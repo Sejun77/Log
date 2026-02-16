@@ -20,7 +20,7 @@ final class Exercise {
     @Relationship(deleteRule: .cascade)
     var routineUsages: [RoutineExercise] = []
 
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .nullify)
     var workoutItems: [WorkoutItem] = []
 
     init(
