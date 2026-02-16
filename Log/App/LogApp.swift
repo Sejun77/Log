@@ -47,6 +47,7 @@ struct LogApp: App {
             SetTemplate.self,
             RoutineExercise.self,
             RoutineBlock.self,
+            RoutineVariant.self,
             Routine.self,
             SetLog.self,
             WorkoutItem.self,

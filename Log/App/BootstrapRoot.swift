@@ -49,6 +49,9 @@ struct BootstrapRoot: View {
                     Self.didResetUITestData = true
                 }
 
+                // Backfill stable slot IDs and default variants for existing data.
+                backfillPhase1()
+
                 // Enforce a minimum splash duration only for real users.
                 if !isUITesting {
                     let elapsed = Date().timeIntervalSince(launchStart)
@@ -72,6 +75,7 @@ struct BootstrapRoot: View {
         deleteAll(SetLog.self)
         deleteAll(WorkoutItem.self)
         deleteAll(Workout.self)
+        deleteAll(RoutineVariant.self)
         deleteAll(Routine.self)
         deleteAll(RoutineBlock.self)
         deleteAll(RoutineExercise.self)
@@ -84,6 +88,52 @@ struct BootstrapRoot: View {
     private func deleteAll<T: PersistentModel>(_ type: T.Type) {
         if let all = try? ctx.fetch(FetchDescriptor<T>()) {
             all.forEach { ctx.delete($0) }
+        }
+    }
+
+    // MARK: - Phase 1 Backfill
+
+    /// Idempotent backfill that runs on every launch.
+    /// 1) Ensures every RoutineBlock and RoutineExercise has a unique slotID.
+    /// 2) Ensures every Routine has at least one RoutineVariant ("Default").
+    @MainActor
+    private func backfillPhase1() {
+        var dirty = false
+
+        // --- Deduplicate RoutineBlock.slotID ---
+        if let blocks = try? ctx.fetch(FetchDescriptor<RoutineBlock>()) {
+            var seen = Set<UUID>()
+            for block in blocks {
+                if !seen.insert(block.slotID).inserted {
+                    block.slotID = UUID()
+                    dirty = true
+                }
+            }
+        }
+
+        // --- Deduplicate RoutineExercise.slotID ---
+        if let exercises = try? ctx.fetch(FetchDescriptor<RoutineExercise>()) {
+            var seen = Set<UUID>()
+            for re in exercises {
+                if !seen.insert(re.slotID).inserted {
+                    re.slotID = UUID()
+                    dirty = true
+                }
+            }
+        }
+
+        // --- Create default RoutineVariant for routines that lack one ---
+        if let routines = try? ctx.fetch(FetchDescriptor<Routine>()) {
+            for routine in routines where routine.variants.isEmpty {
+                let variant = RoutineVariant(name: "Default", order: 0)
+                ctx.insert(variant)
+                routine.variants.append(variant)
+                dirty = true
+            }
+        }
+
+        if dirty {
+            try? ctx.save()
         }
     }
 }

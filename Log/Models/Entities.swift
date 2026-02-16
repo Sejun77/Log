@@ -83,6 +83,8 @@ final class SetTemplate {
 
 @Model
 final class RoutineExercise {
+    var slotID: UUID = UUID()
+
     // Define the inverse ON THIS SIDE ONLY to avoid circular macro resolution
     @Relationship(inverse: \Exercise.routineUsages)
     var exercise: Exercise?
@@ -100,6 +102,7 @@ final class RoutineExercise {
 
 @Model
 final class RoutineBlock {
+    var slotID: UUID = UUID()
     var isSuperset: Bool
     var order: Int
     var restAfterSeconds: Int?
@@ -122,6 +125,23 @@ final class RoutineBlock {
 }
 
 @Model
+final class RoutineVariant {
+    @Attribute(.unique) var id: UUID
+    var name: String
+    var order: Int
+
+    @Relationship(deleteRule: .cascade)
+    var blocks: [RoutineBlock]
+
+    init(name: String, order: Int = 0, blocks: [RoutineBlock] = []) {
+        self.id = UUID()
+        self.name = name
+        self.order = order
+        self.blocks = blocks
+    }
+}
+
+@Model
 final class Routine {
     @Attribute(.unique) var id: UUID
     var name: String
@@ -130,11 +150,15 @@ final class Routine {
     @Relationship(deleteRule: .cascade)
     var blocks: [RoutineBlock]
 
+    @Relationship(deleteRule: .cascade)
+    var variants: [RoutineVariant]
+
     init(name: String, notes: String? = nil, blocks: [RoutineBlock]) {
         self.id = UUID()
         self.name = name
         self.notes = notes
         self.blocks = blocks
+        self.variants = []
     }
 }
 
