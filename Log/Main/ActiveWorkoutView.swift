@@ -842,11 +842,10 @@ struct ActiveWorkoutView: View {
             currentExerciseIndex = 0
         } else {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            // 🔹 Promote last-used inputs to exercise defaults
-            persistDefaultsOnlyForCurrentExercises()
-            // 🔹 Also push session notes into Exercise
-            persistExerciseNotesOnlyForCurrentExercises()
-            applyExerciseSwapsToRoutine()
+            // Phase 2.1: silent template mutations removed.
+            // persistDefaultsOnlyForCurrentExercises()
+            // persistExerciseNotesOnlyForCurrentExercises()
+            // applyExerciseSwapsToRoutine()
             try? ctx.save()
             unlockAndDismiss()
         }
