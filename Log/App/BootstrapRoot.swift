@@ -51,6 +51,7 @@ struct BootstrapRoot: View {
 
                 // Backfill stable slot IDs and default variants for existing data.
                 backfillPhase1()
+                backfillPhase3_1()
 
                 // Enforce a minimum splash duration only for real users.
                 if !isUITesting {
@@ -75,6 +76,10 @@ struct BootstrapRoot: View {
         deleteAll(SetLog.self)
         deleteAll(WorkoutItem.self)
         deleteAll(Workout.self)
+        deleteAll(TechniquePlan.self)
+        deleteAll(SlotPrescription.self)
+        deleteAll(WarmupStep.self)
+        deleteAll(WarmupScheme.self)
         deleteAll(RoutineVariant.self)
         deleteAll(Routine.self)
         deleteAll(RoutineBlock.self)
@@ -130,6 +135,27 @@ struct BootstrapRoot: View {
                 routine.variants.append(variant)
                 dirty = true
             }
+        }
+
+        if dirty {
+            try? ctx.save()
+        }
+    }
+
+    // MARK: - Phase 3.1 Backfill
+
+    /// Idempotent backfill: ensures every RoutineExercise has a SlotPrescription.
+    /// Does NOT migrate data from setTemplates — that is Phase 3.2+.
+    @MainActor
+    private func backfillPhase3_1() {
+        guard let slots = try? ctx.fetch(FetchDescriptor<RoutineExercise>()) else { return }
+
+        var dirty = false
+        for re in slots where re.prescription == nil {
+            let p = SlotPrescription()
+            ctx.insert(p)
+            re.prescription = p
+            dirty = true
         }
 
         if dirty {

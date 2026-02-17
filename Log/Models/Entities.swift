@@ -93,6 +93,13 @@ final class RoutineExercise {
     @Relationship(deleteRule: .cascade)
     var setTemplates: [SetTemplate]
 
+    // Phase 3.1: slot-level notes (distinct from global Exercise.notes)
+    var templateNotes: String?
+
+    // Phase 3.1: structured prescription (replaces setTemplates long-term)
+    @Relationship(deleteRule: .cascade)
+    var prescription: SlotPrescription?
+
     init(exercise: Exercise, order: Int, setTemplates: [SetTemplate]) {
         self.exercise = exercise
         self.order = order
@@ -159,6 +166,181 @@ final class Routine {
         self.notes = notes
         self.blocks = blocks
         self.variants = []
+    }
+}
+
+// MARK: - Prescription & Techniques
+
+enum WarmupStepKind: String, Codable, CaseIterable {
+    case percentage
+    case fixedReps
+    case noteOnly
+}
+
+enum TechniqueType: String, Codable, CaseIterable {
+    case dropset
+    case partialReps
+    case restPause
+    case amrap
+    case toFailure
+    case cluster
+    case tempoOverride
+}
+
+@Model
+final class WarmupStep {
+    var order: Int
+    var kindRaw: String
+    var reps: Int?
+    var percentOfWorking: Double?
+    var restSecondsAfter: Int?
+    var note: String?
+
+    var kind: WarmupStepKind {
+        get { WarmupStepKind(rawValue: kindRaw) ?? .fixedReps }
+        set { kindRaw = newValue.rawValue }
+    }
+
+    init(
+        order: Int,
+        kind: WarmupStepKind = .fixedReps,
+        reps: Int? = nil,
+        percentOfWorking: Double? = nil,
+        restSecondsAfter: Int? = nil,
+        note: String? = nil
+    ) {
+        self.order = order
+        self.kindRaw = kind.rawValue
+        self.reps = reps
+        self.percentOfWorking = percentOfWorking
+        self.restSecondsAfter = restSecondsAfter
+        self.note = note
+    }
+}
+
+@Model
+final class WarmupScheme {
+    var name: String
+
+    @Relationship(deleteRule: .cascade)
+    var steps: [WarmupStep]
+
+    init(name: String, steps: [WarmupStep] = []) {
+        self.name = name
+        self.steps = steps
+    }
+}
+
+@Model
+final class TechniquePlan {
+    var order: Int
+    var typeRaw: String
+
+    var repMin: Int?
+    var repMax: Int?
+    var reps: Int?
+    var durationSeconds: Int?
+    var restSeconds: Int?
+    var rounds: Int?
+    var dropPercent: Double?
+    var dropCount: Int?
+    var partialRangeNote: String?
+    var note: String?
+
+    var type: TechniqueType {
+        get { TechniqueType(rawValue: typeRaw) ?? .dropset }
+        set { typeRaw = newValue.rawValue }
+    }
+
+    init(
+        order: Int,
+        type: TechniqueType,
+        repMin: Int? = nil,
+        repMax: Int? = nil,
+        reps: Int? = nil,
+        durationSeconds: Int? = nil,
+        restSeconds: Int? = nil,
+        rounds: Int? = nil,
+        dropPercent: Double? = nil,
+        dropCount: Int? = nil,
+        partialRangeNote: String? = nil,
+        note: String? = nil
+    ) {
+        self.order = order
+        self.typeRaw = type.rawValue
+        self.repMin = repMin
+        self.repMax = repMax
+        self.reps = reps
+        self.durationSeconds = durationSeconds
+        self.restSeconds = restSeconds
+        self.rounds = rounds
+        self.dropPercent = dropPercent
+        self.dropCount = dropCount
+        self.partialRangeNote = partialRangeNote
+        self.note = note
+    }
+}
+
+@Model
+final class SlotPrescription {
+    // Core
+    var sets: Int?
+    var repMin: Int?
+    var repMax: Int?
+    var restSecondsBetweenSets: Int?
+    var restSecondsAfterExercise: Int?
+
+    // Autoregulation
+    var rir: Double?
+    var rpe: Double?
+    var tempo: String?
+
+    // Duration targets
+    var durationMinSeconds: Int?
+    var durationMaxSeconds: Int?
+    var usesDuration: Bool = false
+
+    // Context overrides
+    var equipment: String?
+    var setupNotes: String?
+
+    // Warmup: reusable across slots (.nullify preserves scheme when prescription deleted)
+    @Relationship(deleteRule: .nullify)
+    var warmupScheme: WarmupScheme?
+
+    // Techniques: owned by this prescription
+    @Relationship(deleteRule: .cascade)
+    var techniquePlans: [TechniquePlan]
+
+    init(
+        sets: Int? = nil,
+        repMin: Int? = nil,
+        repMax: Int? = nil,
+        restSecondsBetweenSets: Int? = nil,
+        restSecondsAfterExercise: Int? = nil,
+        rir: Double? = nil,
+        rpe: Double? = nil,
+        tempo: String? = nil,
+        durationMinSeconds: Int? = nil,
+        durationMaxSeconds: Int? = nil,
+        usesDuration: Bool = false,
+        equipment: String? = nil,
+        setupNotes: String? = nil
+    ) {
+        self.sets = sets
+        self.repMin = repMin
+        self.repMax = repMax
+        self.restSecondsBetweenSets = restSecondsBetweenSets
+        self.restSecondsAfterExercise = restSecondsAfterExercise
+        self.rir = rir
+        self.rpe = rpe
+        self.tempo = tempo
+        self.durationMinSeconds = durationMinSeconds
+        self.durationMaxSeconds = durationMaxSeconds
+        self.usesDuration = usesDuration
+        self.equipment = equipment
+        self.setupNotes = setupNotes
+        self.techniquePlans = []
     }
 }
 
