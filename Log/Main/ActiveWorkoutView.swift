@@ -103,6 +103,7 @@ struct ActiveWorkoutView: View {
     @State private var currentBlockIndex = 0
     @State private var currentExerciseIndex = 0
     @State private var showEndConfirm = false
+    @State private var showFinishConfirm = false
     @State private var loggedByExercise: [UUID: Set<Int>] = [:]
     @State private var showRestOverlay = false
 
@@ -743,6 +744,35 @@ struct ActiveWorkoutView: View {
                     unlockAndDismiss()
                 }
             }
+            .confirmationDialog(
+                "Apply changes?",
+                isPresented: $showFinishConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Finish (this workout only)") {
+                    finishWorkout(applySwaps: false, applyNotes: false)
+                }
+
+                if hasSwapsPending {
+                    Button("Finish + Update routine template") {
+                        finishWorkout(applySwaps: true, applyNotes: false)
+                    }
+                }
+
+                if hasNotesPending {
+                    Button("Finish + Update exercise notes") {
+                        finishWorkout(applySwaps: false, applyNotes: true)
+                    }
+                }
+
+                if hasSwapsPending && hasNotesPending {
+                    Button("Finish + Apply both") {
+                        finishWorkout(applySwaps: true, applyNotes: true)
+                    }
+                }
+
+                Button("Cancel", role: .cancel) {}
+            }
             .onAppear {
                 Task {
                     await AppNotificationService.requestAuthorizationIfNeeded()
@@ -842,13 +872,41 @@ struct ActiveWorkoutView: View {
             currentExerciseIndex = 0
         } else {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            // Phase 2.1: silent template mutations removed.
-            // persistDefaultsOnlyForCurrentExercises()
-            // persistExerciseNotesOnlyForCurrentExercises()
-            // applyExerciseSwapsToRoutine()
-            try? ctx.save()
-            unlockAndDismiss()
+            if hasSwapsPending || hasNotesPending {
+                showFinishConfirm = true
+            } else {
+                finishWorkout(applySwaps: false, applyNotes: false)
+            }
         }
+    }
+
+    // MARK: - Finish helpers
+
+    private var hasSwapsPending: Bool {
+        plan.blocks.flatMap(\.exercises).contains {
+            $0.originalExerciseID != $0.currentExerciseID
+        }
+    }
+
+    private var hasNotesPending: Bool {
+        for block in plan.blocks {
+            for planEx in block.exercises {
+                let slotID = planEx.id
+                let exerciseID = planEx.currentExerciseID
+                guard let cached = activeGuard.notesCache[slotID] else { continue }
+                let current = fetchExercise(by: exerciseID)?.notes
+                let cachedNormalized: String? = cached.isEmpty ? nil : cached
+                if cachedNormalized != current { return true }
+            }
+        }
+        return false
+    }
+
+    private func finishWorkout(applySwaps: Bool, applyNotes: Bool) {
+        if applySwaps { applyExerciseSwapsToRoutine() }
+        if applyNotes { persistExerciseNotesOnlyForCurrentExercises() }
+        try? ctx.save()
+        unlockAndDismiss()
     }
 
     /// Persist exercise defaults based on what was actually logged in this Workout.
