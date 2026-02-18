@@ -561,6 +561,89 @@ struct ActiveWorkoutView: View {
         )
     }
 
+    // MARK: - Planned Prescription Display
+
+    /// Compact read-only section showing the planned prescription snapshot
+    /// captured at plan creation time (not the live template).
+    @ViewBuilder
+    private func plannedSection(for exercise: PlanExercise) -> some View {
+        let snap = exercise.prescriptionSnapshot
+        let notes = exercise.templateNotesSnapshot
+        let hasSnap = snap != nil
+        let hasNotes = notes != nil && !(notes?.isEmpty ?? true)
+
+        if hasSnap || hasNotes {
+            Section("Planned") {
+                if let snap {
+                    if snap.usesDuration {
+                        if let dMin = snap.durationMinSeconds,
+                            let dMax = snap.durationMaxSeconds, dMin != dMax
+                        {
+                            plannedRow("Duration", "\(dMin)–\(dMax)s")
+                        } else if let d = snap.durationMaxSeconds
+                            ?? snap.durationMinSeconds
+                        {
+                            plannedRow("Duration", "\(d)s")
+                        }
+                    } else {
+                        if let rMin = snap.repMin, let rMax = snap.repMax,
+                            rMin != rMax
+                        {
+                            plannedRow("Reps", "\(rMin)–\(rMax)")
+                        } else if let r = snap.repMax ?? snap.repMin {
+                            plannedRow("Reps", "\(r)")
+                        }
+                    }
+
+                    if let sets = snap.sets {
+                        plannedRow("Sets", "\(sets)")
+                    }
+
+                    if let rest = snap.restSecondsBetweenSets, rest > 0 {
+                        plannedRow("Rest", "\(rest)s")
+                    }
+
+                    if let tempo = snap.tempo, !tempo.isEmpty {
+                        plannedRow("Tempo", tempo)
+                    }
+
+                    if let rir = snap.rir {
+                        plannedRow(
+                            "RIR",
+                            rir.truncatingRemainder(dividingBy: 1) == 0
+                                ? "\(Int(rir))" : String(format: "%.1f", rir)
+                        )
+                    }
+
+                    if let rpe = snap.rpe {
+                        plannedRow(
+                            "RPE",
+                            rpe.truncatingRemainder(dividingBy: 1) == 0
+                                ? "\(Int(rpe))" : String(format: "%.1f", rpe)
+                        )
+                    }
+                }
+
+                if let notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func plannedRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .monospacedDigit()
+        }
+        .font(.subheadline)
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -608,6 +691,9 @@ struct ActiveWorkoutView: View {
                             )
                         }
                     }
+
+                    // --- Planned prescription (from snapshot) ---
+                    plannedSection(for: exercise)
 
                     // --- Sets section ---
                     Section {
@@ -1030,6 +1116,8 @@ struct ActiveWorkoutView: View {
         // 7) Create a new clean WorkoutItem for the *new* exercise
         if let w = workout {
             let newItem = WorkoutItem(exercise: newEx, setLogs: [])
+            let updatedPlanEx = plan.blocks[blockIndex].exercises[exIndex]
+            populateSnapshotFields(on: newItem, from: updatedPlanEx)
             w.items.append(newItem)
             itemsByExerciseID[slotID] = newItem
         }
@@ -1106,6 +1194,7 @@ struct ActiveWorkoutView: View {
             else { return }
 
             let newItem = WorkoutItem(exercise: ex, setLogs: [])
+            populateSnapshotFields(on: newItem, from: planEx)
             workout.items.append(newItem)
             itemsByExerciseID[slotID] = newItem
         }
@@ -1148,6 +1237,7 @@ struct ActiveWorkoutView: View {
                 let ex = fetchExercise(by: planEx.currentExerciseID)
             else { return }
             let newItem = WorkoutItem(exercise: ex, setLogs: [])
+            populateSnapshotFields(on: newItem, from: planEx)
             workout.items.append(newItem)
             itemsByExerciseID[slotID] = newItem
         }
@@ -1337,6 +1427,20 @@ struct ActiveWorkoutView: View {
     private func fetchExercise(by id: UUID) -> Exercise? {
         let d = FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
         return try? ctx.fetch(d).first
+    }
+
+    /// Populate session snapshot fields on a WorkoutItem from its PlanExercise.
+    private func populateSnapshotFields(
+        on item: WorkoutItem,
+        from planEx: PlanExercise
+    ) {
+        item.routineSlotID = planEx.routineSlotID
+        item.templateNotesSnapshot = planEx.templateNotesSnapshot
+        if let payload = planEx.prescriptionSnapshot {
+            let snapshot = payload.toModel()
+            ctx.insert(snapshot)
+            item.plannedPrescriptionSnapshot = snapshot
+        }
     }
 
     /// true iff every exercise in the block has logged set index `idx`
