@@ -52,6 +52,7 @@ struct BootstrapRoot: View {
                 // Backfill stable slot IDs and default variants for existing data.
                 backfillPhase1()
                 backfillPhase3_1()
+                // Phase 3.3a: no backfill needed — snapshots are nil for old items.
 
                 // Enforce a minimum splash duration only for real users.
                 if !isUITesting {
@@ -73,6 +74,7 @@ struct BootstrapRoot: View {
     /// Clears all persistent data for UI tests so each run starts clean.
     @MainActor
     private func resetDataForUITests() async {
+        deleteAll(PlannedPrescriptionSnapshot.self)
         deleteAll(SetLog.self)
         deleteAll(WorkoutItem.self)
         deleteAll(Workout.self)

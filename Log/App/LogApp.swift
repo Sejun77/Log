@@ -53,6 +53,7 @@ struct LogApp: App {
             WarmupScheme.self,
             TechniquePlan.self,
             SlotPrescription.self,
+            PlannedPrescriptionSnapshot.self,
             SetLog.self,
             WorkoutItem.self,
             Workout.self,

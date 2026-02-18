@@ -410,6 +410,81 @@ extension RoutineExercise {
     }
 }
 
+// MARK: - Session Snapshots
+
+@Model
+final class PlannedPrescriptionSnapshot {
+    // Core
+    var sets: Int?
+    var repMin: Int?
+    var repMax: Int?
+    var restSecondsBetweenSets: Int?
+    var restSecondsAfterExercise: Int?
+
+    // Autoregulation
+    var rir: Double?
+    var rpe: Double?
+    var tempo: String?
+
+    // Duration
+    var durationMinSeconds: Int?
+    var durationMaxSeconds: Int?
+    var usesDuration: Bool = false
+
+    // Context
+    var equipment: String?
+    var setupNotes: String?
+
+    init(
+        sets: Int? = nil,
+        repMin: Int? = nil,
+        repMax: Int? = nil,
+        restSecondsBetweenSets: Int? = nil,
+        restSecondsAfterExercise: Int? = nil,
+        rir: Double? = nil,
+        rpe: Double? = nil,
+        tempo: String? = nil,
+        durationMinSeconds: Int? = nil,
+        durationMaxSeconds: Int? = nil,
+        usesDuration: Bool = false,
+        equipment: String? = nil,
+        setupNotes: String? = nil
+    ) {
+        self.sets = sets
+        self.repMin = repMin
+        self.repMax = repMax
+        self.restSecondsBetweenSets = restSecondsBetweenSets
+        self.restSecondsAfterExercise = restSecondsAfterExercise
+        self.rir = rir
+        self.rpe = rpe
+        self.tempo = tempo
+        self.durationMinSeconds = durationMinSeconds
+        self.durationMaxSeconds = durationMaxSeconds
+        self.usesDuration = usesDuration
+        self.equipment = equipment
+        self.setupNotes = setupNotes
+    }
+
+    /// Build a snapshot by copying fields from a live SlotPrescription.
+    convenience init(from source: SlotPrescription) {
+        self.init(
+            sets: source.sets,
+            repMin: source.repMin,
+            repMax: source.repMax,
+            restSecondsBetweenSets: source.restSecondsBetweenSets,
+            restSecondsAfterExercise: source.restSecondsAfterExercise,
+            rir: source.rir,
+            rpe: source.rpe,
+            tempo: source.tempo,
+            durationMinSeconds: source.durationMinSeconds,
+            durationMaxSeconds: source.durationMaxSeconds,
+            usesDuration: source.usesDuration,
+            equipment: source.equipment,
+            setupNotes: source.setupNotes
+        )
+    }
+}
+
 // MARK: - Workout Logs
 
 @Model
@@ -454,6 +529,13 @@ final class WorkoutItem {
 
     @Relationship(deleteRule: .cascade)
     var setLogs: [SetLog]
+
+    // Phase 3.3: session snapshot fields (nil for pre-existing items)
+    var routineSlotID: UUID?
+    var templateNotesSnapshot: String?
+
+    @Relationship(deleteRule: .cascade)
+    var plannedPrescriptionSnapshot: PlannedPrescriptionSnapshot?
 
     init(exercise: Exercise, setLogs: [SetLog]) {
         self.exercise = exercise
