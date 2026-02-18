@@ -952,6 +952,10 @@ private struct RoutineBlockDetailView: View {
                             }
                         }
                     }
+                    SlotPrescriptionSection(
+                        re: re,
+                        isTimeBased: ex.isTimeBased
+                    )
                 }
             }
         }
@@ -1024,10 +1028,163 @@ private struct SupersetDetailNoRest: View {
                             }
                         }
                     }
+                    SlotPrescriptionSection(
+                        re: re,
+                        isTimeBased: ex.isTimeBased
+                    )
                 }
             }
         }
         .navigationTitle("Superset")
+    }
+}
+
+// MARK: - Prescription Editor
+
+private struct SlotPrescriptionSection: View {
+    @Environment(\.modelContext) private var ctx
+    @Bindable var re: RoutineExercise
+    let isTimeBased: Bool
+
+    var body: some View {
+        Section {
+            if !re.setTemplates.isEmpty {
+                Label(
+                    "Custom set templates override prescription.",
+                    systemImage: "info.circle"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+
+            if let prescription = re.prescription {
+                PrescriptionFields(
+                    prescription: prescription,
+                    isTimeBased: isTimeBased
+                )
+            }
+
+            TextField("Slot notes", text: slotNotesBinding, axis: .vertical)
+                .lineLimit(1...4)
+        } header: {
+            Text("Prescription")
+        }
+        .onAppear(perform: ensurePrescription)
+    }
+
+    private var slotNotesBinding: Binding<String> {
+        Binding(
+            get: { re.templateNotes ?? "" },
+            set: { re.templateNotes = $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    private func ensurePrescription() {
+        if re.prescription == nil {
+            let p = SlotPrescription()
+            p.usesDuration = isTimeBased
+            ctx.insert(p)
+            re.prescription = p
+            try? ctx.save()
+        } else if let p = re.prescription, p.usesDuration != isTimeBased {
+            p.usesDuration = isTimeBased
+        }
+    }
+}
+
+private struct PrescriptionFields: View {
+    @Bindable var prescription: SlotPrescription
+    let isTimeBased: Bool
+
+    var body: some View {
+        optionalIntRow("Sets", keyPath: \.sets)
+
+        if isTimeBased {
+            optionalIntRow("Duration min", keyPath: \.durationMinSeconds, unit: "s")
+            optionalIntRow("Duration max", keyPath: \.durationMaxSeconds, unit: "s")
+        } else {
+            optionalIntRow("Rep min", keyPath: \.repMin)
+            optionalIntRow("Rep max", keyPath: \.repMax)
+        }
+
+        optionalIntRow("Rest between sets", keyPath: \.restSecondsBetweenSets, unit: "s")
+
+        HStack {
+            Text("RIR")
+            Spacer()
+            TextField("—", text: optionalDoubleString(\.rir))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 80)
+        }
+
+        HStack {
+            Text("Tempo")
+            Spacer()
+            TextField("e.g. 3-1-2-0", text: optionalString(\.tempo))
+                .multilineTextAlignment(.trailing)
+                .frame(width: 120)
+        }
+    }
+
+    private func optionalIntRow(
+        _ label: String,
+        keyPath: ReferenceWritableKeyPath<SlotPrescription, Int?>,
+        unit: String? = nil
+    ) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("—", text: optionalIntString(keyPath))
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 80)
+            if let unit {
+                Text(unit).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func optionalIntString(
+        _ kp: ReferenceWritableKeyPath<SlotPrescription, Int?>
+    ) -> Binding<String> {
+        Binding(
+            get: {
+                if let v = prescription[keyPath: kp] { return String(v) }
+                return ""
+            },
+            set: {
+                let digits = $0.filter(\.isNumber)
+                prescription[keyPath: kp] = digits.isEmpty ? nil : Int(digits)
+            }
+        )
+    }
+
+    private func optionalDoubleString(
+        _ kp: ReferenceWritableKeyPath<SlotPrescription, Double?>
+    ) -> Binding<String> {
+        Binding(
+            get: {
+                if let v = prescription[keyPath: kp] {
+                    return v.truncatingRemainder(dividingBy: 1) == 0
+                        ? String(Int(v)) : String(v)
+                }
+                return ""
+            },
+            set: {
+                let cleaned = $0.filter { $0.isNumber || $0 == "." }
+                prescription[keyPath: kp] = cleaned.isEmpty ? nil : Double(cleaned)
+            }
+        )
+    }
+
+    private func optionalString(
+        _ kp: ReferenceWritableKeyPath<SlotPrescription, String?>
+    ) -> Binding<String> {
+        Binding(
+            get: { prescription[keyPath: kp] ?? "" },
+            set: { prescription[keyPath: kp] = $0.isEmpty ? nil : $0 }
+        )
     }
 }
 
@@ -1255,19 +1412,29 @@ extension RoutineExercise {
     func resolvedTemplates(in ctx: ModelContext) -> [SetTemplate] {
         guard let ex = safeExercise(in: ctx) else { return [] }
 
-        let base = setTemplates.isEmpty ? ex.defaultTemplates : setTemplates
+        // Tier 1: explicit per-set overrides
+        if !setTemplates.isEmpty {
+            let didFix = normalizeOrderIfNeeded(setTemplates)
+            let sorted = setTemplates.sorted { a, b in
+                if a.order != b.order { return a.order < b.order }
+                return a.persistentModelID < b.persistentModelID
+            }
+            if didFix { try? ctx.save() }
+            return sorted
+        }
 
-        let didFix = normalizeOrderIfNeeded(base)
+        // Tier 2: prescription-generated
+        if let p = prescription, p.hasContent {
+            return p.generateTemplates()
+        }
 
-        let sorted = base.sorted { a, b in
+        // Tier 3: exercise defaults
+        let didFix = normalizeOrderIfNeeded(ex.defaultTemplates)
+        let sorted = ex.defaultTemplates.sorted { a, b in
             if a.order != b.order { return a.order < b.order }
             return a.persistentModelID < b.persistentModelID
         }
-
-        if didFix {
-            try? ctx.save()
-        }
-
+        if didFix { try? ctx.save() }
         return sorted
     }
 }
