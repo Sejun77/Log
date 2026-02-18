@@ -344,6 +344,72 @@ final class SlotPrescription {
     }
 }
 
+// MARK: - Prescription Helpers
+
+extension SlotPrescription {
+    /// True when the prescription carries enough info to generate working sets.
+    var hasContent: Bool {
+        if usesDuration {
+            return (durationMinSeconds ?? durationMaxSeconds) != nil
+        }
+        return sets != nil
+    }
+
+    /// Deterministic generator: produces [SetTemplate] from prescription fields.
+    /// Does NOT insert into a model context — callers decide lifecycle.
+    func generateTemplates() -> [SetTemplate] {
+        let count = max(1, sets ?? 3)
+
+        return (0..<count).map { i in
+            let tpl: SetTemplate
+            if usesDuration {
+                let dur = durationMaxSeconds ?? durationMinSeconds ?? 60
+                tpl = SetTemplate(
+                    kind: .working,
+                    targetReps: 0,
+                    targetWeight: nil,
+                    restSecondsAfter: restSecondsBetweenSets
+                )
+                tpl.durationSeconds = dur
+            } else {
+                let reps = repMax ?? repMin ?? 8
+                tpl = SetTemplate(
+                    kind: .working,
+                    targetReps: reps,
+                    targetWeight: nil,
+                    restSecondsAfter: restSecondsBetweenSets
+                )
+            }
+            tpl.order = i
+            return tpl
+        }
+    }
+}
+
+// MARK: - Template Resolution
+
+extension RoutineExercise {
+    /// Canonical 3-tier template resolution:
+    /// 1) Explicit per-set overrides (setTemplates non-empty)
+    /// 2) Prescription-generated templates (prescription with content)
+    /// 3) Exercise default templates (fallback)
+    func resolvedTemplates() -> [SetTemplate] {
+        // Tier 1: explicit overrides
+        if !setTemplates.isEmpty {
+            return setTemplates.sorted { $0.order < $1.order }
+        }
+
+        // Tier 2: prescription-generated
+        if let p = prescription, p.hasContent {
+            return p.generateTemplates()
+        }
+
+        // Tier 3: exercise defaults
+        guard let ex = exercise else { return [] }
+        return ex.defaultTemplates.sorted { $0.order < $1.order }
+    }
+}
+
 // MARK: - Workout Logs
 
 @Model
