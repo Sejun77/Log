@@ -84,6 +84,80 @@ extension Collection {
     }
 }
 
+// MARK: - Session-scoped editable plan (in-memory only)
+
+struct SessionPlan {
+    var sets: Int?
+    var repMin: Int?
+    var repMax: Int?
+    var restSecondsBetweenSets: Int?
+    var restSecondsAfterExercise: Int?
+    var tempo: String?
+    var rir: Double?
+    var rpe: Double?
+    var durationMinSeconds: Int?
+    var durationMaxSeconds: Int?
+    var usesDuration: Bool = false
+    var slotNotes: String?
+
+    /// Line 1: sets + rep range (or duration range)
+    var primarySummary: String {
+        var parts: [String] = []
+        if let s = sets { parts.append("\(s) sets") }
+        if usesDuration {
+            if let lo = durationMinSeconds, let hi = durationMaxSeconds,
+                lo != hi
+            {
+                parts.append("\(lo)–\(hi)s")
+            } else if let d = durationMaxSeconds ?? durationMinSeconds {
+                parts.append("\(d)s")
+            }
+        } else {
+            if let lo = repMin, let hi = repMax, lo != hi {
+                parts.append("\(lo)–\(hi) reps")
+            } else if let r = repMax ?? repMin {
+                parts.append("\(r) reps")
+            }
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Line 2: rest + intensity + tempo
+    var secondarySummary: String {
+        var parts: [String] = []
+        if let r = restSecondsBetweenSets, r > 0 { parts.append("\(r)s rest") }
+        if let v = rir {
+            let s = v.truncatingRemainder(dividingBy: 1) == 0
+                ? "\(Int(v))" : String(format: "%.1f", v)
+            parts.append("RIR \(s)")
+        }
+        if let v = rpe {
+            let s = v.truncatingRemainder(dividingBy: 1) == 0
+                ? "\(Int(v))" : String(format: "%.1f", v)
+            parts.append("RPE \(s)")
+        }
+        if let t = tempo, !t.isEmpty { parts.append("Tempo \(t)") }
+        return parts.joined(separator: " · ")
+    }
+
+    init() { self.usesDuration = false }
+
+    init(from snapshot: PrescriptionSnapshotPayload, notes: String?) {
+        self.sets = snapshot.sets
+        self.repMin = snapshot.repMin
+        self.repMax = snapshot.repMax
+        self.restSecondsBetweenSets = snapshot.restSecondsBetweenSets
+        self.restSecondsAfterExercise = snapshot.restSecondsAfterExercise
+        self.tempo = snapshot.tempo
+        self.rir = snapshot.rir
+        self.rpe = snapshot.rpe
+        self.durationMinSeconds = snapshot.durationMinSeconds
+        self.durationMaxSeconds = snapshot.durationMaxSeconds
+        self.usesDuration = snapshot.usesDuration
+        self.slotNotes = notes
+    }
+}
+
 struct ActiveWorkoutView: View {
     // Snapshot plan (mutable copy for this view)
     @State private var plan: WorkoutPlan
@@ -104,6 +178,8 @@ struct ActiveWorkoutView: View {
     @State private var currentExerciseIndex = 0
     @State private var showEndConfirm = false
     @State private var showFinishConfirm = false
+    @State private var sessionPlans: [UUID: SessionPlan] = [:]
+    @State private var showEditPlanSheet = false
     @State private var loggedByExercise: [UUID: Set<Int>] = [:]
     @State private var showRestOverlay = false
 
@@ -561,87 +637,82 @@ struct ActiveWorkoutView: View {
         )
     }
 
-    // MARK: - Planned Prescription Display
+    // MARK: - Session Plan
 
-    /// Compact read-only section showing the planned prescription snapshot
-    /// captured at plan creation time (not the live template).
-    @ViewBuilder
-    private func plannedSection(for exercise: PlanExercise) -> some View {
-        let snap = exercise.prescriptionSnapshot
-        let notes = exercise.templateNotesSnapshot
-        let hasSnap = snap != nil
-        let hasNotes = notes != nil && !(notes?.isEmpty ?? true)
-
-        if hasSnap || hasNotes {
-            Section("Planned") {
-                if let snap {
-                    if snap.usesDuration {
-                        if let dMin = snap.durationMinSeconds,
-                            let dMax = snap.durationMaxSeconds, dMin != dMax
-                        {
-                            plannedRow("Duration", "\(dMin)–\(dMax)s")
-                        } else if let d = snap.durationMaxSeconds
-                            ?? snap.durationMinSeconds
-                        {
-                            plannedRow("Duration", "\(d)s")
-                        }
-                    } else {
-                        if let rMin = snap.repMin, let rMax = snap.repMax,
-                            rMin != rMax
-                        {
-                            plannedRow("Reps", "\(rMin)–\(rMax)")
-                        } else if let r = snap.repMax ?? snap.repMin {
-                            plannedRow("Reps", "\(r)")
-                        }
-                    }
-
-                    if let sets = snap.sets {
-                        plannedRow("Sets", "\(sets)")
-                    }
-
-                    if let rest = snap.restSecondsBetweenSets, rest > 0 {
-                        plannedRow("Rest", "\(rest)s")
-                    }
-
-                    if let tempo = snap.tempo, !tempo.isEmpty {
-                        plannedRow("Tempo", tempo)
-                    }
-
-                    if let rir = snap.rir {
-                        plannedRow(
-                            "RIR",
-                            rir.truncatingRemainder(dividingBy: 1) == 0
-                                ? "\(Int(rir))" : String(format: "%.1f", rir)
-                        )
-                    }
-
-                    if let rpe = snap.rpe {
-                        plannedRow(
-                            "RPE",
-                            rpe.truncatingRemainder(dividingBy: 1) == 0
-                                ? "\(Int(rpe))" : String(format: "%.1f", rpe)
-                        )
-                    }
-                }
-
-                if let notes, !notes.isEmpty {
-                    Text(notes)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+    private func initializeSessionPlans() {
+        for block in plan.blocks {
+            for ex in block.exercises {
+                guard sessionPlans[ex.id] == nil else { continue }
+                if let snap = ex.prescriptionSnapshot {
+                    sessionPlans[ex.id] = SessionPlan(
+                        from: snap, notes: ex.templateNotesSnapshot)
+                } else {
+                    var p = SessionPlan()
+                    p.slotNotes = ex.templateNotesSnapshot
+                    sessionPlans[ex.id] = p
                 }
             }
         }
     }
 
-    private func plannedRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .monospacedDigit()
+    private func sessionPlanBinding(for exerciseID: UUID)
+        -> Binding<SessionPlan>
+    {
+        Binding(
+            get: { sessionPlans[exerciseID] ?? SessionPlan() },
+            set: { sessionPlans[exerciseID] = $0 }
+        )
+    }
+
+    /// Compact plan summary row with "Edit Plan" sheet trigger.
+    @ViewBuilder
+    private func planSummarySection(for exercise: PlanExercise) -> some View {
+        let sp = sessionPlans[exercise.id] ?? SessionPlan()
+        let line1 = sp.primarySummary
+        let line2 = sp.secondarySummary
+        let notes = sp.slotNotes
+        let hasContent =
+            !line1.isEmpty || !line2.isEmpty
+                || (notes != nil && !(notes?.isEmpty ?? true))
+
+        Section("Plan") {
+            Button {
+                showEditPlanSheet = true
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        if hasContent {
+                            if !line1.isEmpty {
+                                Text(line1)
+                                    .font(.dsBody)
+                                    .foregroundStyle(.primary)
+                            }
+                            if !line2.isEmpty {
+                                Text(line2)
+                                    .font(.dsBodySecondary)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            if let notes, !notes.isEmpty {
+                                Text(notes)
+                                    .font(.dsCaption)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        } else {
+                            Text("No plan")
+                                .font(.dsBodySecondary)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "pencil.circle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
         }
-        .font(.subheadline)
     }
 
     // MARK: - Body
@@ -692,8 +763,8 @@ struct ActiveWorkoutView: View {
                         }
                     }
 
-                    // --- Planned prescription (from snapshot) ---
-                    plannedSection(for: exercise)
+                    // --- Plan summary (compact) + edit via sheet ---
+                    planSummarySection(for: exercise)
 
                     // --- Sets section ---
                     Section {
@@ -868,6 +939,8 @@ struct ActiveWorkoutView: View {
                 rest.resumeIfScheduled()
                 rest.syncNow()
 
+                // 0) initialize session plans from snapshots
+                initializeSessionPlans()
                 // 1) mirror caches (if returning)
                 syncFromGuardCachesIfAny()
                 // 2) if still empty, seed from plan
@@ -923,6 +996,12 @@ struct ActiveWorkoutView: View {
                         showSwapSheet = false
                         exerciseToSwapIndex = nil
                     }
+                }
+            }
+            .sheet(isPresented: $showEditPlanSheet) {
+                if let exercise = currentExercise {
+                    EditSessionPlanSheet(
+                        plan: sessionPlanBinding(for: exercise.id))
                 }
             }
         } else {
@@ -1089,6 +1168,8 @@ struct ActiveWorkoutView: View {
 
         inputsByExerciseID[slotID] = perSet
         loggedByExercise[slotID] = []
+        // Keep existing session plan for this slot (user edits preserved across swaps).
+        // A "Reset plan" option will be added in Phase 5d.
 
         activeGuard.inputsCache[slotID] = perSet
         activeGuard.loggedCache[slotID] = []
@@ -1546,6 +1627,118 @@ private struct RestOverlayScreen: View {
             }
         }
         .transition(.opacity)
+    }
+}
+
+// MARK: - Edit Session Plan Sheet
+
+private struct EditSessionPlanSheet: View {
+    @Binding var plan: SessionPlan
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if plan.usesDuration {
+                    Section("Duration") {
+                        fieldRow("Min (s)", binding: optionalInt(\.durationMinSeconds))
+                        fieldRow("Max (s)", binding: optionalInt(\.durationMaxSeconds))
+                    }
+                } else {
+                    Section("Reps") {
+                        fieldRow("Min", binding: optionalInt(\.repMin))
+                        fieldRow("Max", binding: optionalInt(\.repMax))
+                    }
+                }
+
+                Section("Sets & Rest") {
+                    fieldRow("Sets", binding: optionalInt(\.sets))
+                    fieldRow(
+                        "Rest between (s)",
+                        binding: optionalInt(\.restSecondsBetweenSets))
+                    fieldRow(
+                        "Rest after (s)",
+                        binding: optionalInt(\.restSecondsAfterExercise))
+                }
+
+                Section("Intensity") {
+                    fieldRow("RIR", binding: optionalDouble(\.rir), decimal: true)
+                    fieldRow("RPE", binding: optionalDouble(\.rpe), decimal: true)
+                    HStack {
+                        Text("Tempo")
+                        Spacer()
+                        TextField(
+                            "—", text: optionalString(\.tempo)
+                        )
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 120)
+                    }
+                }
+
+                Section("Notes") {
+                    TextField(
+                        "Slot notes", text: optionalString(\.slotNotes),
+                        axis: .vertical
+                    )
+                    .lineLimit(3...6)
+                }
+            }
+            .navigationTitle("Edit Plan")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+    }
+
+    // MARK: - Field Row
+
+    private func fieldRow(
+        _ label: String, binding: Binding<String>, decimal: Bool = false
+    ) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("—", text: binding)
+                .keyboardType(decimal ? .decimalPad : .numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 80)
+        }
+    }
+
+    // MARK: - Binding Helpers
+
+    private func optionalInt(_ kp: WritableKeyPath<SessionPlan, Int?>)
+        -> Binding<String>
+    {
+        Binding(
+            get: { plan[keyPath: kp].map(String.init) ?? "" },
+            set: { plan[keyPath: kp] = Int($0) }
+        )
+    }
+
+    private func optionalDouble(_ kp: WritableKeyPath<SessionPlan, Double?>)
+        -> Binding<String>
+    {
+        Binding(
+            get: {
+                guard let v = plan[keyPath: kp] else { return "" }
+                return v.truncatingRemainder(dividingBy: 1) == 0
+                    ? "\(Int(v))" : String(format: "%.1f", v)
+            },
+            set: { plan[keyPath: kp] = Double($0) }
+        )
+    }
+
+    private func optionalString(_ kp: WritableKeyPath<SessionPlan, String?>)
+        -> Binding<String>
+    {
+        Binding(
+            get: { plan[keyPath: kp] ?? "" },
+            set: { plan[keyPath: kp] = $0.isEmpty ? nil : $0 }
+        )
     }
 }
 
