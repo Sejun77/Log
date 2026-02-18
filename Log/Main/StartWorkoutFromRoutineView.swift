@@ -50,62 +50,7 @@ struct StartWorkoutFromRoutineView: View {
 
     @State private var cachedPlan: WorkoutPlan?
 
-    // MARK: - Template Resolution (unchanged logic)
-
-    private func normalizeTemplateOrder(_ templates: [SetTemplate]) {
-        let n = templates.count
-        guard n > 0 else { return }
-
-        let orders = templates.map(\.order)
-        let uniqueCount = Set(orders).count
-        let minOrder = orders.min() ?? 0
-        let maxOrder = orders.max() ?? 0
-
-        // Invalid if:
-        // - duplicate orders
-        // - negative values
-        // - not exactly 0...(n-1)
-        let needsFix =
-            uniqueCount != n || minOrder < 0 || maxOrder != (n - 1)
-
-        guard needsFix else { return }
-
-        // Deterministic repair:
-        // 1. warmup → working → dropset
-        // 2. then previous order
-        let repaired = templates.sorted { a, b in
-            if a.kindSortKey != b.kindSortKey {
-                return a.kindSortKey < b.kindSortKey
-            }
-            return a.order < b.order
-        }
-
-        for (i, tpl) in repaired.enumerated() {
-            tpl.order = i
-        }
-    }
-
-    private func resolvedTemplates(for re: RoutineExercise) -> [SetTemplate] {
-        guard let ex = re.exercise else { return [] }
-
-        let base =
-            re.setTemplates.isEmpty ? ex.defaultTemplates : re.setTemplates
-
-        normalizeTemplateOrder(base)
-
-        let sorted = base.sorted { $0.order < $1.order }
-
-        return sorted.map { src in
-            let copy = SetTemplate(
-                kind: src.kind,
-                targetReps: src.targetReps,
-                targetWeight: src.targetWeight,
-                restSecondsAfter: src.restSecondsAfter
-            )
-            copy.durationSeconds = src.durationSeconds
-            return copy
-        }
-    }
+    // MARK: - Plan Builder
 
     private func makePlan(from routine: Routine) -> WorkoutPlan {
         let blocks: [PlanBlock] = routine.blocks
@@ -115,7 +60,7 @@ struct StartWorkoutFromRoutineView: View {
                     .sorted { $0.order < $1.order }
                     .compactMap { re in
                         guard let ex = re.exercise else { return nil }
-                        let templates = resolvedTemplates(for: re).enumerated()
+                        let templates = re.resolvedTemplates().enumerated()
                             .map { (i, tpl) in
                                 PlanSetTemplate(
                                     id: "\(ex.id.uuidString)-set\(i)",
