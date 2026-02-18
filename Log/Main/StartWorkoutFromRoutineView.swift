@@ -12,6 +12,58 @@ struct PlanSetTemplate: Identifiable {
     var durationSeconds: Int?
 }
 
+/// Lightweight value-type copy of SlotPrescription fields, carried in the plan
+/// and converted to @Model PlannedPrescriptionSnapshot at WorkoutItem creation.
+struct PrescriptionSnapshotPayload {
+    var sets: Int?
+    var repMin: Int?
+    var repMax: Int?
+    var restSecondsBetweenSets: Int?
+    var restSecondsAfterExercise: Int?
+    var rir: Double?
+    var rpe: Double?
+    var tempo: String?
+    var durationMinSeconds: Int?
+    var durationMaxSeconds: Int?
+    var usesDuration: Bool
+    var equipment: String?
+    var setupNotes: String?
+
+    init(from source: SlotPrescription) {
+        self.sets = source.sets
+        self.repMin = source.repMin
+        self.repMax = source.repMax
+        self.restSecondsBetweenSets = source.restSecondsBetweenSets
+        self.restSecondsAfterExercise = source.restSecondsAfterExercise
+        self.rir = source.rir
+        self.rpe = source.rpe
+        self.tempo = source.tempo
+        self.durationMinSeconds = source.durationMinSeconds
+        self.durationMaxSeconds = source.durationMaxSeconds
+        self.usesDuration = source.usesDuration
+        self.equipment = source.equipment
+        self.setupNotes = source.setupNotes
+    }
+
+    func toModel() -> PlannedPrescriptionSnapshot {
+        PlannedPrescriptionSnapshot(
+            sets: sets,
+            repMin: repMin,
+            repMax: repMax,
+            restSecondsBetweenSets: restSecondsBetweenSets,
+            restSecondsAfterExercise: restSecondsAfterExercise,
+            rir: rir,
+            rpe: rpe,
+            tempo: tempo,
+            durationMinSeconds: durationMinSeconds,
+            durationMaxSeconds: durationMaxSeconds,
+            usesDuration: usesDuration,
+            equipment: equipment,
+            setupNotes: setupNotes
+        )
+    }
+}
+
 struct PlanExercise: Identifiable {
     // Stable identity tied to RoutineExercise
     var id: UUID
@@ -26,6 +78,11 @@ struct PlanExercise: Identifiable {
     var notes: String?
     var templates: [PlanSetTemplate]
     var isTimeBased: Bool = false
+
+    // Session snapshot payload (Phase 3.3)
+    var routineSlotID: UUID
+    var templateNotesSnapshot: String?
+    var prescriptionSnapshot: PrescriptionSnapshotPayload?
 }
 
 struct PlanBlock: Identifiable {
@@ -81,7 +138,12 @@ struct StartWorkoutFromRoutineView: View {
                             name: ex.name,
                             notes: ex.notes,
                             templates: templates,
-                            isTimeBased: ex.isTimeBased
+                            isTimeBased: ex.isTimeBased,
+                            routineSlotID: re.slotID,
+                            templateNotesSnapshot: re.templateNotes,
+                            prescriptionSnapshot: re.prescription.map(
+                                PrescriptionSnapshotPayload.init(from:)
+                            )
                         )
                     }
                 guard !exs.isEmpty else { return nil }
