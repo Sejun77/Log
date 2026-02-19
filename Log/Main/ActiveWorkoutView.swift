@@ -180,6 +180,9 @@ struct ActiveWorkoutView: View {
     @State private var showFinishConfirm = false
     @State private var sessionPlans: [UUID: SessionPlan] = [:]
     @State private var showEditPlanSheet = false
+    /// Per-set planned targets captured before opening the edit sheet.
+    @State private var preEditRepStrs: [UUID: [Int: String]] = [:]
+    @State private var preEditDurStrs: [UUID: [Int: String]] = [:]
     @State private var loggedByExercise: [UUID: Set<Int>] = [:]
     @State private var showRestOverlay = false
 
@@ -221,9 +224,10 @@ struct ActiveWorkoutView: View {
                         [:]
                 for (i, tpl) in ex.templates.enumerated() {
                     perSet[i] = (
-                        reps: String(tpl.targetReps),
+                        reps: String(plannedRepTarget(for: ex, template: tpl)),
                         weight: tpl.targetWeight.map { String($0) } ?? "",
-                        duration: tpl.durationSeconds.map { String($0) } ?? ""
+                        duration: plannedDurationTarget(for: ex, template: tpl)
+                            .map { String($0) } ?? ""
                     )
                 }
                 inputsByExerciseID[ex.id] = perSet
@@ -274,10 +278,12 @@ struct ActiveWorkoutView: View {
                         perSet[i] = (reps, weight, duration)
                     } else {
                         perSet[i] = (
-                            reps: String(tpl.targetReps),
+                            reps: String(
+                                plannedRepTarget(for: ex, template: tpl)),
                             weight: tpl.targetWeight.map { String($0) } ?? "",
-                            duration: tpl.durationSeconds.map { String($0) }
-                                ?? ""
+                            duration: plannedDurationTarget(
+                                for: ex, template: tpl)
+                                .map { String($0) } ?? ""
                         )
                     }
                 }
@@ -318,18 +324,21 @@ struct ActiveWorkoutView: View {
             }
             if inputsByExerciseID[exID]?[setIndex] == nil {
                 inputsByExerciseID[exID]?[setIndex] = (
-                    reps: String(template.targetReps),
+                    reps: String(
+                        plannedRepTarget(for: exercise, template: template)),
                     weight: template.targetWeight.map { String($0) } ?? "",
-                    duration: template.durationSeconds.map { String($0) } ?? ""
+                    duration: plannedDurationTarget(
+                        for: exercise, template: template)
+                        .map { String($0) } ?? ""
                 )
             }
         }
 
         let repsB = Binding<String>(
             get: {
-                // ❌ no state mutation here
                 inputsByExerciseID[exID]?[setIndex]?.reps
-                    ?? String(template.targetReps)
+                    ?? String(
+                        plannedRepTarget(for: exercise, template: template))
             },
             set: { newVal in
                 ensureEntry()
@@ -368,9 +377,12 @@ struct ActiveWorkoutView: View {
             }
             if inputsByExerciseID[exID]?[setIndex] == nil {
                 inputsByExerciseID[exID]?[setIndex] = (
-                    reps: String(template.targetReps),
+                    reps: String(
+                        plannedRepTarget(for: exercise, template: template)),
                     weight: template.targetWeight.map { String($0) } ?? "",
-                    duration: template.durationSeconds.map { String($0) } ?? ""
+                    duration: plannedDurationTarget(
+                        for: exercise, template: template)
+                        .map { String($0) } ?? ""
                 )
             }
         }
@@ -378,7 +390,9 @@ struct ActiveWorkoutView: View {
         return Binding<String>(
             get: {
                 inputsByExerciseID[exID]?[setIndex]?.duration
-                    ?? (template.durationSeconds.map { String($0) } ?? "")
+                    ?? (plannedDurationTarget(
+                        for: exercise, template: template)
+                        .map { String($0) } ?? "")
             },
             set: { newVal in
                 ensureEntry()
@@ -642,32 +656,33 @@ struct ActiveWorkoutView: View {
     private func initializeSessionPlans() {
         for block in plan.blocks {
             for ex in block.exercises {
-                guard sessionPlans[ex.id] == nil else { continue }
+                let key = ex.routineSlotID
+                guard sessionPlans[key] == nil else { continue }
                 if let snap = ex.prescriptionSnapshot {
-                    sessionPlans[ex.id] = SessionPlan(
+                    sessionPlans[key] = SessionPlan(
                         from: snap, notes: ex.templateNotesSnapshot)
                 } else {
                     var p = SessionPlan()
                     p.slotNotes = ex.templateNotesSnapshot
-                    sessionPlans[ex.id] = p
+                    sessionPlans[key] = p
                 }
             }
         }
     }
 
-    private func sessionPlanBinding(for exerciseID: UUID)
+    private func sessionPlanBinding(for slotID: UUID)
         -> Binding<SessionPlan>
     {
         Binding(
-            get: { sessionPlans[exerciseID] ?? SessionPlan() },
-            set: { sessionPlans[exerciseID] = $0 }
+            get: { sessionPlans[slotID] ?? SessionPlan() },
+            set: { sessionPlans[slotID] = $0 }
         )
     }
 
     /// Compact plan summary row with "Edit Plan" sheet trigger.
     @ViewBuilder
     private func planSummarySection(for exercise: PlanExercise) -> some View {
-        let sp = sessionPlans[exercise.id] ?? SessionPlan()
+        let sp = sessionPlans[exercise.routineSlotID] ?? SessionPlan()
         let line1 = sp.primarySummary
         let line2 = sp.secondarySummary
         let notes = sp.slotNotes
@@ -677,6 +692,7 @@ struct ActiveWorkoutView: View {
 
         Section("Plan") {
             Button {
+                capturePreEditTargets()
                 showEditPlanSheet = true
             } label: {
                 HStack {
@@ -713,6 +729,88 @@ struct ActiveWorkoutView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    // MARK: - Planned Target Resolution
+
+    /// Resolve planned rep target: session plan → snapshot → template.
+    private func plannedRepTarget(
+        for exercise: PlanExercise,
+        template: PlanSetTemplate
+    ) -> Int {
+        if let sp = sessionPlans[exercise.routineSlotID],
+            let v = sp.repMax ?? sp.repMin
+        { return v }
+        if let snap = exercise.prescriptionSnapshot,
+            let v = snap.repMax ?? snap.repMin
+        { return v }
+        return template.targetReps
+    }
+
+    /// Resolve planned duration target: session plan → snapshot → template.
+    private func plannedDurationTarget(
+        for exercise: PlanExercise,
+        template: PlanSetTemplate
+    ) -> Int? {
+        if let sp = sessionPlans[exercise.routineSlotID],
+            let v = sp.durationMaxSeconds ?? sp.durationMinSeconds
+        { return v }
+        if let snap = exercise.prescriptionSnapshot,
+            let v = snap.durationMaxSeconds ?? snap.durationMinSeconds
+        { return v }
+        return template.durationSeconds
+    }
+
+    /// Snapshot current planned targets per set so we can detect user edits.
+    private func capturePreEditTargets() {
+        guard let exercise = currentExercise else { return }
+        let key = exercise.routineSlotID
+        var reps: [Int: String] = [:]
+        var durs: [Int: String] = [:]
+        for (i, tpl) in exercise.templates.enumerated() {
+            reps[i] = String(plannedRepTarget(for: exercise, template: tpl))
+            durs[i] = plannedDurationTarget(for: exercise, template: tpl)
+                .map(String.init) ?? ""
+        }
+        preEditRepStrs[key] = reps
+        preEditDurStrs[key] = durs
+    }
+
+    /// After session plan edit, update input caches for un-modified sets only.
+    private func applySessionPlanToInputs() {
+        guard let exercise = currentExercise else { return }
+        let slotKey = exercise.routineSlotID
+        let cacheKey = exercise.id  // inputsByExerciseID key
+
+        let oldReps = preEditRepStrs[slotKey] ?? [:]
+        let oldDurs = preEditDurStrs[slotKey] ?? [:]
+
+        for (i, tpl) in exercise.templates.enumerated() {
+            let newRep = String(
+                plannedRepTarget(for: exercise, template: tpl))
+            let newDur = plannedDurationTarget(for: exercise, template: tpl)
+                .map(String.init) ?? ""
+
+            guard var entry = inputsByExerciseID[cacheKey]?[i] else {
+                continue
+            }
+
+            // Update reps if still at old planned target or empty
+            if entry.reps == (oldReps[i] ?? "") || entry.reps.isEmpty {
+                entry.reps = newRep
+            }
+
+            // Update duration if still at old planned target or empty
+            if entry.duration == (oldDurs[i] ?? "") || entry.duration.isEmpty {
+                entry.duration = newDur
+            }
+
+            inputsByExerciseID[cacheKey]?[i] = entry
+        }
+
+        syncToGuardCaches()
+        preEditRepStrs.removeValue(forKey: slotKey)
+        preEditDurStrs.removeValue(forKey: slotKey)
     }
 
     // MARK: - Body
@@ -998,10 +1096,14 @@ struct ActiveWorkoutView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showEditPlanSheet) {
+            .sheet(
+                isPresented: $showEditPlanSheet,
+                onDismiss: { applySessionPlanToInputs() }
+            ) {
                 if let exercise = currentExercise {
                     EditSessionPlanSheet(
-                        plan: sessionPlanBinding(for: exercise.id))
+                        plan: sessionPlanBinding(
+                            for: exercise.routineSlotID))
                 }
             }
         } else {
@@ -1155,14 +1257,18 @@ struct ActiveWorkoutView: View {
 
         // 4) Build fresh per-set inputs for this slot from newTemplates
         let slotID = plan.blocks[blockIndex].exercises[exIndex].id
+        let swappedPlanEx = plan.blocks[blockIndex].exercises[exIndex]
 
         var perSet: [Int: (reps: String, weight: String, duration: String)] =
             [:]
         for (i, tpl) in newTemplates.enumerated() {
             perSet[i] = (
-                reps: String(tpl.targetReps),
+                reps: String(
+                    plannedRepTarget(for: swappedPlanEx, template: tpl)),
                 weight: tpl.targetWeight.map { String($0) } ?? "",
-                duration: tpl.durationSeconds.map { String($0) } ?? ""
+                duration: plannedDurationTarget(
+                    for: swappedPlanEx, template: tpl)
+                    .map { String($0) } ?? ""
             )
         }
 
