@@ -761,6 +761,19 @@ struct ActiveWorkoutView: View {
         return template.durationSeconds
     }
 
+    /// Resolve planned rest between sets: session plan → snapshot → nil (fall through to template).
+    private func plannedRestBetweenSets(
+        for exercise: PlanExercise
+    ) -> Int? {
+        if let sp = sessionPlans[exercise.routineSlotID],
+            let v = sp.restSecondsBetweenSets, v > 0
+        { return v }
+        if let snap = exercise.prescriptionSnapshot,
+            let v = snap.restSecondsBetweenSets, v > 0
+        { return v }
+        return nil
+    }
+
     /// Snapshot current planned targets per set so we can detect user edits.
     private func capturePreEditTargets() {
         guard let exercise = currentExercise else { return }
@@ -1522,11 +1535,13 @@ struct ActiveWorkoutView: View {
                 }
 
                 if roundHasDrop {
-                    // After a dropset: derive from prior working round(s); take max of explicit rests
+                    // After a dropset: planned rest → prior working round rest; take max
                     var maxSeconds = 0
                     var found = false
                     for ex in block.exercises where idx < ex.templates.count {
-                        if let r = priorWorkingRest(in: ex.templates, upTo: idx)
+                        if let r = plannedRestBetweenSets(for: ex)
+                            ?? priorWorkingRest(in: ex.templates, upTo: idx),
+                            r > 0
                         {
                             maxSeconds = max(maxSeconds, r)
                             found = true
@@ -1534,11 +1549,13 @@ struct ActiveWorkoutView: View {
                     }
                     restSec = (found && maxSeconds > 0) ? maxSeconds : nil
                 } else {
-                    // Normal round: explicit rest only (no defaults); combine via max
+                    // Normal round: planned rest → template rest; combine via max
                     var maxSeconds = 0
                     var found = false
                     for ex in block.exercises where idx < ex.templates.count {
-                        if let r = ex.templates[idx].restSecondsAfter, r > 0 {
+                        if let r = plannedRestBetweenSets(for: ex)
+                            ?? ex.templates[idx].restSecondsAfter, r > 0
+                        {
                             maxSeconds = max(maxSeconds, r)
                             found = true
                         }
@@ -1557,8 +1574,9 @@ struct ActiveWorkoutView: View {
         } else {
             // Single exercise block
             if t.kind == .dropset {
-                // After dropset: use prior working set's explicit rest (if any)
-                if let r = priorWorkingRest(in: exercise.templates, upTo: idx),
+                // After dropset: planned rest → prior working set's template rest
+                if let r = plannedRestBetweenSets(for: exercise)
+                    ?? priorWorkingRest(in: exercise.templates, upTo: idx),
                     r > 0
                 {
                     restSec = r
@@ -1571,7 +1589,9 @@ struct ActiveWorkoutView: View {
                     exercise.templates[idx + 1].kind == .dropset
                 {
                     restSec = nil
-                } else if let r = t.restSecondsAfter, r > 0 {
+                } else if let r = plannedRestBetweenSets(for: exercise)
+                    ?? t.restSecondsAfter, r > 0
+                {
                     restSec = r
                 } else {
                     restSec = nil
