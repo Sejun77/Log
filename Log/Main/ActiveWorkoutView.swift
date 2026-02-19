@@ -1033,9 +1033,24 @@ struct ActiveWorkoutView: View {
                     }
                 }
 
-                if hasSwapsPending && hasNotesPending {
-                    Button("Finish + Apply both") {
-                        finishWorkout(applySwaps: true, applyNotes: true)
+                if hasSessionPlanPending {
+                    // Placeholder — no write-back yet (Phase 5d)
+                    Button("Finish + Update slot prescription") {
+                        finishWorkout(applySwaps: false, applyNotes: false)
+                    }
+                }
+
+                // Combined options when multiple categories are pending
+                let pendingCount = [
+                    hasSwapsPending, hasNotesPending,
+                    hasSessionPlanPending,
+                ].filter(\.self).count
+                if pendingCount >= 2 {
+                    Button("Finish + Apply all") {
+                        finishWorkout(
+                            applySwaps: hasSwapsPending,
+                            applyNotes: hasNotesPending)
+                        // Session plan write-back will be added in Phase 5d
                     }
                 }
 
@@ -1152,7 +1167,7 @@ struct ActiveWorkoutView: View {
             currentExerciseIndex = 0
         } else {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            if hasSwapsPending || hasNotesPending {
+            if hasSwapsPending || hasNotesPending || hasSessionPlanPending {
                 showFinishConfirm = true
             } else {
                 finishWorkout(applySwaps: false, applyNotes: false)
@@ -1177,6 +1192,61 @@ struct ActiveWorkoutView: View {
                 let current = fetchExercise(by: exerciseID)?.notes
                 let cachedNormalized: String? = cached.isEmpty ? nil : cached
                 if cachedNormalized != current { return true }
+            }
+        }
+        return false
+    }
+
+    /// True if the SessionPlan for this slot differs from the original snapshot.
+    private func isSessionPlanDirty(
+        for slotID: UUID,
+        in exercise: PlanExercise
+    ) -> Bool {
+        guard let sp = sessionPlans[slotID] else { return false }
+
+        // Build the "original" SessionPlan from the snapshot
+        let original: SessionPlan
+        if let snap = exercise.prescriptionSnapshot {
+            original = SessionPlan(
+                from: snap, notes: exercise.templateNotesSnapshot)
+        } else {
+            var p = SessionPlan()
+            p.slotNotes = exercise.templateNotesSnapshot
+            original = p
+        }
+
+        // Normalize empty strings to nil for text fields
+        func norm(_ s: String?) -> String? {
+            guard let s, !s.isEmpty else { return nil }
+            return s
+        }
+
+        if sp.sets != original.sets { return true }
+        if sp.repMin != original.repMin { return true }
+        if sp.repMax != original.repMax { return true }
+        if sp.restSecondsBetweenSets != original.restSecondsBetweenSets {
+            return true
+        }
+        if sp.restSecondsAfterExercise != original.restSecondsAfterExercise {
+            return true
+        }
+        if sp.durationMinSeconds != original.durationMinSeconds { return true }
+        if sp.durationMaxSeconds != original.durationMaxSeconds { return true }
+        if sp.usesDuration != original.usesDuration { return true }
+        if sp.rir != original.rir { return true }
+        if sp.rpe != original.rpe { return true }
+        if norm(sp.tempo) != norm(original.tempo) { return true }
+        if norm(sp.slotNotes) != norm(original.slotNotes) { return true }
+
+        return false
+    }
+
+    private var hasSessionPlanPending: Bool {
+        for block in plan.blocks {
+            for ex in block.exercises {
+                if isSessionPlanDirty(
+                    for: ex.routineSlotID, in: ex)
+                { return true }
             }
         }
         return false
