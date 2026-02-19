@@ -1034,13 +1034,14 @@ struct ActiveWorkoutView: View {
                 }
 
                 if hasSessionPlanPending {
-                    // Placeholder — no write-back yet (Phase 5d)
                     Button("Finish + Update slot prescription") {
-                        finishWorkout(applySwaps: false, applyNotes: false)
+                        finishWorkout(
+                            applySwaps: false, applyNotes: false,
+                            applySlotPrescription: true)
                     }
                 }
 
-                // Combined options when multiple categories are pending
+                // Combined option when multiple categories are pending
                 let pendingCount = [
                     hasSwapsPending, hasNotesPending,
                     hasSessionPlanPending,
@@ -1049,8 +1050,8 @@ struct ActiveWorkoutView: View {
                     Button("Finish + Apply all") {
                         finishWorkout(
                             applySwaps: hasSwapsPending,
-                            applyNotes: hasNotesPending)
-                        // Session plan write-back will be added in Phase 5d
+                            applyNotes: hasNotesPending,
+                            applySlotPrescription: hasSessionPlanPending)
                     }
                 }
 
@@ -1252,11 +1253,62 @@ struct ActiveWorkoutView: View {
         return false
     }
 
-    private func finishWorkout(applySwaps: Bool, applyNotes: Bool) {
+    private func finishWorkout(
+        applySwaps: Bool,
+        applyNotes: Bool,
+        applySlotPrescription: Bool = false
+    ) {
         if applySwaps { applyExerciseSwapsToRoutine() }
         if applyNotes { persistExerciseNotesOnlyForCurrentExercises() }
+        if applySlotPrescription { applySessionPlansToSlotPrescriptions() }
         try? ctx.save()
         unlockAndDismiss()
+    }
+
+    /// Write dirty SessionPlan fields back to the corresponding
+    /// RoutineExercise.prescription + templateNotes.
+    /// Only called when the user explicitly chooses "Update slot prescription".
+    private func applySessionPlansToSlotPrescriptions() {
+        for block in plan.blocks {
+            for ex in block.exercises {
+                let slotID = ex.routineSlotID
+                guard isSessionPlanDirty(for: slotID, in: ex) else { continue }
+                guard let sp = sessionPlans[slotID] else { continue }
+
+                // Fetch the RoutineExercise by slotID
+                let descriptor = FetchDescriptor<RoutineExercise>(
+                    predicate: #Predicate { $0.slotID == slotID }
+                )
+                guard let re = try? ctx.fetch(descriptor).first else {
+                    continue
+                }
+
+                // Ensure prescription exists
+                if re.prescription == nil {
+                    let p = SlotPrescription()
+                    ctx.insert(p)
+                    re.prescription = p
+                }
+                guard let rx = re.prescription else { continue }
+
+                // Copy SessionPlan fields → SlotPrescription
+                rx.sets = sp.sets
+                rx.repMin = sp.repMin
+                rx.repMax = sp.repMax
+                rx.restSecondsBetweenSets = sp.restSecondsBetweenSets
+                rx.restSecondsAfterExercise = sp.restSecondsAfterExercise
+                rx.durationMinSeconds = sp.durationMinSeconds
+                rx.durationMaxSeconds = sp.durationMaxSeconds
+                rx.usesDuration = sp.usesDuration
+                rx.rir = sp.rir
+                rx.rpe = sp.rpe
+                rx.tempo = sp.tempo?.isEmpty == true ? nil : sp.tempo
+
+                // Copy slotNotes → templateNotes
+                re.templateNotes =
+                    sp.slotNotes?.isEmpty == true ? nil : sp.slotNotes
+            }
+        }
     }
 
     /// Persist exercise defaults based on what was actually logged in this Workout.
