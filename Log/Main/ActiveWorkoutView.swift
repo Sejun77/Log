@@ -168,6 +168,8 @@ struct ActiveWorkoutView: View {
 
     @State private var exerciseToSwapIndex: Int? = nil
     @State private var showSwapSheet = false
+    @State private var pendingSwapNewExercise: Exercise? = nil
+    @State private var showSwapPlanChoice = false
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
 
     @Environment(\.modelContext) private var ctx
@@ -222,7 +224,12 @@ struct ActiveWorkoutView: View {
                 var perSet:
                     [Int: (reps: String, weight: String, duration: String)] =
                         [:]
-                for (i, tpl) in ex.templates.enumerated() {
+                let setCount = effectiveSetCount(
+                    for: ex, resolvedTemplates: ex.templates)
+                for i in 0..<setCount {
+                    let tpl =
+                        ex.templates[safe: i]
+                        ?? defaultTemplate(for: ex, at: i)
                     perSet[i] = (
                         reps: String(plannedRepTarget(for: ex, template: tpl)),
                         weight: tpl.targetWeight.map { String($0) } ?? "",
@@ -264,7 +271,12 @@ struct ActiveWorkoutView: View {
                     logged[slotID, default: []].formUnion(indices)
                 }
 
-                for (i, tpl) in ex.templates.enumerated() {
+                let setCount = effectiveSetCount(
+                    for: ex, resolvedTemplates: ex.templates)
+                for i in 0..<setCount {
+                    let tpl =
+                        ex.templates[safe: i]
+                        ?? defaultTemplate(for: ex, at: i)
                     if let cached = activeGuard.inputsCache[slotID]?[i] {
                         perSet[i] = cached
                     } else if let log = item?.setLogs.last(where: {
@@ -431,7 +443,9 @@ struct ActiveWorkoutView: View {
             }
             for j in 0..<exIdx {
                 let prevEx = block.exercises[j]
-                if setIndex < prevEx.templates.count {
+                if setIndex < effectiveSetCount(
+                    for: prevEx, resolvedTemplates: prevEx.templates)
+                {
                     if !loggedByExercise[prevEx.id, default: []].contains(
                         setIndex
                     ) {
@@ -716,6 +730,12 @@ struct ActiveWorkoutView: View {
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                             }
+                        } else if exercise.templates.isEmpty {
+                            Text(
+                                "No templates found — set your plan."
+                            )
+                            .font(.dsBodySecondary)
+                            .foregroundStyle(.orange)
                         } else {
                             Text("No plan")
                                 .font(.dsBodySecondary)
@@ -774,13 +794,46 @@ struct ActiveWorkoutView: View {
         return nil
     }
 
+    /// Effective set count for an exercise, resolving through session plan → snapshot → templates.
+    private func effectiveSetCount(
+        for ex: PlanExercise,
+        resolvedTemplates: [PlanSetTemplate]
+    ) -> Int {
+        if let sp = sessionPlans[ex.routineSlotID],
+            let s = sp.sets, s > 0
+        { return s }
+        if let snap = ex.prescriptionSnapshot,
+            let s = snap.sets, s > 0
+        { return s }
+        return max(1, resolvedTemplates.count)
+    }
+
+    /// Lightweight default template for set indices beyond the resolved templates array.
+    private func defaultTemplate(for exercise: PlanExercise, at index: Int)
+        -> PlanSetTemplate
+    {
+        PlanSetTemplate(
+            id: "\(exercise.currentExerciseID.uuidString)-extra\(index)",
+            kind: .working,
+            targetReps: 0,
+            targetWeight: nil,
+            restSecondsAfter: nil,
+            durationSeconds: nil
+        )
+    }
+
     /// Snapshot current planned targets per set so we can detect user edits.
     private func capturePreEditTargets() {
         guard let exercise = currentExercise else { return }
         let key = exercise.routineSlotID
         var reps: [Int: String] = [:]
         var durs: [Int: String] = [:]
-        for (i, tpl) in exercise.templates.enumerated() {
+        let count = effectiveSetCount(
+            for: exercise, resolvedTemplates: exercise.templates)
+        for i in 0..<count {
+            let tpl =
+                exercise.templates[safe: i]
+                ?? defaultTemplate(for: exercise, at: i)
             reps[i] = String(plannedRepTarget(for: exercise, template: tpl))
             durs[i] = plannedDurationTarget(for: exercise, template: tpl)
                 .map(String.init) ?? ""
@@ -798,27 +851,39 @@ struct ActiveWorkoutView: View {
         let oldReps = preEditRepStrs[slotKey] ?? [:]
         let oldDurs = preEditDurStrs[slotKey] ?? [:]
 
-        for (i, tpl) in exercise.templates.enumerated() {
+        let count = effectiveSetCount(
+            for: exercise, resolvedTemplates: exercise.templates)
+        if inputsByExerciseID[cacheKey] == nil {
+            inputsByExerciseID[cacheKey] = [:]
+        }
+        for i in 0..<count {
+            let tpl =
+                exercise.templates[safe: i]
+                ?? defaultTemplate(for: exercise, at: i)
             let newRep = String(
                 plannedRepTarget(for: exercise, template: tpl))
             let newDur = plannedDurationTarget(for: exercise, template: tpl)
                 .map(String.init) ?? ""
 
-            guard var entry = inputsByExerciseID[cacheKey]?[i] else {
-                continue
+            if var entry = inputsByExerciseID[cacheKey]?[i] {
+                // Update reps if still at old planned target or empty
+                if entry.reps == (oldReps[i] ?? "") || entry.reps.isEmpty {
+                    entry.reps = newRep
+                }
+                // Update duration if still at old planned target or empty
+                if entry.duration == (oldDurs[i] ?? "") || entry.duration.isEmpty
+                {
+                    entry.duration = newDur
+                }
+                inputsByExerciseID[cacheKey]?[i] = entry
+            } else {
+                // New set from increased set count
+                inputsByExerciseID[cacheKey]?[i] = (
+                    reps: newRep,
+                    weight: tpl.targetWeight.map { String($0) } ?? "",
+                    duration: newDur
+                )
             }
-
-            // Update reps if still at old planned target or empty
-            if entry.reps == (oldReps[i] ?? "") || entry.reps.isEmpty {
-                entry.reps = newRep
-            }
-
-            // Update duration if still at old planned target or empty
-            if entry.duration == (oldDurs[i] ?? "") || entry.duration.isEmpty {
-                entry.duration = newDur
-            }
-
-            inputsByExerciseID[cacheKey]?[i] = entry
         }
 
         syncToGuardCaches()
@@ -879,10 +944,13 @@ struct ActiveWorkoutView: View {
 
                     // --- Sets section ---
                     Section {
-                        ForEach(
-                            Array(exercise.templates.enumerated()),
-                            id: \.1.id
-                        ) { (idx, t) in
+                        let setCount = effectiveSetCount(
+                            for: exercise,
+                            resolvedTemplates: exercise.templates)
+                        ForEach(0..<setCount, id: \.self) { idx in
+                            let t =
+                                exercise.templates[safe: idx]
+                                ?? defaultTemplate(for: exercise, at: idx)
                             buildSetRow(
                                 block: block,
                                 exercise: exercise,
@@ -892,13 +960,15 @@ struct ActiveWorkoutView: View {
                         }
                     } header: {
                         VStack(alignment: .leading, spacing: 4) {
-                            // progress hint only
+                            let setCount = effectiveSetCount(
+                                for: exercise,
+                                resolvedTemplates: exercise.templates)
                             let loggedCount = loggedByExercise[
                                 exercise.id,
                                 default: []
                             ].count
                             Text(
-                                "Logged \(loggedCount)/\(exercise.templates.count) sets"
+                                "Logged \(loggedCount)/\(setCount) sets"
                             )
                             .font(.dsBody)
                         }
@@ -1109,20 +1179,47 @@ struct ActiveWorkoutView: View {
             .task {
                 await AppNotificationService.requestAuthorizationIfNeeded()
             }
-            .sheet(isPresented: $showSwapSheet) {
+            .sheet(
+                isPresented: $showSwapSheet,
+                onDismiss: {
+                    if pendingSwapNewExercise != nil {
+                        showSwapPlanChoice = true
+                    }
+                }
+            ) {
                 if let idx = exerciseToSwapIndex,
                     let block = currentBlock
                 {
-
-                    let planEx = block.exercises[idx]
-
-                    ExercisePickerSingle(exercises: allExercises) { picked in
-                        if let newEx = picked {
-                            swapExercise(planExercise: planEx, with: newEx)
-                        }
-                        showSwapSheet = false
-                        exerciseToSwapIndex = nil
+                    let usedIDs = Set(
+                        plan.blocks.flatMap(\.exercises)
+                            .map(\.currentExerciseID))
+                    let filtered = allExercises.filter {
+                        !usedIDs.contains($0.id)
                     }
+
+                    ExercisePickerSingle(exercises: filtered) { picked in
+                        pendingSwapNewExercise = picked
+                        showSwapSheet = false
+                        if picked == nil {
+                            exerciseToSwapIndex = nil
+                        }
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Session plan for this slot",
+                isPresented: $showSwapPlanChoice,
+                titleVisibility: .visible
+            ) {
+                Button("Keep current plan") {
+                    performPendingSwap(resetPlan: false)
+                }
+                Button("Reset plan for this slot") {
+                    performPendingSwap(resetPlan: true)
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingSwapNewExercise = nil
+                    exerciseToSwapIndex = nil
                 }
             }
             .sheet(
@@ -1354,6 +1451,76 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    /// Execute the deferred swap after the user chose keep/reset plan.
+    private func performPendingSwap(resetPlan: Bool) {
+        guard let idx = exerciseToSwapIndex,
+            let block = currentBlock,
+            idx < block.exercises.count,
+            let newEx = pendingSwapNewExercise
+        else {
+            pendingSwapNewExercise = nil
+            exerciseToSwapIndex = nil
+            return
+        }
+
+        let planEx = block.exercises[idx]
+        #if DEBUG
+        let preSwapPlan = sessionPlans[planEx.routineSlotID]
+        let preSwapSnap = planEx.prescriptionSnapshot
+        let preSwapNotes = planEx.templateNotesSnapshot
+        #endif
+
+        if resetPlan {
+            let slotID = planEx.routineSlotID
+            sessionPlans[slotID] = SessionPlan()
+            // Clear stale snapshot so input rebuild uses new template values
+            if let bi = plan.blocks.firstIndex(where: {
+                $0.exercises.contains(where: { $0.id == planEx.id })
+            }),
+                let ei = plan.blocks[bi].exercises.firstIndex(where: {
+                    $0.id == planEx.id
+                })
+            {
+                plan.blocks[bi].exercises[ei].prescriptionSnapshot = nil
+                plan.blocks[bi].exercises[ei].templateNotesSnapshot = nil
+            }
+        } else {
+            // Keep plan: verify nothing was cleared
+            #if DEBUG
+            assert(
+                sessionPlans[planEx.routineSlotID]?.sets == preSwapPlan?.sets
+                    && sessionPlans[planEx.routineSlotID]?.repMin == preSwapPlan?.repMin
+                    && sessionPlans[planEx.routineSlotID]?.repMax == preSwapPlan?.repMax,
+                "performPendingSwap(resetPlan: false) must not mutate sessionPlans"
+            )
+            assert(
+                planEx.prescriptionSnapshot != nil || preSwapSnap == nil,
+                "performPendingSwap(resetPlan: false) must not nil prescriptionSnapshot"
+            )
+            assert(
+                planEx.templateNotesSnapshot == preSwapNotes,
+                "performPendingSwap(resetPlan: false) must not clear templateNotesSnapshot"
+            )
+            #endif
+        }
+
+        swapExercise(planExercise: planEx, with: newEx)
+
+        // A) After reset+swap, if the new exercise has no templates and the
+        //    (now-empty) session plan has no sets, auto-open the Edit Plan
+        //    sheet so the user can immediately set sets/reps/rest.
+        if resetPlan, let swapped = currentExercise {
+            let sc = effectiveSetCount(
+                for: swapped, resolvedTemplates: swapped.templates)
+            if sc <= 1 && swapped.templates.isEmpty {
+                showEditPlanSheet = true
+            }
+        }
+
+        pendingSwapNewExercise = nil
+        exerciseToSwapIndex = nil
+    }
+
     private func swapExercise(planExercise: PlanExercise, with newEx: Exercise)
     {
         // 1) Locate slot
@@ -1394,9 +1561,14 @@ struct ActiveWorkoutView: View {
         let slotID = plan.blocks[blockIndex].exercises[exIndex].id
         let swappedPlanEx = plan.blocks[blockIndex].exercises[exIndex]
 
+        let swappedCount = effectiveSetCount(
+            for: swappedPlanEx, resolvedTemplates: newTemplates)
         var perSet: [Int: (reps: String, weight: String, duration: String)] =
             [:]
-        for (i, tpl) in newTemplates.enumerated() {
+        for i in 0..<swappedCount {
+            let tpl =
+                newTemplates[safe: i]
+                ?? defaultTemplate(for: swappedPlanEx, at: i)
             perSet[i] = (
                 reps: String(
                     plannedRepTarget(for: swappedPlanEx, template: tpl)),
@@ -1620,11 +1792,12 @@ struct ActiveWorkoutView: View {
         exercise: PlanExercise
     ) -> Int? {
 
-        // Nearest prior WORKING set's explicit rest (>0) or nil if none
+        // Nearest prior WORKING set's explicit rest (>0) or nil if none.
+        // Clamps starting index to templates bounds for safety with extra sets.
         func priorWorkingRest(in templates: [PlanSetTemplate], upTo i: Int)
             -> Int?
         {
-            var j = i - 1
+            var j = min(i - 1, templates.count - 1)
             while j >= 0 {
                 let prev = templates[j]
                 if prev.kind == .working {
@@ -1641,7 +1814,9 @@ struct ActiveWorkoutView: View {
         if block.isSuperset {
             // Wait for all exercises that HAVE this index to be logged
             for ex in block.exercises {
-                if idx >= ex.templates.count { continue }
+                let exSetCount = effectiveSetCount(
+                    for: ex, resolvedTemplates: ex.templates)
+                if idx >= exSetCount { continue }
                 if !loggedByExercise[ex.id, default: []].contains(idx) {
                     return nil
                 }
@@ -1652,15 +1827,20 @@ struct ActiveWorkoutView: View {
                 restSec = rr
             } else {
                 let roundHasDrop = block.exercises.contains { ex in
-                    idx < ex.templates.count
-                        && ex.templates[idx].kind == .dropset
+                    let sc = effectiveSetCount(
+                        for: ex, resolvedTemplates: ex.templates)
+                    return idx < sc
+                        && (ex.templates[safe: idx]?.kind ?? .working)
+                            == .dropset
                 }
 
                 if roundHasDrop {
                     // After a dropset: planned rest → prior working round rest; take max
                     var maxSeconds = 0
                     var found = false
-                    for ex in block.exercises where idx < ex.templates.count {
+                    for ex in block.exercises where idx < effectiveSetCount(
+                        for: ex, resolvedTemplates: ex.templates)
+                    {
                         if let r = plannedRestBetweenSets(for: ex)
                             ?? priorWorkingRest(in: ex.templates, upTo: idx),
                             r > 0
@@ -1674,9 +1854,11 @@ struct ActiveWorkoutView: View {
                     // Normal round: planned rest → template rest; combine via max
                     var maxSeconds = 0
                     var found = false
-                    for ex in block.exercises where idx < ex.templates.count {
+                    for ex in block.exercises where idx < effectiveSetCount(
+                        for: ex, resolvedTemplates: ex.templates)
+                    {
                         if let r = plannedRestBetweenSets(for: ex)
-                            ?? ex.templates[idx].restSecondsAfter, r > 0
+                            ?? ex.templates[safe: idx]?.restSecondsAfter, r > 0
                         {
                             maxSeconds = max(maxSeconds, r)
                             found = true
@@ -1685,8 +1867,11 @@ struct ActiveWorkoutView: View {
                     // If the *next* round contains any dropset and there IS a next round, skip rest now
                     let hasNextRound = idx < lastRoundIndex(in: block)
                     let nextHasDrop = block.exercises.contains { ex in
-                        (idx + 1) < ex.templates.count
-                            && ex.templates[idx + 1].kind == .dropset
+                        let sc = effectiveSetCount(
+                            for: ex, resolvedTemplates: ex.templates)
+                        return (idx + 1) < sc
+                            && (ex.templates[safe: idx + 1]?.kind ?? .working)
+                                == .dropset
                     }
                     restSec =
                         (hasNextRound && nextHasDrop)
@@ -1707,8 +1892,11 @@ struct ActiveWorkoutView: View {
                 }
             } else {
                 // Before dropset: skip
-                if idx + 1 < exercise.templates.count,
-                    exercise.templates[idx + 1].kind == .dropset
+                let exSetCount = effectiveSetCount(
+                    for: exercise, resolvedTemplates: exercise.templates)
+                if idx + 1 < exSetCount,
+                    (exercise.templates[safe: idx + 1]?.kind ?? .working)
+                        == .dropset
                 {
                     restSec = nil
                 } else if let r = plannedRestBetweenSets(for: exercise)
@@ -1725,10 +1913,12 @@ struct ActiveWorkoutView: View {
         if let current = currentBlock, current.id == block.id {
             let isLastExerciseOfBlock =
                 (currentExerciseIndex == block.exercises.count - 1)
+            let exSetCount = effectiveSetCount(
+                for: exercise, resolvedTemplates: exercise.templates)
             let isFinal: Bool =
                 block.isSuperset
                 ? (idx == lastRoundIndex(in: block)) && isLastExerciseOfBlock
-                : (idx == exercise.templates.count - 1) && isLastExerciseOfBlock
+                : (idx == exSetCount - 1) && isLastExerciseOfBlock
 
             if isFinal, let extra = block.restAfterSeconds, extra != 0 {
                 if let base = restSec {
@@ -1744,7 +1934,11 @@ struct ActiveWorkoutView: View {
             let isLastBlock = currentBlockIndex == plan.blocks.count - 1
             let isLastExercise =
                 currentExerciseIndex == currentBlock.exercises.count - 1
-            let isLastSet = idx == exercise.templates.count - 1
+            let isLastSet =
+                idx
+                    == effectiveSetCount(
+                        for: exercise, resolvedTemplates: exercise.templates)
+                    - 1
             if isLastBlock && isLastExercise && isLastSet {
                 return nil
             }
@@ -1777,7 +1971,9 @@ struct ActiveWorkoutView: View {
         -> Bool
     {
         for ex in block.exercises {
-            guard idx < ex.templates.count else { return false }
+            let sc = effectiveSetCount(
+                for: ex, resolvedTemplates: ex.templates)
+            guard idx < sc else { return false }
             if !loggedByExercise[ex.id, default: []].contains(idx) {
                 return false
             }
@@ -1788,7 +1984,10 @@ struct ActiveWorkoutView: View {
     /// Assumes your superset safeguard ensures equal set counts across exercises.
     private func lastRoundIndex(in block: PlanBlock) -> Int {
         guard let first = block.exercises.first else { return 0 }
-        return max(0, first.templates.count - 1)
+        return max(
+            0,
+            effectiveSetCount(for: first, resolvedTemplates: first.templates)
+                - 1)
     }
 
     /// Advance focus after logging within a superset.
@@ -1807,7 +2006,9 @@ struct ActiveWorkoutView: View {
         for _ in 0..<total {
             next = (next + 1) % total
             let ex = block.exercises[next]
-            if idx < ex.templates.count,
+            let sc = effectiveSetCount(
+                for: ex, resolvedTemplates: ex.templates)
+            if idx < sc,
                 !loggedByExercise[ex.id, default: []].contains(idx)
             {
                 currentExerciseIndex = next
