@@ -660,30 +660,42 @@ struct ActiveWorkoutView: View {
     /// Starts a rest timer with stable notification ID and persisted state.
     private func startRestWithPersistence(seconds: Int, slotID: UUID) {
         let stableID = restNotificationID(slotID: slotID)
+
+        // Cancel the OLD slot's notification before overwriting the stable ID.
+        // Without this, switching slots would orphan the old notification.
+        if let oldID = rest.stableNotificationID, oldID != stableID {
+            let center = UNUserNotificationCenter.current()
+            center.removePendingNotificationRequests(withIdentifiers: [oldID])
+            center.removeDeliveredNotifications(withIdentifiers: [oldID])
+        }
+
+        // Compute endsAt before rest.start() so wall-clock is consistent.
+        let endsAt = Date().addingTimeInterval(TimeInterval(seconds))
+
         rest.stableNotificationID = stableID
         rest.start(seconds: seconds, mode: .rest)
-
-        if let endsAt = rest.isRunning ? Date().addingTimeInterval(TimeInterval(seconds)) : nil {
-            persistRestState(endsAt: endsAt, slotID: slotID)
-        }
+        persistRestState(endsAt: endsAt, slotID: slotID)
     }
 
     /// Restores rest timer from persisted AppState on cold resume.
+    /// Only called when `rest.resumeIfScheduled()` did not rehydrate
+    /// (e.g. UserDefaults cleared). Exactly one notification is
+    /// scheduled via `rest.start()`, which internally cancel+reschedules
+    /// using the same `stableNotificationID`.
     private func resumeRestFromAppState() {
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
         guard let endsAt = appState.activeRestEndsAt,
               let slotID = appState.activeRestSlotID
         else { return }
 
+        let stableID = restNotificationID(slotID: slotID)
         let remaining = Int(floor(endsAt.timeIntervalSinceNow))
         if remaining > 0 {
-            // Set stable ID before starting so notification uses it
-            rest.stableNotificationID = restNotificationID(slotID: slotID)
+            rest.stableNotificationID = stableID
             rest.start(seconds: remaining, mode: .rest)
             showRestOverlay = true
         } else {
             // Rest already expired — clear persisted state and cancel stale notification
-            let stableID = restNotificationID(slotID: slotID)
             let center = UNUserNotificationCenter.current()
             center.removePendingNotificationRequests(withIdentifiers: [stableID])
             center.removeDeliveredNotifications(withIdentifiers: [stableID])
@@ -1267,9 +1279,12 @@ struct ActiveWorkoutView: View {
                     activeGuard.activeWorkoutID = w.id
                 }
 
-                // Restore rest timer: set stable notification ID before
-                // resumeIfScheduled so the rescheduled notification replaces
-                // any stale one from a prior process.
+                // Restore the stable notification ID from AppState so that
+                // any subsequent rest start (or stop) can cancel the
+                // notification from the previous process by its stable ID.
+                // resumeIfScheduled() itself does NOT reschedule — it only
+                // rehydrates the timer from UserDefaults. The original
+                // notification remains pending and fires naturally.
                 restoreStableRestID()
                 rest.resumeIfScheduled()
                 rest.syncNow()
