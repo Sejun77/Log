@@ -504,10 +504,11 @@ struct ActiveWorkoutView: View {
                             block: block,
                             exercise: exercise
                         ) {
-                            rest.start(seconds: seconds)
+                            startRestWithPersistence(seconds: seconds, slotID: exercise.routineSlotID)
                             showRestOverlay = true
                         } else {
                             rest.stop()
+                            clearPersistedRestState()
                         }
                         advanceForSupersetAfterLog(setIndex: idx, in: block)
                         UINotificationFeedbackGenerator().notificationOccurred(
@@ -562,10 +563,11 @@ struct ActiveWorkoutView: View {
                             block: block,
                             exercise: exercise
                         ) {
-                            rest.start(seconds: seconds)
+                            startRestWithPersistence(seconds: seconds, slotID: exercise.routineSlotID)
                             showRestOverlay = true
                         } else {
                             rest.stop()
+                            clearPersistedRestState()
                         }
                         advanceForSupersetAfterLog(setIndex: idx, in: block)
                         UINotificationFeedbackGenerator().notificationOccurred(
@@ -575,6 +577,7 @@ struct ActiveWorkoutView: View {
                     onUndo: {
                         undoSetLog(exerciseID: exercise.id, setIndex: idx)
                         rest.stop()
+                        clearPersistedRestState()
                         var s = loggedByExercise[exercise.id, default: []]
                         s.remove(idx)
                         loggedByExercise[exercise.id] = s
@@ -596,9 +599,96 @@ struct ActiveWorkoutView: View {
         // End the Live Activity (force remove widget)
         rest.endLiveActivityForWorkout()
 
+        // Clear persisted active session state
+        updateAppState(to: .idle)
+
         // Clear session locks and dismiss screen
         activeGuard.endSession()
         dismiss()
+    }
+
+    /// Updates the persisted AppState singleton.
+    private func updateAppState(to state: WorkoutLifecycleState) {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        appState.workoutState = state
+
+        switch state {
+        case .active:
+            appState.activeWorkoutID = workout?.id
+            appState.activeWorkoutStartedAt = activeGuard.sessionStart
+        case .idle, .finished:
+            appState.activeWorkoutID = nil
+            appState.activeWorkoutStartedAt = nil
+            appState.activeRestEndsAt = nil
+            appState.activeRestSlotID = nil
+        }
+
+        try? ctx.save()
+    }
+
+    /// Builds a stable notification ID: "rest.<workoutID>.<slotID>"
+    private func restNotificationID(slotID: UUID) -> String {
+        let wID = workout?.id.uuidString ?? "unknown"
+        return "rest.\(wID).\(slotID.uuidString)"
+    }
+
+    /// Persists rest timer state to AppState for cold-restart resume.
+    private func persistRestState(endsAt: Date, slotID: UUID) {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        appState.activeRestEndsAt = endsAt
+        appState.activeRestSlotID = slotID
+        try? ctx.save()
+    }
+
+    /// Clears persisted rest state in AppState.
+    private func clearPersistedRestState() {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        appState.activeRestEndsAt = nil
+        appState.activeRestSlotID = nil
+        try? ctx.save()
+    }
+
+    /// Sets `rest.stableNotificationID` from persisted AppState so that
+    /// `rest.resumeIfScheduled()` deduplicates correctly on cold restart.
+    private func restoreStableRestID() {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        if let slotID = appState.activeRestSlotID {
+            rest.stableNotificationID = restNotificationID(slotID: slotID)
+        }
+    }
+
+    /// Starts a rest timer with stable notification ID and persisted state.
+    private func startRestWithPersistence(seconds: Int, slotID: UUID) {
+        let stableID = restNotificationID(slotID: slotID)
+        rest.stableNotificationID = stableID
+        rest.start(seconds: seconds, mode: .rest)
+
+        if let endsAt = rest.isRunning ? Date().addingTimeInterval(TimeInterval(seconds)) : nil {
+            persistRestState(endsAt: endsAt, slotID: slotID)
+        }
+    }
+
+    /// Restores rest timer from persisted AppState on cold resume.
+    private func resumeRestFromAppState() {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        guard let endsAt = appState.activeRestEndsAt,
+              let slotID = appState.activeRestSlotID
+        else { return }
+
+        let remaining = Int(floor(endsAt.timeIntervalSinceNow))
+        if remaining > 0 {
+            // Set stable ID before starting so notification uses it
+            rest.stableNotificationID = restNotificationID(slotID: slotID)
+            rest.start(seconds: remaining, mode: .rest)
+            showRestOverlay = true
+        } else {
+            // Rest already expired — clear persisted state and cancel stale notification
+            let stableID = restNotificationID(slotID: slotID)
+            let center = UNUserNotificationCenter.current()
+            center.removePendingNotificationRequests(withIdentifiers: [stableID])
+            center.removeDeliveredNotifications(withIdentifiers: [stableID])
+            clearPersistedRestState()
+        }
     }
 
     @State private var now = Date()
@@ -621,6 +711,29 @@ struct ActiveWorkoutView: View {
     private func fetchWorkout(by id: UUID) -> Workout? {
         let d = FetchDescriptor<Workout>(predicate: #Predicate { $0.id == id })
         return (try? ctx.fetch(d))?.first
+    }
+
+    /// Rebuild the in-memory `itemsByExerciseID` cache from the persisted
+    /// workout's items. This is critical on resume so that subsequent
+    /// `appendSetLog` calls find existing `WorkoutItem` objects instead
+    /// of creating duplicates.
+    private func rebuildItemsByExerciseID() {
+        guard let w = workout else { return }
+        let planSlots = plan.blocks.flatMap(\.exercises)
+        for item in w.items {
+            guard let ex = item.exercise else { continue }
+            // Match by routineSlotID first (stable across swaps)
+            if let slotID = item.routineSlotID,
+               let slot = planSlots.first(where: { $0.routineSlotID == slotID })
+            {
+                itemsByExerciseID[slot.id] = item
+            } else {
+                // Fallback: match by exercise ID (pre-snapshot items)
+                if let slot = planSlots.first(where: { $0.currentExerciseID == ex.id }) {
+                    itemsByExerciseID[slot.id] = item
+                }
+            }
+        }
     }
 
     private var planExerciseIDs: [UUID] {
@@ -1133,6 +1246,31 @@ struct ActiveWorkoutView: View {
                 }
                 activeGuard.beginSession(plan: plan)
                 rest.ensureActivityStartedForSession()
+
+                // Bind to existing Workout first (before rehydration reads it)
+                if let id = activeGuard.activeWorkoutID,
+                    let existing = fetchWorkout(by: id)
+                {
+                    self.workout = existing
+                    rebuildItemsByExerciseID()
+                } else if workout == nil {
+                    let w = Workout(
+                        date: .now,
+                        routineName: plan.routineName,
+                        routineID: plan.routineID,
+                        items: [],
+                        notes: nil
+                    )
+                    ctx.insert(w)
+                    try? ctx.save()
+                    workout = w
+                    activeGuard.activeWorkoutID = w.id
+                }
+
+                // Restore rest timer: set stable notification ID before
+                // resumeIfScheduled so the rescheduled notification replaces
+                // any stale one from a prior process.
+                restoreStableRestID()
                 rest.resumeIfScheduled()
                 rest.syncNow()
 
@@ -1145,27 +1283,24 @@ struct ActiveWorkoutView: View {
                 // 3) now rehydrate from existing workout logs (so logged checkmarks & fields match reality)
                 rehydrateFromWorkoutIfPresent()
 
-                // Reuse an existing Workout if we have one; else create once
-                if let id = activeGuard.activeWorkoutID,
-                    let existing = fetchWorkout(by: id)
-                {
-                    self.workout = existing
-                } else if workout == nil {
-                    let w = Workout(
-                        date: .now,
-                        routineName: plan.routineName,
-                        items: [],
-                        notes: nil
-                    )
-                    ctx.insert(w)
-                    try? ctx.save()
-                    workout = w
-                    activeGuard.activeWorkoutID = w.id
+                // Persist active state for cold-restart resume
+                updateAppState(to: .active)
+
+                // On cold resume, restore rest from AppState if UserDefaults
+                // didn't already rehydrate it (e.g. UserDefaults cleared).
+                if !rest.isRunning {
+                    resumeRestFromAppState()
                 }
+
                 // ensure overlay shows if a rest is already running in background
                 showRestOverlay = rest.isRunning
             }
             .onReceive(sessionTicker) { now = $0 }
+            .onChange(of: rest.isRunning) { _, running in
+                if !running {
+                    clearPersistedRestState()
+                }
+            }
             .onReceive(
                 NotificationCenter.default.publisher(
                     for: UIApplication.didBecomeActiveNotification

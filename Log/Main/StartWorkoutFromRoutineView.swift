@@ -64,6 +64,25 @@ struct PrescriptionSnapshotPayload {
     }
 }
 
+extension PrescriptionSnapshotPayload {
+    /// Reconstruct a payload from a persisted snapshot (for resume path).
+    init(from snapshot: PlannedPrescriptionSnapshot) {
+        self.sets = snapshot.sets
+        self.repMin = snapshot.repMin
+        self.repMax = snapshot.repMax
+        self.restSecondsBetweenSets = snapshot.restSecondsBetweenSets
+        self.restSecondsAfterExercise = snapshot.restSecondsAfterExercise
+        self.rir = snapshot.rir
+        self.rpe = snapshot.rpe
+        self.tempo = snapshot.tempo
+        self.durationMinSeconds = snapshot.durationMinSeconds
+        self.durationMaxSeconds = snapshot.durationMaxSeconds
+        self.usesDuration = snapshot.usesDuration
+        self.equipment = snapshot.equipment
+        self.setupNotes = snapshot.setupNotes
+    }
+}
+
 struct PlanExercise: Identifiable {
     // Stable identity tied to RoutineExercise
     var id: UUID

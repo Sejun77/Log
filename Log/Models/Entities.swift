@@ -548,6 +548,7 @@ final class Workout {
     @Attribute(.unique) var id: UUID
     var date: Date
     var routineName: String?
+    var routineID: UUID?
     @Relationship(deleteRule: .cascade)
     var items: [WorkoutItem]
     var notes: String?
@@ -555,12 +556,14 @@ final class Workout {
     init(
         date: Date = .now,
         routineName: String? = nil,
+        routineID: UUID? = nil,
         items: [WorkoutItem],
         notes: String? = nil
     ) {
         self.id = UUID()
         self.date = date
         self.routineName = routineName
+        self.routineID = routineID
         self.items = items
         self.notes = notes
     }

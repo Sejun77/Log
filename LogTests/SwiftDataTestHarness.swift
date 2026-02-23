@@ -13,8 +13,12 @@ class SwiftDataTestHarness: XCTestCase {
         super.setUp()
         let schema = Schema([
             Exercise.self, SetTemplate.self, RoutineExercise.self,
-            RoutineBlock.self, Routine.self, SetLog.self,
-            WorkoutItem.self, Workout.self,
+            RoutineBlock.self, RoutineVariant.self, Routine.self,
+            WarmupStep.self, WarmupScheme.self,
+            TechniquePlan.self, SlotPrescription.self,
+            PlannedPrescriptionSnapshot.self,
+            SetLog.self, WorkoutItem.self, Workout.self,
+            AppState.self,
         ])
         container = try! ModelContainer(
             for: schema,

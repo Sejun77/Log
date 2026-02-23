@@ -54,6 +54,9 @@ struct BootstrapRoot: View {
                 backfillPhase3_1()
                 // Phase 3.3a: no backfill needed — snapshots are nil for old items.
 
+                // Phase 4a: validate persisted active session state.
+                validateActiveSession()
+
                 // Enforce a minimum splash duration only for real users.
                 if !isUITesting {
                     let elapsed = Date().timeIntervalSince(launchStart)
@@ -74,6 +77,7 @@ struct BootstrapRoot: View {
     /// Clears all persistent data for UI tests so each run starts clean.
     @MainActor
     private func resetDataForUITests() async {
+        deleteAll(AppState.self)
         deleteAll(PlannedPrescriptionSnapshot.self)
         deleteAll(SetLog.self)
         deleteAll(WorkoutItem.self)
@@ -161,6 +165,57 @@ struct BootstrapRoot: View {
         }
 
         if dirty {
+            try? ctx.save()
+        }
+    }
+
+    // MARK: - Phase 4a: AppState Helpers
+
+    /// Idempotent: fetches the singleton AppState or creates one.
+    @MainActor
+    @discardableResult
+    static func fetchOrCreateAppState(in ctx: ModelContext) -> AppState {
+        let descriptor = FetchDescriptor<AppState>(
+            predicate: #Predicate { $0.key == "appState" }
+        )
+        if let existing = try? ctx.fetch(descriptor).first {
+            return existing
+        }
+        let state = AppState()
+        ctx.insert(state)
+        try? ctx.save()
+        return state
+    }
+
+    /// Validates persisted active session state on launch.
+    /// Resets to `.idle` if the referenced workout no longer exists.
+    @MainActor
+    private func validateActiveSession() {
+        let appState = Self.fetchOrCreateAppState(in: ctx)
+
+        guard appState.workoutState == .active else { return }
+
+        var shouldReset = false
+
+        if let workoutID = appState.activeWorkoutID {
+            let descriptor = FetchDescriptor<Workout>(
+                predicate: #Predicate { $0.id == workoutID }
+            )
+            let workoutExists = (try? ctx.fetch(descriptor).first) != nil
+            if !workoutExists {
+                shouldReset = true
+            }
+        } else {
+            // State is .active but no workout ID — inconsistent
+            shouldReset = true
+        }
+
+        if shouldReset {
+            appState.workoutState = .idle
+            appState.activeWorkoutID = nil
+            appState.activeWorkoutStartedAt = nil
+            appState.activeRestEndsAt = nil
+            appState.activeRestSlotID = nil
             try? ctx.save()
         }
     }

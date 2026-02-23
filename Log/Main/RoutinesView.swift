@@ -686,9 +686,18 @@ struct RoutineEditor: View {
             )
             if let w = try? ctx.fetch(d).first {
                 ctx.delete(w)
-                try? ctx.save()
             }
         }
+
+        // Clear persisted AppState
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        appState.workoutState = .idle
+        appState.activeWorkoutID = nil
+        appState.activeWorkoutStartedAt = nil
+        appState.activeRestEndsAt = nil
+        appState.activeRestSlotID = nil
+        try? ctx.save()
+
         activeGuard.endSession()
     }
 

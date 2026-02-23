@@ -57,6 +57,7 @@ struct LogApp: App {
             SetLog.self,
             WorkoutItem.self,
             Workout.self,
+            AppState.self,
         ])
     }
 }
