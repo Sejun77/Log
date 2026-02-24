@@ -18,9 +18,9 @@ struct RootTabView: View {
     // MARK: - State
 
     @State private var selection: Tab = .routines
-    @State private var resumePlan: WorkoutPlan?
-    @State private var showResumedWorkout = false
     @State private var didCheckResume = false
+    @State private var triggerResumeNavigation = false
+    @State private var showResumeFailedAlert = false
 
     // MARK: - Body
 
@@ -42,19 +42,22 @@ struct RootTabView: View {
             didCheckResume = true
             checkForActiveSession()
         }
-        .fullScreenCover(isPresented: $showResumedWorkout) {
-            if let plan = resumePlan {
-                NavigationStack {
-                    ActiveWorkoutView(plan: plan)
-                }
-            }
+        .alert(
+            "Could not resume workout",
+            isPresented: $showResumeFailedAlert
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(
+                "The previous workout could not be restored. It may have been deleted."
+            )
         }
     }
 
     // MARK: - Tabs
 
     private var routinesTab: some View {
-        RoutinesView()
+        RoutinesView(resumeNavigationTrigger: $triggerResumeNavigation)
             .tag(Tab.routines)
             .tabItem {
                 Label("Routines", systemImage: "list.bullet.rectangle")
@@ -113,14 +116,16 @@ struct RootTabView: View {
             appState.activeRestEndsAt = nil
             appState.activeRestSlotID = nil
             try? ctx.save()
+            showResumeFailedAlert = true
             return
         }
 
-        // Restore in-memory state
+        // Restore in-memory state and navigate inside the Routines tab
         activeGuard.activeWorkoutID = workoutID
         activeGuard.sessionStart = appState.activeWorkoutStartedAt
+        activeGuard.beginSession(plan: plan)
 
-        resumePlan = plan
-        showResumedWorkout = true
+        selection = .routines
+        triggerResumeNavigation = true
     }
 }

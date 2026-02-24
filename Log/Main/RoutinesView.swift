@@ -4,6 +4,8 @@ import SwiftUI
 // MARK: - Routines List
 
 struct RoutinesView: View {
+    @Binding var resumeNavigationTrigger: Bool
+
     @Environment(\.modelContext) private var ctx
     @Query(sort: \Routine.name) private var routines: [Routine]
 
@@ -19,6 +21,12 @@ struct RoutinesView: View {
     @State private var showDeleteRoutineAlert = false
     @State private var pendingDeleteRoutine: Routine? = nil
     @State private var routineDeleteMessage = "This will delete the routine."
+
+    @State private var navigateToActiveWorkout = false
+
+    init(resumeNavigationTrigger: Binding<Bool> = .constant(false)) {
+        self._resumeNavigationTrigger = resumeNavigationTrigger
+    }
 
     var body: some View {
         NavigationStack {
@@ -68,8 +76,19 @@ struct RoutinesView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(
-                    "You can’t delete “\(lockedRoutineName)” while a workout using it is active."
+                    "You can\u{2019}t delete \u{201C}\(lockedRoutineName)\u{201D} while a workout using it is active."
                 )
+            }
+            .navigationDestination(isPresented: $navigateToActiveWorkout) {
+                if let plan = activeGuard.activePlan {
+                    ActiveWorkoutView(plan: plan)
+                }
+            }
+            .onChange(of: resumeNavigationTrigger) { _, trigger in
+                if trigger, activeGuard.activePlan != nil {
+                    navigateToActiveWorkout = true
+                    resumeNavigationTrigger = false
+                }
             }
         }
     }
@@ -80,8 +99,8 @@ struct RoutinesView: View {
         Group {
             if let plan = activeGuard.activePlan {
                 Section {
-                    NavigationLink {
-                        ActiveWorkoutView(plan: plan)
+                    Button {
+                        navigateToActiveWorkout = true
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "play.circle.fill")
@@ -98,9 +117,14 @@ struct RoutinesView: View {
                             Spacer()
 
                             LockBadge()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
                         }
                         .padding(.vertical, 2)
                     }
+                    .tint(.primary)
                 } header: {
                     DSSectionHeader(
                         title: "Active Session",

@@ -80,11 +80,17 @@ final class RestTimer: ObservableObject {
     // For canceling/replacing the scheduled local notification
     private var pendingNotificationID: String?
 
+    /// Stable notification ID set externally (e.g. "rest.<workoutID>.<slotID>").
+    /// When set, replaces the random UUID-based ID for deduplication.
+    var stableNotificationID: String?
+
     private func clearDeliveredNotificationIfAny() {
-        if let id = pendingNotificationID {
-            UNUserNotificationCenter.current()
-                .removeDeliveredNotifications(withIdentifiers: [id])
-        }
+        var ids: [String] = []
+        if let id = pendingNotificationID { ids.append(id) }
+        if let id = stableNotificationID, !ids.contains(id) { ids.append(id) }
+        guard !ids.isEmpty else { return }
+        UNUserNotificationCenter.current()
+            .removeDeliveredNotifications(withIdentifiers: ids)
     }
 
     // MARK: - Time Math (for resume / sync)
@@ -237,13 +243,19 @@ final class RestTimer: ObservableObject {
     }
 
     private func scheduleRestDoneNotification(at date: Date) {
+        let id = stableNotificationID ?? UUID().uuidString
+
+        // Cancel any existing notification with this ID before scheduling
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+        center.removeDeliveredNotifications(withIdentifiers: [id])
+
         let content = UNMutableNotificationContent()
         content.title = "Rest finished"
         content.body = "Ready for your next set."
         content.sound = .default
-        content.interruptionLevel = .timeSensitive  // boosts prominence + haptic on supported devices
+        content.interruptionLevel = .timeSensitive
 
-        let id = UUID().uuidString
         // UNTimeIntervalNotificationTrigger needs ≥ 1s
         let interval = max(1, Int(ceil(date.timeIntervalSinceNow)))
         let trigger = UNTimeIntervalNotificationTrigger(
@@ -255,16 +267,18 @@ final class RestTimer: ObservableObject {
             content: content,
             trigger: trigger
         )
-        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
+        center.add(req, withCompletionHandler: nil)
         pendingNotificationID = id
     }
 
     private func cancelPendingNotification() {
-        if let id = pendingNotificationID {
-            UNUserNotificationCenter.current()
-                .removePendingNotificationRequests(withIdentifiers: [id])
-            pendingNotificationID = nil
-        }
+        var ids: [String] = []
+        if let id = pendingNotificationID { ids.append(id) }
+        if let id = stableNotificationID, !ids.contains(id) { ids.append(id) }
+        guard !ids.isEmpty else { return }
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: ids)
+        pendingNotificationID = nil
     }
 
     private func startOrUpdateActivity() {
