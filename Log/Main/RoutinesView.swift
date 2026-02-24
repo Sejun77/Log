@@ -704,12 +704,13 @@ struct RoutineEditor: View {
     }
 
     private func endActiveSessionIfAny() {
+        // Preserve the active workout (non-destructive override).
         if let id = activeGuard.activeWorkoutID {
             let d = FetchDescriptor<Workout>(
                 predicate: #Predicate { $0.id == id }
             )
             if let w = try? ctx.fetch(d).first {
-                ctx.delete(w)
+                w.completedAt = Date()
             }
         }
 

@@ -1197,15 +1197,27 @@ struct ActiveWorkoutView: View {
                         .accessibilityIdentifier("sessionElapsedTimer")
                 }
             }
-            .alert("End workout?", isPresented: $showEndConfirm) {
-                Button("Cancel", role: .cancel) {}
-                Button("End Workout", role: .destructive) {
+            .confirmationDialog(
+                "End workout?",
+                isPresented: $showEndConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Save & Exit") {
+                    workout?.completedAt = Date()
+                    try? ctx.save()
+                    unlockAndDismiss()
+                }
+                Button("Discard Workout", role: .destructive) {
                     if let w = workout {
                         ctx.delete(w)
                         try? ctx.save()
                     }
                     unlockAndDismiss()
                 }
+            } message: {
+                Text(
+                    "Save keeps all logged sets. Discard deletes the workout permanently."
+                )
             }
             .confirmationDialog(
                 "Apply changes?",
@@ -2113,6 +2125,7 @@ struct ActiveWorkoutView: View {
     ) {
         item.routineSlotID = planEx.routineSlotID
         item.templateNotesSnapshot = planEx.templateNotesSnapshot
+        item.exerciseNameSnapshot = planEx.name
         if let payload = planEx.prescriptionSnapshot {
             let snapshot = payload.toModel()
             ctx.insert(snapshot)

@@ -326,37 +326,41 @@ struct HistoryView: View {
             } else {
                 ForEach(workouts) { w in
                     let isActive = activeGuard.activeWorkoutID == w.id
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(
-                                w.date.formatted(
-                                    date: .abbreviated,
-                                    time: .omitted
+                    NavigationLink {
+                        WorkoutDetailView(workout: w)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(
+                                    w.date.formatted(
+                                        date: .abbreviated,
+                                        time: .omitted
+                                    )
                                 )
-                            )
-                            .font(.dsBody)
+                                .font(.dsBody)
 
-                            Spacer()
+                                Spacer()
 
-                            if isActive {
-                                Text("In Progress")
-                                    .font(.dsCaption.weight(.semibold))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(.thinMaterial)
-                                    .clipShape(Capsule())
-                                    .foregroundStyle(.secondary)
-                            } else if let duration = workoutDuration(w) {
-                                Text(duration)
-                                    .font(.dsBodySecondary.monospacedDigit())
+                                if isActive {
+                                    Text("In Progress")
+                                        .font(.dsCaption.weight(.semibold))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.thinMaterial)
+                                        .clipShape(Capsule())
+                                        .foregroundStyle(.secondary)
+                                } else if let duration = workoutDuration(w) {
+                                    Text(duration)
+                                        .font(.dsBodySecondary.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            if let name = w.routineName {
+                                Text(name)
+                                    .font(.dsBodySecondary)
                                     .foregroundStyle(.secondary)
                             }
-                        }
-
-                        if let name = w.routineName {
-                            Text(name)
-                                .font(.dsBodySecondary)
-                                .foregroundStyle(.secondary)
                         }
                     }
                     .swipeActions(allowsFullSwipe: false) {
@@ -393,6 +397,107 @@ struct HistoryView: View {
             return String(format: "%dh %02dm", h, m)
         }
         return "\(max(1, m))m"
+    }
+}
+
+// MARK: - Workout Detail
+
+private struct WorkoutDetailView: View {
+    let workout: Workout
+
+    private func exerciseName(for item: WorkoutItem) -> String {
+        item.exercise?.name
+            ?? item.exerciseNameSnapshot
+            ?? "Deleted exercise"
+    }
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Date") {
+                    Text(
+                        workout.date.formatted(
+                            date: .abbreviated,
+                            time: .shortened
+                        )
+                    )
+                }
+
+                if let name = workout.routineName {
+                    LabeledContent("Routine") {
+                        Text(name)
+                    }
+                }
+
+                if let end = workout.completedAt {
+                    let total = max(0, Int(end.timeIntervalSince(workout.date)))
+                    let h = total / 3600
+                    let m = (total % 3600) / 60
+                    LabeledContent("Duration") {
+                        Text(
+                            h > 0
+                                ? String(format: "%dh %02dm", h, m)
+                                : "\(max(1, m))m"
+                        )
+                        .monospacedDigit()
+                    }
+                }
+            } header: {
+                Text("Overview")
+            }
+
+            ForEach(workout.items, id: \.id) { item in
+                Section {
+                    let logs = item.setLogs.sorted {
+                        $0.indexInExercise < $1.indexInExercise
+                    }
+                    if logs.isEmpty {
+                        Text("No sets logged")
+                            .font(.dsBodySecondary)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(logs, id: \.id) { log in
+                            HStack {
+                                Text(
+                                    "\(log.indexInExercise + 1). \(log.kindRaw.capitalized)"
+                                )
+                                .font(.dsBody)
+                                Spacer()
+
+                                if let dur = log.durationSeconds, dur > 0 {
+                                    Text("\(dur)s")
+                                        .font(.dsBodySecondary.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    if let w = log.weight, w > 0 {
+                                        let unit =
+                                            Units.weightIsKg ? "kg" : "lb"
+                                        Text(
+                                            "\(Int(w.rounded())) \(unit)"
+                                        )
+                                        .font(
+                                            .dsBodySecondary.monospacedDigit()
+                                        )
+                                        .foregroundStyle(.secondary)
+                                    }
+                                    Text(
+                                        "\(log.reps) rep\(log.reps == 1 ? "" : "s")"
+                                    )
+                                    .font(.dsBodySecondary.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text(exerciseName(for: item))
+                }
+            }
+        }
+        .navigationTitle("Workout")
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(DSColor.bg.ignoresSafeArea())
     }
 }
 

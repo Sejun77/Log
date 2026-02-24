@@ -537,9 +537,13 @@ final class WorkoutItem {
     @Relationship(deleteRule: .cascade)
     var plannedPrescriptionSnapshot: PlannedPrescriptionSnapshot?
 
+    // Phase 4b: readable history after exercise deletion
+    var exerciseNameSnapshot: String?
+
     init(exercise: Exercise, setLogs: [SetLog]) {
         self.exercise = exercise
         self.setLogs = setLogs
+        self.exerciseNameSnapshot = exercise.name
     }
 }
 
