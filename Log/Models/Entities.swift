@@ -549,6 +549,7 @@ final class Workout {
     var date: Date
     var routineName: String?
     var routineID: UUID?
+    var completedAt: Date?
     @Relationship(deleteRule: .cascade)
     var items: [WorkoutItem]
     var notes: String?

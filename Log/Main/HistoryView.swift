@@ -320,19 +320,38 @@ struct HistoryView: View {
     private var recentWorkoutsSection: some View {
         Section {
             if workouts.isEmpty {
-                Text("You don’t have any workouts yet.")
+                Text("You don't have any workouts yet.")
                     .font(.dsBodySecondary)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(workouts) { w in
+                    let isActive = activeGuard.activeWorkoutID == w.id
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(
-                            w.date.formatted(
-                                date: .abbreviated,
-                                time: .omitted
+                        HStack {
+                            Text(
+                                w.date.formatted(
+                                    date: .abbreviated,
+                                    time: .omitted
+                                )
                             )
-                        )
-                        .font(.dsBody)
+                            .font(.dsBody)
+
+                            Spacer()
+
+                            if isActive {
+                                Text("In Progress")
+                                    .font(.dsCaption.weight(.semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(.thinMaterial)
+                                    .clipShape(Capsule())
+                                    .foregroundStyle(.secondary)
+                            } else if let duration = workoutDuration(w) {
+                                Text(duration)
+                                    .font(.dsBodySecondary.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
 
                         if let name = w.routineName {
                             Text(name)
@@ -342,7 +361,7 @@ struct HistoryView: View {
                     }
                     .swipeActions(allowsFullSwipe: false) {
                         Button {
-                            if activeGuard.activeWorkoutID == w.id {
+                            if isActive {
                                 showActiveDeleteWarning = true
                             } else {
                                 toDelete = w
@@ -361,6 +380,19 @@ struct HistoryView: View {
                 systemImage: "clock.arrow.circlepath"
             )
         }
+    }
+
+    /// Formats workout duration from `date` → `completedAt`.
+    /// Returns nil when the workout has no `completedAt` (in-progress or legacy).
+    private func workoutDuration(_ w: Workout) -> String? {
+        guard let end = w.completedAt else { return nil }
+        let total = max(0, Int(end.timeIntervalSince(w.date)))
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        if h > 0 {
+            return String(format: "%dh %02dm", h, m)
+        }
+        return "\(max(1, m))m"
     }
 }
 

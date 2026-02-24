@@ -1508,6 +1508,10 @@ struct ActiveWorkoutView: View {
         if applySwaps { applyExerciseSwapsToRoutine() }
         if applyNotes { persistExerciseNotesOnlyForCurrentExercises() }
         if applySlotPrescription { applySessionPlansToSlotPrescriptions() }
+
+        // Mark the workout as completed (single point of truth for all finish paths).
+        workout?.completedAt = Date()
+
         try? ctx.save()
         unlockAndDismiss()
     }
