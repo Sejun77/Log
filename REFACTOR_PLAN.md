@@ -5,7 +5,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-02-18 (KST)
+Last updated: 2026-02-24 (KST)
 
 ---
 
@@ -16,18 +16,62 @@ The app works, but had production blockers that are being systematically resolve
 - **~~Templates and exercise defaults were silently mutated by session behavior~~** — **RESOLVED.** Silent calls to `persistDefaultsOnlyForCurrentExercises()`, `persistExerciseNotesOnlyForCurrentExercises()`, and `applyExerciseSwapsToRoutine()` have been removed. A finish-time confirmation dialog now gates any propagation.
 - **~~Routine slots had no stable UUIDs~~** — **RESOLVED.** `RoutineBlock.slotID` and `RoutineExercise.slotID` added (named `slotID` to avoid shadowing SwiftData's `PersistentIdentifier`-based `.id`).
 - **~~Exercise deletion cascaded into workout history~~** — **RESOLVED.** `Exercise.workoutItems` delete rule changed from `.cascade` to `.nullify`.
+- **~~No persisted workout lifecycle state~~** — **RESOLVED.** `AppState` model persists `activeWorkoutID`, `activeWorkoutStartedAt`, rest timer state. Cold resume rebuilds `WorkoutPlan` via `WorkoutResumeService`.
 - **History is still linked by strings**: `Workout.routineName: String?` — to be replaced by RoutineVariant relationship.
-- **Persisted workout lifecycle state** (resume after restart) — not yet implemented.
-
-Enforced invariants (in progress):
-- Templates = stable blueprint (prescription is now source of intent)
-- Sessions = snapshotted, append-only record (Phase 3.3 done — snapshots populated at session start, displayed in workout UI)
-- Explicit "apply changes" flow for any propagation back to templates/defaults (implemented)
-- History grouped by IDs/relationships, not names (not yet implemented)
 
 ---
 
-## 1) Current System Snapshot (as of Phase 3.3)
+## 1) Reality Rules / Invariants
+
+These are the enforced invariants as of Phase 5. All new work must preserve them.
+
+### Session isolation
+- Templates are never silently mutated by workout actions.
+- Sessions snapshot prescription at start (`PlannedPrescriptionSnapshot`) — immutable thereafter.
+- Session-level edits (SessionPlan) default to "this workout only." Applying back to slot prescription requires explicit user action via `applySessionPlansToSlotPrescriptions()`.
+
+### Slot identity
+- `RoutineBlock.slotID` and `RoutineExercise.slotID` are stable UUIDs distinct from SwiftData's `PersistentIdentifier`.
+- `WorkoutItem.routineSlotID` copies `RoutineExercise.slotID` at session start for later reconciliation.
+
+### History protection
+- `Exercise.workoutItems` delete rule is `.nullify` — deleting an exercise preserves workout history.
+- `Workout.routineID: UUID?` links workouts to their source routine (additive, optional).
+- `WorkoutItem.exerciseNameSnapshot` (Phase 4b) preserves exercise name for display when exercise is deleted.
+
+### Workout lifecycle
+- `AppState` (SwiftData singleton, keyed `"appState"`) persists: `workoutState` (idle/active/finished), `activeWorkoutID`, `activeWorkoutStartedAt`, `activeRestEndsAt`, `activeRestSlotID`.
+- On cold launch, `BootstrapRoot.validateActiveSession()` resets to `.idle` if the referenced workout is missing.
+- `RootTabView.checkForActiveSession()` rebuilds a `WorkoutPlan` via `WorkoutResumeService` and presents `ActiveWorkoutView` in a `.fullScreenCover`. Resume binds to the existing `Workout` — never creates a new one.
+- `ActiveWorkoutGuard` is the in-memory session singleton; `AppState` is the persistence layer.
+
+### Rest timer durability
+- Rest timer persists via both UserDefaults (warm resume) and AppState (cold resume).
+- Stable notification IDs (`"rest.<workoutID>.<slotID>"`) prevent duplicate local notifications.
+- Cancel-before-reschedule on every `startRestWithPersistence` call.
+- `.onChange(of: rest.isRunning)` clears persisted rest state on natural expiration.
+
+### Template resolution (3-tier, current)
+1. `RoutineExercise.setTemplates` — explicit per-set overrides (compatibility/power-user)
+2. `SlotPrescription.generateTemplates()` — primary source of programming intent
+3. `Exercise.defaultTemplates` — exercise-level fallback (targeted for removal in Phase 8)
+
+### Session plan (in-workout editing)
+- `SessionPlan` is a per-exercise in-memory copy of prescription fields, created at workout start.
+- Users can edit sets, rep range, rest, RIR, RPE, tempo during the workout via a sheet.
+- `effectiveSetCount` resolves the displayed set target from session plan → prescription snapshot → setTemplate count.
+- Rest timer uses session plan rest values with precedence over prescription snapshot.
+- `hasSessionPlanPending` detects if any session plan diverges from the original snapshot.
+- On finish, if pending changes exist, an explicit apply-back dialog offers to write them to `SlotPrescription`.
+
+### Exercise swap (in-workout)
+- Swapping an exercise during a workout shows a keep/reset dialog for logged sets.
+- The exercise picker filters out exercises already present in the current block.
+- Swap changes are tracked and surfaced at finish time for optional routine update.
+
+---
+
+## 2) Current System Snapshot
 
 ### Models
 
@@ -72,7 +116,7 @@ Enforced invariants (in progress):
 
 - **WarmupScheme** — `name`, `steps: [WarmupStep]` (.cascade)
 - **WarmupStep** — `order`, `kind` (percentage/fixedReps/noteOnly), `reps?`, `percentOfWorking?`, `restSecondsAfter?`, `note?`
-- **TechniquePlan** — `order`, `type` (dropset/partialReps/restPause/amrap/toFailure/cluster/tempoOverride), plus parameterized fields (`repMin?`, `repMax?`, `reps?`, `durationSeconds?`, `restSeconds?`, `rounds?`, `dropPercent?`, `dropCount?`, `partialRangeNote?`, `note?`)
+- **TechniquePlan** — `order`, `type` (dropset/partialReps/restPause/amrap/toFailure/cluster/tempoOverride), plus parameterized fields
 
 - **SetTemplate** — `order`, `kind` (warmup/working/dropset), `targetReps`, `targetWeight?`, `restSecondsAfter?`, `durationSeconds?`
 - **SetLog** — `indexInExercise`, `kind`, `reps`, `weight?`, `restSeconds?`, `durationSeconds?`, `timestamp`
@@ -81,207 +125,232 @@ Enforced invariants (in progress):
   - `routineSlotID: UUID?` — copy of `RoutineExercise.slotID` at session start
   - `templateNotesSnapshot: String?` — copy of `RoutineExercise.templateNotes`
   - `plannedPrescriptionSnapshot: PlannedPrescriptionSnapshot?` (.cascade) — immutable prescription snapshot
-- **Workout** — `id: UUID`, `date`, `routineName: String?`, `items: [WorkoutItem]` (.cascade), `notes?`
+  - `exerciseNameSnapshot: String?` (**Phase 4b**) — copy of `exercise.name` at creation time (survives exercise deletion)
+- **Workout** — `id: UUID`, `date`, `routineName: String?`, `routineID: UUID?`, `completedAt: Date?` (**Phase 4b**), `items: [WorkoutItem]` (.cascade), `notes?`
 
-### Exercise-level vs Slot-level responsibility
-
-**Exercise-level** (definition — shared across all routines):
-- `name`, `bodyPart`, `isTimeBased`, `isCustom`
-- `notes` — global cues / form notes
-- `equipmentType` + `setupDefaults` — **future** (not yet added; see Phase 9)
-
-**Slot-level** (per-routine programming intent — varies per routine/variant):
-- `sets`, `repMin`/`repMax`, `restSecondsBetweenSets`, `restSecondsAfterExercise`
-- `rir`, `rpe`, `tempo`
-- `durationMinSeconds`/`durationMaxSeconds` (when `isTimeBased`)
-- `warmupScheme`, `techniquePlans`
-- `templateNotes` (slot-specific coaching notes)
-
-### Template resolution (current 3-tier, with target 2-tier)
-
-**Current (compatibility):**
-1. **`RoutineExercise.setTemplates`** — explicit per-set overrides (compatibility/power-user layer)
-2. **`SlotPrescription.generateTemplates()`** — deterministic generation from structured prescription
-3. **`Exercise.defaultTemplates`** — exercise-level fallback (**targeted for removal**)
-
-**Target architecture (after Phase 8):**
-1. **`RoutineExercise.setTemplates`** — explicit per-set overrides (optional/advanced)
-2. **`SlotPrescription.generateTemplates()`** — primary source of programming intent
-3. **Unprogrammed slot** — UI shows "Unprogrammed" state with optional quick-fill buttons (e.g., 3x8), NOT exercise default templates
-
-Implemented in:
-- `RoutineExercise.resolvedTemplates()` (shared, in Entities.swift)
-- `RoutineExercise.resolvedTemplates(in:)` (context-aware, in RoutinesView.swift — adds order normalization)
-- `StartWorkoutFromRoutineView.makePlan()` — calls `re.resolvedTemplates()`
-
-### Duration-based design
-
-- **`Exercise.isTimeBased`**: describes the exercise mode/capability (e.g., plank, wall sit).
-- **`SlotPrescription.durationMinSeconds` / `durationMaxSeconds`**: slot-level duration targets that vary per routine/variant. These belong on the prescription, not the exercise.
-- **`SlotPrescription.usesDuration`**: synced with `Exercise.isTimeBased` by the prescription editor on appear. Controls whether `generateTemplates()` produces duration-based or rep-based templates.
-
-### Compatibility bridge
-
-- `setTemplates` on `RoutineExercise` remain for existing data and power-user overrides.
-- When `setTemplates` is non-empty, it wins (tier 1). The routine editor shows an orange hint: "Custom set templates override prescription."
-- Prescription-generated templates (tier 2) produce `[SetTemplate]` with a single `targetReps` value (`repMax ?? repMin ?? 8`). Min/max range display uses session snapshots in the workout UI.
-- `Exercise.defaultTemplates` (tier 3) remains as a compatibility fallback until Phase 8 removes it.
+- **AppState** — persisted singleton (`@Attribute(.unique) key: "appState"`)
+  - `workoutState: WorkoutLifecycleState` (idle/active/finished)
+  - `activeWorkoutID: UUID?`, `activeWorkoutStartedAt: Date?`
+  - `activeRestEndsAt: Date?`, `activeRestSlotID: UUID?`
+  - `sessionPlansJSON: String?` (**Phase 4c**) — Codable `[String: SessionPlan]` keyed by routineSlotID
+  - `activeBlockIndex: Int?`, `activeExerciseIndex: Int?` (**Phase 4c**)
 
 ---
 
-## 2) Target Architecture (Remaining)
+## 3) Completed Phases
 
-### 2.1 Workout lifecycle (single source of truth)
-`WorkoutState`:
-- idle
-- configuringTemplate
-- active(sessionID)
-- finished(sessionID)
-
-Persist `activeSessionID` so sessions can resume after app restart.
-
-### 2.2 History grouping by IDs (not strings)
-Replace:
-- `Workout.routineName: String?` as primary link
-with:
-- `Workout.routineVariantID` (or relationship to RoutineVariant)
-
-### 2.3 Exercise-level equipment & setup (future)
-Move equipment/setup from `SlotPrescription` to Exercise-level defaults:
-- Add `equipmentType: String?` and `setupDefaults: String?` to Exercise
-- Deprecate `SlotPrescription.equipment` and `SlotPrescription.setupNotes`
-- Optional: slot-level overrides only if explicitly required (rare case where same exercise uses different equipment in different routines)
-
-### 2.4 Remove Exercise.defaultTemplates
-`Exercise.defaultTemplates` is a legacy field. Target state:
-- Slot prescription is the single source of programming intent
-- Unprogrammed slots show a clear "Unprogrammed" UX with quick-fill options
-- No global default templates on Exercise
-
----
-
-## 3) Production Requirements (Non-negotiable)
-
-### 3.1 Migrations: non-destructive, additive first
-- Add new entities/fields as optional with safe defaults.
-- Backfill lazily or via migration helpers.
-- Keep compatibility for existing data until stable.
-
-### 3.2 Deletion rules: protect history
-Exercise → WorkoutItem is now `.nullify` (done).
-Remaining goals:
-- Deleting a routine/variant should NOT delete past workouts.
-- Workouts should keep exercise name snapshots or survive nullified links gracefully.
-
-### 3.3 Tests (3-5)
-1) Session creation snapshots prescription from template slot
-2) Session edits do not mutate template without explicit apply
-3) Finish produces immutable history record
-Optional:
-4) Resume active session after restart
-5) History grouping survives name changes
-
-### 3.4 Performance
-Avoid heavy grouping/filtering/sorting in SwiftUI `body`.
-Prefer:
-- Query-based fetch with sort descriptors
-- Precomputed summaries (last performed, session count, duration, etc.)
-- Cached groupings keyed by IDs
-
----
-
-## 4) Tight Execution Checklist
-
-### Completed Phases
-
-#### Phase 0 — Baseline & guardrails
+### Phase 0 — Baseline & guardrails ✅
 - [x] Create `CLAUDE.md` (rules/invariants)
 - [x] Create `REFACTOR_PLAN.md`
 - [x] Commit as first commit on `refactor/architecture-v2`
 - [x] Confirm app builds and runs
 
-#### Phase 1.1 — Identity & variant skeleton (additive)
+### Phase 1.1 — Identity & variant skeleton ✅
 - [x] Add `RoutineVariant` model (`id: UUID`, `name`, `order`, `blocks`)
-- [x] Add `slotID: UUID` to `RoutineBlock` and `RoutineExercise` (named `slotID`, NOT `id`, to avoid shadowing SwiftData identity)
-- [x] Backfill: deduplicate `slotID`s, create "Default" variant for existing routines (`BootstrapRoot.backfillPhase1()`)
-- [x] Register `RoutineVariant` in model container (`LogApp.swift`)
+- [x] Add `slotID: UUID` to `RoutineBlock` and `RoutineExercise`
+- [x] Backfill: deduplicate `slotID`s, create "Default" variant for existing routines
+- [x] Register `RoutineVariant` in model container
 - [x] UI unchanged; existing routines display correctly
 
-#### Phase 1.2 — Data integrity hardening
+### Phase 1.2 — Data integrity hardening ✅
 - [x] Change `Exercise.workoutItems` delete rule from `.cascade` to `.nullify`
 - [x] Verified: deleting an exercise no longer destroys workout history
 
-#### Phase 2.1 — Remove silent mutations
-- [x] Commented out `persistDefaultsOnlyForCurrentExercises()` in `ActiveWorkoutView.next()` finish path
-- [x] Commented out `persistExerciseNotesOnlyForCurrentExercises()` in finish path
-- [x] Commented out `applyExerciseSwapsToRoutine()` in finish path
+### Phase 2.1 — Remove silent mutations ✅
+- [x] Removed `persistDefaultsOnlyForCurrentExercises()` from finish path
+- [x] Removed `persistExerciseNotesOnlyForCurrentExercises()` from finish path
+- [x] Removed `applyExerciseSwapsToRoutine()` from finish path
 - [x] Verified: completing a workout does not silently mutate Exercise or Routine
 
-#### Phase 2.2 — Explicit apply flow
+### Phase 2.2 — Explicit apply flow ✅
 - [x] Added `hasSwapsPending` / `hasNotesPending` detection on workout finish
 - [x] Added `.confirmationDialog` with 4 options: this workout only / update routine swaps / update global notes / apply both
 - [x] `finishWorkout(applySwaps:applyNotes:)` centralized finish helper
 
-#### Phase 3.1 — Prescription models (additive)
+### Phase 3.1 — Prescription models ✅
 - [x] Added `SlotPrescription` model (core + autoregulation + duration + context fields)
 - [x] Added `WarmupScheme` + `WarmupStep` models (reusable, `.nullify` delete rule)
 - [x] Added `TechniquePlan` model (parameterized, `.cascade` owned by prescription)
 - [x] Added `WarmupStepKind` and `TechniqueType` enums
 - [x] Added `templateNotes: String?` and `prescription: SlotPrescription?` (.cascade) to `RoutineExercise`
 - [x] Backfill: `BootstrapRoot.backfillPhase3_1()` ensures every `RoutineExercise` has a `SlotPrescription`
-- [x] Registered all new models in model container
 
-#### Phase 3.2a — Prescription-driven template generation (model only)
-- [x] Added `SlotPrescription.hasContent` computed property
-- [x] Added `SlotPrescription.generateTemplates() -> [SetTemplate]` (deterministic; does not insert into context)
-- [x] Added `RoutineExercise.resolvedTemplates() -> [SetTemplate]` (shared 3-tier resolver in Entities.swift)
+### Phase 3.2a — Prescription-driven template generation ✅
+- [x] `SlotPrescription.hasContent` computed property
+- [x] `SlotPrescription.generateTemplates() -> [SetTemplate]` (deterministic; does not insert into context)
+- [x] `RoutineExercise.resolvedTemplates() -> [SetTemplate]` (shared 3-tier resolver)
 
-#### Phase 3.2b — Workout plan uses prescription resolver
-- [x] `StartWorkoutFromRoutineView.makePlan()` now calls `re.resolvedTemplates()` (shared helper)
-- [x] Removed local `resolvedTemplates(for:)` and `normalizeTemplateOrder()` from `StartWorkoutFromRoutineView`
+### Phase 3.2b — Workout plan uses prescription resolver ✅
+- [x] `StartWorkoutFromRoutineView.makePlan()` calls `re.resolvedTemplates()`
+- [x] Removed local `resolvedTemplates(for:)` and `normalizeTemplateOrder()`
 
-#### Phase 3.2c — Routine editor writes prescription + slot notes
-- [x] Added `SlotPrescriptionSection` view (ensures prescription exists on appear, syncs `usesDuration`)
-- [x] Added `PrescriptionFields` view (sets, rep range or duration range, rest, RIR, tempo)
-- [x] Added slot notes field bound to `re.templateNotes`
-- [x] Wired into both `RoutineBlockDetailView` and `SupersetDetailNoRest`
+### Phase 3.2c — Routine editor writes prescription + slot notes ✅
+- [x] `SlotPrescriptionSection` + `PrescriptionFields` views
+- [x] Slot notes field bound to `re.templateNotes`
 - [x] Shows precedence hint when custom `setTemplates` exist
-- [x] Updated `resolvedTemplates(in:)` to 3-tier (matching shared helper)
 
-#### Phase 3.3a — Session snapshot fields (additive)
-- [x] Added `PlannedPrescriptionSnapshot` @Model (mirrors SlotPrescription display fields)
-- [x] Added `PlannedPrescriptionSnapshot.init(from: SlotPrescription)` convenience init
-- [x] Added `routineSlotID: UUID?`, `templateNotesSnapshot: String?`, `plannedPrescriptionSnapshot: PlannedPrescriptionSnapshot?` (.cascade) to `WorkoutItem`
-- [x] Registered `PlannedPrescriptionSnapshot` in model container
-- [x] Added to UI test reset; no backfill needed (old items get nil, UI falls back)
+### Phase 3.3a — Session snapshot fields ✅
+- [x] `PlannedPrescriptionSnapshot` @Model (mirrors SlotPrescription display fields)
+- [x] `routineSlotID`, `templateNotesSnapshot`, `plannedPrescriptionSnapshot` on `WorkoutItem`
 
-#### Phase 3.3b — Populate snapshots at workout start
-- [x] Added `PrescriptionSnapshotPayload` value struct to carry snapshot data in plan
-- [x] Extended `PlanExercise` with `routineSlotID`, `templateNotesSnapshot`, `prescriptionSnapshot`
-- [x] `makePlan()` populates snapshot fields from `re.slotID`, `re.templateNotes`, `re.prescription`
-- [x] Added `populateSnapshotFields(on:from:)` helper in `ActiveWorkoutView`
-- [x] All 3 `WorkoutItem` creation sites (appendSetLog, appendTimeSetLog, swapExercise) populate snapshots
+### Phase 3.3b — Populate snapshots at workout start ✅
+- [x] `PrescriptionSnapshotPayload` value struct in plan
+- [x] `PlanExercise` extended with `routineSlotID`, `templateNotesSnapshot`, `prescriptionSnapshot`
+- [x] `makePlan()` populates snapshot fields; all `WorkoutItem` creation sites populate snapshots
 
-#### Phase 3.3c — Workout UI displays planned prescription
-- [x] Added compact "Planned" section in `ActiveWorkoutView` between Actions and Sets
-- [x] Displays rep range, duration range, sets, rest, tempo, RIR, RPE, slot notes from snapshot
-- [x] Reads from `PlanExercise.prescriptionSnapshot` (snapshot data, not live template)
+### Phase 3.3c — Workout UI displays planned prescription ✅
+- [x] Compact "Planned" section in `ActiveWorkoutView` between Actions and Sets
+- [x] Reads from `PlanExercise.prescriptionSnapshot` (immutable snapshot data)
 - [x] Section hidden when no snapshot data exists (graceful fallback for old workouts)
+
+### Phase 4a — Persisted AppState + resume after restart ✅
+- [x] `AppState` model: `WorkoutLifecycleState` enum (idle/active/finished), singleton with `@Attribute(.unique) key`
+- [x] Fields: `activeWorkoutID`, `activeWorkoutStartedAt`, `activeRestEndsAt`, `activeRestSlotID`
+- [x] `Workout.routineID: UUID?` added (single source of truth for routine association)
+- [x] `WorkoutResumeService.rebuildPlan(for:in:)` — primary path (routine exists) + fallback path (routine deleted, flat blocks from workout items)
+- [x] `BootstrapRoot.fetchOrCreateAppState(in:)` — idempotent singleton fetch/create
+- [x] `BootstrapRoot.validateActiveSession()` — resets to `.idle` if referenced workout missing
+- [x] `RootTabView.checkForActiveSession()` — `.task` with run-once guard, presents `.fullScreenCover`
+- [x] Resume binds to existing `Workout` via `rebuildItemsByExerciseID()` — never creates duplicates
+- [x] `ActiveWorkoutView.updateAppState(to:)` — sets on `.onAppear`, clears on `unlockAndDismiss()`
+- [x] `RoutinesView.endActiveSessionIfAny()` clears AppState
+- [x] `PrescriptionSnapshotPayload.init(from: PlannedPrescriptionSnapshot)` for fallback rebuild
+
+**Verification:**
+- Start workout → kill app → relaunch → fullScreenCover resumes with correct plan, bound to same Workout
+- Start workout → finish → relaunch → no resume prompt
+- Start workout → delete routine → kill → relaunch → degraded flat-block resume works
+- Start workout → end (discard) → relaunch → no resume
+
+### Phase 4a.1 — Rest timer durability ✅
+- [x] `RestTimer.stableNotificationID` — deterministic IDs (`"rest.<workoutID>.<slotID>"`)
+- [x] `scheduleRestDoneNotification` uses stable ID, cancels pending+delivered before scheduling
+- [x] `startRestWithPersistence(seconds:slotID:)` — cancels old slot notification before overwriting ID
+- [x] `persistRestState(endsAt:slotID:)` / `clearPersistedRestState()` write to AppState
+- [x] `restoreStableRestID()` + `resumeRestFromAppState()` for cold resume fallback
+- [x] `.onChange(of: rest.isRunning)` auto-clears persisted rest on natural expiration
+
+**Verification:**
+- Rest timer survives app kill and cold restart
+- No duplicate notifications on resume or cross-slot transitions
+
+### Phase 5 — Session plan editing + explicit apply-back ✅
+- [x] `SessionPlan` struct: in-memory per-exercise copy of prescription fields (sets, repMin/Max, rest, RIR, RPE, tempo)
+- [x] `sessionPlans: [UUID: SessionPlan]` dictionary in `ActiveWorkoutView`, keyed by `PlanExercise.id`
+- [x] Session plan edit sheet: modify sets, rep range, rest, autoregulation during workout
+- [x] `effectiveSetCount` resolves displayed set target: session plan → prescription snapshot → setTemplate count
+- [x] Rest timer uses session plan rest values with precedence over prescription snapshot
+- [x] Set target defaults (reps, weight input) use session plan values
+- [x] Compact "Planned" display updates live from session plan edits
+- [x] `hasSessionPlanPending` detects divergence from original prescription snapshot
+- [x] Finish dialog: explicit apply-back via `applySessionPlansToSlotPrescriptions()` — writes changed fields to `SlotPrescription` using `routineSlotID` matching
+- [x] Exercise swap: keep/reset dialog for logged sets
+- [x] Exercise picker filters out exercises already present in the current block
+
+**Verification:**
+- Editing session plan during workout does not touch SlotPrescription until explicit apply
+- Apply-back only writes to matching slots via `routineSlotID`
+- Swap keep/reset preserves or clears sets correctly
 
 ---
 
-### Remaining Phases
+## 4) Remaining Phases
 
-#### Phase 3.5 — Warmup scheme + technique plan editor UI
+### Phase 4b — Lifecycle hardening: non-destructive end + workout metadata
+
+Core concern: prevent accidental data loss from destructive dismissal paths. Add workout metadata so history has duration and exercise names survive deletion.
+
+**Current problems this solves:**
+- "End Workout" deletes the entire `Workout` — all logged sets silently destroyed.
+- "Start New" override in `RoutinesView.endActiveSessionIfAny()` deletes the old workout — logged sets lost.
+- `Workout` has no `completedAt` — can't display duration, can't distinguish finished from abandoned.
+- `WorkoutItem` has no exercise name snapshot — deleting an exercise makes history rows unreadable.
+- Active in-progress workout appears in HistoryView without visual distinction.
+
+**Checklist:**
+- [ ] Add `completedAt: Date?` to `Workout` model (additive, lightweight migration)
+- [ ] Set `workout.completedAt = Date()` in all `finishWorkout()` paths (before `unlockAndDismiss`)
+- [ ] Replace "End Workout" destructive alert with a two-option `.confirmationDialog`:
+  - "Save & Exit" — sets `completedAt`, clears AppState, dismisses (keeps all logged sets)
+  - "Discard Workout" — deletes workout, clears AppState, dismisses (current behavior, clearly labeled)
+- [ ] `RoutinesView.endActiveSessionIfAny()`: finalize old workout (set `completedAt = Date()`) instead of deleting it
+- [ ] Add `exerciseNameSnapshot: String?` to `WorkoutItem` — copy of `exercise.name` at creation time
+- [ ] Populate `exerciseNameSnapshot` at all `WorkoutItem` creation sites (appendSetLog, appendTimeSetLog, swapExercise)
+- [ ] HistoryView: skip rows where `activeGuard.activeWorkoutID == w.id`, or show with a distinct "In Progress" badge
+- [ ] HistoryView: display workout duration on completed rows (computed: `completedAt - date`, formatted as `1h 23m`)
+
+**Acceptance criteria:**
+- [ ] "End Workout" never silently destroys logged data — user must explicitly choose "Discard"
+- [ ] Overriding an active session with a new routine preserves the old workout with all logged sets
+- [ ] History shows workout duration for completed workouts
+- [ ] Deleting an exercise doesn't make history workout rows unreadable (`exerciseNameSnapshot` displayed as fallback)
+- [ ] In-progress workout is visually distinct or hidden in history
+
+**Manual test checklist:**
+1. Start workout → log 3 sets → End → "Save & Exit" → workout appears in history with 3 sets and duration
+2. Start workout → log sets → End → "Discard Workout" → workout is gone from history
+3. Start routine A → log sets → go back → start routine B with override → old workout A appears in history with sets preserved
+4. Start workout → switch to History tab → in-progress workout is visually distinct or not shown
+5. Finish workout normally → `completedAt` is populated → duration shown in history row
+6. Delete an exercise → check history still shows the exercise name from snapshot
+
+**Guardrails (must never regress):**
+- AppState transitions: `.active` ↔ `.idle` clearing always nils all fields (including rest)
+- Rest timer stable IDs and cancel-before-reschedule remain intact
+- Session snapshot immutability: `PlannedPrescriptionSnapshot` is never mutated after creation
+- Resume binds to existing Workout — never creates duplicates
+
+---
+
+### Phase 4c — Cold restart session fidelity
+
+Core concern: in-workout edits (session plans, exercise swaps, current position) survive cold restart. Without this, a cold restart loses all session plan edits and resets position to the first exercise.
+
+**Current problems this solves:**
+- `sessionPlans` dictionary is `@State` — edits (sets 3→5, rest 60→90) lost on cold restart.
+- `currentBlockIndex` / `currentExerciseIndex` are `@State` — position resets to first exercise.
+- Exercise swaps are in the in-memory `plan` only — after restart, routine-based rebuild shows the original exercise, not the swapped one.
+
+**Checklist:**
+- [ ] Make `SessionPlan` conform to `Codable`
+- [ ] Add `sessionPlansJSON: String?` to `AppState` — stores `[String: SessionPlan]` as JSON (keyed by `routineSlotID` UUID string)
+- [ ] Add `activeBlockIndex: Int?` and `activeExerciseIndex: Int?` to `AppState`
+- [ ] Persist session plans to AppState on session plan edit (on edit-sheet dismiss)
+- [ ] Persist position to AppState on block/exercise navigation changes
+- [ ] On resume: after `initializeSessionPlans()`, overlay persisted session plans from AppState (they take precedence)
+- [ ] On resume: restore `currentBlockIndex` / `currentExerciseIndex` from AppState (clamped to valid range)
+- [ ] `WorkoutResumeService.rebuildPlan()`: reconcile exercise swaps — for each plan slot, check if workout items have a different exercise for the same `routineSlotID`; if so, update plan's `currentExerciseID` and `name`
+- [ ] Clear `sessionPlansJSON`, `activeBlockIndex`, `activeExerciseIndex` in `updateAppState(to: .idle)`
+
+**Acceptance criteria:**
+- [ ] Session plan edits survive cold restart (verified with round-trip: edit → kill → resume → check values)
+- [ ] Exercise position survives cold restart (at least within valid bounds)
+- [ ] Swapped exercises display correctly after cold restart (plan shows swapped exercise, not original)
+- [ ] Finishing or discarding a workout clears all persisted session state from AppState
+
+**Manual test checklist:**
+1. Start workout → edit session plan (sets 3→5, rest 60→90) → kill app → resume → session plan shows edited values
+2. Start workout → navigate to 3rd exercise → kill app → resume → position at 3rd exercise (or nearest valid)
+3. Start workout → swap bench press for incline bench → log 2 sets → kill app → resume → plan shows incline bench in that slot with 2 logged sets
+4. Finish workout normally → verify `sessionPlansJSON`, `activeBlockIndex`, `activeExerciseIndex` are nil in AppState
+
+**Guardrails (must never regress):**
+- Session plans keyed by `routineSlotID` (stable UUID, survives rebuild)
+- `rebuildItemsByExerciseID()` matching logic unchanged (routineSlotID-first, then exercise ID fallback)
+- Plan rebuild primary path (routine exists) and fallback path (routine deleted) both work correctly
+- Persisted session plan values are always validated against live plan on restore (ignore stale keys)
+
+---
+
+### Phase 3.5 — Warmup scheme + technique plan editor UI
 Template-level editing for advanced prescription elements.
 - [ ] Warmup scheme picker/editor in routine slot detail (select existing or create new)
 - [ ] WarmupStep list editor (order, kind, reps, percent, rest, note)
 - [ ] TechniquePlan list editor in routine slot detail (add/remove/reorder techniques)
 - [ ] Technique type picker with parameterized fields per type
-- [ ] Modifier scope field (if needed for technique application rules)
 - [ ] Prescription section reflects warmup/technique counts as summary badges
 
-#### Phase 3.6 — Technique execution UX
+### Phase 3.6 — Technique execution UX
 How techniques affect set rendering and logging during a workout.
 - [ ] Define how each `TechniqueType` modifies set display (e.g., dropset adds sub-sets, rest-pause shows rest intervals)
 - [ ] Optional: generate technique-derived set structures from `TechniquePlan` into the set list
@@ -289,66 +358,64 @@ How techniques affect set rendering and logging during a workout.
 - [ ] SetLog captures technique metadata if needed (or inferred from plan)
 - [ ] Verify: technique plans do not silently mutate the underlying prescription
 
-#### Phase 4 — WorkoutState + persisted resume
-- [ ] Implement `WorkoutState` enum (idle / configuringTemplate / active(sessionID) / finished(sessionID))
-- [ ] Persist `activeSessionID` (UserDefaults or lightweight model)
-- [ ] On app launch: if activeSessionID exists and session exists → resume; else → reset to idle
-- [ ] Prevent duplicate sessions on relaunch
-- [ ] Handle edge case: session data deleted externally while activeSessionID persists
-
-#### Phase 5 — History refactor from strings to relationships
+### Phase 6 — History refactor + workout detail
+Upgrade history from string-based grouping to relationship-based, and add workout detail view.
 - [ ] Add `routineVariantID: UUID?` (or relationship) on `Workout`
 - [ ] New sessions always populate `routineVariantID`
 - [ ] Backfill existing workouts: if `routineName` matches an existing Routine → link to its Default variant
 - [ ] Keep `routineName` for display fallback (read-only compatibility)
 - [ ] Update `HistoryView` grouping to use relationship/ID, falling back to `routineName` for unlinked records
 - [ ] Verify: renaming a routine or variant does not break history grouping
+- [ ] Add workout detail view: `NavigationLink` from history row → detail screen showing exercises, sets, weights, duration
+- [ ] Workout detail: display exercise names from `exerciseNameSnapshot` when `exercise` relationship is nil (exercise deleted)
+- [ ] Workout detail: show workout notes if present
 
-#### Phase 6 — Tests + performance pass
+### Phase 7 — Tests + performance pass
 - [ ] Test: session creation snapshots prescription from template slot + stores routineSlotID
 - [ ] Test: session edits do not mutate template unless explicit apply action is invoked
 - [ ] Test: finishing a workout produces immutable history and clears active state
-- [ ] Test (optional): resume active session after app restart
+- [ ] Test: "Save & Exit" preserves workout with `completedAt` set; "Discard" deletes it
+- [ ] Test (optional): resume active session after app restart with correct position and session plans
 - [ ] Test (optional): history grouping by RoutineVariant survives name changes
 - [ ] Performance: ensure history grouping is not done expensively in SwiftUI `body`
 - [ ] Performance: add lightweight summary fields or caching if needed
 - [ ] Performance: audit `resolvedTemplates(in:)` — avoid redundant fetches in list views
 
-#### Phase 7 — Deprecation cleanup
+### Phase 8 — Deprecation cleanup
 - [ ] Deprecate `Workout.routineName` as primary grouping link (keep as display fallback)
 - [ ] Evaluate deprecating `RoutineExercise.setTemplates` once prescription adoption is stable
 - [ ] Remove commented-out silent mutation calls from `ActiveWorkoutView`
+- [ ] Remove or use `WorkoutLifecycleState.finished` (currently unused — either remove it or use it in Phase 4b's "Save & Exit" path)
 - [ ] Consider migration tool for existing device data cleanup
 - [ ] Keep fallback read-only until migration is proven stable across updates
 
-#### Phase 8 — Remove Exercise.defaultTemplates
-Slot prescription becomes the single source of programming intent. `Exercise.defaultTemplates` is removed.
+### Phase 9 — Remove Exercise.defaultTemplates
+Slot prescription becomes the single source of programming intent.
 - [ ] Stop exposing `defaultTemplates` editing UI in exercise detail screens
-- [ ] Update `resolvedTemplates()` / `resolvedTemplates(in:)` to remove tier 3 (exercise defaults fallback)
-- [ ] Replace tier 3 with "unprogrammed slot" logic: return empty array or a sentinel indicating no programming
-- [ ] Add "Unprogrammed" UX in routine editor for slots without prescription content (clear visual state)
-- [ ] Add quick-fill buttons for unprogrammed slots (e.g., "3×8", "3×10", "5×5") that write directly to `SlotPrescription`
-- [ ] Ensure all existing routines/variants have prescriptions populated (migration pass or user-facing prompt)
+- [ ] Update `resolvedTemplates()` to remove tier 3 (exercise defaults fallback)
+- [ ] Replace tier 3 with "unprogrammed slot" logic: return empty array or sentinel
+- [ ] Add "Unprogrammed" UX in routine editor (clear visual state + quick-fill buttons like "3x8", "5x5")
+- [ ] Ensure all existing routines have prescriptions populated (migration pass or user prompt)
 - [ ] Remove `Exercise.defaultTemplates` relationship and `SetTemplate` dependence on Exercise
 - [ ] Handle migration: lightweight migration drops the field; backfill ensures no data loss
-- [ ] Update `SupersetPicker` set-count validation to use prescription instead of `defaultTemplates`
+- [ ] Update `SupersetPicker` set-count validation to use prescription
 
-#### Phase 9 — Equipment & setup migration + Exercise UI polish
+### Phase 10 — Equipment & setup migration + Exercise UI polish
 Move equipment/setup to Exercise-level and fill UI gaps.
 - [ ] Add `equipmentType: String?` and `setupDefaults: String?` to Exercise model
 - [ ] Migrate existing `SlotPrescription.equipment` / `setupNotes` values to Exercise fields (one-time backfill)
-- [ ] Deprecate and remove `equipment` / `setupNotes` from `SlotPrescription` (or keep as optional slot-level override behind explicit "Override equipment" toggle)
+- [ ] Deprecate and remove `equipment` / `setupNotes` from `SlotPrescription` (or keep as optional slot-level override)
 - [ ] Add equipment and setup display/editing in Exercise detail UI
-- [ ] Display `bodyPart` / muscle group in Exercise detail screens (currently exists on model but not shown in detail UI)
-- [ ] Optional: slot-level equipment override field (only if a clear use case emerges, e.g., same exercise on cable vs dumbbell)
+- [ ] Display `bodyPart` / muscle group in Exercise detail screens
+- [ ] Optional: slot-level equipment override field
 
-**Acceptance criteria (Phase 9):**
+**Acceptance criteria (Phase 10):**
 - [ ] Exercise detail screen shows `bodyPart` / muscle group (read + edit)
-- [ ] Equipment and setup are edited on Exercise (not SlotPrescription) after migration completes
-- [ ] `SlotPrescription.equipment` / `setupNotes` are either removed entirely or demoted to "override only" behind a clear UI affordance (e.g., "Override equipment for this slot" toggle — collapsed by default)
-- [ ] Migration backfill is idempotent and non-destructive (existing slot values copied to Exercise; slot fields cleared only after Exercise fields are confirmed populated)
-- [ ] Snapshots remain immutable: `PlannedPrescriptionSnapshot` equipment/setup fields reflect whatever was active at session start and are never back-mutated
-- [ ] No silent mutations: editing Exercise-level equipment does not propagate to existing workout history or active sessions
+- [ ] Equipment and setup are edited on Exercise (not SlotPrescription) after migration
+- [ ] `SlotPrescription.equipment` / `setupNotes` either removed or demoted to "override only"
+- [ ] Migration backfill is idempotent and non-destructive
+- [ ] Snapshots remain immutable: `PlannedPrescriptionSnapshot` equipment/setup reflect session-start state
+- [ ] No silent mutations: editing Exercise-level equipment does not propagate to history
 
 ---
 
@@ -357,7 +424,7 @@ Move equipment/setup to Exercise-level and fill UI gaps.
 ### Exercise-level concerns (definition — shared across routines)
 - `name`, `bodyPart`, `isTimeBased`, `isCustom`
 - `notes` — global form cues / coaching notes
-- `equipmentType` + `setupDefaults` — **future** (Phase 9; currently on SlotPrescription, migrating out)
+- `equipmentType` + `setupDefaults` — **future** (Phase 10; currently on SlotPrescription, migrating out)
 
 ### Slot-level concerns (stored on `SlotPrescription`)
 - **Core**: sets, rep range (min/max), rest between sets, rest after exercise
@@ -367,7 +434,7 @@ Move equipment/setup to Exercise-level and fill UI gaps.
 - **Techniques**: `TechniquePlan` (owned, `.cascade`) — dropset, partial reps, rest-pause, AMRAP, to-failure, cluster, tempo override
 - **Slot notes**: `RoutineExercise.templateNotes` — per-slot coaching notes distinct from `Exercise.notes`
 
-> **Equipment/setup** currently lives on `SlotPrescription` but is being migrated to Exercise-level defaults (Phase 9). Slot-level equipment override is optional and only if a clear use case emerges.
+> **Equipment/setup** currently lives on `SlotPrescription` but is being migrated to Exercise-level defaults (Phase 10). Slot-level equipment override is optional and only if a clear use case emerges.
 
 ### Additional production-grade prescription candidates (later)
 These are NOT part of the current refactor scope but represent future prescription enrichment:
@@ -388,17 +455,15 @@ These are product tweaks and must not block completion:
 - routine name editable
 - reorder routines by drag
 - **multi-select exercise add**
-  - [ ] Selection UI: checkmark-based multi-select in exercise picker (replace current single-pick sheet)
-  - [ ] Confirm-add action: selected exercises added to the target block in selection order
-  - [ ] Preserve ordering: insertion follows user selection sequence, appended after existing slot exercises
-  - [ ] Search & filter: exercise picker supports name search and optional bodyPart/muscle group filter
-  - [ ] Edge case: duplicate exercise in same block shows warning or is silently allowed (decide)
+  - [ ] Selection UI: checkmark-based multi-select in exercise picker
+  - [ ] Confirm-add action: selected exercises added in selection order
+  - [ ] Search & filter: name search and optional bodyPart/muscle group filter
+  - [ ] Edge case: duplicate exercise in same block shows warning or is silently allowed
 - **remove extra "Done" buttons**
-  - [ ] Audit: identify all views with standalone "Done" buttons (routine editor sheets, prescription editor, exercise detail, etc.)
-  - [ ] Replace with toolbar `.confirmationAction` placement or automatic dismiss on save
-  - [ ] Keyboard UX: ensure "Done" toolbar item on `.keyboard` placement is consistent across all text-input views (no double "Done")
-  - [ ] Sheet dismiss: prefer SwiftUI `.presentationDetents` + drag-to-dismiss over explicit close buttons where appropriate
-  - [ ] Verify: no views lose their only dismissal path after cleanup
+  - [ ] Audit: identify all views with standalone "Done" buttons
+  - [ ] Replace with toolbar `.confirmationAction` placement or automatic dismiss
+  - [ ] Keyboard UX: consistent "Done" toolbar on `.keyboard` placement
+  - [ ] Sheet dismiss: prefer drag-to-dismiss over explicit close buttons
 - +/- steppers for reps
 - preset note options
 - pause/resume workout (may integrate with WorkoutState later)
@@ -419,20 +484,50 @@ These are product tweaks and must not block completion:
 
 ### Prescription architecture
 - `SlotPrescription` is the single source of programming intent for routine slots
-- `setTemplates` are compatibility/override only (Phase 7 evaluates deprecation)
-- `Exercise.defaultTemplates` is targeted for removal (Phase 8); unprogrammed slots use "Unprogrammed" UX with quick-fill instead
+- `setTemplates` are compatibility/override only (Phase 8 evaluates deprecation)
+- `Exercise.defaultTemplates` is targeted for removal (Phase 9); unprogrammed slots use "Unprogrammed" UX with quick-fill instead
 - Resolution precedence target: slot setTemplates (optional) → slot prescription (primary) → unprogrammed fallback (UI prompt)
-- Equipment/setup belongs on Exercise, not SlotPrescription (Phase 9 migration)
+- Equipment/setup belongs on Exercise, not SlotPrescription (Phase 10 migration)
 
-### Session snapshots
+### Session snapshots + session plans
 - Workout UI displays rep range (min-max), tempo, RIR, RPE, and slot notes from session-level snapshots
 - Snapshots are copied at session start and are immutable thereafter
 - Old workouts with nil snapshots degrade gracefully (section hidden)
+- Session plans allow in-workout editing; apply-back to slot prescription is explicit and opt-in
 
-### History & lifecycle (once Phase 4-5 are complete)
+### Workout lifecycle
+- `AppState` persists active workout state across app restarts
+- Cold resume presents `ActiveWorkoutView` via `WorkoutResumeService.rebuildPlan()`, binding to the existing `Workout`
+- Rest timer survives restart with stable notification IDs (no duplicates)
+- Finishing or discarding a workout clears all `AppState` fields
+- "End Workout" offers "Save & Exit" (keeps data) vs "Discard" (deletes) — never silently destroys logged sets (Phase 4b)
+- Session plan edits and exercise position survive cold restart (Phase 4c)
+
+### History & grouping (once Phase 6 is complete)
 - History grouping uses RoutineVariant relationship/ID (not `routineName` string)
-- Active session resumes after restart (persisted `activeSessionID`)
 
 ### Quality
 - 3-5 tests pass reliably
 - No heavy regrouping inside SwiftUI `body` for history lists
+
+---
+
+## 8) Production Requirements (Non-negotiable)
+
+### Migrations: non-destructive, additive first
+- Add new entities/fields as optional with safe defaults.
+- Backfill lazily or via migration helpers.
+- Keep compatibility for existing data until stable.
+
+### Deletion rules: protect history
+Exercise → WorkoutItem is now `.nullify` (done).
+Remaining goals:
+- Deleting a routine/variant should NOT delete past workouts.
+- Workouts should keep exercise name snapshots or survive nullified links gracefully.
+
+### Performance
+Avoid heavy grouping/filtering/sorting in SwiftUI `body`.
+Prefer:
+- Query-based fetch with sort descriptors
+- Precomputed summaries (last performed, session count, duration, etc.)
+- Cached groupings keyed by IDs
