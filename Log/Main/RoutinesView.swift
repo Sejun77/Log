@@ -716,6 +716,23 @@ struct RoutineEditor: View {
 
         // Clear persisted AppState
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+
+        // Cancel rest notification + clear UserDefaults before resetting AppState,
+        // while we still have the IDs needed to reconstruct the stable ID.
+        var notificationIDs: [String] = []
+        if let wID = activeGuard.activeWorkoutID,
+            let slotID = appState.activeRestSlotID
+        {
+            notificationIDs.append(
+                RestTimer.stableNotificationID(
+                    workoutID: wID, slotID: slotID
+                )
+            )
+        }
+        RestTimer.clearPersistedStateAndNotifications(
+            cancelNotificationIDs: notificationIDs
+        )
+
         appState.workoutState = .idle
         appState.activeWorkoutID = nil
         appState.activeWorkoutStartedAt = nil

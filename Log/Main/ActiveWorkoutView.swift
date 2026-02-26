@@ -628,8 +628,12 @@ struct ActiveWorkoutView: View {
 
     /// Builds a stable notification ID: "rest.<workoutID>.<slotID>"
     private func restNotificationID(slotID: UUID) -> String {
-        let wID = workout?.id.uuidString ?? "unknown"
-        return "rest.\(wID).\(slotID.uuidString)"
+        guard let wID = workout?.id else {
+            return "rest.unknown.\(slotID.uuidString)"
+        }
+        return RestTimer.stableNotificationID(
+            workoutID: wID, slotID: slotID
+        )
     }
 
     /// Persists rest timer state to AppState for cold-restart resume.
