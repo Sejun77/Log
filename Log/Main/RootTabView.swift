@@ -96,7 +96,10 @@ struct RootTabView: View {
             predicate: #Predicate { $0.id == workoutID }
         )
         guard let workout = try? ctx.fetch(descriptor).first else {
-            // Workout is gone — reset state
+            // Workout is gone — reset state + clear orphaned rest
+            clearOrphanedRestState(
+                appState: appState, workoutID: workoutID
+            )
             appState.workoutState = .idle
             appState.activeWorkoutID = nil
             appState.activeWorkoutStartedAt = nil
@@ -110,6 +113,9 @@ struct RootTabView: View {
         guard let plan = WorkoutResumeService.rebuildPlan(
             for: workout, in: ctx
         ) else {
+            clearOrphanedRestState(
+                appState: appState, workoutID: workoutID
+            )
             appState.workoutState = .idle
             appState.activeWorkoutID = nil
             appState.activeWorkoutStartedAt = nil
@@ -127,5 +133,24 @@ struct RootTabView: View {
 
         selection = .routines
         triggerResumeNavigation = true
+    }
+
+    /// Clears orphaned rest timer persistence (UserDefaults + notifications)
+    /// when the session is being reset without going through ActiveWorkoutView.
+    private func clearOrphanedRestState(
+        appState: AppState,
+        workoutID: UUID
+    ) {
+        var ids: [String] = []
+        if let slotID = appState.activeRestSlotID {
+            ids.append(
+                RestTimer.stableNotificationID(
+                    workoutID: workoutID, slotID: slotID
+                )
+            )
+        }
+        RestTimer.clearPersistedStateAndNotifications(
+            cancelNotificationIDs: ids
+        )
     }
 }

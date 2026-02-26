@@ -62,6 +62,36 @@ extension RestTimer {
         ud.removeObject(forKey: RestStoreKey.total)
         ud.removeObject(forKey: RestStoreKey.mode)
     }
+
+    /// Clears persisted rest state (UserDefaults) and cancels any
+    /// scheduled/delivered notifications with the given IDs.
+    /// Safe to call from any context (does not require a RestTimer instance).
+    static func clearPersistedStateAndNotifications(
+        cancelNotificationIDs: [String] = []
+    ) {
+        let ud = UserDefaults.standard
+        ud.removeObject(forKey: RestStoreKey.endDate)
+        ud.removeObject(forKey: RestStoreKey.total)
+        ud.removeObject(forKey: RestStoreKey.mode)
+
+        if !cancelNotificationIDs.isEmpty {
+            let center = UNUserNotificationCenter.current()
+            center.removePendingNotificationRequests(
+                withIdentifiers: cancelNotificationIDs
+            )
+            center.removeDeliveredNotifications(
+                withIdentifiers: cancelNotificationIDs
+            )
+        }
+    }
+
+    /// Builds the stable notification ID format used by rest timers.
+    static func stableNotificationID(
+        workoutID: UUID,
+        slotID: UUID
+    ) -> String {
+        "rest.\(workoutID.uuidString).\(slotID.uuidString)"
+    }
 }
 
 @MainActor

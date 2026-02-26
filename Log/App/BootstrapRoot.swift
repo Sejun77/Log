@@ -211,6 +211,21 @@ struct BootstrapRoot: View {
         }
 
         if shouldReset {
+            // Clear orphaned rest persistence before resetting AppState
+            var notificationIDs: [String] = []
+            if let wID = appState.activeWorkoutID,
+                let slotID = appState.activeRestSlotID
+            {
+                notificationIDs.append(
+                    RestTimer.stableNotificationID(
+                        workoutID: wID, slotID: slotID
+                    )
+                )
+            }
+            RestTimer.clearPersistedStateAndNotifications(
+                cancelNotificationIDs: notificationIDs
+            )
+
             appState.workoutState = .idle
             appState.activeWorkoutID = nil
             appState.activeWorkoutStartedAt = nil
