@@ -102,6 +102,9 @@ struct PlanExercise: Identifiable {
     var routineSlotID: UUID
     var templateNotesSnapshot: String?
     var prescriptionSnapshot: PrescriptionSnapshotPayload?
+
+    // Phase 3.6: technique labels snapshotted at plan-build time (read-only; never mutates prescription)
+    var techniqueSummaries: [String] = []
 }
 
 struct PlanBlock: Identifiable {
@@ -149,6 +152,43 @@ struct StartWorkoutFromRoutineView: View {
                                     durationSeconds: tpl.durationSeconds
                                 )
                             }
+                        // Phase 3.6: snapshot technique labels (read-only; never mutates prescription)
+                        let techniqueSummaries: [String] = (re.prescription?.techniquePlans ?? [])
+                            .sorted { $0.order < $1.order }
+                            .map { tp in
+                                switch tp.type {
+                                case .dropset:
+                                    if let pct = tp.dropPercent, let n = tp.dropCount {
+                                        return "Dropset ×\(n) (−\(Int(pct))%)"
+                                    } else if let n = tp.dropCount {
+                                        return "Dropset ×\(n)"
+                                    }
+                                    return "Dropset"
+                                case .partialReps:
+                                    if let note = tp.partialRangeNote, !note.isEmpty {
+                                        return "Partials (\(note))"
+                                    }
+                                    return "Partial Reps"
+                                case .restPause:
+                                    if let r = tp.rounds { return "Rest-Pause ×\(r)" }
+                                    return "Rest-Pause"
+                                case .amrap:
+                                    return "AMRAP"
+                                case .toFailure:
+                                    return "To Failure"
+                                case .cluster:
+                                    if let r = tp.rounds, let rest = tp.restSeconds {
+                                        return "Cluster ×\(r) (\(rest)s)"
+                                    } else if let r = tp.rounds {
+                                        return "Cluster ×\(r)"
+                                    }
+                                    return "Cluster"
+                                case .tempoOverride:
+                                    if let t = tp.note, !t.isEmpty { return "Tempo: \(t)" }
+                                    return "Tempo Override"
+                                }
+                            }
+
                         return PlanExercise(
                             id: ex.id,
                             routineExerciseID: re.id,
@@ -162,7 +202,8 @@ struct StartWorkoutFromRoutineView: View {
                             templateNotesSnapshot: re.templateNotes,
                             prescriptionSnapshot: re.prescription.map(
                                 PrescriptionSnapshotPayload.init(from:)
-                            )
+                            ),
+                            techniqueSummaries: techniqueSummaries
                         )
                     }
                 guard !exs.isEmpty else { return nil }

@@ -1,0 +1,12 @@
+CMD: git
+ARGS: ["diff","--name-only"]
+CWD: .
+EXIT: 0
+--- STDOUT ---
+CLAUDE.md
+Log/Main/ActiveWorkoutView.swift
+Log/Models/AppState.swift
+REFACTOR_PLAN.md
+
+--- STDERR ---
+

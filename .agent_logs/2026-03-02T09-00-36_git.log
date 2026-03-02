@@ -1,0 +1,13 @@
+CMD: git
+ARGS: ["diff","--stat"]
+CWD: .
+EXIT: 0
+--- STDOUT ---
+ CLAUDE.md                        | 191 ++++++++++++++++++---------------------
+ Log/Main/ActiveWorkoutView.swift |  32 ++++++-
+ Log/Models/AppState.swift        |   9 ++
+ REFACTOR_PLAN.md                 |  57 ++++++++----
+ 4 files changed, 165 insertions(+), 124 deletions(-)
+
+--- STDERR ---
+

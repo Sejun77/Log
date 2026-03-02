@@ -1,0 +1,19 @@
+CMD: xcodebuild
+ARGS: ["-project","Log.xcodeproj","-scheme","Log","-configuration","Debug","-destination","generic/platform=iOS Simulator","build","2>&1"]
+CWD: .
+EXIT: 65
+--- STDOUT ---
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project Log.xcodeproj -scheme Log -configuration Debug -destination "generic/platform=iOS Simulator" build "2>&1"
+
+
+--- STDERR ---
+2026-03-02 18:48:32.309 xcodebuild[32580:2193908] Writing error result bundle to /var/folders/dr/43yqmq214r3fyrk543dk31rh0000gn/T/ResultBundle_2026-02-03_18-48-0032.xcresult
+xcodebuild: error: Unknown build action '2>&1'.
+
+
+--- ERROR MESSAGE ---
+Command failed: xcodebuild -project Log.xcodeproj -scheme Log -configuration Debug -destination generic/platform=iOS Simulator build 2>&1
+2026-03-02 18:48:32.309 xcodebuild[32580:2193908] Writing error result bundle to /var/folders/dr/43yqmq214r3fyrk543dk31rh0000gn/T/ResultBundle_2026-02-03_18-48-0032.xcresult
+xcodebuild: error: Unknown build action '2>&1'.
+

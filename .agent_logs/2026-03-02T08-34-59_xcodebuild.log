@@ -1,0 +1,26 @@
+CMD: xcodebuild
+ARGS: ["-project","Log.xcodeproj","-scheme","Log","-list"]
+CWD: .
+EXIT: 0
+--- STDOUT ---
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project Log.xcodeproj -scheme Log -list
+
+Information about project "Log":
+    Targets:
+        Log
+        RestLiveActivityWidgetExtension
+
+    Build Configurations:
+        Debug
+        Release
+
+    If no build configuration is specified and -scheme is not passed then "Release" is used.
+
+    Schemes:
+        Log
+        RestLiveActivityWidgetExtension
+
+
+--- STDERR ---
+

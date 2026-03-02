@@ -26,7 +26,10 @@ enum WorkoutResumeService {
                 predicate: #Predicate { $0.id == routineID }
             )
             if let routine = try? context.fetch(descriptor).first {
-                return planFromRoutine(routine, workoutName: workout.routineName)
+                return planFromRoutine(
+                    routine, workout: workout,
+                    workoutName: workout.routineName
+                )
             }
         }
 
@@ -37,10 +40,24 @@ enum WorkoutResumeService {
     // MARK: - Primary Path
 
     /// Mirrors `StartWorkoutFromRoutineView.makePlan(from:)`.
+    /// Also reconciles exercise swaps: if the in-progress workout has a
+    /// `WorkoutItem` for a given slot (matched by `routineSlotID`) whose
+    /// `exercise` differs from the routine template's exercise, the plan
+    /// reflects the swapped exercise (currentExerciseID / name updated).
     private static func planFromRoutine(
         _ routine: Routine,
+        workout: Workout,
         workoutName: String?
     ) -> WorkoutPlan {
+        // Build a slotID → WorkoutItem lookup for swap reconciliation.
+        let itemsBySlotID: [UUID: WorkoutItem] = Dictionary(
+            workout.items.compactMap { item -> (UUID, WorkoutItem)? in
+                guard let slotID = item.routineSlotID else { return nil }
+                return (slotID, item)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+
         let blocks: [PlanBlock] = routine.blocks
             .sorted { $0.order < $1.order }
             .compactMap { b -> PlanBlock? in
@@ -61,12 +78,33 @@ enum WorkoutResumeService {
                                     durationSeconds: tpl.durationSeconds
                                 )
                             }
+
+                        // Swap reconciliation: if the workout has a WorkoutItem
+                        // for this slot whose exercise differs from the template,
+                        // use the swapped exercise's ID and name instead.
+                        var currentID = ex.id
+                        var currentName = ex.name
+                        if let item = itemsBySlotID[re.slotID],
+                           let swappedEx = item.exercise,
+                           swappedEx.id != ex.id
+                        {
+                            currentID = swappedEx.id
+                            currentName = swappedEx.name
+                        } else if let item = itemsBySlotID[re.slotID],
+                                  item.exercise == nil,
+                                  let snap = item.exerciseNameSnapshot,
+                                  !snap.isEmpty
+                        {
+                            // Exercise was deleted — keep original plan name
+                            currentName = snap
+                        }
+
                         return PlanExercise(
                             id: ex.id,
                             routineExerciseID: re.id,
                             originalExerciseID: ex.id,
-                            currentExerciseID: ex.id,
-                            name: ex.name,
+                            currentExerciseID: currentID,
+                            name: currentName,
                             notes: ex.notes,
                             templates: templates,
                             isTimeBased: ex.isTimeBased,

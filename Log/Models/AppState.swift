@@ -31,6 +31,15 @@ final class AppState {
     /// The slot (exercise) that triggered the current rest. Used for stable notification IDs.
     var activeRestSlotID: UUID?
 
+    /// JSON-encoded [slotID (uuidString): SessionPlan] for active session plan overrides.
+    var sessionPlansJSON: String?
+
+    /// Current block index in the active workout.
+    var activeBlockIndex: Int?
+
+    /// Current exercise index in the active workout.
+    var activeExerciseIndex: Int?
+
     // MARK: - Computed
 
     var workoutState: WorkoutLifecycleState {

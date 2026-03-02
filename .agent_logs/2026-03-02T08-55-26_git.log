@@ -1,0 +1,18 @@
+CMD: git
+ARGS: ["show","DOES_NOT_EXIST"]
+CWD: .
+EXIT: 128
+--- STDOUT ---
+
+--- STDERR ---
+fatal: ambiguous argument 'DOES_NOT_EXIST': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+
+
+--- ERROR MESSAGE ---
+Command failed: git show DOES_NOT_EXIST
+fatal: ambiguous argument 'DOES_NOT_EXIST': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+

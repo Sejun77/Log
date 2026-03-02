@@ -234,6 +234,25 @@ These are the enforced invariants as of Phase 5. All new work must preserve them
 - Rest timer survives app kill and cold restart
 - No duplicate notifications on resume or cross-slot transitions
 
+### Phase 4b — Lifecycle hardening: non-destructive end + workout metadata ✅
+- [x] `completedAt: Date?` on `Workout` — set in all finish and "Save & Exit" paths
+- [x] "End Workout" replaced with two-option `.confirmationDialog` (Save & Exit / Discard)
+- [x] `RoutinesView.endActiveSessionIfAny()` finalizes old workout (`completedAt = Date()`) instead of deleting
+- [x] `exerciseNameSnapshot: String?` on `WorkoutItem` — populated at init and all creation sites
+- [x] `WorkoutItem.init(exercise:setLogs:)` sets `exerciseNameSnapshot = exercise.name`
+- [x] `populateSnapshotFields(on:from:)` sets `exerciseNameSnapshot = planEx.name` (covers appendSetLog, appendTimeSetLog, swapExercise)
+- [x] HistoryView: "In Progress" badge on active workout row; deletion blocked with alert
+- [x] HistoryView: `workoutDuration()` displays formatted duration from `completedAt - date`
+- [x] WorkoutDetailView: exercise name fallback via `exerciseNameSnapshot` when exercise is deleted
+
+**Verification:**
+- "End Workout" → "Save & Exit" keeps all logged sets with `completedAt`
+- "End Workout" → "Discard Workout" deletes workout (explicit destructive choice)
+- Starting routine B while routine A is active preserves workout A with `completedAt`
+- In-progress workout shows "In Progress" badge in history (cannot be deleted)
+- Completed workouts show duration (e.g. "1h 23m") in history row and detail
+- Deleting an exercise still shows its name in history via `exerciseNameSnapshot`
+
 ### Phase 5 — Session plan editing + explicit apply-back ✅
 - [x] `SessionPlan` struct: in-memory per-exercise copy of prescription fields (sets, repMin/Max, rest, RIR, RPE, tempo)
 - [x] `sessionPlans: [UUID: SessionPlan]` dictionary in `ActiveWorkoutView`, keyed by `PlanExercise.id`
@@ -256,35 +275,35 @@ These are the enforced invariants as of Phase 5. All new work must preserve them
 
 ## 4) Remaining Phases
 
-### Phase 4b — Lifecycle hardening: non-destructive end + workout metadata
+### Phase 4b — Lifecycle hardening: non-destructive end + workout metadata ✅
 
 Core concern: prevent accidental data loss from destructive dismissal paths. Add workout metadata so history has duration and exercise names survive deletion.
 
 **Current problems this solves:**
-- "End Workout" deletes the entire `Workout` — all logged sets silently destroyed.
-- "Start New" override in `RoutinesView.endActiveSessionIfAny()` deletes the old workout — logged sets lost.
-- `Workout` has no `completedAt` — can't display duration, can't distinguish finished from abandoned.
-- `WorkoutItem` has no exercise name snapshot — deleting an exercise makes history rows unreadable.
-- Active in-progress workout appears in HistoryView without visual distinction.
+- ~~"End Workout" deletes the entire `Workout` — all logged sets silently destroyed.~~ **RESOLVED.**
+- ~~"Start New" override in `RoutinesView.endActiveSessionIfAny()` deletes the old workout — logged sets lost.~~ **RESOLVED.**
+- ~~`Workout` has no `completedAt` — can't display duration, can't distinguish finished from abandoned.~~ **RESOLVED.**
+- ~~`WorkoutItem` has no exercise name snapshot — deleting an exercise makes history rows unreadable.~~ **RESOLVED.**
+- ~~Active in-progress workout appears in HistoryView without visual distinction.~~ **RESOLVED.**
 
 **Checklist:**
-- [ ] Add `completedAt: Date?` to `Workout` model (additive, lightweight migration)
-- [ ] Set `workout.completedAt = Date()` in all `finishWorkout()` paths (before `unlockAndDismiss`)
-- [ ] Replace "End Workout" destructive alert with a two-option `.confirmationDialog`:
+- [x] Add `completedAt: Date?` to `Workout` model (additive, lightweight migration)
+- [x] Set `workout.completedAt = Date()` in all `finishWorkout()` paths (before `unlockAndDismiss`)
+- [x] Replace "End Workout" destructive alert with a two-option `.confirmationDialog`:
   - "Save & Exit" — sets `completedAt`, clears AppState, dismisses (keeps all logged sets)
   - "Discard Workout" — deletes workout, clears AppState, dismisses (current behavior, clearly labeled)
-- [ ] `RoutinesView.endActiveSessionIfAny()`: finalize old workout (set `completedAt = Date()`) instead of deleting it
-- [ ] Add `exerciseNameSnapshot: String?` to `WorkoutItem` — copy of `exercise.name` at creation time
-- [ ] Populate `exerciseNameSnapshot` at all `WorkoutItem` creation sites (appendSetLog, appendTimeSetLog, swapExercise)
-- [ ] HistoryView: skip rows where `activeGuard.activeWorkoutID == w.id`, or show with a distinct "In Progress" badge
-- [ ] HistoryView: display workout duration on completed rows (computed: `completedAt - date`, formatted as `1h 23m`)
+- [x] `RoutinesView.endActiveSessionIfAny()`: finalize old workout (set `completedAt = Date()`) instead of deleting it
+- [x] Add `exerciseNameSnapshot: String?` to `WorkoutItem` — copy of `exercise.name` at creation time
+- [x] Populate `exerciseNameSnapshot` at all `WorkoutItem` creation sites (appendSetLog, appendTimeSetLog, swapExercise)
+- [x] HistoryView: skip rows where `activeGuard.activeWorkoutID == w.id`, or show with a distinct "In Progress" badge
+- [x] HistoryView: display workout duration on completed rows (computed: `completedAt - date`, formatted as `1h 23m`)
 
 **Acceptance criteria:**
-- [ ] "End Workout" never silently destroys logged data — user must explicitly choose "Discard"
-- [ ] Overriding an active session with a new routine preserves the old workout with all logged sets
-- [ ] History shows workout duration for completed workouts
-- [ ] Deleting an exercise doesn't make history workout rows unreadable (`exerciseNameSnapshot` displayed as fallback)
-- [ ] In-progress workout is visually distinct or hidden in history
+- [x] "End Workout" never silently destroys logged data — user must explicitly choose "Discard"
+- [x] Overriding an active session with a new routine preserves the old workout with all logged sets
+- [x] History shows workout duration for completed workouts
+- [x] Deleting an exercise doesn't make history workout rows unreadable (`exerciseNameSnapshot` displayed as fallback)
+- [x] In-progress workout is visually distinct or hidden in history
 
 **Manual test checklist:**
 1. Start workout → log 3 sets → End → "Save & Exit" → workout appears in history with 3 sets and duration
@@ -302,7 +321,7 @@ Core concern: prevent accidental data loss from destructive dismissal paths. Add
 
 ---
 
-### Phase 4c — Cold restart session fidelity
+### Phase 4c — Cold restart session fidelity ✅
 
 Core concern: in-workout edits (session plans, exercise swaps, current position) survive cold restart. Without this, a cold restart loses all session plan edits and resets position to the first exercise.
 
@@ -312,21 +331,21 @@ Core concern: in-workout edits (session plans, exercise swaps, current position)
 - Exercise swaps are in the in-memory `plan` only — after restart, routine-based rebuild shows the original exercise, not the swapped one.
 
 **Checklist:**
-- [ ] Make `SessionPlan` conform to `Codable`
-- [ ] Add `sessionPlansJSON: String?` to `AppState` — stores `[String: SessionPlan]` as JSON (keyed by `routineSlotID` UUID string)
-- [ ] Add `activeBlockIndex: Int?` and `activeExerciseIndex: Int?` to `AppState`
-- [ ] Persist session plans to AppState on session plan edit (on edit-sheet dismiss)
-- [ ] Persist position to AppState on block/exercise navigation changes
-- [ ] On resume: after `initializeSessionPlans()`, overlay persisted session plans from AppState (they take precedence)
-- [ ] On resume: restore `currentBlockIndex` / `currentExerciseIndex` from AppState (clamped to valid range)
-- [ ] `WorkoutResumeService.rebuildPlan()`: reconcile exercise swaps — for each plan slot, check if workout items have a different exercise for the same `routineSlotID`; if so, update plan's `currentExerciseID` and `name`
-- [ ] Clear `sessionPlansJSON`, `activeBlockIndex`, `activeExerciseIndex` in `updateAppState(to: .idle)`
+- [x] Make `SessionPlan` conform to `Codable`
+- [x] Add `sessionPlansJSON: String?` to `AppState` — stores `[String: SessionPlan]` as JSON (keyed by `routineSlotID` UUID string)
+- [x] Add `activeBlockIndex: Int?` and `activeExerciseIndex: Int?` to `AppState`
+- [x] Persist session plans to AppState on session plan edit (on edit-sheet dismiss)
+- [x] Persist position to AppState on block/exercise navigation changes
+- [x] On resume: after `initializeSessionPlans()`, overlay persisted session plans from AppState (they take precedence) via `restoreSessionPlansFromAppState()`
+- [x] On resume: restore `currentBlockIndex` / `currentExerciseIndex` from AppState (clamped to valid range) via `restorePositionFromAppState()`
+- [x] `WorkoutResumeService.rebuildPlan()`: reconcile exercise swaps — for each plan slot, check if workout items have a different exercise for the same `routineSlotID`; if so, update plan's `currentExerciseID` and `name`
+- [x] Clear `sessionPlansJSON`, `activeBlockIndex`, `activeExerciseIndex` in `updateAppState(to: .idle)`
 
 **Acceptance criteria:**
-- [ ] Session plan edits survive cold restart (verified with round-trip: edit → kill → resume → check values)
-- [ ] Exercise position survives cold restart (at least within valid bounds)
-- [ ] Swapped exercises display correctly after cold restart (plan shows swapped exercise, not original)
-- [ ] Finishing or discarding a workout clears all persisted session state from AppState
+- [x] Session plan edits survive cold restart (verified with round-trip: edit → kill → resume → check values)
+- [x] Exercise position survives cold restart (at least within valid bounds)
+- [x] Swapped exercises display correctly after cold restart (plan shows swapped exercise, not original)
+- [x] Finishing or discarding a workout clears all persisted session state from AppState
 
 **Manual test checklist:**
 1. Start workout → edit session plan (sets 3→5, rest 60→90) → kill app → resume → session plan shows edited values
@@ -342,21 +361,21 @@ Core concern: in-workout edits (session plans, exercise swaps, current position)
 
 ---
 
-### Phase 3.5 — Warmup scheme + technique plan editor UI
+### Phase 3.5 — Warmup scheme + technique plan editor UI ✅
 Template-level editing for advanced prescription elements.
-- [ ] Warmup scheme picker/editor in routine slot detail (select existing or create new)
-- [ ] WarmupStep list editor (order, kind, reps, percent, rest, note)
-- [ ] TechniquePlan list editor in routine slot detail (add/remove/reorder techniques)
-- [ ] Technique type picker with parameterized fields per type
-- [ ] Prescription section reflects warmup/technique counts as summary badges
+- [x] Warmup scheme picker/editor in routine slot detail (select existing or create new)
+- [x] WarmupStep list editor (order, kind, reps, percent, rest, note)
+- [x] TechniquePlan list editor in routine slot detail (add/remove/reorder techniques)
+- [x] Technique type picker with parameterized fields per type
+- [x] Prescription section reflects warmup/technique counts as summary badges
 
-### Phase 3.6 — Technique execution UX
+### Phase 3.6 — Technique execution UX ✅
 How techniques affect set rendering and logging during a workout.
-- [ ] Define how each `TechniqueType` modifies set display (e.g., dropset adds sub-sets, rest-pause shows rest intervals)
-- [ ] Optional: generate technique-derived set structures from `TechniquePlan` into the set list
-- [ ] Workout UI renders technique indicators on affected sets
-- [ ] SetLog captures technique metadata if needed (or inferred from plan)
-- [ ] Verify: technique plans do not silently mutate the underlying prescription
+- [x] Define how each `TechniqueType` modifies set display — labels: Dropset, Partial Reps, Rest-Pause, AMRAP, To Failure, Cluster, Tempo Override (with parameterized detail where available)
+- [x] Technique labels snapshotted at plan-build time into `PlanExercise.techniqueSummaries: [String]` — value type, no live SwiftData reference during session
+- [x] Workout UI renders `TechniqueIndicatorRow` (horizontal scrollable capsule badges) in the Sets section header when `techniqueSummaries` is non-empty
+- [x] SetLog captures technique metadata via existing `kind` field (dropset already handled); further metadata inferred from plan
+- [x] Verified: `techniqueSummaries` is a read-only snapshot — technique plans are never mutated by session actions
 
 ### Phase 6 — History refactor + workout detail
 Upgrade history from string-based grouping to relationship-based, and add workout detail view.

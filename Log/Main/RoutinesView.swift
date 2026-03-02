@@ -1090,7 +1090,347 @@ private struct SupersetDetailNoRest: View {
     }
 }
 
-// MARK: - Prescription Editor
+// MARK: - Warmup & Technique Editors
+
+// WarmupSchemeEditor: add/remove/edit warmup steps for a SlotPrescription
+private struct WarmupSchemeEditor: View {
+    @Environment(\.modelContext) private var ctx
+    @Bindable var prescription: SlotPrescription
+    @State private var showAddStep = false
+
+    private var sortedSteps: [WarmupStep] {
+        (prescription.warmupScheme?.steps ?? []).sorted { $0.order < $1.order }
+    }
+
+    var body: some View {
+        List {
+            schemeSummarySection
+            stepsSection
+        }
+        .navigationTitle("Warmup")
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button { showAddStep = true } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showAddStep) {
+            WarmupStepEditSheet(onSave: { kind, reps, pct, rest, note in
+                addStep(kind: kind, reps: reps, pct: pct, rest: rest, note: note)
+            })
+        }
+    }
+
+    private var schemeSummarySection: some View {
+        Section {
+            let count = prescription.warmupScheme?.steps.count ?? 0
+            if count == 0 {
+                Text("No warmup steps. Tap + to add one.")
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Warmup Steps")
+        }
+    }
+
+    private var stepsSection: some View {
+        Section {
+            ForEach(sortedSteps) { step in
+                WarmupStepRow(step: step)
+            }
+            .onDelete(perform: deleteSteps)
+            .onMove(perform: moveSteps)
+        }
+    }
+
+    private func addStep(kind: WarmupStepKind, reps: Int?, pct: Double?, rest: Int?, note: String?) {
+        let scheme: WarmupScheme
+        if let existing = prescription.warmupScheme {
+            scheme = existing
+        } else {
+            let s = WarmupScheme(name: "Warmup")
+            ctx.insert(s)
+            prescription.warmupScheme = s
+            scheme = s
+        }
+        let nextOrder = (scheme.steps.map(\.order).max() ?? -1) + 1
+        let step = WarmupStep(order: nextOrder, kind: kind, reps: reps,
+                              percentOfWorking: pct, restSecondsAfter: rest, note: note)
+        ctx.insert(step)
+        scheme.steps.append(step)
+        try? ctx.save()
+    }
+
+    private func deleteSteps(at offsets: IndexSet) {
+        guard let scheme = prescription.warmupScheme else { return }
+        let sorted = sortedSteps
+        for i in offsets {
+            let step = sorted[i]
+            scheme.steps.removeAll { $0.id == step.id }
+            ctx.delete(step)
+        }
+        renumber(scheme.steps)
+        try? ctx.save()
+    }
+
+    private func moveSteps(from source: IndexSet, to destination: Int) {
+        guard let scheme = prescription.warmupScheme else { return }
+        var sorted = sortedSteps
+        sorted.move(fromOffsets: source, toOffset: destination)
+        renumber(sorted)
+        try? ctx.save()
+    }
+
+    private func renumber(_ steps: [WarmupStep]) {
+        for (i, s) in steps.enumerated() { s.order = i }
+    }
+}
+
+// Row displaying a single warmup step in the WarmupSchemeEditor list.
+private struct WarmupStepRow: View {
+    @Bindable var step: WarmupStep
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(step.kind == .percentage ? "%" :
+                     step.kind == .fixedReps  ? "Reps" : "Note")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let r = step.restSecondsAfter, r > 0 {
+                    Text("\(r)s rest")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if step.kind == .percentage, let pct = step.percentOfWorking {
+                Text("\(Int(pct * 100))% of working weight")
+                    .font(.dsBody)
+            }
+            if step.kind == .fixedReps, let reps = step.reps {
+                Text("\(reps) reps")
+                    .font(.dsBody)
+            }
+            if let note = step.note, !note.isEmpty {
+                Text(note)
+                    .font(.dsBodySecondary)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// Sheet for creating a new warmup step.
+private struct WarmupStepEditSheet: View {
+    var onSave: (WarmupStepKind, Int?, Double?, Int?, String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var kind: WarmupStepKind = .fixedReps
+    @State private var repsText = ""
+    @State private var pctText = ""
+    @State private var restText = ""
+    @State private var note = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Type") {
+                    Picker("Kind", selection: $kind) {
+                        Text("Fixed Reps").tag(WarmupStepKind.fixedReps)
+                        Text("% of Working").tag(WarmupStepKind.percentage)
+                        Text("Note Only").tag(WarmupStepKind.noteOnly)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                if kind == .fixedReps {
+                    Section("Reps") {
+                        TextField("e.g. 5", text: $repsText)
+                            .keyboardType(.numberPad)
+                    }
+                }
+                if kind == .percentage {
+                    Section("Percent of Working Weight") {
+                        TextField("e.g. 50", text: $pctText)
+                            .keyboardType(.decimalPad)
+                    }
+                }
+                Section("Rest After (s)") {
+                    TextField("e.g. 60", text: $restText)
+                        .keyboardType(.numberPad)
+                }
+                Section("Note") {
+                    TextField("Optional cue", text: $note, axis: .vertical)
+                        .lineLimit(1...3)
+                }
+            }
+            .navigationTitle("Add Warmup Step")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        let reps = Int(repsText.filter(\.isNumber))
+                        let pct  = Double(pctText.filter { $0.isNumber || $0 == "." }).map { $0 / 100.0 }
+                        let rest = Int(restText.filter(\.isNumber))
+                        let noteVal = note.trimmingCharacters(in: .whitespacesAndNewlines)
+                        onSave(kind, reps, pct, rest, noteVal.isEmpty ? nil : noteVal)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Editor for the list of TechniquePlan entries on a SlotPrescription.
+private struct TechniquePlanEditor: View {
+    @Environment(\.modelContext) private var ctx
+    @Bindable var prescription: SlotPrescription
+    @State private var showAdd = false
+    @State private var addType: TechniqueType = .dropset
+
+    private var sorted: [TechniquePlan] {
+        prescription.techniquePlans.sorted { $0.order < $1.order }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                if prescription.techniquePlans.isEmpty {
+                    Text("No techniques. Tap + to add.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(sorted) { plan in
+                    TechniquePlanRow(plan: plan)
+                }
+                .onDelete(perform: deletePlans)
+                .onMove(perform: movePlans)
+            } header: {
+                Text("Techniques")
+            }
+        }
+        .navigationTitle("Techniques")
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button { showAdd = true } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showAdd) {
+            TechniqueTypePickerSheet(onPick: { t in addPlan(type: t) })
+        }
+    }
+
+    private func addPlan(type: TechniqueType) {
+        let nextOrder = (prescription.techniquePlans.map(\.order).max() ?? -1) + 1
+        let plan = TechniquePlan(order: nextOrder, type: type)
+        ctx.insert(plan)
+        prescription.techniquePlans.append(plan)
+        try? ctx.save()
+    }
+
+    private func deletePlans(at offsets: IndexSet) {
+        let s = sorted
+        for i in offsets {
+            let plan = s[i]
+            prescription.techniquePlans.removeAll { $0.id == plan.id }
+            ctx.delete(plan)
+        }
+        for (i, p) in sorted.enumerated() { p.order = i }
+        try? ctx.save()
+    }
+
+    private func movePlans(from source: IndexSet, to destination: Int) {
+        var s = sorted
+        s.move(fromOffsets: source, toOffset: destination)
+        for (i, p) in s.enumerated() { p.order = i }
+        try? ctx.save()
+    }
+}
+
+// A single row summarising one TechniquePlan.
+private struct TechniquePlanRow: View {
+    @Bindable var plan: TechniquePlan
+
+    private var title: String {
+        switch plan.type {
+        case .dropset:       return "Drop Set"
+        case .partialReps:   return "Partial Reps"
+        case .restPause:     return "Rest-Pause"
+        case .amrap:         return "AMRAP"
+        case .toFailure:     return "To Failure"
+        case .cluster:       return "Cluster"
+        case .tempoOverride: return "Tempo Override"
+        }
+    }
+
+    private var detail: String {
+        var parts: [String] = []
+        if let r = plan.rounds,   r > 0  { parts.append("\(r) rounds") }
+        if let r = plan.reps,     r > 0  { parts.append("\(r) reps") }
+        if let d = plan.dropPercent       { parts.append("\(Int(d * 100))% drop") }
+        if let s = plan.restSeconds, s > 0 { parts.append("\(s)s rest") }
+        if let n = plan.note, !n.isEmpty  { parts.append(n) }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.dsBody)
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(.dsBodySecondary)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// Sheet for picking a technique type when adding a new TechniquePlan.
+private struct TechniqueTypePickerSheet: View {
+    var onPick: (TechniqueType) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private let types: [(TechniqueType, String, String)] = [
+        (.dropset,       "Drop Set",       "Reduce weight immediately after reaching failure."),
+        (.partialReps,   "Partial Reps",   "Continue with partial range of motion after failure."),
+        (.restPause,     "Rest-Pause",      "Short intra-set rest, then continue."),
+        (.amrap,         "AMRAP",           "As many reps as possible on last set."),
+        (.toFailure,     "To Failure",      "Push until technical failure."),
+        (.cluster,       "Cluster",         "Intra-set pause clusters."),
+        (.tempoOverride, "Tempo Override",  "Override tempo for this exercise."),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            List(types, id: \.0) { type, name, desc in
+                Button {
+                    onPick(type)
+                    dismiss()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(.dsBody).foregroundStyle(.primary)
+                        Text(desc).font(.dsBodySecondary).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            .navigationTitle("Add Technique")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Prescription Editor (Phase 3.5)
 
 private struct SlotPrescriptionSection: View {
     @Environment(\.modelContext) private var ctx
@@ -1113,6 +1453,42 @@ private struct SlotPrescriptionSection: View {
                     prescription: prescription,
                     isTimeBased: isTimeBased
                 )
+
+                // Phase 3.5: Warmup scheme navigation
+                NavigationLink {
+                    WarmupSchemeEditor(prescription: prescription)
+                } label: {
+                    HStack {
+                        Text("Warmup")
+                        Spacer()
+                        let count = prescription.warmupScheme?.steps.count ?? 0
+                        if count > 0 {
+                            Text("\(count) step\(count == 1 ? "" : "s")")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("None")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // Phase 3.5: Technique plans navigation
+                NavigationLink {
+                    TechniquePlanEditor(prescription: prescription)
+                } label: {
+                    HStack {
+                        Text("Techniques")
+                        Spacer()
+                        let count = prescription.techniquePlans.count
+                        if count > 0 {
+                            Text("\(count) technique\(count == 1 ? "" : "s")")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("None")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
 
             TextField("Slot notes", text: slotNotesBinding, axis: .vertical)

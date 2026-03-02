@@ -86,7 +86,7 @@ extension Collection {
 
 // MARK: - Session-scoped editable plan (in-memory only)
 
-struct SessionPlan {
+struct SessionPlan: Codable {
     var sets: Int?
     var repMin: Int?
     var repMax: Int?
@@ -621,6 +621,9 @@ struct ActiveWorkoutView: View {
             appState.activeWorkoutStartedAt = nil
             appState.activeRestEndsAt = nil
             appState.activeRestSlotID = nil
+            appState.sessionPlansJSON = nil
+            appState.activeBlockIndex = nil
+            appState.activeExerciseIndex = nil
         }
 
         try? ctx.save()
@@ -649,6 +652,66 @@ struct ActiveWorkoutView: View {
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
         appState.activeRestEndsAt = nil
         appState.activeRestSlotID = nil
+        try? ctx.save()
+    }
+
+    /// Encodes `sessionPlans` to JSON and writes it to AppState.
+    private func persistSessionPlans() {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        let stringKeyed = Dictionary(
+            uniqueKeysWithValues: sessionPlans.map { ($0.key.uuidString, $0.value) }
+        )
+        appState.sessionPlansJSON =
+            (try? JSONEncoder().encode(stringKeyed))
+            .flatMap { String(data: $0, encoding: .utf8) }
+        try? ctx.save()
+    }
+
+    /// Overlays session plans from AppState.sessionPlansJSON onto the current
+    /// `sessionPlans` dictionary.  Called after `initializeSessionPlans()` on cold
+    /// resume so that in-workout edits survive a process kill.
+    /// Stale keys (slot IDs not present in the current plan) are silently ignored.
+    private func restoreSessionPlansFromAppState() {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        guard let json = appState.sessionPlansJSON,
+              let data = json.data(using: .utf8)
+        else { return }
+
+        let validSlotIDs = Set(
+            plan.blocks.flatMap { $0.exercises.map(\.routineSlotID) }
+        )
+
+        if let decoded = try? JSONDecoder().decode(
+            [String: SessionPlan].self, from: data
+        ) {
+            for (keyStr, sp) in decoded {
+                guard let slotID = UUID(uuidString: keyStr),
+                      validSlotIDs.contains(slotID)
+                else { continue }
+                sessionPlans[slotID] = sp
+            }
+        }
+    }
+
+    /// Restores `currentBlockIndex` and `currentExerciseIndex` from AppState,
+    /// clamping to valid bounds so out-of-range persisted values never crash.
+    private func restorePositionFromAppState() {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        if let b = appState.activeBlockIndex {
+            let clampedBlock = max(0, min(b, plan.blocks.count - 1))
+            currentBlockIndex = clampedBlock
+            if let e = appState.activeExerciseIndex {
+                let exCount = plan.blocks[clampedBlock].exercises.count
+                currentExerciseIndex = max(0, min(e, exCount - 1))
+            }
+        }
+    }
+
+    /// Writes the current block/exercise cursor position to AppState.
+    private func persistPosition() {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        appState.activeBlockIndex = currentBlockIndex
+        appState.activeExerciseIndex = currentExerciseIndex
         try? ctx.save()
     }
 
@@ -1088,7 +1151,7 @@ struct ActiveWorkoutView: View {
                             )
                         }
                     } header: {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 6) {
                             let setCount = effectiveSetCount(
                                 for: exercise,
                                 resolvedTemplates: exercise.templates)
@@ -1100,6 +1163,13 @@ struct ActiveWorkoutView: View {
                                 "Logged \(loggedCount)/\(setCount) sets"
                             )
                             .font(.dsBody)
+
+                            // Phase 3.6: technique indicators (read-only snapshot; never mutates prescription)
+                            if !exercise.techniqueSummaries.isEmpty {
+                                TechniqueIndicatorRow(
+                                    labels: exercise.techniqueSummaries
+                                )
+                            }
                         }
                     }
                 }
@@ -1307,6 +1377,10 @@ struct ActiveWorkoutView: View {
 
                 // 0) initialize session plans from snapshots
                 initializeSessionPlans()
+                // 0a) overlay persisted session plans (cold resume — takes precedence)
+                restoreSessionPlansFromAppState()
+                // 0b) restore cursor position from AppState (cold resume)
+                restorePositionFromAppState()
                 // 1) mirror caches (if returning)
                 syncFromGuardCachesIfAny()
                 // 2) if still empty, seed from plan
@@ -1332,6 +1406,8 @@ struct ActiveWorkoutView: View {
                     clearPersistedRestState()
                 }
             }
+            .onChange(of: currentBlockIndex) { _, _ in persistPosition() }
+            .onChange(of: currentExerciseIndex) { _, _ in persistPosition() }
             .onReceive(
                 NotificationCenter.default.publisher(
                     for: UIApplication.didBecomeActiveNotification
@@ -1390,7 +1466,10 @@ struct ActiveWorkoutView: View {
             }
             .sheet(
                 isPresented: $showEditPlanSheet,
-                onDismiss: { applySessionPlanToInputs() }
+                onDismiss: {
+                    applySessionPlanToInputs()
+                    persistSessionPlans()
+                }
             ) {
                 if let exercise = currentExercise {
                     EditSessionPlanSheet(
@@ -2453,6 +2532,31 @@ private struct SetEntryRow: View {
                 }
             }
             .frame(minWidth: 80)
+        }
+    }
+}
+
+// MARK: - Phase 3.6: Technique indicators
+
+/// Displays technique badges snapshotted at plan-build time.
+/// Read-only — never touches the live SlotPrescription or TechniquePlan models.
+private struct TechniqueIndicatorRow: View {
+    let labels: [String]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(labels, id: \.self) { label in
+                    Text(label)
+                        .font(.dsCaption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundStyle(Color.orange)
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.vertical, 2)
         }
     }
 }

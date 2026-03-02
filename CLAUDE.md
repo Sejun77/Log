@@ -1,138 +1,123 @@
 # CLAUDE.md
 Gym Log — Architecture v2 (SwiftUI + SwiftData)
-Branch: refactor/architecture-v2
+Branch: refactor/architecture-v2-exec
 
 ## Core Directive
-You are allowed — and expected — to make extensive structural changes when they improve:
+Optimize for:
 - correctness
 - data integrity
 - maintainability
 - production readiness
 - performance
 
-However, you must implement changes incrementally, with compile-safe commits and migration safety.
-
-This project is transitioning from “functional prototype” → “production-grade app.”
+Implement incrementally with compile-safe commits and migration safety.
 
 ---
 
-## Definition of “Production-Ready” (What you must optimize for)
-
-### A) Data integrity & invariants (must never break)
-1) Templates are not silently mutated during workouts.
-2) Sessions are snapshotted from templates at start and are append-only history.
-3) History grouping uses stable IDs/relationships, not strings.
-4) Slot identity is stable and unique per slot (not derived from Exercise.id).
-5) Deleting routines/exercises does NOT delete completed history by default.
-
-### B) Safety & reliability
-- No force unwraps.
-- No hidden side effects.
-- Explicit error handling where failure is possible.
-- Deterministic state transitions for workout lifecycle.
-- No “barely functional” code; avoid hacks that only work in happy-path.
-
-### C) Performance expectations
-- Avoid heavy grouping/sorting/filtering in SwiftUI `body`.
-- Prefer queries, caching, precomputed summaries, and lightweight view models/services.
-- No O(n²) work in rendering paths for history screens.
-
-### D) Developer experience
-- Keep the repo buildable at each step.
-- Provide clear diffs and file summaries.
-- Prefer clear naming and cohesive architecture over minimal edits.
+## Non-Negotiable Rules
+1) NO auto-commit, NO auto-push.
+   - You may propose the exact commit command, but stop and wait for me to run it.
+2) Keep every step buildable.
+   - After edits: build must pass.
+   - Run tests only when required by Slice Workflow or when touching high-risk areas (see Build & Test Policy).
+3) Migration safety: additive-first.
+   - New fields optional with nil defaults unless explicitly approved.
+4) No silent template mutation from sessions (ever).
+   - Any “apply back” must be explicit and gated by UI.
+5) Avoid heavy work in SwiftUI body.
+   - Prefer helpers/services/caches.
 
 ---
 
-## Allowed Scope of Change (Explicit Permission)
-You MAY:
-- introduce new models/entities (RoutineVariant, Prescription, etc.)
-- rename models to clarify responsibilities (e.g., Workout → WorkoutSession)
-- split responsibilities into services/stores (WorkoutStore, HistoryIndex, etc.)
-- redesign relationships + delete rules to protect history
-- refactor UI flows to align with new invariants
-- add tests and helper utilities
-
-You SHOULD choose the best architecture for long-term maintainability even if it requires multiple files changing.
-
-You MUST do it incrementally (see “Execution Rules”).
-
----
-
-## Execution Rules (How you must work)
-
-### 1) Never do a “big bang” rewrite
-Do not attempt to complete the entire refactor in one step.
-
-Work phase-by-phase. Each phase must compile and preserve user data.
-
-### 2) Each phase must be reversible
-After each phase:
-- commit changes with a clear message
-- keep the app building
-- do not leave dead code paths or incomplete migrations
-
-### 3) Migration strategy: additive first
-- Add new entities/fields as optional with safe defaults.
-- Backfill existing objects lazily or with controlled migration code.
-- Do not remove old fields until compatibility is proven stable.
-
-### 4) History protection is priority
-Current model uses `.cascade` heavily. This is unsafe.
-
-Whenever you change relationships:
-- default to preserving history
-- avoid cascading deletion from templates/exercises into workouts
-- if links must break, keep readable snapshots in history
-
-### 5) Template vs Session vs Exercise: strict boundaries
-- Exercise = definition-level info (name/bodyPart/etc.)
-- Routine slot (template) = structured prescription + per-template notes
-- Session item = what happened today + snapshots and performed results
+## Architecture Boundaries
+- Exercise = definition-level (name, bodyPart, global cues/notes, equipment/setup defaults)
+- Routine slot (template) = prescription + slot notes
+- Session (workout) = immutable snapshots + performed logs
 
 Session completion must NOT mutate Exercise or Routine by default.
 
-### 6) “Apply changes to…” must be explicit
-During an active workout, edits default to “this workout only.”
-If applying back:
-- template updates must be explicit and targeted using `routineSlotID`
-- exercise defaults updates are optional and must be narrowly scoped
+---
 
-### 7) Communication format during work
-Before editing:
-- list files likely to be touched
-- state the invariants preserved
-- state any migration/backfill plan
+## Slice Workflow (MANDATORY)
+For each slice:
+1) State goal + invariants
+2) List files to be touched
+3) Make minimal changes
+4) Build (see Build & Test Policy)
+5) Output:
+   - files changed
+   - functions changed
+   - final precedence/behavior rules
+   - manual test steps (if needed)
+6) STOP and propose ONE commit command in this format only:
+   git add <files> && git commit -m "type(scope): concise message"
 
-After editing:
-- summarize changes
-- list files changed
-- note migration impacts
-- note how to verify in app
+Do not add long commit bodies.
+Do not add "Generated by..." or "Co-Authored-By..." lines.
 
 ---
 
-## Known Current Violations (Must be removed during refactor)
-From current code (e.g., ActiveWorkoutView):
-- finishing a workout writes back to `Exercise.notes`
-- finishing a workout updates `Exercise.defaultTemplates`
-- exercise swaps can apply back to `Routine` silently
-- history grouping uses `Workout.routineName: String?`
+## Build & Test Policy (Autonomous + Token-Safe)
+Default per slice:
+- Run a build-only command (fast safety gate):
+  xcodebuild -project Log.xcodeproj -scheme Log -configuration Debug -destination 'generic/platform=iOS Simulator' build
 
-These behaviors conflict with Architecture v2. They must be replaced with explicit flows.
+Run tests only when:
+- A slice changes SwiftData models / schema / migrations
+- A slice changes session/template ownership logic
+- A slice changes persistence, timers, Live Activity lifecycle, or other high-risk behavior
+- Or the slice explicitly requires tests
+
+Test command (when needed):
+- Prefer targeted / minimal tests when possible.
+- Otherwise:
+  xcodebuild -project Log.xcodeproj -scheme Log -configuration Debug -destination 'generic/platform=iOS Simulator' test
 
 ---
 
-## Minimum Test Suite (3–5 tests)
-1) Starting a session snapshots prescription into session items + stores routineSlotID.
-2) Session edits do not mutate template unless explicit apply action is invoked.
-3) Finishing a workout produces immutable history and clears active state.
-Optional:
-4) Resume active session after app restart (persisted activeSessionID).
-5) History grouping by RoutineVariant relationship survives name changes.
+## Tooling & Command Safety (Custom Tools)
+This repo may be operated by an autonomous agent via custom tools.
+
+### Allowed actions
+- Read-only inspection (list/read/search files)
+- Patch-based edits (replace snippets; refuse if match not found)
+- Build/test via xcodebuild
+- Git read-only inspection (status/diff/log/show)
+
+### Forbidden actions (never do these via tools)
+- git commit, git push, git reset, git clean, git rebase, git checkout, git merge
+- rm -rf or destructive deletes
+- installing dependencies / network calls (brew/curl/npm install/etc.) unless explicitly approved
+
+### Long output policy (token control)
+- Never dump full build/test logs into the chat.
+- Save full command output to a file under:
+  .agent_logs/<timestamp>_<cmd>.log
+- In responses, include only:
+  - command + exit status
+  - the last ~120 lines of output
+  - and any error lines / key failure messages
+
+---
+
+## Production-Ready Definition (must never regress)
+A) Data integrity
+- Templates not silently mutated during workouts
+- Sessions snapshotted at start; history append-only
+- Slot identity stable (routineSlotID / slotID)
+- Deleting exercises/routines does not delete completed history by default
+
+B) Reliability
+- No force unwraps
+- Deterministic lifecycle transitions
+- Explicit error handling where failure is possible
+
+C) Performance
+- No O(n²) in list rendering
+- Prefer queries/caches/precomputed summaries
 
 ---
 
 ## Primary References
-- Follow `REFACTOR_PLAN.md` as the high-level blueprint.
-- Treat this file (CLAUDE.md) as the rules of engagement.
+- Follow REFACTOR_PLAN.md as the blueprint.
+- If a plan section conflicts with code reality, propose a plan update first.
