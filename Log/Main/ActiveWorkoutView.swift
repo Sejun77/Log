@@ -591,6 +591,102 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    // MARK: - Warmup Row
+
+    @ViewBuilder
+    private func buildWarmupRow(
+        block: PlanBlock,
+        exercise: PlanExercise,
+        step: WarmupStepSnapshot
+    ) -> some View {
+        // Warmup SetLogs use negative indexInExercise to avoid collision with working-set indices.
+        let logIndex = -(step.order + 1)
+        let isLogged = loggedByExercise[exercise.id, default: []].contains(logIndex)
+        let restSec = step.restSecondsAfter ?? exercise.prescriptionSnapshot?.restSecondsBetweenSets
+
+        HStack(spacing: 12) {
+            Text("W\(step.order + 1)")
+                .font(.dsCaption.weight(.semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 28, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(warmupStepDescription(step))
+                    .font(.dsBody)
+                    .foregroundStyle(isLogged ? .secondary : .primary)
+                if let note = step.note, !note.isEmpty,
+                   step.kind != .noteOnly
+                {
+                    Text(note)
+                        .font(.dsBodySecondary)
+                        .foregroundStyle(.secondary)
+                }
+                if let r = restSec, r > 0 {
+                    Text("\(r)s rest")
+                        .font(.dsBodySecondary)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                if isLogged {
+                    undoSetLog(exerciseID: exercise.id, setIndex: logIndex)
+                    var s = loggedByExercise[exercise.id, default: []]
+                    s.remove(logIndex)
+                    loggedByExercise[exercise.id] = s
+                    syncToGuardCaches()
+                    UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                } else {
+                    appendSetLog(
+                        exerciseID: exercise.id,
+                        setIndex: logIndex,
+                        reps: step.reps ?? 0,
+                        weight: nil,
+                        kind: .warmup
+                    )
+                    var s = loggedByExercise[exercise.id, default: []]
+                    s.insert(logIndex)
+                    loggedByExercise[exercise.id] = s
+                    syncToGuardCaches()
+                    if let seconds = restSec, seconds > 0 {
+                        startRestWithPersistence(
+                            seconds: seconds,
+                            slotID: exercise.routineSlotID
+                        )
+                        showRestOverlay = true
+                    }
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+            } label: {
+                Image(systemName: isLogged ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isLogged ? Color.green : Color.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+        .opacity(isLogged ? 0.65 : 1.0)
+    }
+
+    private func warmupStepDescription(_ step: WarmupStepSnapshot) -> String {
+        switch step.kind {
+        case .fixedReps:
+            if let r = step.reps { return "\(r) reps" }
+            return "Reps"
+        case .percentage:
+            if let pct = step.percentOfWorking {
+                let p = Int(pct * 100)
+                if let r = step.reps { return "\(p)% × \(r) reps" }
+                return "\(p)% of working"
+            }
+            return "% of working"
+        case .noteOnly:
+            return step.note ?? "—"
+        }
+    }
+
     private func unlockAndDismiss() {
         // Fully terminate timers for this workout
         rest.stop()
@@ -1134,6 +1230,18 @@ struct ActiveWorkoutView: View {
                     // --- Plan summary (compact) + edit via sheet ---
                     planSummarySection(for: exercise)
 
+                    // --- Warmup section ---
+                    if !exercise.warmupStepsSnapshot.isEmpty {
+                        Section {
+                            ForEach(exercise.warmupStepsSnapshot, id: \.order) { step in
+                                buildWarmupRow(block: block, exercise: exercise, step: step)
+                            }
+                        } header: {
+                            Text("Warmup")
+                                .font(.dsBody)
+                        }
+                    }
+
                     // --- Sets section ---
                     Section {
                         let setCount = effectiveSetCount(
@@ -1155,10 +1263,11 @@ struct ActiveWorkoutView: View {
                             let setCount = effectiveSetCount(
                                 for: exercise,
                                 resolvedTemplates: exercise.templates)
+                            // Warmup logs use negative indexInExercise — exclude them from working-set count.
                             let loggedCount = loggedByExercise[
                                 exercise.id,
                                 default: []
-                            ].count
+                            ].filter { $0 >= 0 }.count
                             Text(
                                 "Logged \(loggedCount)/\(setCount) sets"
                             )

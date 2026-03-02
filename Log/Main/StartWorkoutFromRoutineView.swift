@@ -12,6 +12,16 @@ struct PlanSetTemplate: Identifiable {
     var durationSeconds: Int?
 }
 
+/// Value-type snapshot of one warmup step — no live SwiftData references.
+struct WarmupStepSnapshot {
+    var order: Int
+    var kind: WarmupStepKind
+    var reps: Int?
+    var percentOfWorking: Double?
+    var note: String?
+    var restSecondsAfter: Int?
+}
+
 /// Lightweight value-type copy of SlotPrescription fields, carried in the plan
 /// and converted to @Model PlannedPrescriptionSnapshot at WorkoutItem creation.
 struct PrescriptionSnapshotPayload {
@@ -105,6 +115,9 @@ struct PlanExercise: Identifiable {
 
     // Phase 3.6: technique labels snapshotted at plan-build time (read-only; never mutates prescription)
     var techniqueSummaries: [String] = []
+
+    // Warmup steps snapshotted at plan-build time (read-only; no live SwiftData references)
+    var warmupStepsSnapshot: [WarmupStepSnapshot] = []
 }
 
 struct PlanBlock: Identifiable {
@@ -189,6 +202,20 @@ struct StartWorkoutFromRoutineView: View {
                                 }
                             }
 
+                        let warmupStepsSnapshot: [WarmupStepSnapshot] =
+                            (re.prescription?.warmupScheme?.steps ?? [])
+                            .sorted { $0.order < $1.order }
+                            .map { step in
+                                WarmupStepSnapshot(
+                                    order: step.order,
+                                    kind: step.kind,
+                                    reps: step.reps,
+                                    percentOfWorking: step.percentOfWorking,
+                                    note: step.note,
+                                    restSecondsAfter: step.restSecondsAfter
+                                )
+                            }
+
                         return PlanExercise(
                             id: ex.id,
                             routineExerciseID: re.id,
@@ -203,7 +230,8 @@ struct StartWorkoutFromRoutineView: View {
                             prescriptionSnapshot: re.prescription.map(
                                 PrescriptionSnapshotPayload.init(from:)
                             ),
-                            techniqueSummaries: techniqueSummaries
+                            techniqueSummaries: techniqueSummaries,
+                            warmupStepsSnapshot: warmupStepsSnapshot
                         )
                     }
                 guard !exs.isEmpty else { return nil }
