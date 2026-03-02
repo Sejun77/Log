@@ -540,6 +540,11 @@ final class WorkoutItem {
     // Phase 4b: readable history after exercise deletion
     var exerciseNameSnapshot: String?
 
+    // Warmup steps snapshotted at session start; used to restore the warmup
+    // section on cold resume when the routine may no longer be available.
+    // Optional / nil-default — fully additive, no migration required.
+    var warmupStepsSnapshotData: Data? = nil
+
     init(exercise: Exercise, setLogs: [SetLog]) {
         self.exercise = exercise
         self.setLogs = setLogs

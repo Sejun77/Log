@@ -13,7 +13,7 @@ struct PlanSetTemplate: Identifiable {
 }
 
 /// Value-type snapshot of one warmup step — no live SwiftData references.
-struct WarmupStepSnapshot {
+struct WarmupStepSnapshot: Codable {
     var order: Int
     var kind: WarmupStepKind
     var reps: Int?

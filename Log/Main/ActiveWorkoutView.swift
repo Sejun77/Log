@@ -2323,6 +2323,13 @@ struct ActiveWorkoutView: View {
             ctx.insert(snapshot)
             item.plannedPrescriptionSnapshot = snapshot
         }
+        // Persist warmup steps so they survive a cold restart when the routine
+        // may be unavailable (fallback resume path via planFromWorkoutItems).
+        if !planEx.warmupStepsSnapshot.isEmpty {
+            item.warmupStepsSnapshotData = try? JSONEncoder().encode(
+                planEx.warmupStepsSnapshot
+            )
+        }
     }
 
     /// true iff every exercise in the block has logged set index `idx`

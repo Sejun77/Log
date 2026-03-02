@@ -99,6 +99,20 @@ enum WorkoutResumeService {
                             currentName = snap
                         }
 
+                        let warmupStepsSnapshot: [WarmupStepSnapshot] =
+                            (re.prescription?.warmupScheme?.steps ?? [])
+                            .sorted { $0.order < $1.order }
+                            .map { step in
+                                WarmupStepSnapshot(
+                                    order: step.order,
+                                    kind: step.kind,
+                                    reps: step.reps,
+                                    percentOfWorking: step.percentOfWorking,
+                                    note: step.note,
+                                    restSecondsAfter: step.restSecondsAfter
+                                )
+                            }
+
                         return PlanExercise(
                             id: ex.id,
                             routineExerciseID: re.id,
@@ -112,7 +126,8 @@ enum WorkoutResumeService {
                             templateNotesSnapshot: re.templateNotes,
                             prescriptionSnapshot: re.prescription.map(
                                 PrescriptionSnapshotPayload.init(from:)
-                            )
+                            ),
+                            warmupStepsSnapshot: warmupStepsSnapshot
                         )
                     }
                 guard !exs.isEmpty else { return nil }
@@ -198,6 +213,12 @@ enum WorkoutResumeService {
             let prescriptionPayload = item.plannedPrescriptionSnapshot
                 .map(PrescriptionSnapshotPayload.init(from:))
 
+            // Decode persisted warmup snapshot (written by populateSnapshotFields at session start).
+            let warmupStepsSnapshot: [WarmupStepSnapshot] =
+                item.warmupStepsSnapshotData
+                    .flatMap { try? JSONDecoder().decode([WarmupStepSnapshot].self, from: $0) }
+                ?? []
+
             return PlanBlock(
                 isSuperset: false,
                 restAfterSeconds: nil,
@@ -214,7 +235,8 @@ enum WorkoutResumeService {
                         isTimeBased: ex.isTimeBased,
                         routineSlotID: item.routineSlotID ?? UUID(),
                         templateNotesSnapshot: item.templateNotesSnapshot,
-                        prescriptionSnapshot: prescriptionPayload
+                        prescriptionSnapshot: prescriptionPayload,
+                        warmupStepsSnapshot: warmupStepsSnapshot
                     )
                 ]
             )
