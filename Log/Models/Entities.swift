@@ -544,6 +544,7 @@ final class WorkoutItem {
     // section on cold resume when the routine may no longer be available.
     // Optional / nil-default — fully additive, no migration required.
     var warmupStepsSnapshotData: Data? = nil
+    var techniquePlansSnapshotData: Data? = nil
 
     init(exercise: Exercise, setLogs: [SetLog]) {
         self.exercise = exercise

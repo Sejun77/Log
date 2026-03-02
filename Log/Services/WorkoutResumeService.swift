@@ -113,6 +113,23 @@ enum WorkoutResumeService {
                                 )
                             }
 
+                        let techniquePlansSnapshot: [TechniquePlanSnapshot] =
+                            (re.prescription?.techniquePlans ?? [])
+                            .sorted { $0.order < $1.order }
+                            .map { tp in
+                                TechniquePlanSnapshot(
+                                    order: tp.order,
+                                    type: tp.type,
+                                    dropPercent: tp.dropPercent,
+                                    dropCount: tp.dropCount,
+                                    rounds: tp.rounds,
+                                    restSeconds: tp.restSeconds,
+                                    partialRangeNote: tp.partialRangeNote,
+                                    note: tp.note,
+                                    reps: tp.reps
+                                )
+                            }
+
                         return PlanExercise(
                             id: ex.id,
                             routineExerciseID: re.id,
@@ -127,6 +144,7 @@ enum WorkoutResumeService {
                             prescriptionSnapshot: re.prescription.map(
                                 PrescriptionSnapshotPayload.init(from:)
                             ),
+                            techniquePlansSnapshot: techniquePlansSnapshot,
                             warmupStepsSnapshot: warmupStepsSnapshot
                         )
                     }
@@ -213,10 +231,15 @@ enum WorkoutResumeService {
             let prescriptionPayload = item.plannedPrescriptionSnapshot
                 .map(PrescriptionSnapshotPayload.init(from:))
 
-            // Decode persisted warmup snapshot (written by populateSnapshotFields at session start).
+            // Decode persisted snapshots (written by populateSnapshotFields at session start).
             let warmupStepsSnapshot: [WarmupStepSnapshot] =
                 item.warmupStepsSnapshotData
                     .flatMap { try? JSONDecoder().decode([WarmupStepSnapshot].self, from: $0) }
+                ?? []
+
+            let techniquePlansSnapshot: [TechniquePlanSnapshot] =
+                item.techniquePlansSnapshotData
+                    .flatMap { try? JSONDecoder().decode([TechniquePlanSnapshot].self, from: $0) }
                 ?? []
 
             return PlanBlock(
@@ -236,6 +259,7 @@ enum WorkoutResumeService {
                         routineSlotID: item.routineSlotID ?? UUID(),
                         templateNotesSnapshot: item.templateNotesSnapshot,
                         prescriptionSnapshot: prescriptionPayload,
+                        techniquePlansSnapshot: techniquePlansSnapshot,
                         warmupStepsSnapshot: warmupStepsSnapshot
                     )
                 ]

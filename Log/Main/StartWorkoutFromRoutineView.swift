@@ -22,6 +22,55 @@ struct WarmupStepSnapshot: Codable {
     var restSecondsAfter: Int?
 }
 
+/// Value-type snapshot of one technique plan — no live SwiftData references.
+struct TechniquePlanSnapshot: Codable {
+    var order: Int
+    var type: TechniqueType       // Codable via RawRepresentable
+    var dropPercent: Double?      // stored as percentage, e.g. 20.0 = 20%
+    var dropCount: Int?
+    var rounds: Int?
+    var restSeconds: Int?
+    var partialRangeNote: String?
+    var note: String?
+    var reps: Int?
+
+    /// Human-readable badge label shown in the active workout UI.
+    var summaryLabel: String {
+        switch type {
+        case .dropset:
+            var parts: [String] = []
+            if let n = dropCount { parts.append("×\(n)") }
+            if let pct = dropPercent, pct > 0 { parts.append("−\(Int(pct))%") }
+            if let r = restSeconds, r > 0 { parts.append("(\(r)s)") }
+            let tail = parts.isEmpty ? "" : " " + parts.joined(separator: " ")
+            return "Dropset\(tail)"
+        case .restPause:
+            var s = "Rest-Pause"
+            if let r = restSeconds, r > 0 { s += " \(r)s" }
+            if let n = rounds, n > 0 { s += " ×\(n)" }
+            return s
+        case .tempoOverride:
+            if let t = note, !t.isEmpty { return "Tempo \(t)" }
+            return "Tempo"
+        case .partialReps:
+            var s = "Partials"
+            if let region = partialRangeNote, !region.isEmpty { s += " \(region)" }
+            if let n = reps, n > 0 { s += " (\(n))" }
+            return s
+        case .amrap:
+            return "AMRAP"
+        case .toFailure:
+            return "To Failure"
+        case .cluster:
+            var s = "Cluster"
+            if let n = reps, n > 0 { s += " \(n)r" }
+            if let c = rounds, c > 0 { s += " ×\(c)" }
+            if let r = restSeconds, r > 0 { s += " (\(r)s)" }
+            return s
+        }
+    }
+}
+
 /// Lightweight value-type copy of SlotPrescription fields, carried in the plan
 /// and converted to @Model PlannedPrescriptionSnapshot at WorkoutItem creation.
 struct PrescriptionSnapshotPayload {
@@ -113,8 +162,8 @@ struct PlanExercise: Identifiable {
     var templateNotesSnapshot: String?
     var prescriptionSnapshot: PrescriptionSnapshotPayload?
 
-    // Phase 3.6: technique labels snapshotted at plan-build time (read-only; never mutates prescription)
-    var techniqueSummaries: [String] = []
+    // Technique plans snapshotted at plan-build time (read-only; no live SwiftData references)
+    var techniquePlansSnapshot: [TechniquePlanSnapshot] = []
 
     // Warmup steps snapshotted at plan-build time (read-only; no live SwiftData references)
     var warmupStepsSnapshot: [WarmupStepSnapshot] = []
@@ -165,41 +214,22 @@ struct StartWorkoutFromRoutineView: View {
                                     durationSeconds: tpl.durationSeconds
                                 )
                             }
-                        // Phase 3.6: snapshot technique labels (read-only; never mutates prescription)
-                        let techniqueSummaries: [String] = (re.prescription?.techniquePlans ?? [])
+                        // Snapshot technique plans (read-only; no live SwiftData references)
+                        let techniquePlansSnapshot: [TechniquePlanSnapshot] =
+                            (re.prescription?.techniquePlans ?? [])
                             .sorted { $0.order < $1.order }
                             .map { tp in
-                                switch tp.type {
-                                case .dropset:
-                                    if let pct = tp.dropPercent, let n = tp.dropCount {
-                                        return "Dropset ×\(n) (−\(Int(pct))%)"
-                                    } else if let n = tp.dropCount {
-                                        return "Dropset ×\(n)"
-                                    }
-                                    return "Dropset"
-                                case .partialReps:
-                                    if let note = tp.partialRangeNote, !note.isEmpty {
-                                        return "Partials (\(note))"
-                                    }
-                                    return "Partial Reps"
-                                case .restPause:
-                                    if let r = tp.rounds { return "Rest-Pause ×\(r)" }
-                                    return "Rest-Pause"
-                                case .amrap:
-                                    return "AMRAP"
-                                case .toFailure:
-                                    return "To Failure"
-                                case .cluster:
-                                    if let r = tp.rounds, let rest = tp.restSeconds {
-                                        return "Cluster ×\(r) (\(rest)s)"
-                                    } else if let r = tp.rounds {
-                                        return "Cluster ×\(r)"
-                                    }
-                                    return "Cluster"
-                                case .tempoOverride:
-                                    if let t = tp.note, !t.isEmpty { return "Tempo: \(t)" }
-                                    return "Tempo Override"
-                                }
+                                TechniquePlanSnapshot(
+                                    order: tp.order,
+                                    type: tp.type,
+                                    dropPercent: tp.dropPercent,
+                                    dropCount: tp.dropCount,
+                                    rounds: tp.rounds,
+                                    restSeconds: tp.restSeconds,
+                                    partialRangeNote: tp.partialRangeNote,
+                                    note: tp.note,
+                                    reps: tp.reps
+                                )
                             }
 
                         let warmupStepsSnapshot: [WarmupStepSnapshot] =
@@ -230,7 +260,7 @@ struct StartWorkoutFromRoutineView: View {
                             prescriptionSnapshot: re.prescription.map(
                                 PrescriptionSnapshotPayload.init(from:)
                             ),
-                            techniqueSummaries: techniqueSummaries,
+                            techniquePlansSnapshot: techniquePlansSnapshot,
                             warmupStepsSnapshot: warmupStepsSnapshot
                         )
                     }

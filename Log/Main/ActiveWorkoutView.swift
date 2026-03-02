@@ -1273,10 +1273,10 @@ struct ActiveWorkoutView: View {
                             )
                             .font(.dsBody)
 
-                            // Phase 3.6: technique indicators (read-only snapshot; never mutates prescription)
-                            if !exercise.techniqueSummaries.isEmpty {
+                            // Technique indicators (read-only snapshot; never mutates prescription)
+                            if !exercise.techniquePlansSnapshot.isEmpty {
                                 TechniqueIndicatorRow(
-                                    labels: exercise.techniqueSummaries
+                                    labels: exercise.techniquePlansSnapshot.map(\.summaryLabel)
                                 )
                             }
                         }
@@ -2328,6 +2328,12 @@ struct ActiveWorkoutView: View {
         if !planEx.warmupStepsSnapshot.isEmpty {
             item.warmupStepsSnapshotData = try? JSONEncoder().encode(
                 planEx.warmupStepsSnapshot
+            )
+        }
+        // Persist technique plans for the same cold-restart reason.
+        if !planEx.techniquePlansSnapshot.isEmpty {
+            item.techniquePlansSnapshotData = try? JSONEncoder().encode(
+                planEx.techniquePlansSnapshot
             )
         }
     }

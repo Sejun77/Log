@@ -1304,7 +1304,11 @@ private struct TechniquePlanEditor: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(sorted) { plan in
-                    TechniquePlanRow(plan: plan)
+                    NavigationLink {
+                        TechniqueParamEditView(plan: plan)
+                    } label: {
+                        TechniquePlanRow(plan: plan)
+                    }
                 }
                 .onDelete(perform: deletePlans)
                 .onMove(perform: movePlans)
@@ -1372,7 +1376,7 @@ private struct TechniquePlanRow: View {
         var parts: [String] = []
         if let r = plan.rounds,   r > 0  { parts.append("\(r) rounds") }
         if let r = plan.reps,     r > 0  { parts.append("\(r) reps") }
-        if let d = plan.dropPercent       { parts.append("\(Int(d * 100))% drop") }
+        if let d = plan.dropPercent, d > 0 { parts.append("\(Int(d))% drop") }
         if let s = plan.restSeconds, s > 0 { parts.append("\(s)s rest") }
         if let n = plan.note, !n.isEmpty  { parts.append(n) }
         return parts.joined(separator: " · ")
@@ -1425,6 +1429,166 @@ private struct TechniqueTypePickerSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+            }
+        }
+    }
+}
+
+// Edit parameters of an existing TechniquePlan (pushed via NavigationLink).
+private struct TechniqueParamEditView: View {
+    @Environment(\.modelContext) private var ctx
+    @Bindable var plan: TechniquePlan
+
+    var body: some View {
+        Form {
+            techniqueParamSection
+        }
+        .navigationTitle(typeName)
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: plan.dropPercent)      { try? ctx.save() }
+        .onChange(of: plan.dropCount)        { try? ctx.save() }
+        .onChange(of: plan.rounds)           { try? ctx.save() }
+        .onChange(of: plan.restSeconds)      { try? ctx.save() }
+        .onChange(of: plan.reps)             { try? ctx.save() }
+        .onChange(of: plan.partialRangeNote) { try? ctx.save() }
+        .onChange(of: plan.note)             { try? ctx.save() }
+    }
+
+    private var typeName: String {
+        switch plan.type {
+        case .dropset:       return "Drop Set"
+        case .partialReps:   return "Partial Reps"
+        case .restPause:     return "Rest-Pause"
+        case .amrap:         return "AMRAP"
+        case .toFailure:     return "To Failure"
+        case .cluster:       return "Cluster"
+        case .tempoOverride: return "Tempo Override"
+        }
+    }
+
+    @ViewBuilder
+    private var techniqueParamSection: some View {
+        switch plan.type {
+        case .dropset:
+            Section("Drop Set") {
+                Stepper(
+                    "Drops: \(plan.dropCount ?? 1)",
+                    value: Binding(
+                        get: { plan.dropCount ?? 1 },
+                        set: { plan.dropCount = $0 }
+                    ),
+                    in: 1...10
+                )
+                Stepper(
+                    "Weight reduction: \(Int(plan.dropPercent ?? 20))%",
+                    value: Binding(
+                        get: { Int(plan.dropPercent ?? 20) },
+                        set: { plan.dropPercent = Double($0) }
+                    ),
+                    in: 5...50,
+                    step: 5
+                )
+                Stepper(
+                    "Rest between drops: \(plan.restSeconds ?? 0)s",
+                    value: Binding(
+                        get: { plan.restSeconds ?? 0 },
+                        set: { plan.restSeconds = $0 > 0 ? $0 : nil }
+                    ),
+                    in: 0...120,
+                    step: 5
+                )
+            }
+
+        case .restPause:
+            Section("Rest-Pause") {
+                Stepper(
+                    "Rounds: \(plan.rounds ?? 2)",
+                    value: Binding(
+                        get: { plan.rounds ?? 2 },
+                        set: { plan.rounds = $0 }
+                    ),
+                    in: 1...10
+                )
+                Stepper(
+                    "Rest: \(plan.restSeconds ?? 15)s",
+                    value: Binding(
+                        get: { plan.restSeconds ?? 15 },
+                        set: { plan.restSeconds = $0 }
+                    ),
+                    in: 5...120,
+                    step: 5
+                )
+            }
+
+        case .cluster:
+            Section("Cluster") {
+                Stepper(
+                    "Reps per cluster: \(plan.reps ?? 3)",
+                    value: Binding(
+                        get: { plan.reps ?? 3 },
+                        set: { plan.reps = $0 }
+                    ),
+                    in: 1...20
+                )
+                Stepper(
+                    "Clusters: \(plan.rounds ?? 3)",
+                    value: Binding(
+                        get: { plan.rounds ?? 3 },
+                        set: { plan.rounds = $0 }
+                    ),
+                    in: 1...10
+                )
+                Stepper(
+                    "Rest between clusters: \(plan.restSeconds ?? 10)s",
+                    value: Binding(
+                        get: { plan.restSeconds ?? 10 },
+                        set: { plan.restSeconds = $0 }
+                    ),
+                    in: 5...120,
+                    step: 5
+                )
+            }
+
+        case .partialReps:
+            Section("Partial Reps") {
+                TextField("Range note (e.g. top half)", text: Binding(
+                    get: { plan.partialRangeNote ?? "" },
+                    set: { plan.partialRangeNote = $0.isEmpty ? nil : $0 }
+                ))
+                Stepper(
+                    "Partial reps: \(plan.reps ?? 5)",
+                    value: Binding(
+                        get: { plan.reps ?? 5 },
+                        set: { plan.reps = $0 }
+                    ),
+                    in: 1...30
+                )
+            }
+
+        case .tempoOverride:
+            Section("Tempo Override") {
+                TextField("Tempo (e.g. 3-1-3-0)", text: Binding(
+                    get: { plan.note ?? "" },
+                    set: { plan.note = $0.isEmpty ? nil : $0 }
+                ))
+                .keyboardType(.numbersAndPunctuation)
+                Text("Format: eccentric-pause-concentric-pause")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .amrap:
+            Section("AMRAP") {
+                Text("As many reps as possible on the last set. No additional parameters.")
+                    .font(.dsBodySecondary)
+                    .foregroundStyle(.secondary)
+            }
+
+        case .toFailure:
+            Section("To Failure") {
+                Text("Push until technical failure. No additional parameters.")
+                    .font(.dsBodySecondary)
+                    .foregroundStyle(.secondary)
             }
         }
     }
