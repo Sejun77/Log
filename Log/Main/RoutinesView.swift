@@ -1305,7 +1305,7 @@ private struct TechniquePlanEditor: View {
                 }
                 ForEach(sorted) { plan in
                     NavigationLink {
-                        TechniqueParamEditView(plan: plan)
+                        TechniqueParamEditView(plan: plan, siblingTechniques: sorted)
                     } label: {
                         TechniquePlanRow(plan: plan)
                     }
@@ -1325,7 +1325,7 @@ private struct TechniquePlanEditor: View {
             }
         }
         .sheet(isPresented: $showAdd) {
-            TechniqueTypePickerSheet(onPick: { t in addPlan(type: t) })
+            TechniqueTypePickerSheet(existingTechniques: sorted, onPick: { t in addPlan(type: t) })
         }
     }
 
@@ -1374,9 +1374,16 @@ private struct TechniquePlanRow: View {
 
     private var detail: String {
         var parts: [String] = []
+        if plan.appliesToRaw != "lastWorkingSet" { parts.append(plan.appliesTo.displayLabel) }
         if let r = plan.rounds,   r > 0  { parts.append("\(r) rounds") }
         if let r = plan.reps,     r > 0  { parts.append("\(r) reps") }
         if let d = plan.dropPercent, d > 0 { parts.append("\(Int(d))% drop") }
+        if plan.type == .dropset {
+            switch plan.dropsetEffort {
+            case .amrap:            parts.append("AMRAP")
+            case .fixedReps(let n): parts.append("\(n) reps/drop")
+            }
+        }
         if let s = plan.restSeconds, s > 0 { parts.append("\(s)s rest") }
         if let n = plan.note, !n.isEmpty  { parts.append(n) }
         return parts.joined(separator: " · ")
@@ -1395,8 +1402,25 @@ private struct TechniquePlanRow: View {
     }
 }
 
+// MARK: - TechniqueType display helpers (RoutinesView scope)
+
+private extension TechniqueType {
+    var displayName: String {
+        switch self {
+        case .dropset:       return "Drop Set"
+        case .partialReps:   return "Partial Reps"
+        case .restPause:     return "Rest-Pause"
+        case .amrap:         return "AMRAP"
+        case .toFailure:     return "To Failure"
+        case .cluster:       return "Cluster"
+        case .tempoOverride: return "Tempo Override"
+        }
+    }
+}
+
 // Sheet for picking a technique type when adding a new TechniquePlan.
 private struct TechniqueTypePickerSheet: View {
+    var existingTechniques: [TechniquePlan]
     var onPick: (TechniqueType) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -1410,19 +1434,57 @@ private struct TechniqueTypePickerSheet: View {
         (.tempoOverride, "Tempo Override",  "Override tempo for this exercise."),
     ]
 
+    private let intensityFinishers: Set<TechniqueType> = [.dropset, .amrap, .restPause, .cluster]
+
+    /// Returns a block message if adding `newType` (defaults to lastWorkingSet bucket)
+    /// would create a duplicate or violate conflict rules. Returns nil if allowed.
+    private func conflictMessage(for newType: TechniqueType) -> String? {
+        // New techniques always default to lastWorkingSet bucket.
+        let onDefault = existingTechniques.filter { $0.appliesToRaw == "lastWorkingSet" }
+
+        // 1. Duplicate: same type already exists on this bucket (all types).
+        if onDefault.contains(where: { $0.type == newType }) {
+            return "\(newType.displayName) already exists for last working set."
+        }
+
+        guard intensityFinishers.contains(newType) else { return nil }
+
+        // 2. AMRAP ↔ Dropset mutual exclusion.
+        if newType == .amrap && onDefault.contains(where: { $0.type == .dropset }) {
+            return "Dropset already defines AMRAP/fixed reps; remove it to use AMRAP."
+        }
+        if newType == .dropset && onDefault.contains(where: { $0.type == .amrap }) {
+            return "Remove AMRAP first to add a Dropset."
+        }
+
+        // 3. One intensity finisher per bucket.
+        if let other = onDefault.first(where: { intensityFinishers.contains($0.type) }) {
+            return "\(other.type.displayName) already set for the last working set."
+        }
+
+        return nil
+    }
+
     var body: some View {
         NavigationStack {
             List(types, id: \.0) { type, name, desc in
+                let conflict = conflictMessage(for: type)
                 Button {
+                    guard conflict == nil else { return }
                     onPick(type)
                     dismiss()
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(name).font(.dsBody).foregroundStyle(.primary)
-                        Text(desc).font(.dsBodySecondary).foregroundStyle(.secondary)
+                        Text(name)
+                            .font(.dsBody)
+                            .foregroundStyle(conflict != nil ? Color.secondary : Color.primary)
+                        Text(conflict ?? desc)
+                            .font(.dsBodySecondary)
+                            .foregroundStyle(conflict != nil ? Color.red.opacity(0.75) : Color.secondary)
                     }
                     .padding(.vertical, 2)
                 }
+                .disabled(conflict != nil)
             }
             .navigationTitle("Add Technique")
             .toolbar {
@@ -1438,20 +1500,121 @@ private struct TechniqueTypePickerSheet: View {
 private struct TechniqueParamEditView: View {
     @Environment(\.modelContext) private var ctx
     @Bindable var plan: TechniquePlan
+    /// All techniques on the same prescription (including self), for conflict detection.
+    var siblingTechniques: [TechniquePlan] = []
+
+    private let intensityFinishers: Set<TechniqueType> = [.dropset, .amrap, .restPause, .cluster]
+
+    /// Transient error shown when an appliesTo change is immediately reverted.
+    @State private var appliesToErrorMsg: String? = nil
+    /// Transient error shown when a Dropset effort change is immediately reverted.
+    @State private var effortErrorMsg: String? = nil
+
+    // MARK: - Conflict helpers
+
+    /// Checks if moving `plan` to the given target would create a conflict.
+    private func conflictForAppliesTo(raw: String, setNum: Int?) -> String? {
+        let sameTarget = siblingTechniques.filter {
+            $0.persistentModelID != plan.persistentModelID
+                && $0.appliesToRaw == raw
+                && (raw != "setNumber" || $0.appliesToSetNumber == (setNum ?? 1))
+        }
+        // Duplicate: same type already on target.
+        if sameTarget.contains(where: { $0.type == plan.type }) {
+            return "\(plan.type.displayName) already exists for that target."
+        }
+        // AMRAP ↔ Dropset mutual exclusion.
+        if plan.type == .amrap && sameTarget.contains(where: { $0.type == .dropset }) {
+            return "Dropset defines AMRAP/fixed reps on that target."
+        }
+        if plan.type == .dropset && sameTarget.contains(where: { $0.type == .amrap }) {
+            return "AMRAP exists on that target; remove it to move Dropset here."
+        }
+        // One intensity finisher per bucket.
+        if intensityFinishers.contains(plan.type),
+           let other = sameTarget.first(where: { intensityFinishers.contains($0.type) }) {
+            return "\(other.type.displayName) already on that target."
+        }
+        return nil
+    }
+
+    /// Returns a message if switching Dropset effort to `effortRaw` is blocked.
+    private func conflictForEffort(_ effortRaw: String) -> String? {
+        guard plan.type == .dropset, effortRaw == "fixedReps" else { return nil }
+        let amrapOnSameBucket = siblingTechniques.contains {
+            $0.persistentModelID != plan.persistentModelID
+                && $0.type == .amrap
+                && $0.appliesToRaw == plan.appliesToRaw
+                && (plan.appliesToRaw != "setNumber"
+                    || $0.appliesToSetNumber == plan.appliesToSetNumber)
+        }
+        return amrapOnSameBucket
+            ? "AMRAP exists on the same target; can't use fixed reps."
+            : nil
+    }
 
     var body: some View {
         Form {
+            appliesToSection
             techniqueParamSection
         }
         .navigationTitle(typeName)
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: plan.dropPercent)      { try? ctx.save() }
-        .onChange(of: plan.dropCount)        { try? ctx.save() }
-        .onChange(of: plan.rounds)           { try? ctx.save() }
-        .onChange(of: plan.restSeconds)      { try? ctx.save() }
-        .onChange(of: plan.reps)             { try? ctx.save() }
-        .onChange(of: plan.partialRangeNote) { try? ctx.save() }
-        .onChange(of: plan.note)             { try? ctx.save() }
+        .onChange(of: plan.dropPercent)        { try? ctx.save() }
+        .onChange(of: plan.dropCount)          { try? ctx.save() }
+        .onChange(of: plan.rounds)             { try? ctx.save() }
+        .onChange(of: plan.restSeconds)        { try? ctx.save() }
+        .onChange(of: plan.reps)               { try? ctx.save() }
+        .onChange(of: plan.partialRangeNote)   { try? ctx.save() }
+        .onChange(of: plan.note)               { try? ctx.save() }
+        .onChange(of: plan.appliesToRaw)       { try? ctx.save() }
+        .onChange(of: plan.appliesToSetNumber) { try? ctx.save() }
+        .onChange(of: plan.dropsetEffortRaw)   { try? ctx.save() }
+        .onChange(of: plan.dropsetEffortReps)  { try? ctx.save() }
+    }
+
+    @ViewBuilder
+    private var appliesToSection: some View {
+        Section("Applies To") {
+            Picker("Target", selection: Binding(
+                get: { plan.appliesToRaw },
+                set: { v in
+                    let prevRaw = plan.appliesToRaw
+                    let prevSetNum = plan.appliesToSetNumber
+                    // Tentatively apply.
+                    plan.appliesToRaw = v
+                    if v != "setNumber" { plan.appliesToSetNumber = nil }
+                    // Validate; revert immediately if invalid.
+                    if let msg = conflictForAppliesTo(raw: plan.appliesToRaw, setNum: plan.appliesToSetNumber) {
+                        plan.appliesToRaw = prevRaw
+                        plan.appliesToSetNumber = prevSetNum
+                        appliesToErrorMsg = msg
+                    } else {
+                        appliesToErrorMsg = nil
+                    }
+                }
+            )) {
+                Text("Last working set").tag("lastWorkingSet")
+                Text("All working sets").tag("allWorkingSets")
+                Text("Specific set").tag("setNumber")
+            }
+            .pickerStyle(.menu)
+            if plan.appliesToRaw == "setNumber" {
+                Stepper(
+                    "Set number: \(plan.appliesToSetNumber ?? 1)",
+                    value: Binding(
+                        get: { plan.appliesToSetNumber ?? 1 },
+                        set: { plan.appliesToSetNumber = $0 }
+                    ),
+                    in: 1...20
+                )
+            }
+            if let msg = appliesToErrorMsg {
+                Text(msg)
+                    .font(.caption)
+                    .foregroundStyle(.red.opacity(0.85))
+            }
+        }
     }
 
     private var typeName: String {
@@ -1497,6 +1660,41 @@ private struct TechniqueParamEditView: View {
                     in: 0...120,
                     step: 5
                 )
+            }
+            Section("Effort Mode") {
+                Picker("Effort", selection: Binding(
+                    get: { plan.dropsetEffortRaw ?? "amrap" },
+                    set: { v in
+                        let prev = plan.dropsetEffortRaw
+                        plan.dropsetEffortRaw = v
+                        if v != "fixedReps" { plan.dropsetEffortReps = nil }
+                        if let msg = conflictForEffort(v) {
+                            plan.dropsetEffortRaw = prev
+                            effortErrorMsg = msg
+                        } else {
+                            effortErrorMsg = nil
+                        }
+                    }
+                )) {
+                    Text("AMRAP").tag("amrap")
+                    Text("Fixed reps").tag("fixedReps")
+                }
+                .pickerStyle(.segmented)
+                if (plan.dropsetEffortRaw ?? "amrap") == "fixedReps" {
+                    Stepper(
+                        "Reps per drop: \(plan.dropsetEffortReps ?? 8)",
+                        value: Binding(
+                            get: { plan.dropsetEffortReps ?? 8 },
+                            set: { plan.dropsetEffortReps = $0 }
+                        ),
+                        in: 1...30
+                    )
+                }
+                if let msg = effortErrorMsg {
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(.red.opacity(0.85))
+                }
             }
 
         case .restPause:

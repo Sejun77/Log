@@ -186,6 +186,13 @@ struct ActiveWorkoutView: View {
     @State private var preEditRepStrs: [UUID: [Int: String]] = [:]
     @State private var preEditDurStrs: [UUID: [Int: String]] = [:]
     @State private var loggedByExercise: [UUID: Set<Int>] = [:]
+    /// Maps exerciseID → parentSetIndex → Set of logged drop subIndices (1-based).
+    @State private var dropsLoggedByExercise: [UUID: [Int: Set<Int>]] = [:]
+    /// Reps/weight input buffers for drop rows. Key: "\(exerciseID)_\(parentSetIdx)_\(subIdx)".
+    @State private var dropRepsInput: [String: String] = [:]
+    @State private var dropWeightInput: [String: String] = [:]
+    /// Keys where the user manually typed a weight — treated as authoritative over auto-suggestion.
+    @State private var dropWeightUserEdited: Set<String> = []
     @State private var showRestOverlay = false
 
     @StateObject private var setTimer = RestTimer()
@@ -267,8 +274,29 @@ struct ActiveWorkoutView: View {
                 })
 
                 if let item = item {
-                    let indices = item.setLogs.map(\.indexInExercise)
+                    // Exclude sub-drops (subIndex != nil) from the main logged-set tracking.
+                    let indices = item.setLogs
+                        .filter { $0.subIndex == nil }
+                        .map(\.indexInExercise)
                     logged[slotID, default: []].formUnion(indices)
+
+                    // Populate drop-logged cache and pre-fill input buffers from persisted drops.
+                    var slotDrops = dropsLoggedByExercise[slotID] ?? [:]
+                    for log in item.setLogs where log.subIndex != nil {
+                        let sub = log.subIndex!
+                        slotDrops[log.indexInExercise, default: []].insert(sub)
+                        let key = "\(slotID)_\(log.indexInExercise)_\(sub)"
+                        dropRepsInput[key] = String(log.reps)
+                        let wStr = log.weight.map {
+                            $0.truncatingRemainder(dividingBy: 1) == 0
+                                ? String(Int($0)) : String($0)
+                        } ?? ""
+                        dropWeightInput[key] = wStr
+                        // Mark as user-edited so the logged weight is shown verbatim
+                        // rather than being overwritten by the auto-suggestion.
+                        dropWeightUserEdited.insert(key)
+                    }
+                    dropsLoggedByExercise[slotID] = slotDrops
                 }
 
                 let setCount = effectiveSetCount(
@@ -1257,6 +1285,10 @@ struct ActiveWorkoutView: View {
                                 idx: idx,
                                 template: t
                             )
+                            buildDropSection(
+                                exercise: exercise,
+                                parentSetIndex: idx
+                            )
                         }
                     } header: {
                         VStack(alignment: .leading, spacing: 6) {
@@ -2054,7 +2086,7 @@ struct ActiveWorkoutView: View {
         guard let wi = itemsByExerciseID[slotID] else { return }
 
         if let j = wi.setLogs.firstIndex(where: {
-            $0.indexInExercise == setIndex
+            $0.indexInExercise == setIndex && $0.subIndex == nil
         }) {
             wi.setLogs[j].reps = reps
             wi.setLogs[j].weight = weight.map(Double.init)
@@ -2097,7 +2129,7 @@ struct ActiveWorkoutView: View {
         guard let wi = itemsByExerciseID[slotID] else { return }
 
         if let j = wi.setLogs.firstIndex(where: {
-            $0.indexInExercise == setIndex
+            $0.indexInExercise == setIndex && $0.subIndex == nil
         }) {
             wi.setLogs[j].kindRaw = kind.rawValue
             wi.setLogs[j].reps = 0
@@ -2123,10 +2155,220 @@ struct ActiveWorkoutView: View {
     private func undoSetLog(exerciseID: UUID, setIndex: Int) {
         guard let wi = itemsByExerciseID[exerciseID] else { return }
         if let j = wi.setLogs.lastIndex(where: {
-            $0.indexInExercise == setIndex
+            $0.indexInExercise == setIndex && $0.subIndex == nil
         }) {
             wi.setLogs.remove(at: j)
             try? ctx.save()
+        }
+    }
+
+    // MARK: - Dropset Sub-logging
+
+    /// Returns the first Dropset TechniquePlanSnapshot that applies to `setIndex`
+    /// in the given exercise, or nil if no Dropset technique covers that set.
+    private func dropsetTechniqueApplying(
+        to setIndex: Int,
+        in exercise: PlanExercise
+    ) -> TechniquePlanSnapshot? {
+        let templates = exercise.templates
+        let setCount = effectiveSetCount(for: exercise, resolvedTemplates: templates)
+        // Last index whose template kind is .working (fallback: last index)
+        let lastWorkingIdx = (0..<setCount).last {
+            (templates[safe: $0]?.kind ?? .working) == .working
+        } ?? (setCount - 1)
+
+        return exercise.techniquePlansSnapshot.first { snap in
+            guard snap.type == .dropset else { return false }
+            switch snap.appliesTo {
+            case .lastWorkingSet:
+                return setIndex == lastWorkingIdx
+            case .allWorkingSets:
+                return (templates[safe: setIndex]?.kind ?? .working) == .working
+            case .setNumber(let n):
+                return setIndex == (n - 1)
+            }
+        }
+    }
+
+    /// Computes and rounds the suggested weight for a new drop.
+    /// Base is previous drop's logged weight, or the parent set's logged weight.
+    private func suggestedDropWeight(
+        exerciseID: UUID,
+        parentSetIndex: Int,
+        subIndex: Int,
+        dropPercent: Double
+    ) -> String {
+        guard let wi = itemsByExerciseID[exerciseID] else { return "" }
+        let base: Double?
+        if subIndex > 1 {
+            base = wi.setLogs.first(where: {
+                $0.indexInExercise == parentSetIndex && $0.subIndex == subIndex - 1
+            })?.weight
+        } else {
+            base = wi.setLogs.first(where: {
+                $0.indexInExercise == parentSetIndex && $0.subIndex == nil
+            })?.weight
+        }
+        guard let b = base, b > 0 else { return "" }
+        let raw = b * (1.0 - dropPercent / 100.0)
+        return formatWeight(roundWeight(raw))
+    }
+
+    private func roundWeight(_ raw: Double) -> Double {
+        Units.weightIsKg
+            ? (raw * 2).rounded() / 2  // nearest 0.5
+            : raw.rounded()             // nearest 1.0
+    }
+
+    private func formatWeight(_ w: Double) -> String {
+        w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(w)
+    }
+
+    /// Appends (or updates) a drop sub-log under `parentSetIndex`.
+    private func appendDropLog(
+        exerciseID slotID: UUID,
+        parentSetIndex: Int,
+        subIndex: Int,
+        reps: Int,
+        weight: Double?
+    ) {
+        guard let workout else { return }
+
+        if itemsByExerciseID[slotID] == nil {
+            guard
+                let planEx = plan.blocks.flatMap(\.exercises).first(where: { $0.id == slotID }),
+                let ex = fetchExercise(by: planEx.currentExerciseID)
+            else { return }
+            let newItem = WorkoutItem(exercise: ex, setLogs: [])
+            populateSnapshotFields(on: newItem, from: planEx)
+            workout.items.append(newItem)
+            itemsByExerciseID[slotID] = newItem
+        }
+
+        guard let wi = itemsByExerciseID[slotID] else { return }
+
+        if let j = wi.setLogs.firstIndex(where: {
+            $0.indexInExercise == parentSetIndex && $0.subIndex == subIndex
+        }) {
+            wi.setLogs[j].reps = reps
+            wi.setLogs[j].weight = weight
+            wi.setLogs[j].timestamp = .now
+        } else {
+            wi.setLogs.append(
+                SetLog(
+                    indexInExercise: parentSetIndex,
+                    kind: .dropset,
+                    reps: reps,
+                    weight: weight,
+                    subIndex: subIndex
+                )
+            )
+        }
+
+        var drops = dropsLoggedByExercise[slotID, default: [:]]
+        drops[parentSetIndex, default: []].insert(subIndex)
+        dropsLoggedByExercise[slotID] = drops
+        try? ctx.save()
+    }
+
+    /// Removes a logged drop sub-log and clears the user-edited flag so the weight
+    /// suggestion recomputes automatically on the next render.
+    private func undoDropLog(exerciseID slotID: UUID, parentSetIndex: Int, subIndex: Int) {
+        guard let wi = itemsByExerciseID[slotID] else { return }
+        if let j = wi.setLogs.firstIndex(where: {
+            $0.indexInExercise == parentSetIndex && $0.subIndex == subIndex
+        }) {
+            wi.setLogs.remove(at: j)
+            var drops = dropsLoggedByExercise[slotID, default: [:]]
+            drops[parentSetIndex]?.remove(subIndex)
+            dropsLoggedByExercise[slotID] = drops
+            // Clear authoritative flag → weight binding will recompute suggestion.
+            let key = "\(slotID)_\(parentSetIndex)_\(subIndex)"
+            dropWeightUserEdited.remove(key)
+            dropWeightInput.removeValue(forKey: key)
+            try? ctx.save()
+        }
+    }
+
+    /// Renders drop sub-rows under a working set row when a Dropset technique applies.
+    @ViewBuilder
+    private func buildDropSection(
+        exercise: PlanExercise,
+        parentSetIndex: Int
+    ) -> some View {
+        if let snap = dropsetTechniqueApplying(to: parentSetIndex, in: exercise) {
+            let dropCount = max(1, snap.dropCount ?? 1)
+            let loggedSubs = dropsLoggedByExercise[exercise.id, default: [:]][parentSetIndex, default: []]
+            let parentLogged = loggedByExercise[exercise.id, default: []].contains(parentSetIndex)
+
+            ForEach(1...dropCount, id: \.self) { sub in
+                let key = "\(exercise.id)_\(parentSetIndex)_\(sub)"
+                let isDropLogged = loggedSubs.contains(sub)
+                let canLogDrop = parentLogged && !isDropLogged
+                    && (sub == 1 || loggedSubs.contains(sub - 1))
+
+                DropLogRow(
+                    dropNumber: sub,
+                    isLogged: isDropLogged,
+                    canLog: canLogDrop,
+                    reps: Binding(
+                        get: {
+                            if let v = dropRepsInput[key] { return v }
+                            let effectiveRaw = snap.dropsetEffortRaw ?? "amrap"
+                            if effectiveRaw == "fixedReps", let n = snap.dropsetEffortReps {
+                                return String(n)
+                            }
+                            return ""
+                        },
+                        set: { dropRepsInput[key] = $0 }
+                    ),
+                    weight: Binding(
+                        get: {
+                            // If the user manually typed a value, treat it as authoritative.
+                            // Otherwise always recompute from current logged state so that
+                            // changes to the parent set or previous drop propagate automatically.
+                            if dropWeightUserEdited.contains(key) {
+                                return dropWeightInput[key] ?? ""
+                            }
+                            return suggestedDropWeight(
+                                exerciseID: exercise.id,
+                                parentSetIndex: parentSetIndex,
+                                subIndex: sub,
+                                dropPercent: snap.dropPercent ?? 20
+                            )
+                        },
+                        set: { newVal in
+                            dropWeightInput[key] = newVal
+                            dropWeightUserEdited.insert(key)
+                        }
+                    ),
+                    onLog: { reps, weight in
+                        appendDropLog(
+                            exerciseID: exercise.id,
+                            parentSetIndex: parentSetIndex,
+                            subIndex: sub,
+                            reps: reps,
+                            weight: weight
+                        )
+                        // Rest between drops: use technique restSeconds, fallback to prescription
+                        let restDur = snap.restSeconds.flatMap { $0 > 0 ? $0 : nil }
+                            ?? plannedRestBetweenSets(for: exercise)
+                        if let r = restDur, r > 0 {
+                            startRestWithPersistence(seconds: r, slotID: exercise.routineSlotID)
+                            showRestOverlay = true
+                        }
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    },
+                    onUndo: {
+                        undoDropLog(
+                            exerciseID: exercise.id,
+                            parentSetIndex: parentSetIndex,
+                            subIndex: sub
+                        )
+                        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                    }
+                )
+            }
         }
     }
 
@@ -2655,6 +2897,79 @@ private struct SetEntryRow: View {
             }
             .frame(minWidth: 80)
         }
+    }
+}
+
+// MARK: - Drop sub-row (shown under a working set when a Dropset technique applies)
+
+private struct DropLogRow: View {
+    @FocusState private var focused: Field?
+    private enum Field { case reps, weight }
+
+    let dropNumber: Int
+    let isLogged: Bool
+    let canLog: Bool
+    @Binding var reps: String
+    @Binding var weight: String
+    var onLog: (Int, Double?) -> Void
+    var onUndo: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.turn.down.right")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+                Text("Drop \(dropNumber)")
+                    .font(.dsBody.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                if isLogged {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 12) {
+                TextField("Reps", text: $reps)
+                    .font(.dsBody.monospacedDigit())
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+                    .disabled(isLogged)
+                    .focused($focused, equals: .reps)
+
+                Text("×").foregroundStyle(.secondary).fixedSize()
+
+                TextField("Wt", text: $weight)
+                    .font(.dsBody.monospacedDigit())
+                    .keyboardType(.decimalPad)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 70)
+                    .disabled(isLogged)
+                    .focused($focused, equals: .weight)
+
+                Text(Units.weightIsKg ? "kg" : "lb")
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+
+                Spacer(minLength: 8)
+
+                if isLogged {
+                    Button("Undo") { onUndo() }
+                        .buttonStyle(.bordered)
+                } else {
+                    Button("Log Drop") {
+                        let r = Int(reps) ?? 0
+                        let w = Double(weight)
+                        onLog(r, w)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!canLog)
+                }
+            }
+            .frame(minWidth: 80)
+        }
+        .padding(.leading, 20)
     }
 }
 

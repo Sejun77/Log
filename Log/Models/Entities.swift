@@ -187,6 +187,57 @@ enum TechniqueType: String, Codable, CaseIterable {
     case tempoOverride
 }
 
+/// Which set(s) within a working-set sequence a technique applies to.
+enum TechniqueAppliesTo: Equatable {
+    case lastWorkingSet   // default — final working set only
+    case allWorkingSets   // every working set
+    case setNumber(Int)   // specific 1-based set number
+
+    var rawValue: String {
+        switch self {
+        case .lastWorkingSet: return "lastWorkingSet"
+        case .allWorkingSets: return "allWorkingSets"
+        case .setNumber:      return "setNumber"
+        }
+    }
+
+    static func from(raw: String, setNumber: Int?) -> TechniqueAppliesTo {
+        switch raw {
+        case "allWorkingSets": return .allWorkingSets
+        case "setNumber":      return .setNumber(setNumber ?? 1)
+        default:               return .lastWorkingSet
+        }
+    }
+
+    var displayLabel: String {
+        switch self {
+        case .lastWorkingSet:   return "Last working set"
+        case .allWorkingSets:   return "All working sets"
+        case .setNumber(let n): return "Set \(n)"
+        }
+    }
+}
+
+/// Effort mode for each drop in a Dropset.
+enum DropsetEffort: Equatable {
+    case amrap          // as many reps as possible (default)
+    case fixedReps(Int) // specific rep count
+
+    var rawValue: String {
+        switch self {
+        case .amrap:     return "amrap"
+        case .fixedReps: return "fixedReps"
+        }
+    }
+
+    static func from(raw: String?, reps: Int?) -> DropsetEffort {
+        switch raw {
+        case "fixedReps": return .fixedReps(reps ?? 8)
+        default:          return .amrap
+        }
+    }
+}
+
 @Model
 final class WarmupStep {
     var order: Int
@@ -247,9 +298,33 @@ final class TechniquePlan {
     var partialRangeNote: String?
     var note: String?
 
+    // appliesTo targeting (additive; default "lastWorkingSet" is migration-safe)
+    var appliesToRaw: String = "lastWorkingSet"
+    var appliesToSetNumber: Int? = nil
+
+    // Dropset effort mode (nil raw == amrap default)
+    var dropsetEffortRaw: String? = nil
+    var dropsetEffortReps: Int? = nil
+
     var type: TechniqueType {
         get { TechniqueType(rawValue: typeRaw) ?? .dropset }
         set { typeRaw = newValue.rawValue }
+    }
+
+    var appliesTo: TechniqueAppliesTo {
+        get { TechniqueAppliesTo.from(raw: appliesToRaw, setNumber: appliesToSetNumber) }
+        set {
+            appliesToRaw = newValue.rawValue
+            if case .setNumber(let n) = newValue { appliesToSetNumber = n } else { appliesToSetNumber = nil }
+        }
+    }
+
+    var dropsetEffort: DropsetEffort {
+        get { DropsetEffort.from(raw: dropsetEffortRaw, reps: dropsetEffortReps) }
+        set {
+            dropsetEffortRaw = newValue.rawValue
+            if case .fixedReps(let n) = newValue { dropsetEffortReps = n } else { dropsetEffortReps = nil }
+        }
     }
 
     init(
@@ -264,7 +339,11 @@ final class TechniquePlan {
         dropPercent: Double? = nil,
         dropCount: Int? = nil,
         partialRangeNote: String? = nil,
-        note: String? = nil
+        note: String? = nil,
+        appliesToRaw: String = "lastWorkingSet",
+        appliesToSetNumber: Int? = nil,
+        dropsetEffortRaw: String? = nil,
+        dropsetEffortReps: Int? = nil
     ) {
         self.order = order
         self.typeRaw = type.rawValue
@@ -278,6 +357,10 @@ final class TechniquePlan {
         self.dropCount = dropCount
         self.partialRangeNote = partialRangeNote
         self.note = note
+        self.appliesToRaw = appliesToRaw
+        self.appliesToSetNumber = appliesToSetNumber
+        self.dropsetEffortRaw = dropsetEffortRaw
+        self.dropsetEffortReps = dropsetEffortReps
     }
 }
 
@@ -496,6 +579,9 @@ final class SetLog {
     var restSeconds: Int?
     var durationSeconds: Int? = nil
     var timestamp: Date
+    /// 1-based sub-index for drop sub-sets logged under a parent working set.
+    /// nil = main set (working / warmup / legacy template-based dropset).
+    var subIndex: Int? = nil
 
     var kind: SetKind {
         get { SetKind(rawValue: kindRaw) ?? .working }
@@ -509,7 +595,8 @@ final class SetLog {
         weight: Double?,
         restSeconds: Int? = nil,
         timestamp: Date = .now,
-        durationSeconds: Int? = nil
+        durationSeconds: Int? = nil,
+        subIndex: Int? = nil
     ) {
         self.indexInExercise = indexInExercise
         self.kindRaw = kind.rawValue
@@ -518,6 +605,7 @@ final class SetLog {
         self.restSeconds = restSeconds
         self.timestamp = timestamp
         self.durationSeconds = durationSeconds
+        self.subIndex = subIndex
     }
 }
 

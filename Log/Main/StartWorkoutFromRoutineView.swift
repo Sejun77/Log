@@ -34,40 +34,66 @@ struct TechniquePlanSnapshot: Codable {
     var note: String?
     var reps: Int?
 
+    // New fields — optional for backward-compatible JSON decoding of existing data.
+    // nil decodes as the appropriate default (lastWorkingSet / amrap).
+    var appliesToRaw: String?
+    var appliesToSetNumber: Int?
+    var dropsetEffortRaw: String?
+    var dropsetEffortReps: Int?
+
+    var appliesTo: TechniqueAppliesTo {
+        TechniqueAppliesTo.from(raw: appliesToRaw ?? "lastWorkingSet", setNumber: appliesToSetNumber)
+    }
+
+    var dropsetEffort: DropsetEffort {
+        DropsetEffort.from(raw: dropsetEffortRaw, reps: dropsetEffortReps)
+    }
+
     /// Human-readable badge label shown in the active workout UI.
     var summaryLabel: String {
+        var label: String
         switch type {
         case .dropset:
             var parts: [String] = []
-            if let n = dropCount { parts.append("×\(n)") }
             if let pct = dropPercent, pct > 0 { parts.append("−\(Int(pct))%") }
-            if let r = restSeconds, r > 0 { parts.append("(\(r)s)") }
+            if let n = dropCount { parts.append("×\(n)") }
+            switch dropsetEffort {
+            case .amrap:            parts.append("(AMRAP)")
+            case .fixedReps(let n): parts.append("(\(n) reps)")
+            }
+            if let r = restSeconds, r > 0 { parts.append("\(r)s") }
             let tail = parts.isEmpty ? "" : " " + parts.joined(separator: " ")
-            return "Dropset\(tail)"
+            label = "Dropset\(tail)"
         case .restPause:
             var s = "Rest-Pause"
             if let r = restSeconds, r > 0 { s += " \(r)s" }
             if let n = rounds, n > 0 { s += " ×\(n)" }
-            return s
+            label = s
         case .tempoOverride:
-            if let t = note, !t.isEmpty { return "Tempo \(t)" }
-            return "Tempo"
+            label = (note.flatMap { $0.isEmpty ? nil : $0 }).map { "Tempo \($0)" } ?? "Tempo"
         case .partialReps:
             var s = "Partials"
             if let region = partialRangeNote, !region.isEmpty { s += " \(region)" }
             if let n = reps, n > 0 { s += " (\(n))" }
-            return s
+            label = s
         case .amrap:
-            return "AMRAP"
+            label = "AMRAP"
         case .toFailure:
-            return "To Failure"
+            label = "To Failure"
         case .cluster:
             var s = "Cluster"
             if let n = reps, n > 0 { s += " \(n)r" }
             if let c = rounds, c > 0 { s += " ×\(c)" }
             if let r = restSeconds, r > 0 { s += " (\(r)s)" }
-            return s
+            label = s
         }
+        // Append appliesTo qualifier when non-default (lastWorkingSet = no suffix).
+        switch appliesTo {
+        case .lastWorkingSet: break
+        case .allWorkingSets:   label += " [all]"
+        case .setNumber(let n): label += " [set \(n)]"
+        }
+        return label
     }
 }
 
@@ -228,7 +254,11 @@ struct StartWorkoutFromRoutineView: View {
                                     restSeconds: tp.restSeconds,
                                     partialRangeNote: tp.partialRangeNote,
                                     note: tp.note,
-                                    reps: tp.reps
+                                    reps: tp.reps,
+                                    appliesToRaw: tp.appliesToRaw,
+                                    appliesToSetNumber: tp.appliesToSetNumber,
+                                    dropsetEffortRaw: tp.dropsetEffortRaw,
+                                    dropsetEffortReps: tp.dropsetEffortReps
                                 )
                             }
 
