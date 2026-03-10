@@ -38,11 +38,25 @@ struct TechniquePlanSnapshot: Codable {
     // nil decodes as the appropriate default (lastWorkingSet / amrap).
     var appliesToRaw: String?
     var appliesToSetNumber: Int?
+    // Explicit 0-based indices CSV (nil = not set; fall back to appliesTo).
+    var appliesToSetIndicesRaw: String? = nil
     var dropsetEffortRaw: String?
     var dropsetEffortReps: Int?
 
     var appliesTo: TechniqueAppliesTo {
         TechniqueAppliesTo.from(raw: appliesToRaw ?? "lastWorkingSet", setNumber: appliesToSetNumber)
+    }
+
+    /// Parsed 0-based set indices. Empty = not set; runtime resolves using setCount.
+    var appliesToSetIndices: Set<Int> {
+        if let raw = appliesToSetIndicesRaw, !raw.isEmpty {
+            return Set(raw.split(separator: ",").compactMap { Int($0) })
+        }
+        // Migration from old appliesTo: only setNumber can be statically resolved here.
+        switch appliesTo {
+        case .setNumber(let n): return [n - 1]
+        default: return []
+        }
     }
 
     var dropsetEffort: DropsetEffort {
@@ -87,11 +101,17 @@ struct TechniquePlanSnapshot: Codable {
             if let r = restSeconds, r > 0 { s += " (\(r)s)" }
             label = s
         }
-        // Append appliesTo qualifier when non-default (lastWorkingSet = no suffix).
-        switch appliesTo {
-        case .lastWorkingSet: break
-        case .allWorkingSets:   label += " [all]"
-        case .setNumber(let n): label += " [set \(n)]"
+        // Append set qualifier. Prefer explicit indices when available.
+        let indices = appliesToSetIndices
+        if !indices.isEmpty {
+            let nums = indices.sorted().map { String($0 + 1) }.joined(separator: ",")
+            label += indices.count == 1 ? " [set \(nums)]" : " [sets \(nums)]"
+        } else {
+            switch appliesTo {
+            case .lastWorkingSet: break
+            case .allWorkingSets:   label += " [all]"
+            case .setNumber(let n): label += " [set \(n)]"
+            }
         }
         return label
     }
@@ -257,6 +277,7 @@ struct StartWorkoutFromRoutineView: View {
                                     reps: tp.reps,
                                     appliesToRaw: tp.appliesToRaw,
                                     appliesToSetNumber: tp.appliesToSetNumber,
+                                    appliesToSetIndicesRaw: tp.appliesToSetIndicesRaw.isEmpty ? nil : tp.appliesToSetIndicesRaw,
                                     dropsetEffortRaw: tp.dropsetEffortRaw,
                                     dropsetEffortReps: tp.dropsetEffortReps
                                 )

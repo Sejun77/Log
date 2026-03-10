@@ -1305,7 +1305,11 @@ private struct TechniquePlanEditor: View {
                 }
                 ForEach(sorted) { plan in
                     NavigationLink {
-                        TechniqueParamEditView(plan: plan, siblingTechniques: sorted)
+                        TechniqueParamEditView(
+                            plan: plan,
+                            siblingTechniques: sorted,
+                            setCount: prescription.sets ?? 3
+                        )
                     } label: {
                         TechniquePlanRow(plan: plan)
                     }
@@ -1325,7 +1329,11 @@ private struct TechniquePlanEditor: View {
             }
         }
         .sheet(isPresented: $showAdd) {
-            TechniqueTypePickerSheet(existingTechniques: sorted, onPick: { t in addPlan(type: t) })
+            TechniqueTypePickerSheet(
+                existingTechniques: sorted,
+                setCount: prescription.sets ?? 3,
+                onPick: { t in addPlan(type: t) }
+            )
         }
     }
 
@@ -1374,7 +1382,13 @@ private struct TechniquePlanRow: View {
 
     private var detail: String {
         var parts: [String] = []
-        if plan.appliesToRaw != "lastWorkingSet" { parts.append(plan.appliesTo.displayLabel) }
+        let indices = plan.appliesToSetIndices
+        if !indices.isEmpty {
+            let nums = indices.sorted().map { String($0 + 1) }.joined(separator: ",")
+            parts.append(indices.count == 1 ? "set \(nums)" : "sets \(nums)")
+        } else if plan.appliesToRaw != "lastWorkingSet" {
+            parts.append(plan.appliesTo.displayLabel)
+        }
         if let r = plan.rounds,   r > 0  { parts.append("\(r) rounds") }
         if let r = plan.reps,     r > 0  { parts.append("\(r) reps") }
         if let d = plan.dropPercent, d > 0 { parts.append("\(Int(d))% drop") }
@@ -1421,6 +1435,8 @@ private extension TechniqueType {
 // Sheet for picking a technique type when adding a new TechniquePlan.
 private struct TechniqueTypePickerSheet: View {
     var existingTechniques: [TechniquePlan]
+    /// Working set count from prescription — used for per-index conflict checking.
+    var setCount: Int = 3
     var onPick: (TechniqueType) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -1436,15 +1452,27 @@ private struct TechniqueTypePickerSheet: View {
 
     private let intensityFinishers: Set<TechniqueType> = [.dropset, .amrap, .restPause, .cluster]
 
-    /// Returns a block message if adding `newType` (defaults to lastWorkingSet bucket)
+    /// Effective 0-based indices for an existing technique (uses new field or migrates old).
+    private func effectiveIndices(for plan: TechniquePlan) -> Set<Int> {
+        let idx = plan.appliesToSetIndices   // computed on TechniquePlan
+        if !idx.isEmpty { return idx }
+        let n = max(1, setCount)
+        switch plan.appliesTo {
+        case .lastWorkingSet: return [n - 1]
+        case .allWorkingSets: return Set(0..<n)
+        case .setNumber(let s): return [s - 1]
+        }
+    }
+
+    /// Returns a block message if adding `newType` (defaults to last set index)
     /// would create a duplicate or violate conflict rules. Returns nil if allowed.
     private func conflictMessage(for newType: TechniqueType) -> String? {
-        // New techniques always default to lastWorkingSet bucket.
-        let onDefault = existingTechniques.filter { $0.appliesToRaw == "lastWorkingSet" }
+        let defaultIdx = max(0, setCount - 1)
+        let onDefault = existingTechniques.filter { effectiveIndices(for: $0).contains(defaultIdx) }
 
-        // 1. Duplicate: same type already exists on this bucket (all types).
+        // 1. Duplicate: same type already exists on the last set.
         if onDefault.contains(where: { $0.type == newType }) {
-            return "\(newType.displayName) already exists for last working set."
+            return "\(newType.displayName) already exists on set \(defaultIdx + 1)."
         }
 
         guard intensityFinishers.contains(newType) else { return nil }
@@ -1457,9 +1485,9 @@ private struct TechniqueTypePickerSheet: View {
             return "Remove AMRAP first to add a Dropset."
         }
 
-        // 3. One intensity finisher per bucket.
+        // 3. One intensity finisher per set.
         if let other = onDefault.first(where: { intensityFinishers.contains($0.type) }) {
-            return "\(other.type.displayName) already set for the last working set."
+            return "\(other.type.displayName) already on set \(defaultIdx + 1)."
         }
 
         return nil
@@ -1502,38 +1530,62 @@ private struct TechniqueParamEditView: View {
     @Bindable var plan: TechniquePlan
     /// All techniques on the same prescription (including self), for conflict detection.
     var siblingTechniques: [TechniquePlan] = []
+    /// Working set count from the prescription (used for per-set-index UI and conflict checks).
+    var setCount: Int = 3
 
     private let intensityFinishers: Set<TechniqueType> = [.dropset, .amrap, .restPause, .cluster]
 
-    /// Transient error shown when an appliesTo change is immediately reverted.
+    /// Transient error shown when a set-index toggle is blocked by a conflict.
     @State private var appliesToErrorMsg: String? = nil
     /// Transient error shown when a Dropset effort change is immediately reverted.
     @State private var effortErrorMsg: String? = nil
 
-    // MARK: - Conflict helpers
+    // MARK: - Conflict helpers (per-index)
 
-    /// Checks if moving `plan` to the given target would create a conflict.
-    private func conflictForAppliesTo(raw: String, setNum: Int?) -> String? {
-        let sameTarget = siblingTechniques.filter {
-            $0.persistentModelID != plan.persistentModelID
-                && $0.appliesToRaw == raw
-                && (raw != "setNumber" || $0.appliesToSetNumber == (setNum ?? 1))
+    /// Effective 0-based indices for a sibling technique (new field or migrated from old).
+    private func effectiveIndices(for p: TechniquePlan) -> Set<Int> {
+        let idx = p.appliesToSetIndices
+        if !idx.isEmpty { return idx }
+        let n = max(1, setCount)
+        switch p.appliesTo {
+        case .lastWorkingSet: return [n - 1]
+        case .allWorkingSets: return Set(0..<n)
+        case .setNumber(let s): return [s - 1]
         }
-        // Duplicate: same type already on target.
-        if sameTarget.contains(where: { $0.type == plan.type }) {
-            return "\(plan.type.displayName) already exists for that target."
+    }
+
+    /// Current resolved indices for the plan being edited.
+    private var currentIndices: Set<Int> {
+        let idx = plan.appliesToSetIndices
+        if !idx.isEmpty { return idx }
+        let n = max(1, setCount)
+        switch plan.appliesTo {
+        case .lastWorkingSet: return [n - 1]
+        case .allWorkingSets: return Set(0..<n)
+        case .setNumber(let s): return [s - 1]
         }
+    }
+
+    /// Returns a conflict message if toggling `idx` on (adding it) would break rules.
+    private func conflictForAdding(idx: Int) -> String? {
+        let sibs = siblingTechniques.filter { $0.persistentModelID != plan.persistentModelID }
+        let sibsOnIdx = sibs.filter { effectiveIndices(for: $0).contains(idx) }
+
+        // Duplicate type on same index.
+        if sibsOnIdx.contains(where: { $0.type == plan.type }) {
+            return "\(plan.type.displayName) already on set \(idx + 1)."
+        }
+        guard intensityFinishers.contains(plan.type) else { return nil }
         // AMRAP ↔ Dropset mutual exclusion.
-        if plan.type == .amrap && sameTarget.contains(where: { $0.type == .dropset }) {
-            return "Dropset defines AMRAP/fixed reps on that target."
+        if plan.type == .amrap, sibsOnIdx.contains(where: { $0.type == .dropset }) {
+            return "Dropset on set \(idx + 1); can't also add AMRAP."
         }
-        if plan.type == .dropset && sameTarget.contains(where: { $0.type == .amrap }) {
-            return "AMRAP exists on that target; remove it to move Dropset here."
+        if plan.type == .dropset, sibsOnIdx.contains(where: { $0.type == .amrap }) {
+            return "AMRAP on set \(idx + 1); remove it to add Dropset."
         }
-        // One intensity finisher per bucket.
-        if intensityFinishers.contains(plan.type),
-           let other = sameTarget.first(where: { intensityFinishers.contains($0.type) }) {
-            return "\(other.type.displayName) already on that target."
+        // One intensity finisher per set.
+        if let other = sibsOnIdx.first(where: { intensityFinishers.contains($0.type) }) {
+            return "\(other.type.displayName) already on set \(idx + 1)."
         }
         return nil
     }
@@ -1541,16 +1593,13 @@ private struct TechniqueParamEditView: View {
     /// Returns a message if switching Dropset effort to `effortRaw` is blocked.
     private func conflictForEffort(_ effortRaw: String) -> String? {
         guard plan.type == .dropset, effortRaw == "fixedReps" else { return nil }
-        let amrapOnSameBucket = siblingTechniques.contains {
+        let planIndices = currentIndices
+        let amrapOverlap = siblingTechniques.contains {
             $0.persistentModelID != plan.persistentModelID
                 && $0.type == .amrap
-                && $0.appliesToRaw == plan.appliesToRaw
-                && (plan.appliesToRaw != "setNumber"
-                    || $0.appliesToSetNumber == plan.appliesToSetNumber)
+                && !effectiveIndices(for: $0).isDisjoint(with: planIndices)
         }
-        return amrapOnSameBucket
-            ? "AMRAP exists on the same target; can't use fixed reps."
-            : nil
+        return amrapOverlap ? "AMRAP exists on an overlapping set; can't use fixed reps." : nil
     }
 
     var body: some View {
@@ -1560,61 +1609,84 @@ private struct TechniqueParamEditView: View {
         }
         .navigationTitle(typeName)
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: plan.dropPercent)        { try? ctx.save() }
-        .onChange(of: plan.dropCount)          { try? ctx.save() }
-        .onChange(of: plan.rounds)             { try? ctx.save() }
-        .onChange(of: plan.restSeconds)        { try? ctx.save() }
-        .onChange(of: plan.reps)               { try? ctx.save() }
-        .onChange(of: plan.partialRangeNote)   { try? ctx.save() }
-        .onChange(of: plan.note)               { try? ctx.save() }
-        .onChange(of: plan.appliesToRaw)       { try? ctx.save() }
-        .onChange(of: plan.appliesToSetNumber) { try? ctx.save() }
-        .onChange(of: plan.dropsetEffortRaw)   { try? ctx.save() }
-        .onChange(of: plan.dropsetEffortReps)  { try? ctx.save() }
+        .onChange(of: plan.dropPercent)              { try? ctx.save() }
+        .onChange(of: plan.dropCount)                { try? ctx.save() }
+        .onChange(of: plan.rounds)                   { try? ctx.save() }
+        .onChange(of: plan.restSeconds)              { try? ctx.save() }
+        .onChange(of: plan.reps)                     { try? ctx.save() }
+        .onChange(of: plan.partialRangeNote)         { try? ctx.save() }
+        .onChange(of: plan.note)                     { try? ctx.save() }
+        .onChange(of: plan.appliesToRaw)             { try? ctx.save() }
+        .onChange(of: plan.appliesToSetNumber)       { try? ctx.save() }
+        .onChange(of: plan.appliesToSetIndicesRaw)   { try? ctx.save() }
+        .onChange(of: plan.dropsetEffortRaw)         { try? ctx.save() }
+        .onChange(of: plan.dropsetEffortReps)        { try? ctx.save() }
     }
+
+    // MARK: - Applies-To multi-select section
 
     @ViewBuilder
     private var appliesToSection: some View {
-        Section("Applies To") {
-            Picker("Target", selection: Binding(
-                get: { plan.appliesToRaw },
-                set: { v in
-                    let prevRaw = plan.appliesToRaw
-                    let prevSetNum = plan.appliesToSetNumber
-                    // Tentatively apply.
-                    plan.appliesToRaw = v
-                    if v != "setNumber" { plan.appliesToSetNumber = nil }
-                    // Validate; revert immediately if invalid.
-                    if let msg = conflictForAppliesTo(raw: plan.appliesToRaw, setNum: plan.appliesToSetNumber) {
-                        plan.appliesToRaw = prevRaw
-                        plan.appliesToSetNumber = prevSetNum
+        let n = max(1, setCount)
+        let indices = currentIndices
+        Section {
+            // Quick-action row
+            HStack(spacing: 0) {
+                Button("All") {
+                    applyIndices(Set(0..<n))
+                }
+                .frame(maxWidth: .infinity)
+                Divider().frame(height: 20)
+                Button("Last") {
+                    applyIndices([n - 1])
+                }
+                .frame(maxWidth: .infinity)
+                Divider().frame(height: 20)
+                Button("Clear") {
+                    applyIndices([])
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderless)
+            .padding(.vertical, 2)
+
+            // Per-set checkboxes
+            ForEach(0..<n, id: \.self) { idx in
+                let selected = indices.contains(idx)
+                let conflict = selected ? nil : conflictForAdding(idx: idx)
+                Button {
+                    if let msg = conflict {
                         appliesToErrorMsg = msg
-                    } else {
-                        appliesToErrorMsg = nil
+                        return
+                    }
+                    var next = indices
+                    if selected { next.remove(idx) } else { next.insert(idx) }
+                    applyIndices(next)
+                } label: {
+                    HStack {
+                        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selected ? Color.accentColor : Color(UIColor.secondaryLabel))
+                        Text("Set \(idx + 1)")
+                            .foregroundStyle(conflict != nil ? .secondary : .primary)
                     }
                 }
-            )) {
-                Text("Last working set").tag("lastWorkingSet")
-                Text("All working sets").tag("allWorkingSets")
-                Text("Specific set").tag("setNumber")
+                .buttonStyle(.borderless)
+                .disabled(conflict != nil && !selected)
             }
-            .pickerStyle(.menu)
-            if plan.appliesToRaw == "setNumber" {
-                Stepper(
-                    "Set number: \(plan.appliesToSetNumber ?? 1)",
-                    value: Binding(
-                        get: { plan.appliesToSetNumber ?? 1 },
-                        set: { plan.appliesToSetNumber = $0 }
-                    ),
-                    in: 1...20
-                )
-            }
+
             if let msg = appliesToErrorMsg {
                 Text(msg)
                     .font(.caption)
                     .foregroundStyle(.red.opacity(0.85))
             }
+        } header: {
+            Text("Applies to Sets")
         }
+    }
+
+    private func applyIndices(_ indices: Set<Int>) {
+        plan.appliesToSetIndices = indices   // writes appliesToSetIndicesRaw via setter
+        appliesToErrorMsg = nil
     }
 
     private var typeName: String {

@@ -302,6 +302,9 @@ final class TechniquePlan {
     var appliesToRaw: String = "lastWorkingSet"
     var appliesToSetNumber: Int? = nil
 
+    // Explicit 0-based working-set indices (CSV). Empty = not set; runtime falls back to appliesTo.
+    var appliesToSetIndicesRaw: String = ""
+
     // Dropset effort mode (nil raw == amrap default)
     var dropsetEffortRaw: String? = nil
     var dropsetEffortReps: Int? = nil
@@ -316,6 +319,22 @@ final class TechniquePlan {
         set {
             appliesToRaw = newValue.rawValue
             if case .setNumber(let n) = newValue { appliesToSetNumber = n } else { appliesToSetNumber = nil }
+        }
+    }
+
+    /// Parsed 0-based set indices from the CSV field.
+    /// Empty set means "not yet set" — runtime must resolve using setCount (last by default).
+    var appliesToSetIndices: Set<Int> {
+        get {
+            guard !appliesToSetIndicesRaw.isEmpty else {
+                // Migration: setNumber(n) → {n-1}; others return {} for runtime handling.
+                if appliesToRaw == "setNumber", let n = appliesToSetNumber { return [n - 1] }
+                return []
+            }
+            return Set(appliesToSetIndicesRaw.split(separator: ",").compactMap { Int($0) })
+        }
+        set {
+            appliesToSetIndicesRaw = newValue.sorted().map(String.init).joined(separator: ",")
         }
     }
 
@@ -342,6 +361,7 @@ final class TechniquePlan {
         note: String? = nil,
         appliesToRaw: String = "lastWorkingSet",
         appliesToSetNumber: Int? = nil,
+        appliesToSetIndicesRaw: String = "",
         dropsetEffortRaw: String? = nil,
         dropsetEffortReps: Int? = nil
     ) {
@@ -359,6 +379,7 @@ final class TechniquePlan {
         self.note = note
         self.appliesToRaw = appliesToRaw
         self.appliesToSetNumber = appliesToSetNumber
+        self.appliesToSetIndicesRaw = appliesToSetIndicesRaw
         self.dropsetEffortRaw = dropsetEffortRaw
         self.dropsetEffortReps = dropsetEffortReps
     }

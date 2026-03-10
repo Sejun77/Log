@@ -2179,6 +2179,12 @@ struct ActiveWorkoutView: View {
 
         return exercise.techniquePlansSnapshot.first { snap in
             guard snap.type == .dropset else { return false }
+            // New path: explicit indices take precedence.
+            let indices = snap.appliesToSetIndices
+            if !indices.isEmpty {
+                return indices.contains(setIndex)
+            }
+            // Old path: appliesTo enum fallback.
             switch snap.appliesTo {
             case .lastWorkingSet:
                 return setIndex == lastWorkingIdx
@@ -2306,6 +2312,16 @@ struct ActiveWorkoutView: View {
                 let isDropLogged = loggedSubs.contains(sub)
                 let canLogDrop = parentLogged && !isDropLogged
                     && (sub == 1 || loggedSubs.contains(sub - 1))
+                // Compute weight in the @ViewBuilder body so @Observable setLogs accesses
+                // are tracked — this ensures re-render when the parent set weight changes.
+                let currentWeight: String = dropWeightUserEdited.contains(key)
+                    ? (dropWeightInput[key] ?? "")
+                    : suggestedDropWeight(
+                        exerciseID: exercise.id,
+                        parentSetIndex: parentSetIndex,
+                        subIndex: sub,
+                        dropPercent: snap.dropPercent ?? 20
+                    )
 
                 DropLogRow(
                     dropNumber: sub,
@@ -2323,20 +2339,7 @@ struct ActiveWorkoutView: View {
                         set: { dropRepsInput[key] = $0 }
                     ),
                     weight: Binding(
-                        get: {
-                            // If the user manually typed a value, treat it as authoritative.
-                            // Otherwise always recompute from current logged state so that
-                            // changes to the parent set or previous drop propagate automatically.
-                            if dropWeightUserEdited.contains(key) {
-                                return dropWeightInput[key] ?? ""
-                            }
-                            return suggestedDropWeight(
-                                exerciseID: exercise.id,
-                                parentSetIndex: parentSetIndex,
-                                subIndex: sub,
-                                dropPercent: snap.dropPercent ?? 20
-                            )
-                        },
+                        get: { currentWeight },
                         set: { newVal in
                             dropWeightInput[key] = newVal
                             dropWeightUserEdited.insert(key)

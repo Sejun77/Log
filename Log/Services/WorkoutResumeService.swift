@@ -126,7 +126,12 @@ enum WorkoutResumeService {
                                     restSeconds: tp.restSeconds,
                                     partialRangeNote: tp.partialRangeNote,
                                     note: tp.note,
-                                    reps: tp.reps
+                                    reps: tp.reps,
+                                    appliesToRaw: tp.appliesToRaw,
+                                    appliesToSetNumber: tp.appliesToSetNumber,
+                                    appliesToSetIndicesRaw: tp.appliesToSetIndicesRaw.isEmpty ? nil : tp.appliesToSetIndicesRaw,
+                                    dropsetEffortRaw: tp.dropsetEffortRaw,
+                                    dropsetEffortReps: tp.dropsetEffortReps
                                 )
                             }
 
