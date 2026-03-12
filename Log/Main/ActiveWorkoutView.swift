@@ -3080,7 +3080,7 @@ private struct SetTechniqueChipsRow: View {
                         HStack(spacing: 4) {
                             Image(systemName: iconName(for: snap.type))
                                 .font(.system(size: 10, weight: .semibold))
-                            Text(snap.summaryLabel)
+                            Text(snap.setAttachedLabel)
                                 .font(.dsCaption)
                         }
                         .padding(.horizontal, 8)
