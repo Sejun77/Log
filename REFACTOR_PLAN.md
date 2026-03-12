@@ -452,9 +452,9 @@ Warmup schemes are editable at the template level and execute in workouts as ded
 
 Current technique infrastructure is functional but still clunky in production use. Techniques should feel attached to the sets they modify, not primarily grouped in a top summary row.
 
-- [ ] Render techniques inline on the affected working-set rows (set-attached chips / badges)
-- [ ] Reduce reliance on the top-level technique summary as the primary interaction surface
-- [ ] Improve technique editor flow so targeting multiple sets is fast and obvious
+- [x] Render techniques inline on the affected working-set rows (set-attached chips / badges)
+- [x] Reduce reliance on the top-level technique summary as the primary interaction surface
+- [x] Improve technique editor flow so targeting multiple sets is fast and obvious
 - [ ] Add “Reset to suggested” for auto-computed drop weights after manual override
 - [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
 - [ ] Verify: a user can understand which techniques apply to which sets without reading abstract summary labels
