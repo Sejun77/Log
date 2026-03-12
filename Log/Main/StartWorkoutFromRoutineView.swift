@@ -63,9 +63,9 @@ struct TechniquePlanSnapshot: Codable {
         DropsetEffort.from(raw: dropsetEffortRaw, reps: dropsetEffortReps)
     }
 
-    /// Human-readable badge label shown in the active workout UI.
-    var summaryLabel: String {
-        var label: String
+    /// Payload-only label — no applies-to suffix.
+    /// Used when the chip is already attached to the relevant set row.
+    var setAttachedLabel: String {
         switch type {
         case .dropset:
             var parts: [String] = []
@@ -77,30 +77,33 @@ struct TechniquePlanSnapshot: Codable {
             }
             if let r = restSeconds, r > 0 { parts.append("\(r)s") }
             let tail = parts.isEmpty ? "" : " " + parts.joined(separator: " ")
-            label = "Dropset\(tail)"
+            return "Dropset\(tail)"
         case .restPause:
             var s = "Rest-Pause"
             if let r = restSeconds, r > 0 { s += " \(r)s" }
             if let n = rounds, n > 0 { s += " ×\(n)" }
-            label = s
+            return s
         case .tempoOverride:
-            label = (note.flatMap { $0.isEmpty ? nil : $0 }).map { "Tempo \($0)" } ?? "Tempo"
+            return (note.flatMap { $0.isEmpty ? nil : $0 }).map { "Tempo \($0)" } ?? "Tempo"
         case .partialReps:
             var s = "Partials"
             if let region = partialRangeNote, !region.isEmpty { s += " \(region)" }
             if let n = reps, n > 0 { s += " (\(n))" }
-            label = s
-        case .amrap:
-            label = "AMRAP"
-        case .toFailure:
-            label = "To Failure"
+            return s
+        case .amrap:    return "AMRAP"
+        case .toFailure: return "To Failure"
         case .cluster:
             var s = "Cluster"
             if let n = reps, n > 0 { s += " \(n)r" }
             if let c = rounds, c > 0 { s += " ×\(c)" }
             if let r = restSeconds, r > 0 { s += " (\(r)s)" }
-            label = s
+            return s
         }
+    }
+
+    /// Full label with applies-to suffix — used in header overview and editors.
+    var summaryLabel: String {
+        var label = setAttachedLabel
         // Append set qualifier. Prefer explicit indices when available.
         let indices = appliesToSetIndices
         if !indices.isEmpty {
