@@ -126,10 +126,19 @@ These are the enforced invariants as of Phase 5. All new work must preserve them
 
 - **WarmupScheme** — `name`, `steps: [WarmupStep]` (.cascade)
 - **WarmupStep** — `order`, `kind` (percentage/fixedReps/noteOnly), `reps?`, `percentOfWorking?`, `restSecondsAfter?`, `note?`
-- **TechniquePlan** — `order`, `type` (dropset/partialReps/restPause/amrap/toFailure/cluster/tempoOverride), plus parameterized fields
 
+- **TechniquePlan**
+  - Template-side, parameterized technique configuration owned by `SlotPrescription`
+  - Supports per-technique parameters (e.g. dropset effort mode, drop %, count) and explicit target selection via working-set indices
+  - Uses persisted targeting fields (`appliesToSetIndicesRaw`) rather than only preset buckets
+- **TechniquePlanSnapshot**
+  - Immutable value-type copy carried in the workout plan and persisted for resume
+  - Used by workout UI for display and per-set attachment without mutating templates
+
+- **SetLog**
+  - `indexInExercise`, `subIndex?`, `kind`, `reps`, `weight?`, `restSeconds?`, `durationSeconds?`, `timestamp`
+  - `subIndex` is used for sub-set logging (e.g. dropsets) while preserving the parent working set index
 - **SetTemplate** — `order`, `kind` (warmup/working/dropset), `targetReps`, `targetWeight?`, `restSecondsAfter?`, `durationSeconds?`
-- **SetLog** — `indexInExercise`, `kind`, `reps`, `weight?`, `restSeconds?`, `durationSeconds?`, `timestamp`
 - **WorkoutItem**
   - `exercise: Exercise?` (inverse), `setLogs: [SetLog]` (.cascade)
   - `routineSlotID: UUID?` — copy of `RoutineExercise.slotID` at session start
@@ -410,35 +419,65 @@ Template-level editing for advanced prescription elements.
 - [x] Technique type picker with parameterized fields per type
 - [x] Prescription section reflects warmup/technique counts as summary badges
 
-### Phase 3.6 — Technique execution UX ✅
+### Phase 3.6 — Technique execution + snapshot UX ✅
 
-How techniques affect set rendering and logging during a workout.
+How techniques are parameterized, snapshotted, targeted, and rendered during a workout.
 
-- [x] Define how each `TechniqueType` modifies set display — labels: Dropset, Partial Reps, Rest-Pause, AMRAP, To Failure, Cluster, Tempo Override (with parameterized detail where available)
-- [x] Technique labels snapshotted at plan-build time into `PlanExercise.techniqueSummaries: [String]` — value type, no live SwiftData reference during session
-- [x] Workout UI renders `TechniqueIndicatorRow` (horizontal scrollable capsule badges) in the Sets section header when `techniqueSummaries` is non-empty
-- [x] SetLog captures technique metadata via existing `kind` field (dropset already handled); further metadata inferred from plan
-- [x] Verified: `techniqueSummaries` is a read-only snapshot — technique plans are never mutated by session actions
+- [x] Technique plans support parameterized fields per type (e.g. dropset %, count, effort mode)
+- [x] Technique plans are snapshotted at workout start into `TechniquePlanSnapshot` value types (no live SwiftData references in session UI)
+- [x] Technique snapshots are persisted/resumable for cold restart
+- [x] Technique targeting uses explicit working-set indices rather than only preset buckets
+- [x] Workout UI renders technique summaries from snapshot data (including applies-to detail when relevant)
+- [x] Dropsets support sub-set logging under the parent working set via `SetLog.subIndex`
+- [x] Drop weight suggestion auto-computes from parent / prior drop unless manually overridden
+- [x] Conflict rules enforced:
+  - one intensity finisher per target set
+  - dropset and AMRAP mutually exclusive on overlapping targets
+  - duplicate technique type on overlapping targets blocked
+- [x] Verified: technique plans remain template-side; sessions do not mutate them unless a future explicit apply-back flow is added
 
-### Phase 3.7 — Warmup execution UX
+### Phase 3.7 — Warmup execution UX + cold-resume persistence ✅
 
-Warmup schemes exist in slot prescriptions (Phase 3.5 editor UI), but must render and log correctly during workouts.
+Warmup schemes are editable at the template level and execute in workouts as dedicated, loggable warmup rows.
 
-- [ ] Convert `WarmupScheme.steps` into executable set rows at plan-build time
-- Prefer: generate `SetTemplate(kind: .warmup, ...)` prepended before working sets
-- Ensure templates are deterministic and snapshot-safe (value types in plan; no live SwiftData links)
-- [ ] ActiveWorkoutView renders warmup sets distinctly (badge/label) but logs them like normal sets
-- [ ] Verify: warmup steps appear in workout UI exactly as configured in prescription (order + rest fields)
-- [ ] Verify: warmup does not affect session plan “working set count” math (warmups are extra, not counted as working sets)
+- [x] Warmup steps are snapshotted into the workout plan as value types (not converted into working `SetTemplate` rows)
+- [x] Active workout renders a dedicated **Warmup** section above working sets
+- [x] Warmup rows display reps / percent of working / note / rest correctly
+- [x] Warmup rows are loggable and create `SetLog(kind: .warmup)` entries
+- [x] Warmup logging starts rest timers using step rest (fallback to prescription rest-between)
+- [x] Warmup logs do not count toward working-set progress
+- [x] Warmup snapshot persists across cold resume, so the Warmup section remains visible after app restart
 
-### Phase 5.1 — User settings: autoregulation mode + weight units
+### Phase 3.8 — Technique attachment UX / interaction redesign
 
-Persisted user preferences that affect workout UX and inputs.
+Current technique infrastructure is functional but still clunky in production use. Techniques should feel attached to the sets they modify, not primarily grouped in a top summary row.
 
-- [ ] Add persisted settings model (singleton): `autoregulationMode` (RIR vs RPE), `weightUnit` (kg vs lb)
-- [ ] Settings screen: user can change both
+- [ ] Render techniques inline on the affected working-set rows (set-attached chips / badges)
+- [ ] Reduce reliance on the top-level technique summary as the primary interaction surface
+- [ ] Improve technique editor flow so targeting multiple sets is fast and obvious
+- [ ] Add “Reset to suggested” for auto-computed drop weights after manual override
+- [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
+- [ ] Verify: a user can understand which techniques apply to which sets without reading abstract summary labels
+
+### Phase 5.1 — User settings: autoregulation mode, weight units, and default prescription values
+
+Persisted user preferences that affect workout UX, input defaults, and slot creation flow.
+
+- [ ] Add persisted settings model (singleton) with:
+  - `autoregulationMode` (RIR vs RPE)
+  - `weightUnit` (kg vs lb)
+  - default prescription values used when creating new slot prescriptions, such as:
+    - default sets
+    - default rep min / rep max
+    - default rest between sets
+    - default rest after exercise
+    - default RIR / RPE preference value
+    - optional default tempo / duration presets if appropriate
+- [ ] Add a Settings screen where the user can edit these preferences
+- [ ] New routine slots / prescriptions prefill from these defaults instead of hardcoded values
 - [ ] In-workout plan edit sheet shows only the active autoregulation field by default (RIR or RPE)
-- [ ] Verify: switching mode does not destroy stored data (both fields may exist; UI chooses which to emphasize)
+- [ ] Verify: switching autoregulation mode does not destroy stored data (both fields may exist; UI only emphasizes one)
+- [ ] Verify: changing settings affects newly created prescriptions, but does not silently mutate existing routines or active sessions
 
 ### Phase 5.2 — Rest semantics cleanup + superset flow streamline
 
