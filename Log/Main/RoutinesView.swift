@@ -1416,22 +1416,6 @@ private struct TechniquePlanRow: View {
     }
 }
 
-// MARK: - TechniqueType display helpers (RoutinesView scope)
-
-private extension TechniqueType {
-    var displayName: String {
-        switch self {
-        case .dropset:       return "Drop Set"
-        case .partialReps:   return "Partial Reps"
-        case .restPause:     return "Rest-Pause"
-        case .amrap:         return "AMRAP"
-        case .toFailure:     return "To Failure"
-        case .cluster:       return "Cluster"
-        case .tempoOverride: return "Tempo Override"
-        }
-    }
-}
-
 // Sheet for picking a technique type when adding a new TechniquePlan.
 private struct TechniqueTypePickerSheet: View {
     var existingTechniques: [TechniquePlan]

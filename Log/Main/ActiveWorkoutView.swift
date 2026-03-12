@@ -194,6 +194,8 @@ struct ActiveWorkoutView: View {
     /// Keys where the user manually typed a weight — treated as authoritative over auto-suggestion.
     @State private var dropWeightUserEdited: Set<String> = []
     @State private var showRestOverlay = false
+    /// Technique snapshot tapped for read-only detail; drives the detail sheet.
+    @State private var techniqueDetailSnap: TechniquePlanSnapshot? = nil
 
     @StateObject private var setTimer = RestTimer()
     @State private var showSetOverlay = false
@@ -1285,6 +1287,10 @@ struct ActiveWorkoutView: View {
                                 idx: idx,
                                 template: t
                             )
+                            buildTechniqueChips(
+                                exercise: exercise,
+                                setIndex: idx
+                            )
                             buildDropSection(
                                 exercise: exercise,
                                 parentSetIndex: idx
@@ -1305,11 +1311,12 @@ struct ActiveWorkoutView: View {
                             )
                             .font(.dsBody)
 
-                            // Technique indicators (read-only snapshot; never mutates prescription)
+                            // Technique overview (secondary; per-set chips are primary UX)
                             if !exercise.techniquePlansSnapshot.isEmpty {
                                 TechniqueIndicatorRow(
                                     labels: exercise.techniquePlansSnapshot.map(\.summaryLabel)
                                 )
+                                .opacity(0.6)
                             }
                         }
                     }
@@ -1616,6 +1623,16 @@ struct ActiveWorkoutView: View {
                     EditSessionPlanSheet(
                         plan: sessionPlanBinding(
                             for: exercise.routineSlotID))
+                }
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { techniqueDetailSnap != nil },
+                    set: { if !$0 { techniqueDetailSnap = nil } }
+                )
+            ) {
+                if let snap = techniqueDetailSnap {
+                    TechniqueDetailSheet(snap: snap)
                 }
             }
         } else {
@@ -2159,6 +2176,50 @@ struct ActiveWorkoutView: View {
         }) {
             wi.setLogs.remove(at: j)
             try? ctx.save()
+        }
+    }
+
+    // MARK: - Technique Targeting Helpers
+
+    /// Returns all TechniquePlanSnapshots that apply to `setIndex` in the exercise.
+    /// Checks explicit appliesToSetIndices first, then falls back to the old appliesTo enum.
+    private func techniquesApplying(
+        to setIndex: Int,
+        in exercise: PlanExercise
+    ) -> [TechniquePlanSnapshot] {
+        let templates = exercise.templates
+        let setCount = effectiveSetCount(for: exercise, resolvedTemplates: templates)
+        let lastWorkingIdx = (0..<setCount).last {
+            (templates[safe: $0]?.kind ?? .working) == .working
+        } ?? (setCount - 1)
+
+        return exercise.techniquePlansSnapshot.filter { snap in
+            let indices = snap.appliesToSetIndices
+            if !indices.isEmpty {
+                return indices.contains(setIndex)
+            }
+            switch snap.appliesTo {
+            case .lastWorkingSet:
+                return setIndex == lastWorkingIdx
+            case .allWorkingSets:
+                return (templates[safe: setIndex]?.kind ?? .working) == .working
+            case .setNumber(let n):
+                return setIndex == (n - 1)
+            }
+        }
+    }
+
+    /// Renders compact technique chips for a working set. Tapping a chip opens the detail sheet.
+    @ViewBuilder
+    private func buildTechniqueChips(
+        exercise: PlanExercise,
+        setIndex: Int
+    ) -> some View {
+        let snaps = techniquesApplying(to: setIndex, in: exercise)
+        if !snaps.isEmpty {
+            SetTechniqueChipsRow(techniques: snaps) { snap in
+                techniqueDetailSnap = snap
+            }
         }
     }
 
@@ -2998,6 +3059,130 @@ private struct TechniqueIndicatorRow: View {
             }
             .padding(.vertical, 2)
         }
+    }
+}
+
+// MARK: - Phase 3.8: Per-set technique chips + detail sheet
+
+/// Horizontal row of tappable technique chips rendered directly on the applicable set row.
+private struct SetTechniqueChipsRow: View {
+    let techniques: [TechniquePlanSnapshot]
+    let onTap: (TechniquePlanSnapshot) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(techniques.indices, id: \.self) { i in
+                    let snap = techniques[i]
+                    Button {
+                        onTap(snap)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: iconName(for: snap.type))
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(snap.summaryLabel)
+                                .font(.dsCaption)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.18))
+                        .foregroundStyle(Color.orange)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    private func iconName(for type: TechniqueType) -> String {
+        switch type {
+        case .dropset:       return "arrow.down.circle"
+        case .partialReps:   return "chart.bar.fill"
+        case .restPause:     return "pause.circle"
+        case .amrap:         return "infinity"
+        case .toFailure:     return "flame"
+        case .cluster:       return "square.grid.2x2"
+        case .tempoOverride: return "metronome"
+        }
+    }
+}
+
+/// Read-only detail sheet for a TechniquePlanSnapshot. No template mutation.
+private struct TechniqueDetailSheet: View {
+    let snap: TechniquePlanSnapshot
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Applies To") {
+                    let indices = snap.appliesToSetIndices
+                    if !indices.isEmpty {
+                        let nums = indices.sorted().map { "Set \($0 + 1)" }.joined(separator: ", ")
+                        Text(nums)
+                    } else {
+                        Text(snap.appliesTo.displayLabel)
+                    }
+                }
+                switch snap.type {
+                case .dropset:
+                    Section("Drop Set") {
+                        if let n = snap.dropCount { LabeledContent("Drops", value: "\(n)") }
+                        if let p = snap.dropPercent { LabeledContent("Weight reduction", value: "\(Int(p))%") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between drops", value: "\(r)s") }
+                        switch snap.dropsetEffort {
+                        case .amrap:             LabeledContent("Effort", value: "AMRAP")
+                        case .fixedReps(let n):  LabeledContent("Reps per drop", value: "\(n)")
+                        }
+                    }
+                case .restPause:
+                    Section("Rest-Pause") {
+                        if let n = snap.rounds { LabeledContent("Rounds", value: "\(n)") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest", value: "\(r)s") }
+                    }
+                case .cluster:
+                    Section("Cluster") {
+                        if let n = snap.reps { LabeledContent("Reps per cluster", value: "\(n)") }
+                        if let c = snap.rounds { LabeledContent("Clusters", value: "\(c)") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between clusters", value: "\(r)s") }
+                    }
+                case .partialReps:
+                    Section("Partial Reps") {
+                        if let region = snap.partialRangeNote, !region.isEmpty {
+                            LabeledContent("Range", value: region)
+                        }
+                        if let n = snap.reps, n > 0 { LabeledContent("Partial reps", value: "\(n)") }
+                    }
+                case .tempoOverride:
+                    Section("Tempo") {
+                        if let t = snap.note, !t.isEmpty { LabeledContent("Tempo", value: t) }
+                    }
+                case .amrap:
+                    Section("AMRAP") {
+                        Text("As many reps as possible on this set.")
+                            .foregroundStyle(.secondary)
+                    }
+                case .toFailure:
+                    Section("To Failure") {
+                        Text("Push to technical failure on this set.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle(snap.type.displayName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
