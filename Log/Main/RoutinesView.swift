@@ -1339,7 +1339,24 @@ private struct TechniquePlanEditor: View {
 
     private func addPlan(type: TechniqueType) {
         let nextOrder = (prescription.techniquePlans.map(\.order).max() ?? -1) + 1
-        let plan = TechniquePlan(order: nextOrder, type: type)
+        let plan: TechniquePlan
+        switch type {
+        case .dropset:
+            plan = TechniquePlan(order: nextOrder, type: type,
+                                 dropPercent: 20, dropCount: 1,
+                                 dropsetEffortRaw: "amrap")
+        case .partialReps:
+            plan = TechniquePlan(order: nextOrder, type: type,
+                                 reps: 8, partialRangeNote: "top half")
+        case .restPause:
+            plan = TechniquePlan(order: nextOrder, type: type,
+                                 restSeconds: 15, rounds: 2)
+        case .cluster:
+            plan = TechniquePlan(order: nextOrder, type: type,
+                                 reps: 3, restSeconds: 10, rounds: 3)
+        default:
+            plan = TechniquePlan(order: nextOrder, type: type)
+        }
         ctx.insert(plan)
         prescription.techniquePlans.append(plan)
         try? ctx.save()
