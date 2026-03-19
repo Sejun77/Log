@@ -2763,6 +2763,13 @@ private struct EditSessionPlanSheet: View {
     @Binding var plan: SessionPlan
     @Environment(\.dismiss) private var dismiss
 
+    @AppStorage(AppSettings.Keys.autoregMode)
+    private var autoregModeRaw: String = AutoregMode.rir.rawValue
+
+    private var autoregMode: AutoregMode {
+        AutoregMode(rawValue: autoregModeRaw) ?? .rir
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -2789,8 +2796,14 @@ private struct EditSessionPlanSheet: View {
                 }
 
                 Section("Intensity") {
-                    fieldRow("RIR", binding: optionalDouble(\.rir), decimal: true)
-                    fieldRow("RPE", binding: optionalDouble(\.rpe), decimal: true)
+                    switch autoregMode {
+                    case .rir:
+                        fieldRow("RIR", binding: optionalDouble(\.rir), decimal: true)
+                    case .rpe:
+                        fieldRow("RPE", binding: optionalDouble(\.rpe), decimal: true)
+                    case .none:
+                        EmptyView()
+                    }
                     HStack {
                         Text("Tempo")
                         Spacer()

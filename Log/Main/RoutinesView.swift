@@ -1945,6 +1945,17 @@ private struct SlotPrescriptionSection: View {
         if re.prescription == nil {
             let p = SlotPrescription()
             p.usesDuration = isTimeBased
+            p.sets = AppSettings.defaultSets
+            if !isTimeBased {
+                p.repMin = AppSettings.defaultRepMin
+                p.repMax = AppSettings.defaultRepMax
+            }
+            p.restSecondsBetweenSets = AppSettings.defaultRestBetweenSets
+            switch AppSettings.autoregMode {
+            case .rir: p.rir = AppSettings.defaultRIR
+            case .rpe: p.rpe = AppSettings.defaultRPE
+            case .none: break
+            }
             ctx.insert(p)
             re.prescription = p
             try? ctx.save()
@@ -1957,6 +1968,13 @@ private struct SlotPrescriptionSection: View {
 private struct PrescriptionFields: View {
     @Bindable var prescription: SlotPrescription
     let isTimeBased: Bool
+
+    @AppStorage(AppSettings.Keys.autoregMode)
+    private var autoregModeRaw: String = AutoregMode.rir.rawValue
+
+    private var autoregMode: AutoregMode {
+        AutoregMode(rawValue: autoregModeRaw) ?? .rir
+    }
 
     var body: some View {
         optionalIntRow("Sets", keyPath: \.sets)
@@ -1971,13 +1989,27 @@ private struct PrescriptionFields: View {
 
         optionalIntRow("Rest between sets", keyPath: \.restSecondsBetweenSets, unit: "s")
 
-        HStack {
-            Text("RIR")
-            Spacer()
-            TextField("—", text: optionalDoubleString(\.rir))
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 80)
+        switch autoregMode {
+        case .rir:
+            HStack {
+                Text("RIR")
+                Spacer()
+                TextField("—", text: optionalDoubleString(\.rir))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 80)
+            }
+        case .rpe:
+            HStack {
+                Text("RPE")
+                Spacer()
+                TextField("—", text: optionalDoubleString(\.rpe))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 80)
+            }
+        case .none:
+            EmptyView()
         }
 
         HStack {

@@ -8,6 +8,7 @@ struct RootTabView: View {
         case routines
         case exercises
         case history
+        case settings
     }
 
     // MARK: - Environment
@@ -29,6 +30,7 @@ struct RootTabView: View {
             routinesTab
             exercisesTab
             historyTab
+            settingsTab
         }
         // Use your brand color for the selected tab icon/label
         .tint(DSColor.brand)
@@ -77,6 +79,14 @@ struct RootTabView: View {
             .tag(Tab.history)
             .tabItem {
                 Label("History", systemImage: "calendar")
+            }
+    }
+
+    private var settingsTab: some View {
+        SettingsView()
+            .tag(Tab.settings)
+            .tabItem {
+                Label("Settings", systemImage: "gear")
             }
     }
 
