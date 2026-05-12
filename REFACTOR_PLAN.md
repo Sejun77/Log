@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-02-24 (KST)
+Last updated: 2026-05-12 (KST)
 
 ---
 
@@ -69,7 +69,7 @@ These are the enforced invariants as of Phase 5. All new work must preserve them
 - `SessionPlan` is a per-exercise in-memory copy of prescription fields, created at workout start.
 - Users can edit sets, rep range, rest, RIR, RPE, tempo during the workout via a sheet.
 - `effectiveSetCount` resolves the displayed set target from session plan → prescription snapshot → setTemplate count.
-- Rest timer uses session plan rest values with precedence over prescription snapshot.
+- Rest timer uses session plan rest values with precedence over prescription snapshot. On the final working set of a non-superset exercise, `restSecondsAfterExercise` (session plan → snapshot) is preferred; all other sets use `restSecondsBetweenSets` → template rest.
 - `hasSessionPlanPending` detects if any session plan diverges from the original snapshot.
 - On finish, if pending changes exist, an explicit apply-back dialog offers to write them to `SlotPrescription`.
 
@@ -153,6 +153,11 @@ These are the enforced invariants as of Phase 5. All new work must preserve them
   - `activeRestEndsAt: Date?`, `activeRestSlotID: UUID?`
   - `sessionPlansJSON: String?` (**Phase 4c**) — Codable `[String: SessionPlan]` keyed by routineSlotID
   - `activeBlockIndex: Int?`, `activeExerciseIndex: Int?` (**Phase 4c**)
+
+- **AppSettings** — `@AppStorage`-backed UserDefaults singleton (not a SwiftData model)
+  - `weightIsKg: Bool`, `autoregMode: AutoregMode` (rir/rpe/none)
+  - New-slot defaults: `defaultSets`, `defaultRepMin`, `defaultRepMax`, `defaultRestBetweenSets`, `defaultRestAfterExercise`, `defaultRIR`, `defaultRPE`
+  - Changing settings affects newly created prescriptions only; never silently mutates existing routines or active sessions
 
 ---
 
@@ -434,6 +439,7 @@ How techniques are parameterized, snapshotted, targeted, and rendered during a w
   - one intensity finisher per target set
   - dropset and AMRAP mutually exclusive on overlapping targets
   - duplicate technique type on overlapping targets blocked
+- [x] Technique plan defaults (effort mode, drop %, count, targeting indices) are initialized when a new `TechniquePlan` is created
 - [x] Verified: technique plans remain template-side; sessions do not mutate them unless a future explicit apply-back flow is added
 
 ### Phase 3.7 — Warmup execution UX + cold-resume persistence ✅
@@ -453,44 +459,61 @@ Warmup schemes are editable at the template level and execute in workouts as ded
 Current technique infrastructure is functional but still clunky in production use. Techniques should feel attached to the sets they modify, not primarily grouped in a top summary row.
 
 - [x] Render techniques inline on the affected working-set rows (set-attached chips / badges)
+- [x] Per-set technique chip labels use payload-only text (no redundant applies-to suffix)
 - [x] Reduce reliance on the top-level technique summary as the primary interaction surface
 - [x] Improve technique editor flow so targeting multiple sets is fast and obvious
 - [ ] Add “Reset to suggested” for auto-computed drop weights after manual override
 - [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
 - [ ] Verify: a user can understand which techniques apply to which sets without reading abstract summary labels
 
-### Phase 5.1 — User settings: autoregulation mode, weight units, and default prescription values
+### Phase 5.1 — User settings: autoregulation mode, weight units, and default prescription values ✅
 
 Persisted user preferences that affect workout UX, input defaults, and slot creation flow.
 
-- [ ] Add persisted settings model (singleton) with:
-  - `autoregulationMode` (RIR vs RPE)
-  - `weightUnit` (kg vs lb)
-  - default prescription values used when creating new slot prescriptions, such as:
-    - default sets
-    - default rep min / rep max
-    - default rest between sets
-    - default rest after exercise
-    - default RIR / RPE preference value
-    - optional default tempo / duration presets if appropriate
-- [ ] Add a Settings screen where the user can edit these preferences
-- [ ] New routine slots / prescriptions prefill from these defaults instead of hardcoded values
-- [ ] In-workout plan edit sheet shows only the active autoregulation field by default (RIR or RPE)
-- [ ] Verify: switching autoregulation mode does not destroy stored data (both fields may exist; UI only emphasizes one)
-- [ ] Verify: changing settings affects newly created prescriptions, but does not silently mutate existing routines or active sessions
+- [x] Add persisted settings model (`AppSettings` — `@AppStorage`-backed UserDefaults) with:
+  - `autoregMode` (RIR / RPE / none)
+  - `weightIsKg` (kg vs lb)
+  - default prescription values for new slot prescriptions:
+    - `defaultSets`, `defaultRepMin`, `defaultRepMax`
+    - `defaultRestBetweenSets`, `defaultRestAfterExercise`
+    - `defaultRIR` / `defaultRPE` (applied based on active autoregulation mode)
+- [x] Add a Settings screen (Settings tab) where the user can edit all preferences
+- [x] New routine slot prescriptions prefill from `AppSettings` defaults instead of hardcoded values
+- [x] In-workout plan edit sheet shows only the active autoregulation field (RIR or RPE); `none` hides the intensity row
+- [x] Verified: switching autoregulation mode does not destroy stored data — both `rir` and `rpe` fields may coexist; UI emphasizes only the active one
+- [x] Verified: changing settings affects newly created prescriptions only; existing routines and active sessions are not silently mutated
 
 ### Phase 5.2 — Rest semantics cleanup + superset flow streamline
 
 Reduce confusion by making rest fields consistent across routine editor and in-workout editing.
 
-- [ ] Move slot-level "Rest after exercise" UX fully into `SlotPrescription.restSecondsAfterExercise`
-- [ ] Ensure routine editor and in-workout plan edit present rest fields consistently:
-- Rest between sets (slot)
-- Rest after exercise (slot)
-- Superset round rest (block, if superset)
-- Block rest-after (block, if used)
-- [ ] Verify: apply-back writes slot rest-after into SlotPrescription (not an unrelated field)
-- [ ] Verify: superset rest fields have clear labels and do not conflict with slot rest fields
+**Completed (5.2.A + 5.2.B):**
+
+- [x] `SlotPrescription.restSecondsAfterExercise` exposed in routine prescription editor as "Rest after exercise"
+- [x] `AppSettings.defaultRestAfterExercise` applied when creating new slot prescriptions
+- [x] Session plan edit sheet label renamed to "Rest after exercise (s)"
+- [x] `restSecondsAfterExercise` wired into timer: on the final working set of a non-superset exercise, session plan → snapshot value is used; falls back to `restSecondsBetweenSets` → template rest if nil
+- [x] "Rest after block" user-facing UI removed from the block row list
+- [x] `RoutineBlock.restAfterSeconds` model field retained for compatibility (additive in runtime if non-zero on old data)
+- [x] Verified: apply-back via `applySessionPlansToSlotPrescriptions()` correctly writes `restSecondsAfterExercise` to `SlotPrescription`
+
+**Rest ownership reference (current):**
+
+| Field | Owner | Editable in | Timer behavior |
+|---|---|---|---|
+| `restSecondsBetweenSets` | `SlotPrescription` | Routine editor + session plan | Non-final sets; final-set fallback |
+| `restSecondsAfterExercise` | `SlotPrescription` | Routine editor + session plan | Final working set of non-superset exercise |
+| `restAfterSeconds` | `RoutineBlock` | UI removed (model retained) | Additive on final set if non-zero (legacy) |
+| `supersetRoundRestSeconds` | `RoutineBlock` | Routine editor (superset only) | After each completed superset round |
+
+**Pending — superset follow-up:**
+
+- [ ] Fix superset exercise insertion so every new `RoutineExercise` added to a superset block receives a valid `SlotPrescription`
+- [ ] Verify: `supersetRoundRestSeconds` is the primary rest timer after each completed superset round (runtime logic exists; needs end-to-end UX confirmation)
+- [ ] Enforce: `restSecondsAfterExercise` must not interrupt between exercises inside a superset (slot rest is irrelevant mid-round)
+- [ ] Superset plan/edit UI: sets/reps/RIR/RPE editable per exercise; rest-between-sets hidden or de-emphasized; superset round rest is the primary timing field shown
+- [ ] Verify: normal blocks and supersets both start workouts with valid working-set rows
+- [ ] Verify: existing routines are not silently mutated by any superset-related changes
 
 ### Phase 6 — History refactor + workout detail
 
@@ -589,7 +612,7 @@ These are NOT part of the current refactor scope but represent future prescripti
 - **Intensity guidance**: %1RM target, suggested load rules (not fixed weight — weight is always session truth)
 - **Pause reps / tempo variants / ROM constraints**: structured tempo patterns beyond the single tempo string
 - **Grip / stance / cues**: structured fields or notes for setup specifics (may live on Exercise or slot)
-- **Rest semantics**: unified model for set rest vs exercise rest vs superset round rest (currently separate fields)
+- **Rest semantics (superset unification)**: slot-level rest fields (`restSecondsBetweenSets`, `restSecondsAfterExercise`) and `supersetRoundRestSeconds` are now wired. Future work: fold `RoutineBlock.restAfterSeconds` into slot-level fields and remove the legacy block-level field
 - **Autoregulation rules**: stop conditions (e.g., "stop if bar speed drops"), adjust-load rules, performance-based set count
 - **Progression hints**: last-time summary display, suggested load increases (read-only; never auto-writing defaults)
 
