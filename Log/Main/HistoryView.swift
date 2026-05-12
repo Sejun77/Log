@@ -404,6 +404,9 @@ struct HistoryView: View {
 
 private struct WorkoutDetailView: View {
     let workout: Workout
+    @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
+
+    private var isActive: Bool { activeGuard.activeWorkoutID == workout.id }
 
     private func exerciseName(for item: WorkoutItem) -> String {
         item.exercise?.name
@@ -429,7 +432,12 @@ private struct WorkoutDetailView: View {
                     }
                 }
 
-                if let end = workout.completedAt {
+                if isActive {
+                    LabeledContent("Status") {
+                        Text("In Progress")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let end = workout.completedAt {
                     let total = max(0, Int(end.timeIntervalSince(workout.date)))
                     let h = total / 3600
                     let m = (total % 3600) / 60
@@ -442,6 +450,13 @@ private struct WorkoutDetailView: View {
                         .monospacedDigit()
                     }
                 }
+
+                if let notes = workout.notes, !notes.isEmpty {
+                    LabeledContent("Notes") {
+                        Text(notes)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
             } header: {
                 Text("Overview")
             }
@@ -449,7 +464,10 @@ private struct WorkoutDetailView: View {
             ForEach(workout.items, id: \.id) { item in
                 Section {
                     let logs = item.setLogs.sorted {
-                        $0.indexInExercise < $1.indexInExercise
+                        if $0.indexInExercise != $1.indexInExercise {
+                            return $0.indexInExercise < $1.indexInExercise
+                        }
+                        return ($0.subIndex ?? -1) < ($1.subIndex ?? -1)
                     }
                     if logs.isEmpty {
                         Text("No sets logged")
