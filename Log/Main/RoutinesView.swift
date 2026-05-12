@@ -282,8 +282,6 @@ struct RoutineEditor: View {
     @State private var showOverrideActiveAlert = false
     @State private var startLinkActive = false
 
-    @FocusState private var focusedRestBlockID: PersistentIdentifier?
-
     // MARK: - Computed
 
     private var sortedBlocks: [RoutineBlock] {
@@ -325,11 +323,6 @@ struct RoutineEditor: View {
                 .disabled(!routineIsStartable(routine))
             }
 
-            // Keyboard "Done" button for rest textfields
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focusedRestBlockID = nil }
-            }
         }
         .alert(
             "A workout is already in progress",
@@ -444,7 +437,7 @@ struct RoutineEditor: View {
                     }
 
                 if blockIsInvalidSuperset(block) {
-                    Text("⚠️ Rest after round required (> 0)")
+                    Text("⚠️ Tap Details to set Rest after round")
                         .font(.caption)
                         .foregroundStyle(.red)
                         .padding(.leading, 8)
@@ -462,8 +455,6 @@ struct RoutineEditor: View {
 
         return BlockRow(
             title: blockTitle(block),
-            roundRestText: block.isSuperset
-                ? roundRestBinding(for: block) : nil,
             details: {
                 if block.isSuperset {
                     return AnyView(SupersetDetailNoRest(block: block))
@@ -471,8 +462,6 @@ struct RoutineEditor: View {
                     return AnyView(RoutineBlockDetailView(block: block))
                 }
             },
-            focusTag: block.id,
-            focused: $focusedRestBlockID,
             locked: isLocked
         )
     }
@@ -661,24 +650,6 @@ struct RoutineEditor: View {
         }
     }
 
-    private func roundRestBinding(for block: RoutineBlock) -> Binding<String> {
-        Binding<String>(
-            get: {
-                if let v = block.supersetRoundRestSeconds, v > 0 {
-                    return String(v)
-                }
-                return ""
-            },
-            set: { input in
-                let digits = input.filter(\.isNumber)
-                if let v = Int(digits), v > 0 {
-                    block.supersetRoundRestSeconds = v
-                } else {
-                    block.supersetRoundRestSeconds = nil
-                }
-            }
-        )
-    }
 
     private func endActiveSessionIfAny() {
         // Preserve the active workout (non-destructive override).
@@ -751,16 +722,16 @@ struct RoutineEditor: View {
         restAfter: Int?
     ) {
         if isSuperset {
-            let counts = exercises.map { ex in
-                ex.defaultTemplates.filter { $0.kind == .working }.count
+            // Resolved count: prefer defaultTemplates, fall back to AppSettings.defaultSets
+            let counts = exercises.map { ex -> Int in
+                let n = ex.defaultTemplates.filter { $0.kind == .working }.count
+                return n > 0 ? n : AppSettings.defaultSets
             }
-            if let first = counts.first, first > 0,
-                counts.allSatisfy({ $0 == first })
-            {
+            if let first = counts.first, counts.allSatisfy({ $0 == first }) {
                 // OK
             } else {
                 supersetCountMessage =
-                    "Selected exercises have working set counts: \(counts.map(String.init).joined(separator: ", ")). All must match and be greater than 0."
+                    "Selected exercises have working set counts: \(counts.map(String.init).joined(separator: ", ")). All must match."
                 showSupersetCountAlert = true
                 return
             }
@@ -770,6 +741,7 @@ struct RoutineEditor: View {
         let res: [RoutineExercise] = exercises.enumerated().map { idx, ex in
             let re = RoutineExercise(exercise: ex, order: idx, setTemplates: [])
             ctx.insert(re)
+            re.prescription = makeDefaultPrescription(isTimeBased: ex.isTimeBased, in: ctx)
             return re
         }
 
@@ -783,6 +755,33 @@ struct RoutineEditor: View {
         routine.blocks.append(block)
         try? ctx.save()
     }
+}
+
+// MARK: - Default Prescription Factory
+
+@discardableResult
+fileprivate func makeDefaultPrescription(
+    isTimeBased: Bool,
+    in ctx: ModelContext
+) -> SlotPrescription {
+    let p = SlotPrescription()
+    p.usesDuration = isTimeBased
+    p.sets = AppSettings.defaultSets
+    if !isTimeBased {
+        p.repMin = AppSettings.defaultRepMin
+        p.repMax = AppSettings.defaultRepMax
+    }
+    p.restSecondsBetweenSets = AppSettings.defaultRestBetweenSets
+    if AppSettings.defaultRestAfterExercise > 0 {
+        p.restSecondsAfterExercise = AppSettings.defaultRestAfterExercise
+    }
+    switch AppSettings.autoregMode {
+    case .rir: p.rir = AppSettings.defaultRIR
+    case .rpe: p.rpe = AppSettings.defaultRPE
+    case .none: break
+    }
+    ctx.insert(p)
+    return p
 }
 
 // MARK: - Exercise Picker (single)
@@ -843,7 +842,8 @@ private struct SupersetPicker: View {
     }
 
     private func setCount(for ex: Exercise) -> Int {
-        ex.defaultTemplates.filter { $0.kind == .working }.count
+        let n = ex.defaultTemplates.filter { $0.kind == .working }.count
+        return n > 0 ? n : AppSettings.defaultSets
     }
 
     private func isCompatible(_ ex: Exercise) -> Bool {
@@ -992,11 +992,11 @@ private struct RoutineBlockDetailView: View {
 }
 
 /// Detail for a Superset block:
-/// - Displays "Rest after round (s)" as read-only info row
+/// - "Rest after round" is editable here (removed from block list)
 /// - Lists sets for each exercise with reps & weight (no per-set rest inputs)
 private struct SupersetDetailNoRest: View {
     @Environment(\.modelContext) private var ctx
-    let block: RoutineBlock
+    @Bindable var block: RoutineBlock
 
     private func templates(for re: RoutineExercise) -> [SetTemplate] {
         re.resolvedTemplates(in: ctx)
@@ -1004,17 +1004,17 @@ private struct SupersetDetailNoRest: View {
 
     var body: some View {
         List {
-            Section {
-                HStack {
-                    Text("Rest after round")
-                    Spacer()
-                    if let v = block.supersetRoundRestSeconds, v > 0 {
-                        Text("\(v)").monospacedDigit()
-                        Text("s").foregroundStyle(.secondary)
-                    } else {
-                        Text("—").foregroundStyle(.secondary)
-                    }
-                }
+            Section("Timing") {
+                Stepper(
+                    (block.supersetRoundRestSeconds.map { "Rest after round: \($0)s" })
+                        ?? "Rest after round: none",
+                    value: Binding(
+                        get: { block.supersetRoundRestSeconds ?? 0 },
+                        set: { block.supersetRoundRestSeconds = $0 > 0 ? $0 : nil }
+                    ),
+                    in: 0...300,
+                    step: 15
+                )
             }
 
             ForEach(block.exercises.sorted { $0.order < $1.order }) { re in
@@ -1920,24 +1920,7 @@ private struct SlotPrescriptionSection: View {
 
     private func ensurePrescription() {
         if re.prescription == nil {
-            let p = SlotPrescription()
-            p.usesDuration = isTimeBased
-            p.sets = AppSettings.defaultSets
-            if !isTimeBased {
-                p.repMin = AppSettings.defaultRepMin
-                p.repMax = AppSettings.defaultRepMax
-            }
-            p.restSecondsBetweenSets = AppSettings.defaultRestBetweenSets
-            if AppSettings.defaultRestAfterExercise > 0 {
-                p.restSecondsAfterExercise = AppSettings.defaultRestAfterExercise
-            }
-            switch AppSettings.autoregMode {
-            case .rir: p.rir = AppSettings.defaultRIR
-            case .rpe: p.rpe = AppSettings.defaultRPE
-            case .none: break
-            }
-            ctx.insert(p)
-            re.prescription = p
+            re.prescription = makeDefaultPrescription(isTimeBased: isTimeBased, in: ctx)
             try? ctx.save()
         } else if let p = re.prescription, p.usesDuration != isTimeBased {
             p.usesDuration = isTimeBased
@@ -2067,45 +2050,8 @@ private struct PrescriptionFields: View {
 
 private struct BlockRow: View {
     let title: String
-    var roundRestText: Binding<String>? = nil
     let details: () -> AnyView
-    let focusTag: PersistentIdentifier
-    let focused: FocusState<PersistentIdentifier?>.Binding
     var locked: Bool = false
-
-    private var roundTimerRow: some View {
-        Group {
-            if let rr = roundRestText {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Rest after round")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Image(systemName: "timer")
-                            .foregroundStyle(.secondary)
-
-                        HStack(spacing: 4) {
-                            TextField("Rest", text: rr)
-                                .keyboardType(.numberPad)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.body.monospacedDigit())
-                                .frame(width: 120, alignment: .trailing)
-                                .multilineTextAlignment(.trailing)
-                                .focused(focused, equals: focusTag)
-                                .submitLabel(.done)
-
-                            Text("s").foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 8)
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2117,8 +2063,6 @@ private struct BlockRow: View {
                 Spacer(minLength: 8)
                 if locked { LockBadge() }
             }
-
-            roundTimerRow
 
             HStack {
                 Spacer()
