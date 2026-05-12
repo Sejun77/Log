@@ -462,7 +462,6 @@ struct RoutineEditor: View {
 
         return BlockRow(
             title: blockTitle(block),
-            restText: restBinding(for: block),
             roundRestText: block.isSuperset
                 ? roundRestBinding(for: block) : nil,
             details: {
@@ -660,28 +659,6 @@ struct RoutineEditor: View {
             }
             return false
         }
-    }
-
-    private func restBinding(for block: RoutineBlock) -> Binding<String> {
-        Binding<String>(
-            get: {
-                if let v = block.restAfterSeconds, v != 0 { return String(v) }
-                return ""
-            },
-            set: { input in
-                let t = input.trimmingCharacters(in: .whitespacesAndNewlines)
-                if t.isEmpty {
-                    block.restAfterSeconds = nil
-                    return
-                }
-
-                if let v = Int(t), v != 0 {
-                    block.restAfterSeconds = v
-                } else {
-                    block.restAfterSeconds = nil
-                }
-            }
-        )
     }
 
     private func roundRestBinding(for block: RoutineBlock) -> Binding<String> {
@@ -2090,84 +2067,11 @@ private struct PrescriptionFields: View {
 
 private struct BlockRow: View {
     let title: String
-    @Binding var restText: String
     var roundRestText: Binding<String>? = nil
     let details: () -> AnyView
     let focusTag: PersistentIdentifier
     let focused: FocusState<PersistentIdentifier?>.Binding
     var locked: Bool = false
-    @State private var restDraft: String = ""
-
-    private var timerRow: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Rest after block")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Image(systemName: "timer")
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 4) {
-                    TextField("Rest", text: $restDraft)
-                        .onAppear {
-                            restDraft = restText
-                        }
-                        .onChange(of: restText) { _, newValue in
-                            if focused.wrappedValue != focusTag {
-                                restDraft = newValue
-                            }
-                        }
-                        .onChange(of: restDraft) { _, newValue in
-                            let sanitized = sanitizeSignedInt(newValue)
-
-                            if sanitized != newValue {
-                                restDraft = sanitized
-                                return
-                            }
-
-                            if sanitized.isEmpty {
-                                restText = ""  // clears model via restBinding
-                            } else if sanitized == "-" {
-                                return
-                            } else if Int(sanitized) != nil {
-                                restText = sanitized
-                            }
-                        }
-                        .onSubmit {
-                            if restDraft == "-" {
-                                restDraft = ""
-                                restText = ""
-                            }
-                        }
-                        .keyboardType(.numbersAndPunctuation)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.body.monospacedDigit())
-                        .frame(width: 120, alignment: .trailing)
-                        .multilineTextAlignment(.trailing)
-                        .focused(focused, equals: focusTag)
-                        .submitLabel(.done)
-                        #if DEBUG
-                            .probe("BlockRow.RestField")
-                        #endif
-
-                    Text("s").foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
-                NavigationLink("Details", destination: details())
-            }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .onChange(of: focused.wrappedValue) { _, newFocus in
-                if newFocus != focusTag, restDraft == "-" {
-                    restDraft = ""
-                    restText = ""
-                }
-            }
-        }
-    }
 
     private var roundTimerRow: some View {
         Group {
@@ -2203,37 +2107,6 @@ private struct BlockRow: View {
         }
     }
 
-    private func sanitizeSignedInt(_ raw: String) -> String {
-        if raw == "-" { return "-" }
-
-        var result = ""
-        var hasSign = false
-        var hasDigit = false
-
-        for (i, ch) in raw.enumerated() {
-            if ch == "-" {
-                if i == 0 && !hasSign && !hasDigit {
-                    result.append(ch)
-                    hasSign = true
-                }
-                continue
-            }
-
-            if ch.isNumber {
-                result.append(ch)
-                hasDigit = true
-                continue
-            }
-        }
-
-        if hasSign {
-            result = result.replacingOccurrences(of: "-", with: "")
-            return "-" + result
-        }
-        return result
-
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
@@ -2245,8 +2118,14 @@ private struct BlockRow: View {
                 if locked { LockBadge() }
             }
 
-            timerRow
             roundTimerRow
+
+            HStack {
+                Spacer()
+                NavigationLink("Details", destination: details())
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 4)
         #if DEBUG

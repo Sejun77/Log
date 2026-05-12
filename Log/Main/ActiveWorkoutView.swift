@@ -1112,6 +1112,20 @@ struct ActiveWorkoutView: View {
         return nil
     }
 
+    /// Resolve planned rest after exercise (used only on the final working set of a non-superset
+    /// exercise): session plan → snapshot → nil (falls back to restSecondsBetweenSets).
+    private func plannedRestAfterExercise(
+        for exercise: PlanExercise
+    ) -> Int? {
+        if let sp = sessionPlans[exercise.routineSlotID],
+            let v = sp.restSecondsAfterExercise, v > 0
+        { return v }
+        if let snap = exercise.prescriptionSnapshot,
+            let v = snap.restSecondsAfterExercise, v > 0
+        { return v }
+        return nil
+    }
+
     /// Effective set count for an exercise, resolving through session plan → snapshot → templates.
     private func effectiveSetCount(
         for ex: PlanExercise,
@@ -2446,6 +2460,8 @@ struct ActiveWorkoutView: View {
     /// • Empty rest (nil) or 0 ⇒ skip.
     /// • Before a dropset ⇒ skip.
     /// • After a dropset ⇒ use the nearest prior WORKING set's explicit rest (if any), else skip.
+    /// • Non-superset final working set: prefer restSecondsAfterExercise (session plan → snapshot),
+    ///   falling back to restSecondsBetweenSets → template rest.
     /// • Supersets compute rest per “round”: wait until all exercises at this index are logged,
     ///   then apply the same rules; when combining, take the max of the explicit rests found.
     /// • Finally, if this was the *last* set/round of the block, append block.restAfterSeconds (>0) to the computed rest.
@@ -2563,12 +2579,16 @@ struct ActiveWorkoutView: View {
                         == .dropset
                 {
                     restSec = nil
-                } else if let r = plannedRestBetweenSets(for: exercise)
-                    ?? t.restSecondsAfter, r > 0
-                {
-                    restSec = r
                 } else {
-                    restSec = nil
+                    let isLastSet = idx == exSetCount - 1
+                    let afterEx = isLastSet ? plannedRestAfterExercise(for: exercise) : nil
+                    if let r = afterEx ?? plannedRestBetweenSets(for: exercise) ?? t.restSecondsAfter,
+                        r > 0
+                    {
+                        restSec = r
+                    } else {
+                        restSec = nil
+                    }
                 }
             }
         }
