@@ -465,6 +465,8 @@ Current technique infrastructure is functional but still clunky in production us
 - [ ] Add “Reset to suggested” for auto-computed drop weights after manual override
 - [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
 - [ ] Verify: a user can understand which techniques apply to which sets without reading abstract summary labels
+- [ ] Hide or collapse the top technique summary row when all techniques are already represented as set-attached chips (redundancy now that chips are primary)
+- [ ] Add technique compatibility filtering for duration-based exercises: disable/hide inapplicable techniques (e.g. partial reps, dropsets) in the technique picker and param editor
 
 ### Phase 5.1 — User settings: autoregulation mode, weight units, and default prescription values ✅
 
@@ -524,9 +526,24 @@ Reduce confusion by making rest fields consistent across routine editor and in-w
 - [ ] Enforce: `restSecondsAfterExercise` must not interrupt between exercises inside a superset (slot rest is irrelevant mid-round)
 - [ ] Superset plan/edit UI polish: sets/reps/RIR/RPE editable per exercise; rest-between-sets hidden or de-emphasized
 
+**Pending — dropset rest timing:**
+
+- [ ] Fix dropset rest timing: the between-set / after-exercise rest timer must not start after the parent working set when dropset sub-logs are configured; rest should begin after the final dropset sub-log is recorded
+
 ### Phase 6 — History refactor + workout detail
 
 Upgrade history from string-based grouping to relationship-based, and add workout detail view.
+
+**Completed (6.A — workout detail view):**
+
+- [x] `WorkoutDetailView`: read-only, pushed via `NavigationLink` from every history row
+- [x] In-progress workouts show `"Status: In Progress"` in the Overview section instead of Duration
+- [x] Exercise name resolved as: `exercise.name` → `exerciseNameSnapshot` → `"Deleted exercise"`; renaming an exercise does not alter history display
+- [x] `Workout.notes` shown in Overview when non-empty; nil or empty produces no visible row
+- [x] Time-based sets display duration (`durationSeconds`); rep-based sets display reps + weight
+- [x] Set logs sorted by `(indexInExercise, subIndex ?? -1)` so dropset sub-logs follow their parent working set in order
+
+**Pending (6.B — history relationship refactor):**
 
 - [ ] Add `routineVariantID: UUID?` (or relationship) on `Workout`
 - [ ] New sessions always populate `routineVariantID`
@@ -534,9 +551,6 @@ Upgrade history from string-based grouping to relationship-based, and add workou
 - [ ] Keep `routineName` for display fallback (read-only compatibility)
 - [ ] Update `HistoryView` grouping to use relationship/ID, falling back to `routineName` for unlinked records
 - [ ] Verify: renaming a routine or variant does not break history grouping
-- [ ] Add workout detail view: `NavigationLink` from history row → detail screen showing exercises, sets, weights, duration
-- [ ] Workout detail: display exercise names from `exerciseNameSnapshot` when `exercise` relationship is nil (exercise deleted)
-- [ ] Workout detail: show workout notes if present
 
 ### Phase 7 — Tests + performance pass
 
