@@ -2791,7 +2791,7 @@ private struct EditSessionPlanSheet: View {
                         "Rest between (s)",
                         binding: optionalInt(\.restSecondsBetweenSets))
                     fieldRow(
-                        "Rest after (s)",
+                        "Rest after exercise (s)",
                         binding: optionalInt(\.restSecondsAfterExercise))
                 }
 

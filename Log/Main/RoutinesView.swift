@@ -1951,6 +1951,9 @@ private struct SlotPrescriptionSection: View {
                 p.repMax = AppSettings.defaultRepMax
             }
             p.restSecondsBetweenSets = AppSettings.defaultRestBetweenSets
+            if AppSettings.defaultRestAfterExercise > 0 {
+                p.restSecondsAfterExercise = AppSettings.defaultRestAfterExercise
+            }
             switch AppSettings.autoregMode {
             case .rir: p.rir = AppSettings.defaultRIR
             case .rpe: p.rpe = AppSettings.defaultRPE
@@ -1988,6 +1991,7 @@ private struct PrescriptionFields: View {
         }
 
         optionalIntRow("Rest between sets", keyPath: \.restSecondsBetweenSets, unit: "s")
+        optionalIntRow("Rest after exercise", keyPath: \.restSecondsAfterExercise, unit: "s")
 
         switch autoregMode {
         case .rir:
