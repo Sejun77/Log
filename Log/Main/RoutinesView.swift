@@ -1058,7 +1058,8 @@ private struct SupersetDetailNoRest: View {
                     }
                     SlotPrescriptionSection(
                         re: re,
-                        isTimeBased: ex.isTimeBased
+                        isTimeBased: ex.isTimeBased,
+                        hideRestFields: true
                     )
                 }
             }
@@ -1848,6 +1849,7 @@ private struct SlotPrescriptionSection: View {
     @Environment(\.modelContext) private var ctx
     @Bindable var re: RoutineExercise
     let isTimeBased: Bool
+    var hideRestFields: Bool = false
 
     var body: some View {
         Section {
@@ -1863,7 +1865,8 @@ private struct SlotPrescriptionSection: View {
             if let prescription = re.prescription {
                 PrescriptionFields(
                     prescription: prescription,
-                    isTimeBased: isTimeBased
+                    isTimeBased: isTimeBased,
+                    hideRestFields: hideRestFields
                 )
 
                 // Phase 3.5: Warmup scheme navigation
@@ -1931,6 +1934,7 @@ private struct SlotPrescriptionSection: View {
 private struct PrescriptionFields: View {
     @Bindable var prescription: SlotPrescription
     let isTimeBased: Bool
+    var hideRestFields: Bool = false
 
     @AppStorage(AppSettings.Keys.autoregMode)
     private var autoregModeRaw: String = AutoregMode.rir.rawValue
@@ -1950,8 +1954,10 @@ private struct PrescriptionFields: View {
             optionalIntRow("Rep max", keyPath: \.repMax)
         }
 
-        optionalIntRow("Rest between sets", keyPath: \.restSecondsBetweenSets, unit: "s")
-        optionalIntRow("Rest after exercise", keyPath: \.restSecondsAfterExercise, unit: "s")
+        if !hideRestFields {
+            optionalIntRow("Rest between sets", keyPath: \.restSecondsBetweenSets, unit: "s")
+            optionalIntRow("Rest after exercise", keyPath: \.restSecondsAfterExercise, unit: "s")
+        }
 
         switch autoregMode {
         case .rir:
