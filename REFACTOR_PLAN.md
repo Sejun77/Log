@@ -497,23 +497,32 @@ Reduce confusion by making rest fields consistent across routine editor and in-w
 - [x] `RoutineBlock.restAfterSeconds` model field retained for compatibility (additive in runtime if non-zero on old data)
 - [x] Verified: apply-back via `applySessionPlansToSlotPrescriptions()` correctly writes `restSecondsAfterExercise` to `SlotPrescription`
 
+**Completed (5.2 superset follow-up):**
+
+- [x] `makeDefaultPrescription(isTimeBased:in:)` extracted as shared factory; `ensurePrescription()` delegates to it
+- [x] `appendBlock()` eagerly calls `makeDefaultPrescription` for every new `RoutineExercise` — prescriptions are no longer lazy
+- [x] `SupersetPicker.setCount(for:)` falls back to `AppSettings.defaultSets` for prescription-only exercises (no `defaultTemplates`)
+- [x] `appendBlock()` superset validation uses resolved set count; no longer rejects prescription-only exercises
+- [x] Superset "Rest after round" editing moved from `BlockRow` into `SupersetDetailNoRest` Details sheet (editable `Stepper`)
+- [x] `BlockRow` simplified: removed editable round-rest text field, `@FocusState`, keyboard toolbar, `roundRestBinding(for:)`
+- [x] Block list warning updated to guide users to Details sheet when round rest is unset
+- [x] Normal blocks and supersets both start workouts with valid working-set rows
+- [x] Existing routines not silently mutated by superset-related changes
+
 **Rest ownership reference (current):**
 
 | Field | Owner | Editable in | Timer behavior |
 |---|---|---|---|
 | `restSecondsBetweenSets` | `SlotPrescription` | Routine editor + session plan | Non-final sets; final-set fallback |
-| `restSecondsAfterExercise` | `SlotPrescription` | Routine editor + session plan | Final working set of non-superset exercise |
+| `restSecondsAfterExercise` | `SlotPrescription` | Routine editor + session plan | Final working set of non-superset exercise only |
 | `restAfterSeconds` | `RoutineBlock` | UI removed (model retained) | Additive on final set if non-zero (legacy) |
-| `supersetRoundRestSeconds` | `RoutineBlock` | Routine editor (superset only) | After each completed superset round |
+| `supersetRoundRestSeconds` | `RoutineBlock` | Superset Details sheet | After each completed superset round |
 
 **Pending — superset follow-up:**
 
-- [ ] Fix superset exercise insertion so every new `RoutineExercise` added to a superset block receives a valid `SlotPrescription`
-- [ ] Verify: `supersetRoundRestSeconds` is the primary rest timer after each completed superset round (runtime logic exists; needs end-to-end UX confirmation)
+- [ ] Verify end-to-end: `supersetRoundRestSeconds` correctly drives the round-rest timer in an active superset workout
 - [ ] Enforce: `restSecondsAfterExercise` must not interrupt between exercises inside a superset (slot rest is irrelevant mid-round)
-- [ ] Superset plan/edit UI: sets/reps/RIR/RPE editable per exercise; rest-between-sets hidden or de-emphasized; superset round rest is the primary timing field shown
-- [ ] Verify: normal blocks and supersets both start workouts with valid working-set rows
-- [ ] Verify: existing routines are not silently mutated by any superset-related changes
+- [ ] Superset plan/edit UI polish: sets/reps/RIR/RPE editable per exercise; rest-between-sets hidden or de-emphasized
 
 ### Phase 6 — History refactor + workout detail
 
