@@ -1056,10 +1056,9 @@ struct ActiveWorkoutView: View {
                             }
                             if let notes, !notes.isEmpty {
                                 Text(notes)
-                                    .font(.dsCaption)
-                                    .foregroundStyle(.tertiary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
+                                    .font(.dsBodySecondary)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         } else if exercise.templates.isEmpty {
                             Text(
@@ -1267,16 +1266,6 @@ struct ActiveWorkoutView: View {
                         TextField(
                             "Notes for this session…",
                             text: workoutNotesBinding
-                        )
-                        .textInputAutocapitalization(.sentences)
-                        .submitLabel(.done)
-                    }
-
-                    // --- Editable slot/exercise notes in workout view ---
-                    Section("Exercise Notes") {
-                        TextField(
-                            "Notes",
-                            text: notesBinding(for: exercise)
                         )
                         .textInputAutocapitalization(.sentences)
                         .submitLabel(.done)
