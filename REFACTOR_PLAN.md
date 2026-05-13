@@ -421,14 +421,15 @@ Current technique infrastructure is functional but still clunky in production us
 - [x] Per-set technique chip labels use payload-only text (no redundant applies-to suffix)
 - [x] Reduce reliance on the top-level technique summary as the primary interaction surface
 - [x] Improve technique editor flow so targeting multiple sets is fast and obvious
+- [x] Dropset UI cohesion: parent working set + drop sub-rows rendered as one unified `VStack` card in a single list row; redundant dropset chip/badge in the top summary suppressed when drop rows are already shown inline
+- [x] Dropset rest timing: parent working set no longer starts normal rest when a dropset technique applies; non-final drops use only dropset-specific `restSeconds` (no prescription fallback); final drop fires the appropriate next rest (see Phase 5.2 for full details)
 
 **Pending:**
 
 - [ ] Add "Reset to suggested" for auto-computed drop weights after manual override
 - [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
 - [ ] Hide or collapse the top technique summary row when all techniques are already represented as set-attached chips (redundancy now that chips are primary)
-- [ ] Add technique compatibility filtering for duration-based exercises: disable/hide inapplicable techniques (e.g. partial reps, dropsets) in the technique picker and param editor
-- [ ] Dropset UI cohesion: group the parent working set, the dropset chip/summary, and the drop sub-rows into one visual card so they feel attached; avoid rendering the dropset chip in the top summary when it is already shown inline on the set row
+- [ ] Duration-based technique compatibility: partial reps and dropsets must be filtered/disabled for duration-based exercises; rest-pause, cluster, and AMRAP require explicit duration-based semantics defined before being enabled in the technique picker and param editor
 
 ### Phase 5.2 — Rest semantics cleanup + superset flow streamline
 
@@ -488,9 +489,12 @@ Upgrade history from string-based grouping to relationship-based, and add workou
 - [x] `WorkoutDetailView`: read-only, pushed via `NavigationLink` from every history row
 - [x] In-progress workouts show `"Status: In Progress"` in the Overview section instead of Duration
 - [x] Exercise name resolved as: `exercise.name` → `exerciseNameSnapshot` → `"Deleted exercise"`; renaming an exercise does not alter history display
-- [x] `Workout.notes` shown in Overview when non-empty; nil or empty produces no visible row
 - [x] Time-based sets display duration (`durationSeconds`); rep-based sets display reps + weight
 - [x] Set logs sorted by `(indexInExercise, subIndex ?? -1)` so dropset sub-logs follow their parent working set in order
+
+**Pending (6.A follow-ups):**
+
+- [ ] Session-level `Workout.notes` display in `WorkoutDetailView`: show in the Overview section when non-empty; nil or empty must not create a visible Notes row. This is `Workout.notes` (session-level), distinct from `RoutineExercise.templateNotes` (slot/template notes). Manual testing confirmed this is not yet working.
 
 **Pending (6.B — history relationship refactor):**
 
