@@ -1295,19 +1295,11 @@ struct ActiveWorkoutView: View {
                             let t =
                                 exercise.templates[safe: idx]
                                 ?? defaultTemplate(for: exercise, at: idx)
-                            buildSetRow(
+                            buildWorkingSetGroup(
                                 block: block,
                                 exercise: exercise,
                                 idx: idx,
                                 template: t
-                            )
-                            buildTechniqueChips(
-                                exercise: exercise,
-                                setIndex: idx
-                            )
-                            buildDropSection(
-                                exercise: exercise,
-                                parentSetIndex: idx
                             )
                         }
                     } header: {
@@ -1325,12 +1317,11 @@ struct ActiveWorkoutView: View {
                             )
                             .font(.dsBody)
 
-                            // Technique overview (secondary; per-set chips are primary UX)
-                            if !exercise.techniquePlansSnapshot.isEmpty {
-                                TechniqueIndicatorRow(
-                                    labels: exercise.techniquePlansSnapshot.map(\.summaryLabel)
-                                )
-                                .opacity(0.6)
+                            // Technique overview — dropsets shown inline in grouped rows; show only non-dropset here.
+                            let nonDropsetTechs = exercise.techniquePlansSnapshot.filter { $0.type != .dropset }
+                            if !nonDropsetTechs.isEmpty {
+                                TechniqueIndicatorRow(labels: nonDropsetTechs.map(\.summaryLabel))
+                                    .opacity(0.6)
                             }
                         }
                     }
@@ -2472,6 +2463,28 @@ struct ActiveWorkoutView: View {
                     }
                 )
             }
+        }
+    }
+
+    /// Renders one working set index as a cohesive group when a dropset technique applies,
+    /// or as separate list rows (set row + technique chips) for non-dropset sets.
+    @ViewBuilder
+    private func buildWorkingSetGroup(
+        block: PlanBlock,
+        exercise: PlanExercise,
+        idx: Int,
+        template: PlanSetTemplate
+    ) -> some View {
+        if dropsetTechniqueApplying(to: idx, in: exercise) != nil {
+            // Unified card: parent working set + drop sub-rows in one list row.
+            VStack(alignment: .leading, spacing: 12) {
+                buildSetRow(block: block, exercise: exercise, idx: idx, template: template)
+                buildDropSection(exercise: exercise, parentSetIndex: idx)
+            }
+        } else {
+            // Standard layout: set row and per-set technique chips as separate list rows.
+            buildSetRow(block: block, exercise: exercise, idx: idx, template: template)
+            buildTechniqueChips(exercise: exercise, setIndex: idx)
         }
     }
 
