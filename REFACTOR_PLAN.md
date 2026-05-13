@@ -467,6 +467,7 @@ Current technique infrastructure is functional but still clunky in production us
 - [ ] Verify: a user can understand which techniques apply to which sets without reading abstract summary labels
 - [ ] Hide or collapse the top technique summary row when all techniques are already represented as set-attached chips (redundancy now that chips are primary)
 - [ ] Add technique compatibility filtering for duration-based exercises: disable/hide inapplicable techniques (e.g. partial reps, dropsets) in the technique picker and param editor
+- [ ] Dropset UI cohesion: group the parent working set, the dropset chip/summary, and the drop sub-rows into one visual card so they feel attached; avoid rendering the dropset chip in the top summary when it is already shown inline on the set row
 
 ### Phase 5.1 — User settings: autoregulation mode, weight units, and default prescription values ✅
 
@@ -526,9 +527,12 @@ Reduce confusion by making rest fields consistent across routine editor and in-w
 - [ ] Enforce: `restSecondsAfterExercise` must not interrupt between exercises inside a superset (slot rest is irrelevant mid-round)
 - [ ] Superset plan/edit UI polish: sets/reps/RIR/RPE editable per exercise; rest-between-sets hidden or de-emphasized
 
-**Pending — dropset rest timing:**
+**Completed — dropset rest timing:**
 
-- [ ] Fix dropset rest timing: the between-set / after-exercise rest timer must not start after the parent working set when dropset sub-logs are configured; rest should begin after the final dropset sub-log is recorded
+- [x] Logging the parent working set no longer starts the normal rest timer when a dropset technique applies
+- [x] Non-final drops use only dropset-specific `restSeconds` if > 0; no fallback to `restSecondsBetweenSets`
+- [x] Final drop fires the real next rest: `restBetweenSets` if not the last working set, `restAfterExercise` (→ `restBetweenSets` fallback) if last working set, none if last set of entire workout
+- [x] Warmup rest and superset round rest behavior unchanged
 
 ### Phase 6 — History refactor + workout detail
 
