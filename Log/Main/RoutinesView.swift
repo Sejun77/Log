@@ -1094,8 +1094,8 @@ private struct WarmupSchemeEditor: View {
             }
         }
         .sheet(isPresented: $showAddStep) {
-            WarmupStepEditSheet(onSave: { kind, reps, pct, rest, note in
-                addStep(kind: kind, reps: reps, pct: pct, rest: rest, note: note)
+            WarmupStepEditSheet(onSave: { kind, reps, pct, rest, note, weight in
+                addStep(kind: kind, reps: reps, pct: pct, rest: rest, note: note, weight: weight)
             })
         }
     }
@@ -1122,7 +1122,7 @@ private struct WarmupSchemeEditor: View {
         }
     }
 
-    private func addStep(kind: WarmupStepKind, reps: Int?, pct: Double?, rest: Int?, note: String?) {
+    private func addStep(kind: WarmupStepKind, reps: Int?, pct: Double?, rest: Int?, note: String?, weight: Double?) {
         let scheme: WarmupScheme
         if let existing = prescription.warmupScheme {
             scheme = existing
@@ -1134,7 +1134,7 @@ private struct WarmupSchemeEditor: View {
         }
         let nextOrder = (scheme.steps.map(\.order).max() ?? -1) + 1
         let step = WarmupStep(order: nextOrder, kind: kind, reps: reps,
-                              percentOfWorking: pct, restSecondsAfter: rest, note: note)
+                              percentOfWorking: pct, restSecondsAfter: rest, note: note, weight: weight)
         ctx.insert(step)
         scheme.steps.append(step)
         try? ctx.save()
@@ -1171,8 +1171,8 @@ private struct WarmupStepRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(step.kind == .percentage ? "%" :
-                     step.kind == .fixedReps  ? "Reps" : "Note")
+                Text(step.kind == .percentage ? "% of Working" :
+                     step.kind == .fixedReps  ? "Fixed Weight" : "Note")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -1182,13 +1182,25 @@ private struct WarmupStepRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            if step.kind == .percentage, let pct = step.percentOfWorking {
-                Text("\(Int(pct * 100))% of working weight")
-                    .font(.dsBody)
-            }
-            if step.kind == .fixedReps, let reps = step.reps {
-                Text("\(reps) reps")
-                    .font(.dsBody)
+            if step.kind == .percentage {
+                if let pct = step.percentOfWorking {
+                    let repsStr = step.reps.map { " × \($0) reps" } ?? ""
+                    Text("\(Int(pct * 100))%\(repsStr)")
+                        .font(.dsBody)
+                }
+            } else if step.kind == .fixedReps {
+                let unit = Units.weightIsKg ? "kg" : "lb"
+                let weightStr: String? = step.weight.map {
+                    $0.truncatingRemainder(dividingBy: 1) == 0
+                        ? "\(Int($0)) \(unit)"
+                        : String(format: "%.1f \(unit)", $0)
+                }
+                let repsStr: String? = step.reps.map { "\($0) reps" }
+                let parts = [weightStr, repsStr].compactMap { $0 }
+                if !parts.isEmpty {
+                    Text(parts.joined(separator: " × "))
+                        .font(.dsBody)
+                }
             }
             if let note = step.note, !note.isEmpty {
                 Text(note)
@@ -1202,13 +1214,14 @@ private struct WarmupStepRow: View {
 
 // Sheet for creating a new warmup step.
 private struct WarmupStepEditSheet: View {
-    var onSave: (WarmupStepKind, Int?, Double?, Int?, String?) -> Void
+    var onSave: (WarmupStepKind, Int?, Double?, Int?, String?, Double?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var kind: WarmupStepKind = .fixedReps
-    @State private var repsText = ""
-    @State private var pctText = ""
-    @State private var restText = ""
+    @State private var reps: Int = 5
+    @State private var pct: Int = 50       // displayed as whole %, stored as fraction on save
+    @State private var rest: Int = 0       // seconds; 0 = no rest
+    @State private var weightText = ""     // optional; free-form for decimal precision
     @State private var note = ""
 
     var body: some View {
@@ -1216,29 +1229,48 @@ private struct WarmupStepEditSheet: View {
             Form {
                 Section("Type") {
                     Picker("Kind", selection: $kind) {
-                        Text("Fixed Reps").tag(WarmupStepKind.fixedReps)
+                        Text("Fixed Weight").tag(WarmupStepKind.fixedReps)
                         Text("% of Working").tag(WarmupStepKind.percentage)
                         Text("Note Only").tag(WarmupStepKind.noteOnly)
                     }
                     .pickerStyle(.segmented)
                 }
+
                 if kind == .fixedReps {
-                    Section("Reps") {
-                        TextField("e.g. 5", text: $repsText)
-                            .keyboardType(.numberPad)
-                    }
-                }
-                if kind == .percentage {
-                    Section("Percent of Working Weight") {
-                        TextField("e.g. 50", text: $pctText)
+                    Section("Weight (\(Units.weightIsKg ? "kg" : "lb"), optional)") {
+                        TextField("e.g. 60", text: $weightText)
                             .keyboardType(.decimalPad)
                     }
                 }
-                Section("Rest After (s)") {
-                    TextField("e.g. 60", text: $restText)
-                        .keyboardType(.numberPad)
+
+                if kind == .percentage {
+                    Section {
+                        Stepper("\(pct)% of working weight", value: $pct, in: 10...100, step: 5)
+                    } header: {
+                        Text("Percent of Working Weight")
+                    }
                 }
-                Section("Note") {
+
+                if kind != .noteOnly {
+                    Section {
+                        Stepper(reps == 1 ? "1 rep" : "\(reps) reps", value: $reps, in: 1...30)
+                    } header: {
+                        Text("Reps")
+                    }
+                }
+
+                Section {
+                    Stepper(
+                        rest == 0 ? "No rest" : "\(rest)s rest",
+                        value: $rest,
+                        in: 0...300,
+                        step: 15
+                    )
+                } header: {
+                    Text("Rest After (optional)")
+                }
+
+                Section("Note (optional)") {
                     TextField("Optional cue", text: $note, axis: .vertical)
                         .lineLimit(1...3)
                 }
@@ -1250,11 +1282,12 @@ private struct WarmupStepEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        let reps = Int(repsText.filter(\.isNumber))
-                        let pct  = Double(pctText.filter { $0.isNumber || $0 == "." }).map { $0 / 100.0 }
-                        let rest = Int(restText.filter(\.isNumber))
+                        let repsVal: Int?    = kind != .noteOnly ? reps : nil
+                        let pctVal: Double?  = kind == .percentage ? Double(pct) / 100.0 : nil
+                        let restVal: Int?    = rest > 0 ? rest : nil
+                        let weightVal: Double? = kind == .fixedReps ? Double(weightText) : nil
                         let noteVal = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                        onSave(kind, reps, pct, rest, noteVal.isEmpty ? nil : noteVal)
+                        onSave(kind, repsVal, pctVal, restVal, noteVal.isEmpty ? nil : noteVal, weightVal)
                         dismiss()
                     }
                 }

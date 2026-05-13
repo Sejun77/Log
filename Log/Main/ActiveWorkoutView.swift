@@ -689,7 +689,7 @@ struct ActiveWorkoutView: View {
                         exerciseID: exercise.id,
                         setIndex: logIndex,
                         reps: step.reps ?? 0,
-                        weight: nil,
+                        weight: step.weight.map { Int($0.rounded()) },
                         kind: .warmup
                     )
                     var s = loggedByExercise[exercise.id, default: []]
@@ -719,8 +719,15 @@ struct ActiveWorkoutView: View {
     private func warmupStepDescription(_ step: WarmupStepSnapshot) -> String {
         switch step.kind {
         case .fixedReps:
-            if let r = step.reps { return "\(r) reps" }
-            return "Reps"
+            var parts: [String] = []
+            if let w = step.weight {
+                let unit = Units.weightIsKg ? "kg" : "lb"
+                parts.append(w.truncatingRemainder(dividingBy: 1) == 0
+                    ? "\(Int(w)) \(unit)"
+                    : String(format: "%.1f \(unit)", w))
+            }
+            if let r = step.reps { parts.append("\(r) reps") }
+            return parts.isEmpty ? "Reps" : parts.joined(separator: " × ")
         case .percentage:
             if let pct = step.percentOfWorking {
                 let p = Int(pct * 100)
