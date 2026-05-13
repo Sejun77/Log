@@ -983,6 +983,19 @@ struct ActiveWorkoutView: View {
         )
     }
 
+    /// Binding for session-level Workout.notes.
+    /// Reads and writes directly on the active Workout model object.
+    /// Sets nil when the trimmed value is empty so the history detail row is suppressed.
+    private var workoutNotesBinding: Binding<String> {
+        Binding<String>(
+            get: { workout?.notes ?? "" },
+            set: { newVal in
+                workout?.notes = newVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? nil : newVal
+            }
+        )
+    }
+
     // MARK: - Session Plan
 
     private func initializeSessionPlans() {
@@ -1249,8 +1262,18 @@ struct ActiveWorkoutView: View {
                 .padding(.horizontal)
 
                 List {
-                    // --- Editable notes in workout view ---
-                    Section("Notes") {
+                    // --- Session-level workout notes (written to Workout.notes) ---
+                    Section("Session Notes") {
+                        TextField(
+                            "Notes for this session…",
+                            text: workoutNotesBinding
+                        )
+                        .textInputAutocapitalization(.sentences)
+                        .submitLabel(.done)
+                    }
+
+                    // --- Editable slot/exercise notes in workout view ---
+                    Section("Exercise Notes") {
                         TextField(
                             "Notes",
                             text: notesBinding(for: exercise)
