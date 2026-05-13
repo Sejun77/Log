@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-15 (KST)
+Last updated: 2026-05-13 (KST)
 
 ---
 
@@ -423,12 +423,14 @@ Current technique infrastructure is functional but still clunky in production us
 - [x] Improve technique editor flow so targeting multiple sets is fast and obvious
 - [x] Dropset UI cohesion: parent working set + drop sub-rows rendered as one unified `VStack` card in a single list row; redundant dropset chip/badge in the top summary suppressed when drop rows are already shown inline
 - [x] Dropset rest timing: parent working set no longer starts normal rest when a dropset technique applies; non-final drops use only dropset-specific `restSeconds` (no prescription fallback); final drop fires the appropriate next rest (see Phase 5.2 for full details)
+- [x] Dropset grouped card: dropset technique summary (effort mode, drop %, count) displayed inside the unified card between the parent set row and drop rows; no detached or duplicate chip display
+- [x] Dropset completion gating: a working set with a dropset technique is not complete until the parent set AND all configured drops are logged; Drop 1 unlocks after parent, Drop N after Drop N-1; the next working set unlocks only after the final drop is logged; gating state preserved across cold resume via `dropsLoggedByExercise`
+- [x] Dropset Log button visual consistency: "Log Drop" buttons now use `.borderedProminent` style matching normal set Log buttons; enabled/unlogged drops show the active primary visual state; disabled and logged states match normal set row behavior
 
 **Pending:**
 
-- [ ] Dropset grouped card: show dropset technique summary (effort mode, drop %, count, intra-drop rest) inside the unified parent set card near the drop rows; avoid detached or duplicate chip display
 - [ ] Non-dropset technique chip cohesion: integrate set-attached technique info directly into the affected set row rather than appending a separate chip row below it
-- [ ] Drop weight UX: auto-computed drop weight suggestion should be visibly pre-populated in the drop row weight field based on parent set / previous drop weight; manual override must be preserved; "Reset to suggested" action reverts to auto-computed value after a manual override
+- [ ] Drop weight UX: "Reset to suggested" action reverts weight to auto-computed value after a manual override
 - [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
 - [ ] Hide or collapse the top technique summary row when all techniques are already represented as set-attached chips (redundancy now that chips are primary)
 - [ ] Duration-based technique compatibility: partial reps and dropsets must be filtered/disabled for duration-based exercises; rest-pause, cluster, and AMRAP require explicit duration-based semantics defined before being enabled in the technique picker and param editor
@@ -496,7 +498,7 @@ Reduce confusion by making rest fields consistent across routine editor and in-w
 
 Upgrade history from string-based grouping to relationship-based, and add workout detail view.
 
-**Completed (6.A — workout detail view):**
+**Completed (6.A — workout detail view + notes semantics):**
 
 - [x] `WorkoutDetailView`: read-only, pushed via `NavigationLink` from every history row
 - [x] In-progress workouts show `"Status: In Progress"` in the Overview section instead of Duration
@@ -504,14 +506,7 @@ Upgrade history from string-based grouping to relationship-based, and add workou
 - [x] Time-based sets display duration (`durationSeconds`); rep-based sets display reps + weight
 - [x] Set logs sorted by `(indexInExercise, subIndex ?? -1)` so dropset sub-logs follow their parent working set in order
 - [x] Session-level `Workout.notes` shown in Overview when non-empty; nil/whitespace-only produces no visible Notes row; "Session Notes" input added to active workout view; distinct from slot/template notes (`RoutineExercise.templateNotes`)
-
-**Pending (6.A follow-ups):**
-
-- [ ] Active workout notes semantics cleanup: consolidate three overlapping note concepts into two distinct, clearly-scoped fields:
-  - **Session Notes** (`Workout.notes`) — workout-level, typed by the user during the session, persisted to and displayed in `WorkoutDetailView` history. Already wired; keep as-is.
-  - **Slot Guidance** (`RoutineExercise.templateNotes` snapshot) — planned per-exercise cues set in the routine editor, displayed read-only during the workout to guide execution. Should replace the current "Exercise Notes" text field in the active workout UI.
-  - Remove the "Exercise Notes" text field from the active workout view: it writes to `Exercise.notes` (global, per-exercise) and overlaps with slot guidance, causing confusion. The field must not appear in active workout UI.
-  - `Exercise.notes` model field is retained for compatibility; deprecation deferred to Phase 8.
+- [x] Active workout notes semantics consolidated: **Session Notes** (`Workout.notes`) — user-typed workout-level notes, persisted to and shown in history; **Slot Guidance** (`RoutineExercise.templateNotes` snapshot) — routine-editor cues shown read-only in the active workout Plan section without requiring the plan sheet; "Exercise Notes" text field (which wrote to `Exercise.notes`) removed from active workout UI; `Exercise.notes` model field retained for compatibility, deprecation deferred to Phase 8
 
 **Pending (6.B — history relationship refactor):**
 
