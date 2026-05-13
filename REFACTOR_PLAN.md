@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-13 (KST)
+Last updated: 2026-05-14 (KST)
 
 ---
 
@@ -426,6 +426,7 @@ Current technique infrastructure is functional but still clunky in production us
 - [x] Dropset grouped card: dropset technique summary (effort mode, drop %, count) displayed inside the unified card between the parent set row and drop rows; no detached or duplicate chip display
 - [x] Dropset completion gating: a working set with a dropset technique is not complete until the parent set AND all configured drops are logged; Drop 1 unlocks after parent, Drop N after Drop N-1; the next working set unlocks only after the final drop is logged; gating state preserved across cold resume via `dropsLoggedByExercise`
 - [x] Dropset Log button visual consistency: "Log Drop" buttons now use `.borderedProminent` style matching normal set Log buttons; enabled/unlogged drops show the active primary visual state; disabled and logged states match normal set row behavior
+- [x] Duration-based technique compatibility: rep/weight-dependent techniques (Drop Set, Partial Reps, Rest-Pause, Cluster, AMRAP) are disabled in the Add Technique picker for duration-based prescriptions with the reason "Not available for duration-based exercises."; Tempo Override and To Failure remain available; existing incompatible saved techniques are displayed and editable without crashing or silent mutation
 
 **Pending:**
 
@@ -433,7 +434,6 @@ Current technique infrastructure is functional but still clunky in production us
 - [ ] Drop weight UX: "Reset to suggested" action reverts weight to auto-computed value after a manual override
 - [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
 - [ ] Hide or collapse the top technique summary row when all techniques are already represented as set-attached chips (redundancy now that chips are primary)
-- [ ] Duration-based technique compatibility: partial reps and dropsets must be filtered/disabled for duration-based exercises; rest-pause, cluster, and AMRAP require explicit duration-based semantics defined before being enabled in the technique picker and param editor
 
 ### Phase 3.9 — Warmup editor redesign + numeric input polish
 
