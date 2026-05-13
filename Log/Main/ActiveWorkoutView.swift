@@ -2878,24 +2878,20 @@ private struct EditSessionPlanSheet: View {
             Form {
                 if plan.usesDuration {
                     Section("Duration") {
-                        fieldRow("Min (s)", binding: optionalInt(\.durationMinSeconds))
-                        fieldRow("Max (s)", binding: optionalInt(\.durationMaxSeconds))
+                        intStepperRow("Min", keyPath: \.durationMinSeconds, range: 0...600, step: 15, unit: "s")
+                        intStepperRow("Max", keyPath: \.durationMaxSeconds, range: 0...600, step: 15, unit: "s")
                     }
                 } else {
                     Section("Reps") {
-                        fieldRow("Min", binding: optionalInt(\.repMin))
-                        fieldRow("Max", binding: optionalInt(\.repMax))
+                        intStepperRow("Min", keyPath: \.repMin, range: 0...50)
+                        intStepperRow("Max", keyPath: \.repMax, range: 0...50)
                     }
                 }
 
                 Section("Sets & Rest") {
-                    fieldRow("Sets", binding: optionalInt(\.sets))
-                    fieldRow(
-                        "Rest between (s)",
-                        binding: optionalInt(\.restSecondsBetweenSets))
-                    fieldRow(
-                        "Rest after exercise (s)",
-                        binding: optionalInt(\.restSecondsAfterExercise))
+                    intStepperRow("Sets", keyPath: \.sets, range: 0...20)
+                    intStepperRow("Rest between sets", keyPath: \.restSecondsBetweenSets, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
+                    intStepperRow("Rest after exercise", keyPath: \.restSecondsAfterExercise, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
                 }
 
                 Section("Intensity") {
@@ -2936,8 +2932,32 @@ private struct EditSessionPlanSheet: View {
         }
     }
 
-    // MARK: - Field Row
+    // MARK: - Field Rows
 
+    /// Stepper for a bounded optional-Int field on SessionPlan.
+    /// 0 maps to nil (unset); stepping up from 0 begins at `range.lowerBound` + `step`.
+    private func intStepperRow(
+        _ label: String,
+        keyPath: WritableKeyPath<SessionPlan, Int?>,
+        range: ClosedRange<Int>,
+        step: Int = 1,
+        unit: String? = nil,
+        zeroLabel: String = "—"
+    ) -> some View {
+        let current = plan[keyPath: keyPath] ?? 0
+        let valStr = current == 0 ? zeroLabel : (unit.map { "\(current)\($0)" } ?? "\(current)")
+        return Stepper(
+            "\(label): \(valStr)",
+            value: Binding(
+                get: { plan[keyPath: keyPath] ?? 0 },
+                set: { plan[keyPath: keyPath] = $0 == 0 ? nil : $0 }
+            ),
+            in: range,
+            step: step
+        )
+    }
+
+    /// Text field row for decimal or freeform fields (RIR, RPE, tempo).
     private func fieldRow(
         _ label: String, binding: Binding<String>, decimal: Bool = false
     ) -> some View {
@@ -2952,15 +2972,6 @@ private struct EditSessionPlanSheet: View {
     }
 
     // MARK: - Binding Helpers
-
-    private func optionalInt(_ kp: WritableKeyPath<SessionPlan, Int?>)
-        -> Binding<String>
-    {
-        Binding(
-            get: { plan[keyPath: kp].map(String.init) ?? "" },
-            set: { plan[keyPath: kp] = Int($0) }
-        )
-    }
 
     private func optionalDouble(_ kp: WritableKeyPath<SessionPlan, Double?>)
         -> Binding<String>

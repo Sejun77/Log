@@ -1987,19 +1987,19 @@ private struct PrescriptionFields: View {
     }
 
     var body: some View {
-        optionalIntRow("Sets", keyPath: \.sets)
+        optionalIntStepper("Sets", keyPath: \.sets, range: 0...20)
 
         if isTimeBased {
-            optionalIntRow("Duration min", keyPath: \.durationMinSeconds, unit: "s")
-            optionalIntRow("Duration max", keyPath: \.durationMaxSeconds, unit: "s")
+            optionalIntStepper("Duration min", keyPath: \.durationMinSeconds, range: 0...600, step: 15, unit: "s")
+            optionalIntStepper("Duration max", keyPath: \.durationMaxSeconds, range: 0...600, step: 15, unit: "s")
         } else {
-            optionalIntRow("Rep min", keyPath: \.repMin)
-            optionalIntRow("Rep max", keyPath: \.repMax)
+            optionalIntStepper("Rep min", keyPath: \.repMin, range: 0...50)
+            optionalIntStepper("Rep max", keyPath: \.repMax, range: 0...50)
         }
 
         if !hideRestFields {
-            optionalIntRow("Rest between sets", keyPath: \.restSecondsBetweenSets, unit: "s")
-            optionalIntRow("Rest after exercise", keyPath: \.restSecondsAfterExercise, unit: "s")
+            optionalIntStepper("Rest between sets", keyPath: \.restSecondsBetweenSets, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
+            optionalIntStepper("Rest after exercise", keyPath: \.restSecondsAfterExercise, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
         }
 
         switch autoregMode {
@@ -2034,36 +2034,24 @@ private struct PrescriptionFields: View {
         }
     }
 
-    private func optionalIntRow(
+    private func optionalIntStepper(
         _ label: String,
         keyPath: ReferenceWritableKeyPath<SlotPrescription, Int?>,
-        unit: String? = nil
+        range: ClosedRange<Int>,
+        step: Int = 1,
+        unit: String? = nil,
+        zeroLabel: String = "—"
     ) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            TextField("—", text: optionalIntString(keyPath))
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 80)
-            if let unit {
-                Text(unit).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func optionalIntString(
-        _ kp: ReferenceWritableKeyPath<SlotPrescription, Int?>
-    ) -> Binding<String> {
-        Binding(
-            get: {
-                if let v = prescription[keyPath: kp] { return String(v) }
-                return ""
-            },
-            set: {
-                let digits = $0.filter(\.isNumber)
-                prescription[keyPath: kp] = digits.isEmpty ? nil : Int(digits)
-            }
+        let current = prescription[keyPath: keyPath] ?? 0
+        let valStr = current == 0 ? zeroLabel : (unit.map { "\(current)\($0)" } ?? "\(current)")
+        return Stepper(
+            "\(label): \(valStr)",
+            value: Binding(
+                get: { prescription[keyPath: keyPath] ?? 0 },
+                set: { prescription[keyPath: keyPath] = $0 == 0 ? nil : $0 }
+            ),
+            in: range,
+            step: step
         )
     }
 
