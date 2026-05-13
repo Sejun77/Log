@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-13 (KST)
+Last updated: 2026-05-14 (KST)
 
 ---
 
@@ -426,10 +426,22 @@ Current technique infrastructure is functional but still clunky in production us
 
 **Pending:**
 
-- [ ] Add "Reset to suggested" for auto-computed drop weights after manual override
+- [ ] Dropset grouped card: show dropset technique summary (effort mode, drop %, count, intra-drop rest) inside the unified parent set card near the drop rows; avoid detached or duplicate chip display
+- [ ] Non-dropset technique chip cohesion: integrate set-attached technique info directly into the affected set row rather than appending a separate chip row below it
+- [ ] Drop weight UX: auto-computed drop weight suggestion should be visibly pre-populated in the drop row weight field based on parent set / previous drop weight; manual override must be preserved; "Reset to suggested" action reverts to auto-computed value after a manual override
 - [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
 - [ ] Hide or collapse the top technique summary row when all techniques are already represented as set-attached chips (redundancy now that chips are primary)
 - [ ] Duration-based technique compatibility: partial reps and dropsets must be filtered/disabled for duration-based exercises; rest-pause, cluster, and AMRAP require explicit duration-based semantics defined before being enabled in the technique picker and param editor
+
+### Phase 3.9 — Warmup editor redesign + numeric input polish
+
+Warmup step definitions need clearer per-type field presentation. Numeric inputs across the app need consistent bounded controls.
+
+**Pending:**
+
+- [ ] Warmup step editor: present per-type fields based on step kind — fixed weight + reps shows weight and reps inputs; percent of working weight + reps shows percent and reps inputs; note-only shows only a note field; step kind selector drives visible fields
+- [ ] Warmup execution rows: display and log the correct fields per step kind — percent warmups log reps against a computed target; fixed-weight warmups log weight and reps
+- [ ] Numeric input consistency: replace free-form text with stepper / +/- controls for bounded integer fields (sets, reps, percentages, rest seconds, drop count, warmup reps); weight input remains free-form for precision
 
 ### Phase 5.2 — Rest semantics cleanup + superset flow streamline
 
@@ -491,10 +503,7 @@ Upgrade history from string-based grouping to relationship-based, and add workou
 - [x] Exercise name resolved as: `exercise.name` → `exerciseNameSnapshot` → `"Deleted exercise"`; renaming an exercise does not alter history display
 - [x] Time-based sets display duration (`durationSeconds`); rep-based sets display reps + weight
 - [x] Set logs sorted by `(indexInExercise, subIndex ?? -1)` so dropset sub-logs follow their parent working set in order
-
-**Pending (6.A follow-ups):**
-
-- [ ] Session-level `Workout.notes` display in `WorkoutDetailView`: show in the Overview section when non-empty; nil or empty must not create a visible Notes row. This is `Workout.notes` (session-level), distinct from `RoutineExercise.templateNotes` (slot/template notes). Manual testing confirmed this is not yet working.
+- [x] Session-level `Workout.notes` shown in Overview when non-empty; nil/whitespace-only produces no visible Notes row; "Session Notes" input added to active workout view; distinct from slot/template notes (`RoutineExercise.templateNotes`)
 
 **Pending (6.B — history relationship refactor):**
 
@@ -567,6 +576,17 @@ Move equipment/setup to Exercise-level and fill UI gaps.
 - [ ] Snapshots remain immutable: `PlannedPrescriptionSnapshot` equipment/setup reflect session-start state
 - [ ] No silent mutations: editing Exercise-level equipment does not propagate to history
 
+### Phase 11 — View decomposition / file architecture
+
+`ActiveWorkoutView.swift` and `RoutinesView.swift` have grown large and contain multiple concerns. This phase splits them into focused subview and helper files in a strictly behavior-preserving refactor.
+
+**Pending:**
+
+- [ ] Split `ActiveWorkoutView.swift` into focused files: warmup section, set rows (reps/weight + time-based), dropset section + drop rows, technique chips + detail sheet
+- [ ] Split `RoutinesView.swift` into focused files: prescription fields + `SlotPrescriptionSection`, technique plan editor, warmup step editor
+- [ ] No logic changes during decomposition — behavior must be fully preserved
+- [ ] Build must pass after each file split; run relevant test paths to confirm no regressions
+
 ---
 
 ## 5) Prescription Elements
@@ -620,7 +640,6 @@ These are product tweaks and must not block completion:
   - [ ] Replace with toolbar `.confirmationAction` placement or automatic dismiss
   - [ ] Keyboard UX: consistent "Done" toolbar on `.keyboard` placement
   - [ ] Sheet dismiss: prefer drag-to-dismiss over explicit close buttons
-- +/- steppers for reps
 - preset note options
 - pause/resume workout (may integrate with WorkoutState later)
 - machine-specific weight/rep handling
