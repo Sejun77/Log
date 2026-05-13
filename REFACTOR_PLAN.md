@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-14 (KST)
+Last updated: 2026-05-15 (KST)
 
 ---
 
@@ -504,6 +504,14 @@ Upgrade history from string-based grouping to relationship-based, and add workou
 - [x] Time-based sets display duration (`durationSeconds`); rep-based sets display reps + weight
 - [x] Set logs sorted by `(indexInExercise, subIndex ?? -1)` so dropset sub-logs follow their parent working set in order
 - [x] Session-level `Workout.notes` shown in Overview when non-empty; nil/whitespace-only produces no visible Notes row; "Session Notes" input added to active workout view; distinct from slot/template notes (`RoutineExercise.templateNotes`)
+
+**Pending (6.A follow-ups):**
+
+- [ ] Active workout notes semantics cleanup: consolidate three overlapping note concepts into two distinct, clearly-scoped fields:
+  - **Session Notes** (`Workout.notes`) — workout-level, typed by the user during the session, persisted to and displayed in `WorkoutDetailView` history. Already wired; keep as-is.
+  - **Slot Guidance** (`RoutineExercise.templateNotes` snapshot) — planned per-exercise cues set in the routine editor, displayed read-only during the workout to guide execution. Should replace the current "Exercise Notes" text field in the active workout UI.
+  - Remove the "Exercise Notes" text field from the active workout view: it writes to `Exercise.notes` (global, per-exercise) and overlaps with slot guidance, causing confusion. The field must not appear in active workout UI.
+  - `Exercise.notes` model field is retained for compatibility; deprecation deferred to Phase 8.
 
 **Pending (6.B — history relationship refactor):**
 
