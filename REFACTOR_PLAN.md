@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-14 (KST)
+Last updated: 2026-05-14 (KST) — Phase 3.9 warmup redesign complete
 
 ---
 
@@ -439,11 +439,19 @@ Current technique infrastructure is functional but still clunky in production us
 
 Warmup step definitions need clearer per-type field presentation. Numeric inputs across the app need consistent bounded controls.
 
+**Completed:**
+
+- [x] Warmup step editor: per-kind field visibility — Fixed Weight shows weight (typed decimal) + reps; % of Working shows percent + reps; Note Only shows only note; step kind selector drives visible fields
+- [x] Fixed-weight warmup: `WarmupStep.weight: Double?` added (additive, nil default); editor exposes weight input; `WarmupStepSnapshot.weight` propagated to active workout
+- [x] Percent warmup: reps field now available alongside percent field in the editor
+- [x] Warmup editor uses `Stepper` controls for bounded numeric fields: reps (1–30), percent of working weight (10–100%, step 5), rest after (0–300s, step 15); weight remains typed decimal for precision
+- [x] `WarmupStepRow` (editor list) updated to display combined summary per kind: fixed-weight shows `weight × reps`, percent shows `N% × M reps`, note-only shows note
+- [x] Active workout warmup rows: `warmupStepDescription` updated to show `weight × reps` for fixed-weight steps; `buildWarmupRow` logs weight when present for fixed-weight steps (`SetLog(kind: .warmup)` unchanged)
+- [x] Warmup rest timer behavior, cold-resume path, and `SetLog.kind = .warmup` logging semantics unchanged
+
 **Pending:**
 
-- [ ] Warmup step editor: present per-type fields based on step kind — fixed weight + reps shows weight and reps inputs; percent of working weight + reps shows percent and reps inputs; note-only shows only a note field; step kind selector drives visible fields
-- [ ] Warmup execution rows: display and log the correct fields per step kind — percent warmups log reps against a computed target; fixed-weight warmups log weight and reps
-- [ ] Numeric input consistency: replace free-form text with stepper / +/- controls for bounded integer fields (sets, reps, percentages, rest seconds, drop count, warmup reps); weight input remains free-form for precision
+- [ ] Numeric input consistency (app-wide): replace remaining free-form text fields with stepper / +/- controls for bounded integer fields in prescription editing (sets, rep range, rest seconds, drop count) outside of the warmup editor; weight inputs remain free-form for precision
 
 ### Phase 5.2 — Rest semantics cleanup + superset flow streamline
 
