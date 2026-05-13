@@ -258,6 +258,8 @@ final class WarmupStep {
     var percentOfWorking: Double?
     var restSecondsAfter: Int?
     var note: String?
+    /// Target weight for fixed-weight warmup steps. nil for percentage/note-only steps.
+    var weight: Double? = nil
 
     var kind: WarmupStepKind {
         get { WarmupStepKind(rawValue: kindRaw) ?? .fixedReps }
@@ -270,7 +272,8 @@ final class WarmupStep {
         reps: Int? = nil,
         percentOfWorking: Double? = nil,
         restSecondsAfter: Int? = nil,
-        note: String? = nil
+        note: String? = nil,
+        weight: Double? = nil
     ) {
         self.order = order
         self.kindRaw = kind.rawValue
@@ -278,6 +281,7 @@ final class WarmupStep {
         self.percentOfWorking = percentOfWorking
         self.restSecondsAfter = restSecondsAfter
         self.note = note
+        self.weight = weight
     }
 }
 

@@ -20,6 +20,9 @@ struct WarmupStepSnapshot: Codable {
     var percentOfWorking: Double?
     var note: String?
     var restSecondsAfter: Int?
+    /// Target weight for fixed-weight steps; nil for other kinds.
+    /// Nil default is Codable-safe for snapshots created before this field was added.
+    var weight: Double? = nil
 }
 
 /// Value-type snapshot of one technique plan — no live SwiftData references.
@@ -296,7 +299,8 @@ struct StartWorkoutFromRoutineView: View {
                                     reps: step.reps,
                                     percentOfWorking: step.percentOfWorking,
                                     note: step.note,
-                                    restSecondsAfter: step.restSecondsAfter
+                                    restSecondsAfter: step.restSecondsAfter,
+                                    weight: step.weight
                                 )
                             }
 
