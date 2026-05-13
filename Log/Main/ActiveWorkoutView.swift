@@ -457,12 +457,13 @@ struct ActiveWorkoutView: View {
         let logged = loggedByExercise[exercise.id, default: []]
         if logged.contains(setIndex) { return false }
 
-        // 1. Within this exercise: earlier sets must be logged
+        // 1. Within this exercise: earlier sets must be fully complete
+        //    (parent + all configured drops for dropset sets).
         for j in 0..<setIndex {
-            if !logged.contains(j) { return false }
+            if !isWorkingSetComplete(exercise: exercise, setIndex: j) { return false }
         }
 
-        // 2. Superset order: prior exercises at this set index must be logged first
+        // 2. Superset order: prior exercises at this set index must be complete first
         if block.isSuperset {
             guard
                 let exIdx = block.exercises.firstIndex(where: {
@@ -476,15 +477,30 @@ struct ActiveWorkoutView: View {
                 if setIndex < effectiveSetCount(
                     for: prevEx, resolvedTemplates: prevEx.templates)
                 {
-                    if !loggedByExercise[prevEx.id, default: []].contains(
-                        setIndex
-                    ) {
+                    if !isWorkingSetComplete(exercise: prevEx, setIndex: setIndex) {
                         return false
                     }
                 }
             }
         }
 
+        return true
+    }
+
+    /// A working set is complete when its parent-set log exists AND — for sets that have
+    /// a dropset technique applied — all configured drop sub-logs are also present.
+    private func isWorkingSetComplete(
+        exercise: PlanExercise,
+        setIndex: Int
+    ) -> Bool {
+        guard loggedByExercise[exercise.id, default: []].contains(setIndex) else {
+            return false
+        }
+        if let snap = dropsetTechniqueApplying(to: setIndex, in: exercise) {
+            let required = max(1, snap.dropCount ?? 1)
+            let done = dropsLoggedByExercise[exercise.id, default: [:]][setIndex, default: []].count
+            return done >= required
+        }
         return true
     }
 
