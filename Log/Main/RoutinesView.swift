@@ -1310,6 +1310,7 @@ private struct TechniquePlanEditor: View {
             TechniqueTypePickerSheet(
                 existingTechniques: sorted,
                 setCount: prescription.sets ?? 3,
+                usesDuration: prescription.usesDuration,
                 onPick: { t in addPlan(type: t) }
             )
         }
@@ -1416,6 +1417,8 @@ private struct TechniqueTypePickerSheet: View {
     var existingTechniques: [TechniquePlan]
     /// Working set count from prescription — used for per-index conflict checking.
     var setCount: Int = 3
+    /// When true, rep-count-dependent techniques are disabled (not applicable to duration sets).
+    var usesDuration: Bool = false
     var onPick: (TechniqueType) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -1430,6 +1433,8 @@ private struct TechniqueTypePickerSheet: View {
     ]
 
     private let intensityFinishers: Set<TechniqueType> = [.dropset, .amrap, .restPause, .cluster]
+    /// Techniques that require a rep count and are not applicable to duration-based prescriptions.
+    private let incompatibleForDuration: Set<TechniqueType> = [.dropset, .partialReps, .restPause, .cluster, .amrap]
 
     /// Effective 0-based indices for an existing technique (uses new field or migrates old).
     private func effectiveIndices(for plan: TechniquePlan) -> Set<Int> {
@@ -1446,6 +1451,11 @@ private struct TechniqueTypePickerSheet: View {
     /// Returns a block message if adding `newType` (defaults to last set index)
     /// would create a duplicate or violate conflict rules. Returns nil if allowed.
     private func conflictMessage(for newType: TechniqueType) -> String? {
+        // Duration-based prescriptions do not support rep-count-dependent techniques.
+        if usesDuration && incompatibleForDuration.contains(newType) {
+            return "Not available for duration-based exercises."
+        }
+
         let defaultIdx = max(0, setCount - 1)
         let onDefault = existingTechniques.filter { effectiveIndices(for: $0).contains(defaultIdx) }
 
