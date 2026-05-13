@@ -2498,10 +2498,15 @@ struct ActiveWorkoutView: View {
         idx: Int,
         template: PlanSetTemplate
     ) -> some View {
-        if dropsetTechniqueApplying(to: idx, in: exercise) != nil {
-            // Unified card: parent working set + drop sub-rows in one list row.
+        if let snap = dropsetTechniqueApplying(to: idx, in: exercise) {
+            // Unified card: parent working set + dropset summary + drop sub-rows in one list row.
             VStack(alignment: .leading, spacing: 12) {
                 buildSetRow(block: block, exercise: exercise, idx: idx, template: template)
+                // Compact dropset config summary — aligned with the indented drop rows below.
+                Text(snap.setAttachedLabel)
+                    .font(.dsCaption)
+                    .foregroundStyle(Color.orange.opacity(0.8))
+                    .padding(.leading, 20)
                 buildDropSection(exercise: exercise, parentSetIndex: idx)
             }
         } else {
