@@ -3136,7 +3136,8 @@ private struct DropLogRow: View {
                         let w = Double(weight)
                         onLog(r, w)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(DSColor.textInverse)
                     .disabled(!canLog)
                 }
             }
