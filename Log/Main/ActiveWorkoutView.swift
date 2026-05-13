@@ -2428,12 +2428,37 @@ struct ActiveWorkoutView: View {
                             reps: reps,
                             weight: weight
                         )
-                        // Rest between drops: use technique restSeconds, fallback to prescription
-                        let restDur = snap.restSeconds.flatMap { $0 > 0 ? $0 : nil }
-                            ?? plannedRestBetweenSets(for: exercise)
-                        if let r = restDur, r > 0 {
-                            startRestWithPersistence(seconds: r, slotID: exercise.routineSlotID)
-                            showRestOverlay = true
+                        let isFinalDrop = (sub == dropCount)
+                        if isFinalDrop {
+                            // Final sub-log: fire between-sets or after-exercise rest.
+                            let exSetCount = effectiveSetCount(
+                                for: exercise, resolvedTemplates: exercise.templates)
+                            let isLastWorkingSet = parentSetIndex == exSetCount - 1
+                            let isLastSetOfWorkout: Bool = {
+                                guard let cb = currentBlock else { return false }
+                                return currentBlockIndex == plan.blocks.count - 1
+                                    && currentExerciseIndex == cb.exercises.count - 1
+                                    && isLastWorkingSet
+                            }()
+                            if !isLastSetOfWorkout {
+                                let restDur = isLastWorkingSet
+                                    ? (plannedRestAfterExercise(for: exercise)
+                                        ?? plannedRestBetweenSets(for: exercise))
+                                    : plannedRestBetweenSets(for: exercise)
+                                if let r = restDur, r > 0 {
+                                    startRestWithPersistence(
+                                        seconds: r, slotID: exercise.routineSlotID)
+                                    showRestOverlay = true
+                                }
+                            }
+                        } else {
+                            // Non-final drop: intra-drop rest (dropset-specific only; no prescription fallback)
+                            let restDur = snap.restSeconds.flatMap { $0 > 0 ? $0 : nil }
+                            if let r = restDur, r > 0 {
+                                startRestWithPersistence(
+                                    seconds: r, slotID: exercise.routineSlotID)
+                                showRestOverlay = true
+                            }
                         }
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                     },
@@ -2458,7 +2483,8 @@ struct ActiveWorkoutView: View {
     /// Returns seconds of rest to start now, or nil to skip.
     /// Rules (no defaults used):
     /// • Empty rest (nil) or 0 ⇒ skip.
-    /// • Before a dropset ⇒ skip.
+    /// • Working set with a technique-based dropset attached: suppress; rest fires after the final sub-log.
+    /// • Before a template-based dropset ⇒ skip.
     /// • After a dropset ⇒ use the nearest prior WORKING set's explicit rest (if any), else skip.
     /// • Non-superset final working set: prefer restSecondsAfterExercise (session plan → snapshot),
     ///   falling back to restSecondsBetweenSets → template rest.
@@ -2570,8 +2596,12 @@ struct ActiveWorkoutView: View {
                 } else {
                     restSec = nil
                 }
+            } else if dropsetTechniqueApplying(to: idx, in: exercise) != nil {
+                // Technique-based dropset on this working set:
+                // suppress parent-set rest; rest fires after the final sub-log.
+                restSec = nil
             } else {
-                // Before dropset: skip
+                // Before template-based dropset: skip
                 let exSetCount = effectiveSetCount(
                     for: exercise, resolvedTemplates: exercise.templates)
                 if idx + 1 < exSetCount,
