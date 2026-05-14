@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-14 (KST) — Phase 3.9 numeric input polish complete
+Last updated: 2026-05-14 (KST) — Phase 3.8 dropset draft + parent input persistence complete
 
 ---
 
@@ -57,6 +57,30 @@ These are the enforced invariants as of Phase 5. All new work must preserve them
 - Stable notification IDs (`"rest.<workoutID>.<slotID>"`) prevent duplicate local notifications.
 - Cancel-before-reschedule on every `startRestWithPersistence` call.
 - `.onChange(of: rest.isRunning)` clears persisted rest state on natural expiration.
+
+### Active workout input persistence
+
+Set inputs (reps / weight / duration) for parent working sets and dropset drops survive force-quit/cold-resume via layered sources. Drafts are persisted per-workout in UserDefaults (keyed by `workoutID`) and are **never** written as `SetLog` rows.
+
+**Parent working-set input source priority** (resolved in `rehydrateFromWorkoutIfPresent`):
+
+1. Logged parent `SetLog` (`subIndex == nil`) — source of truth while the set is logged; field is read-only.
+2. Persisted parent draft (UserDefaults `parentDrafts_<workoutID>`, keyed by `<slotID>_<setIndex>_<field>`) — un-logged user input that must survive cold resume.
+3. In-memory `inputsCache` on `ActiveWorkoutGuard` — warm-navigation draft for the same process.
+4. Plan prescription default from `SlotPrescription` / `SetTemplate`.
+
+**Parent draft lifecycle:**
+
+- Written per keystroke from the `reps` / `weight` / `duration` bindings.
+- Cleared when the parent set is logged (SetLog becomes the truth).
+- On parent **undo**, the just-removed SetLog's reps / weight / duration are snapshotted back into the parent draft before deletion, so the now-editable field retains those values across cold resume; the draft is **not** cleared by undo.
+- Cleared when the workout finishes or dismisses (`unlockAndDismiss` → `clearAllParentDrafts`).
+
+**Dropset drop-weight draft lifecycle:**
+
+- Written per keystroke when the user manually edits a drop weight (UserDefaults `dropWeightDrafts_<workoutID>`, keyed by `<slotID>_<parentSetIndex>_<subIndex>`).
+- Logged drops resume from `SetLog` (`subIndex != nil`); drafts are skipped for keys already populated by a logged drop.
+- Cleared when: the drop is logged, the user taps "↩ suggest" to revert to the auto-computed value, the parent set is undone (cascade clears logged + un-logged drop drafts under that parent), or the workout finishes/dismisses.
 
 ### Template resolution (3-tier, current)
 
@@ -427,11 +451,14 @@ Current technique infrastructure is functional but still clunky in production us
 - [x] Dropset completion gating: a working set with a dropset technique is not complete until the parent set AND all configured drops are logged; Drop 1 unlocks after parent, Drop N after Drop N-1; the next working set unlocks only after the final drop is logged; gating state preserved across cold resume via `dropsLoggedByExercise`
 - [x] Dropset Log button visual consistency: "Log Drop" buttons now use `.borderedProminent` style matching normal set Log buttons; enabled/unlogged drops show the active primary visual state; disabled and logged states match normal set row behavior
 - [x] Duration-based technique compatibility: rep/weight-dependent techniques (Drop Set, Partial Reps, Rest-Pause, Cluster, AMRAP) are disabled in the Add Technique picker for duration-based prescriptions with the reason "Not available for duration-based exercises."; Tempo Override and To Failure remain available; existing incompatible saved techniques are displayed and editable without crashing or silent mutation
+- [x] Drop weight reset/suggest UX: drop weight rows show a "↩ suggest" reset action only when the current visible value differs from the computed suggestion; tapping clears the manual override and returns the field to auto-suggestion behavior
+- [x] Dropset manual/draft weight persistence: manually edited unlogged drop weights survive cold resume via per-workout UserDefaults draft store (key `dropWeightDrafts_<workoutID>`, slot key `<slotID>_<parentSetIndex>_<subIndex>`); logged drops continue to resume from `SetLog` (`subIndex != nil`); drafts never stored as `SetLog`; drafts cleared on log, "↩ suggest" reset, parent undo cascade, or workout finish/dismiss
+- [x] Parent working-set input persistence: logged parent reps/weight restore from `SetLog` (`subIndex == nil`); unlogged parent draft reps/weight survive cold resume via per-workout UserDefaults draft store (key `parentDrafts_<workoutID>`, slot key `<slotID>_<setIndex>_<field>` where field ∈ {reps, weight, duration}); see "Active workout input persistence" in §1 for the full source-priority model
+- [x] Parent undo / dropset cascade consistency: undoing the parent working set removes child drop `SetLog`s for that parent, clears child drop completion state, clears both logged and un-logged child drop drafts under that parent, and relocks the next working set; parent reps/weight are preserved as editable draft values by snapshotting the just-removed `SetLog` into the parent draft before removal, so log → undo → force-quit → resume retains the value
 
 **Pending:**
 
 - [ ] Non-dropset technique chip cohesion: integrate set-attached technique info directly into the affected set row rather than appending a separate chip row below it
-- [ ] Drop weight UX: "Reset to suggested" action reverts weight to auto-computed value after a manual override
 - [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
 - [ ] Hide or collapse the top technique summary row when all techniques are already represented as set-attached chips (redundancy now that chips are primary)
 
