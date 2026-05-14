@@ -998,13 +998,61 @@ private struct SupersetDetailNoRest: View {
     @Environment(\.modelContext) private var ctx
     @Bindable var block: RoutineBlock
 
+    /// Locally-tracked displayed value for the "Sets per exercise" Stepper.
+    /// Seeded lazily from the max of child prescriptions on first read, and updated
+    /// explicitly on user edits. Backing this with @State (rather than a computed
+    /// property over `block.exercises[i].prescription?.sets`) is required because
+    /// SwiftUI's observation on `@Bindable var block` does not fire for mutations
+    /// to properties of nested @Model instances (SlotPrescription.sets), so a
+    /// purely-computed display value would not refresh the Stepper label after
+    /// the user pressed +/-.
+    @State private var displayedSets: Int? = nil
+
     private func templates(for re: RoutineExercise) -> [SetTemplate] {
         re.resolvedTemplates(in: ctx)
+    }
+
+    /// Current value shown in the Stepper label and used as its binding getter.
+    /// Reads from `@State` once seeded; otherwise falls back to the max across
+    /// child prescriptions (mismatched legacy data is shown as the max so nothing
+    /// gets silently truncated). No mutation here — legacy data is normalized
+    /// only when the user explicitly changes the Stepper.
+    private var currentSetsValue: Int {
+        if let d = displayedSets { return d }
+        return block.exercises.compactMap { $0.prescription?.sets }.max() ?? 0
+    }
+
+    private func applySetsToAllExercises(_ newValue: Int) {
+        displayedSets = newValue
+        for re in block.exercises {
+            re.prescription?.sets = newValue > 0 ? newValue : nil
+        }
+        try? ctx.save()
+    }
+
+    private func moveExercises(from offsets: IndexSet, to newOffset: Int) {
+        var sorted = block.exercises.sorted { $0.order < $1.order }
+        sorted.move(fromOffsets: offsets, toOffset: newOffset)
+        for (i, re) in sorted.enumerated() {
+            re.order = i
+        }
+        try? ctx.save()
     }
 
     var body: some View {
         List {
             Section {
+                Stepper(
+                    currentSetsValue == 0
+                        ? "Sets per exercise: —"
+                        : "Sets per exercise: \(currentSetsValue)",
+                    value: Binding(
+                        get: { currentSetsValue },
+                        set: { applySetsToAllExercises($0) }
+                    ),
+                    in: 0...20,
+                    step: 1
+                )
                 Stepper(
                     (block.supersetRoundRestSeconds.map { "Rest after round: \($0)s" })
                         ?? "Rest after round: none",
@@ -1028,7 +1076,24 @@ private struct SupersetDetailNoRest: View {
             } header: {
                 Text("Timing")
             } footer: {
-                Text("Rest after round fires between completed rounds. Rest before next block fires after the final round of this superset, replacing round rest.")
+                Text("Sets per exercise applies to every exercise in this superset (one round = one set per exercise). Rest after round fires between completed rounds. Rest before next block fires after the final round, replacing round rest.")
+            }
+
+            Section {
+                ForEach(block.exercises.sorted { $0.order < $1.order }) { re in
+                    if let ex = re.safeExercise(in: ctx) {
+                        HStack {
+                            Text(ex.name)
+                            Spacer()
+                            Text("\(re.prescription?.sets ?? 0) sets")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                }
+                .onMove(perform: moveExercises)
+            } header: {
+                Text("Exercises (drag to reorder)")
             }
 
             ForEach(block.exercises.sorted { $0.order < $1.order }) { re in
@@ -1073,12 +1138,18 @@ private struct SupersetDetailNoRest: View {
                     SlotPrescriptionSection(
                         re: re,
                         isTimeBased: ex.isTimeBased,
-                        hideRestFields: true
+                        hideRestFields: true,
+                        hideSetsField: true
                     )
                 }
             }
         }
         .navigationTitle("Superset")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                EditButton()
+            }
+        }
     }
 }
 
@@ -1907,6 +1978,7 @@ private struct SlotPrescriptionSection: View {
     @Bindable var re: RoutineExercise
     let isTimeBased: Bool
     var hideRestFields: Bool = false
+    var hideSetsField: Bool = false
 
     var body: some View {
         Section {
@@ -1923,7 +1995,8 @@ private struct SlotPrescriptionSection: View {
                 PrescriptionFields(
                     prescription: prescription,
                     isTimeBased: isTimeBased,
-                    hideRestFields: hideRestFields
+                    hideRestFields: hideRestFields,
+                    hideSetsField: hideSetsField
                 )
 
                 // Phase 3.5: Warmup scheme navigation
@@ -1992,6 +2065,7 @@ private struct PrescriptionFields: View {
     @Bindable var prescription: SlotPrescription
     let isTimeBased: Bool
     var hideRestFields: Bool = false
+    var hideSetsField: Bool = false
 
     @AppStorage(AppSettings.Keys.autoregMode)
     private var autoregModeRaw: String = AutoregMode.rir.rawValue
@@ -2001,7 +2075,9 @@ private struct PrescriptionFields: View {
     }
 
     var body: some View {
-        optionalIntStepper("Sets", keyPath: \.sets, range: 0...20)
+        if !hideSetsField {
+            optionalIntStepper("Sets", keyPath: \.sets, range: 0...20)
+        }
 
         if isTimeBased {
             optionalIntStepper("Duration min", keyPath: \.durationMinSeconds, range: 0...600, step: 15, unit: "s")

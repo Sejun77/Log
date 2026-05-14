@@ -2610,6 +2610,7 @@ struct ActiveWorkoutView: View {
     /// Renders drop sub-rows under a working set row when a Dropset technique applies.
     @ViewBuilder
     private func buildDropSection(
+        block: PlanBlock,
         exercise: PlanExercise,
         parentSetIndex: Int
     ) -> some View {
@@ -2674,25 +2675,50 @@ struct ActiveWorkoutView: View {
                         clearDropWeightDraft(slotKey: key)
                         let isFinalDrop = (sub == dropCount)
                         if isFinalDrop {
-                            // Final sub-log: fire between-sets or after-exercise rest.
-                            let exSetCount = effectiveSetCount(
-                                for: exercise, resolvedTemplates: exercise.templates)
-                            let isLastWorkingSet = parentSetIndex == exSetCount - 1
-                            let isLastSetOfWorkout: Bool = {
-                                guard let cb = currentBlock else { return false }
-                                return currentBlockIndex == plan.blocks.count - 1
-                                    && currentExerciseIndex == cb.exercises.count - 1
-                                    && isLastWorkingSet
-                            }()
-                            if !isLastSetOfWorkout {
-                                let restDur = isLastWorkingSet
-                                    ? (plannedRestAfterExercise(for: exercise)
-                                        ?? plannedRestBetweenSets(for: exercise))
-                                    : plannedRestBetweenSets(for: exercise)
-                                if let r = restDur, r > 0 {
+                            if block.isSuperset {
+                                // Inside a superset: rest only fires when every exercise
+                                // in the round is fully complete (parent + all drops).
+                                // Round rest from supersetRoundRestSeconds; on the final
+                                // round, block.restAfterSeconds (transition rest) replaces
+                                // round rest when configured. Last set of workout: suppressed.
+                                if supersetRoundComplete(block: block, setIndex: parentSetIndex),
+                                    let r = computeSupersetEndOfRoundRest(block: block, setIndex: parentSetIndex),
+                                    r > 0
+                                {
                                     startRestWithPersistence(
                                         seconds: r, slotID: exercise.routineSlotID)
                                     showRestOverlay = true
+                                } else {
+                                    // Round not yet complete (another exercise is pending),
+                                    // or the helper returned nil (e.g., last set of workout).
+                                    // Clear any stale running rest from earlier in this round.
+                                    rest.stop()
+                                    clearPersistedRestState()
+                                }
+                                // Advance focus the same way a normal parent log does once
+                                // the dropset set is now fully complete.
+                                advanceForSupersetAfterLog(setIndex: parentSetIndex, in: block)
+                            } else {
+                                // Non-superset: fire between-sets or after-exercise rest.
+                                let exSetCount = effectiveSetCount(
+                                    for: exercise, resolvedTemplates: exercise.templates)
+                                let isLastWorkingSet = parentSetIndex == exSetCount - 1
+                                let isLastSetOfWorkout: Bool = {
+                                    guard let cb = currentBlock else { return false }
+                                    return currentBlockIndex == plan.blocks.count - 1
+                                        && currentExerciseIndex == cb.exercises.count - 1
+                                        && isLastWorkingSet
+                                }()
+                                if !isLastSetOfWorkout {
+                                    let restDur = isLastWorkingSet
+                                        ? (plannedRestAfterExercise(for: exercise)
+                                            ?? plannedRestBetweenSets(for: exercise))
+                                        : plannedRestBetweenSets(for: exercise)
+                                    if let r = restDur, r > 0 {
+                                        startRestWithPersistence(
+                                            seconds: r, slotID: exercise.routineSlotID)
+                                        showRestOverlay = true
+                                    }
                                 }
                             }
                         } else {
@@ -2742,7 +2768,7 @@ struct ActiveWorkoutView: View {
                     .font(.dsCaption)
                     .foregroundStyle(Color.orange.opacity(0.8))
                     .padding(.leading, 20)
-                buildDropSection(exercise: exercise, parentSetIndex: idx)
+                buildDropSection(block: block, exercise: exercise, parentSetIndex: idx)
             }
         } else {
             // Standard layout: set row and per-set technique chips as separate list rows.
@@ -2796,12 +2822,13 @@ struct ActiveWorkoutView: View {
         var restSec: Int? = nil
 
         if block.isSuperset {
-            // Wait for all exercises that HAVE this index to be logged
+            // Wait for every exercise in the round to be fully complete
+            // (parent log AND, if a dropset technique applies, all configured drops).
             for ex in block.exercises {
                 let exSetCount = effectiveSetCount(
                     for: ex, resolvedTemplates: ex.templates)
                 if idx >= exSetCount { continue }
-                if !loggedByExercise[ex.id, default: []].contains(idx) {
+                if !isWorkingSetComplete(exercise: ex, setIndex: idx) {
                     return nil
                 }
             }
@@ -2914,8 +2941,12 @@ struct ActiveWorkoutView: View {
 
             if isFinal, let extra = block.restAfterSeconds, extra != 0 {
                 if block.isSuperset {
-                    // Final round of a superset: transition rest replaces round rest.
-                    restSec = max(0, extra)
+                    // Final round of a superset: transition rest replaces round rest,
+                    // but only when the round is actually complete (parent + drops for
+                    // every exercise). Otherwise leave restSec untouched (typically nil).
+                    if supersetRoundComplete(block: block, setIndex: idx) {
+                        restSec = max(0, extra)
+                    }
                 } else {
                     // Non-superset legacy: additive on top of the final-set rest.
                     if let base = restSec {
@@ -2978,7 +3009,8 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    /// true iff every exercise in the block has logged set index `idx`
+    /// True iff every exercise in the block has its round at `idx` fully complete
+    /// (parent logged AND, when a dropset technique applies, all configured drops logged).
     private func allExercisesLogged(setIndex idx: Int, in block: PlanBlock)
         -> Bool
     {
@@ -2986,7 +3018,7 @@ struct ActiveWorkoutView: View {
             let sc = effectiveSetCount(
                 for: ex, resolvedTemplates: ex.templates)
             guard idx < sc else { return false }
-            if !loggedByExercise[ex.id, default: []].contains(idx) {
+            if !isWorkingSetComplete(exercise: ex, setIndex: idx) {
                 return false
             }
         }
@@ -3002,6 +3034,62 @@ struct ActiveWorkoutView: View {
                 - 1)
     }
 
+    /// True iff every exercise in the block has fully completed its round at `setIndex`
+    /// (parent set logged AND, when a dropset technique applies, all configured drops logged).
+    /// Exercises whose set count does not reach `setIndex` are skipped.
+    private func supersetRoundComplete(
+        block: PlanBlock,
+        setIndex: Int
+    ) -> Bool {
+        for ex in block.exercises {
+            let sc = effectiveSetCount(
+                for: ex, resolvedTemplates: ex.templates)
+            guard setIndex < sc else { continue }
+            if !isWorkingSetComplete(exercise: ex, setIndex: setIndex) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Computes the rest to fire when a superset round completes at `setIndex`.
+    /// - Primary: `block.supersetRoundRestSeconds` (>0).
+    /// - Fallback: max `plannedRestBetweenSets` across exercises participating in the round.
+    /// - Final round: `block.restAfterSeconds` (transition rest) replaces round rest when configured (>0).
+    /// - Last set of the workout: returns nil (suppressed).
+    private func computeSupersetEndOfRoundRest(
+        block: PlanBlock,
+        setIndex: Int
+    ) -> Int? {
+        let isLastRound = setIndex == lastRoundIndex(in: block)
+        let isLastBlock = currentBlockIndex == plan.blocks.count - 1
+        if isLastRound && isLastBlock { return nil }
+
+        var restSec: Int? = nil
+        if let rr = block.supersetRoundRestSeconds, rr > 0 {
+            restSec = rr
+        } else {
+            var maxSeconds = 0
+            var found = false
+            for ex in block.exercises {
+                let sc = effectiveSetCount(
+                    for: ex, resolvedTemplates: ex.templates)
+                guard setIndex < sc else { continue }
+                if let r = plannedRestBetweenSets(for: ex), r > 0 {
+                    maxSeconds = max(maxSeconds, r)
+                    found = true
+                }
+            }
+            if found, maxSeconds > 0 { restSec = maxSeconds }
+        }
+
+        if isLastRound, let extra = block.restAfterSeconds, extra > 0 {
+            restSec = extra
+        }
+
+        return restSec
+    }
+
     /// Advance focus after logging within a superset.
     /// - Next unlogged exercise in the current round
     /// - If round finished and more rounds remain: wrap to first
@@ -3012,7 +3100,18 @@ struct ActiveWorkoutView: View {
     ) {
         guard block.isSuperset else { return }
 
-        // 1) If any exercise hasn't logged this set index yet, go there next.
+        // 0) Stay on the current exercise if its round isn't fully complete yet
+        //    (e.g., parent logged but a dropset technique still has drops pending).
+        if currentExerciseIndex < block.exercises.count {
+            let cur = block.exercises[currentExerciseIndex]
+            let curSc = effectiveSetCount(
+                for: cur, resolvedTemplates: cur.templates)
+            if idx < curSc, !isWorkingSetComplete(exercise: cur, setIndex: idx) {
+                return
+            }
+        }
+
+        // 1) Find the next exercise whose round at this index isn't fully complete.
         let total = block.exercises.count
         var next = currentExerciseIndex
         for _ in 0..<total {
@@ -3020,24 +3119,17 @@ struct ActiveWorkoutView: View {
             let ex = block.exercises[next]
             let sc = effectiveSetCount(
                 for: ex, resolvedTemplates: ex.templates)
-            if idx < sc,
-                !loggedByExercise[ex.id, default: []].contains(idx)
-            {
+            if idx < sc, !isWorkingSetComplete(exercise: ex, setIndex: idx) {
                 currentExerciseIndex = next
                 return
             }
         }
 
-        // 2) Everyone finished this round.
-        guard allExercisesLogged(setIndex: idx, in: block) else { return }
-
+        // 2) Round is complete. Move to next round (wrap to first), or stay on last.
+        guard supersetRoundComplete(block: block, setIndex: idx) else { return }
         let lastIdx = lastRoundIndex(in: block)
         if idx < lastIdx {
-            // More rounds remain → wrap to first for next round
             currentExerciseIndex = 0
-        } else {
-            // This was the very last set of the block → do not move focus
-            // (stay on the current exercise; rest will start via your existing logic)
         }
     }
 }
