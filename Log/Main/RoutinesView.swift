@@ -2004,9 +2004,11 @@ private struct PrescriptionFields: View {
 
         switch autoregMode {
         case .rir:
-            doubleStepperRow("RIR", binding: $prescription.rir, lowerBound: 0.0, upperBound: 5.0, step: 0.5)
+            doubleStepperRow("RIR", active: $prescription.rir, paired: $prescription.rpe,
+                             range: 0...5, step: 0.5) { 10 - $0 }
         case .rpe:
-            doubleStepperRow("RPE", binding: $prescription.rpe, lowerBound: 5.0, upperBound: 10.0, step: 0.5)
+            doubleStepperRow("RPE", active: $prescription.rpe, paired: $prescription.rir,
+                             range: 5...10, step: 0.5) { 10 - $0 }
         case .none:
             EmptyView()
         }
@@ -2035,25 +2037,38 @@ private struct PrescriptionFields: View {
         )
     }
 
+    /// Stepper for an optional-Double intensity field that keeps its paired counterpart in sync.
+    /// On write: stores the active value and updates `paired` via `convert` (or nil if clearing).
+    /// On display: shows `active` if stored; otherwise derives from `paired` via `convert`.
     private func doubleStepperRow(
         _ label: String,
-        binding: Binding<Double?>,
-        lowerBound: Double,
-        upperBound: Double,
-        step: Double
+        active: Binding<Double?>,
+        paired: Binding<Double?>,
+        range: ClosedRange<Double>,
+        step: Double,
+        convert: @escaping (Double) -> Double
     ) -> some View {
-        let sentinel = lowerBound - step
+        let sentinel = range.lowerBound - step
+        let displayValue = active.wrappedValue ?? paired.wrappedValue.map(convert)
         let formatted: (Double) -> String = { v in
             v.truncatingRemainder(dividingBy: 1) == 0
                 ? String(Int(v)) : String(format: "%.1f", v)
         }
         return Stepper(
-            "\(label): \(binding.wrappedValue.map(formatted) ?? "—")",
+            "\(label): \(displayValue.map(formatted) ?? "—")",
             value: Binding(
-                get: { binding.wrappedValue ?? sentinel },
-                set: { binding.wrappedValue = $0 < lowerBound ? nil : $0 }
+                get: {
+                    if let v = active.wrappedValue { return v }
+                    if let pv = paired.wrappedValue { return convert(pv) }
+                    return sentinel
+                },
+                set: { newVal in
+                    let stored: Double? = newVal < range.lowerBound ? nil : newVal
+                    active.wrappedValue = stored
+                    paired.wrappedValue = stored.map(convert)
+                }
             ),
-            in: sentinel...upperBound,
+            in: sentinel...range.upperBound,
             step: step
         )
     }
@@ -2079,7 +2094,7 @@ struct TempoEditorView: View {
             .onChange(of: concentric) { serializeTempo() }
         Stepper("Squeeze pause: \(label(squeezePause))", value: $squeezePause, in: 0...10)
             .onChange(of: squeezePause) { serializeTempo() }
-        Text("Eccentric · Stretch · Concentric · Squeeze (seconds)")
+        Text("Tempo = eccentric – stretch pause – concentric – squeeze pause")
             .font(.caption)
             .foregroundStyle(.secondary)
     }

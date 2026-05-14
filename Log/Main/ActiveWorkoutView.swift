@@ -122,19 +122,25 @@ struct SessionPlan: Codable {
         return parts.joined(separator: " · ")
     }
 
-    /// Line 2: rest + intensity + tempo
-    var secondarySummary: String {
+    /// Line 2: rest + intensity (mode-filtered) + tempo.
+    /// Shows only the active autoregulation field; falls back to a converted value
+    /// from the other field if the active one is nil.
+    func secondarySummary(autoregMode: AutoregMode) -> String {
         var parts: [String] = []
         if let r = restSecondsBetweenSets, r > 0 { parts.append("\(r)s rest") }
-        if let v = rir {
-            let s = v.truncatingRemainder(dividingBy: 1) == 0
-                ? "\(Int(v))" : String(format: "%.1f", v)
-            parts.append("RIR \(s)")
+        let fmt: (Double) -> String = { v in
+            v.truncatingRemainder(dividingBy: 1) == 0
+                ? String(Int(v)) : String(format: "%.1f", v)
         }
-        if let v = rpe {
-            let s = v.truncatingRemainder(dividingBy: 1) == 0
-                ? "\(Int(v))" : String(format: "%.1f", v)
-            parts.append("RPE \(s)")
+        switch autoregMode {
+        case .rir:
+            let val = rir ?? rpe.map { 10 - $0 }
+            if let v = val { parts.append("RIR \(fmt(v))") }
+        case .rpe:
+            let val = rpe ?? rir.map { 10 - $0 }
+            if let v = val { parts.append("RPE \(fmt(v))") }
+        case .none:
+            break
         }
         if let t = tempo, !t.isEmpty { parts.append("Tempo \(t)") }
         return parts.joined(separator: " · ")
@@ -206,6 +212,13 @@ struct ActiveWorkoutView: View {
     @State private var itemsByExerciseID: [UUID: WorkoutItem] = [:]
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
+
+    @AppStorage(AppSettings.Keys.autoregMode)
+    private var autoregModeRaw: String = AutoregMode.rir.rawValue
+
+    private var autoregMode: AutoregMode {
+        AutoregMode(rawValue: autoregModeRaw) ?? .rir
+    }
 
     @State private var inputsByExerciseID:
         [UUID: [Int: (reps: String, weight: String, duration: String)]] = [:]
@@ -1052,7 +1065,7 @@ struct ActiveWorkoutView: View {
     private func planSummarySection(for exercise: PlanExercise) -> some View {
         let sp = sessionPlans[exercise.routineSlotID] ?? SessionPlan()
         let line1 = sp.primarySummary
-        let line2 = sp.secondarySummary
+        let line2 = sp.secondarySummary(autoregMode: autoregMode)
         let notes = sp.slotNotes
         let hasContent =
             !line1.isEmpty || !line2.isEmpty
@@ -2897,9 +2910,11 @@ private struct EditSessionPlanSheet: View {
                 Section("Intensity") {
                     switch autoregMode {
                     case .rir:
-                        doubleStepperRow("RIR", binding: $plan.rir, lowerBound: 0.0, upperBound: 5.0, step: 0.5)
+                        doubleStepperRow("RIR", active: $plan.rir, paired: $plan.rpe,
+                                         range: 0...5, step: 0.5) { 10 - $0 }
                     case .rpe:
-                        doubleStepperRow("RPE", binding: $plan.rpe, lowerBound: 5.0, upperBound: 10.0, step: 0.5)
+                        doubleStepperRow("RPE", active: $plan.rpe, paired: $plan.rir,
+                                         range: 5...10, step: 0.5) { 10 - $0 }
                     case .none:
                         EmptyView()
                     }
@@ -2949,25 +2964,38 @@ private struct EditSessionPlanSheet: View {
         )
     }
 
+    /// Stepper for an optional-Double intensity field that keeps its paired counterpart in sync.
+    /// On write: stores the active value and updates `paired` via `convert` (or nil if clearing).
+    /// On display: shows `active` if stored; otherwise derives from `paired` via `convert`.
     private func doubleStepperRow(
         _ label: String,
-        binding: Binding<Double?>,
-        lowerBound: Double,
-        upperBound: Double,
-        step: Double
+        active: Binding<Double?>,
+        paired: Binding<Double?>,
+        range: ClosedRange<Double>,
+        step: Double,
+        convert: @escaping (Double) -> Double
     ) -> some View {
-        let sentinel = lowerBound - step
+        let sentinel = range.lowerBound - step
+        let displayValue = active.wrappedValue ?? paired.wrappedValue.map(convert)
         let formatted: (Double) -> String = { v in
             v.truncatingRemainder(dividingBy: 1) == 0
                 ? String(Int(v)) : String(format: "%.1f", v)
         }
         return Stepper(
-            "\(label): \(binding.wrappedValue.map(formatted) ?? "—")",
+            "\(label): \(displayValue.map(formatted) ?? "—")",
             value: Binding(
-                get: { binding.wrappedValue ?? sentinel },
-                set: { binding.wrappedValue = $0 < lowerBound ? nil : $0 }
+                get: {
+                    if let v = active.wrappedValue { return v }
+                    if let pv = paired.wrappedValue { return convert(pv) }
+                    return sentinel
+                },
+                set: { newVal in
+                    let stored: Double? = newVal < range.lowerBound ? nil : newVal
+                    active.wrappedValue = stored
+                    paired.wrappedValue = stored.map(convert)
+                }
             ),
-            in: sentinel...upperBound,
+            in: sentinel...range.upperBound,
             step: step
         )
     }
