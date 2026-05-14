@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-14 (KST) — Phase 3.9 warmup redesign complete
+Last updated: 2026-05-14 (KST) — Phase 3.9 numeric input polish complete
 
 ---
 
@@ -397,7 +397,7 @@ Persisted user preferences that affect workout UX, input defaults, and slot crea
 - [x] Settings screen (Settings tab) for editing all preferences
 - [x] New routine slot prescriptions prefill from `AppSettings` defaults instead of hardcoded values
 - [x] In-workout plan edit sheet shows only the active autoregulation field (RIR or RPE); `none` hides the intensity row
-- [x] Switching autoregulation mode does not destroy stored data — both `rir` and `rpe` fields may coexist; UI emphasizes only the active one
+- [x] Switching autoregulation mode does not destroy stored data; RIR and RPE fields are kept in sync via `10 − x` conversion (editing one writes the other); plan preview and editors show only the active mode field; see Phase 3.9 for implementation details
 - [x] Changing settings affects newly created prescriptions only; existing routines and active sessions not silently mutated
 
 **Manual verification:**
@@ -448,10 +448,12 @@ Warmup step definitions need clearer per-type field presentation. Numeric inputs
 - [x] `WarmupStepRow` (editor list) updated to display combined summary per kind: fixed-weight shows `weight × reps`, percent shows `N% × M reps`, note-only shows note
 - [x] Active workout warmup rows: `warmupStepDescription` updated to show `weight × reps` for fixed-weight steps; `buildWarmupRow` logs weight when present for fixed-weight steps (`SetLog(kind: .warmup)` unchanged)
 - [x] Warmup rest timer behavior, cold-resume path, and `SetLog.kind = .warmup` logging semantics unchanged
-
-**Pending:**
-
-- [ ] Numeric input consistency (app-wide): replace remaining free-form text fields with stepper / +/- controls for bounded integer fields in prescription editing (sets, rep range, rest seconds, drop count) outside of the warmup editor; weight inputs remain free-form for precision
+- [x] Numeric input consistency (prescription editors): bounded integer fields (sets, rep min/max, rest between/after sets, duration min/max) use `Stepper` in both routine editor (`PrescriptionFields`) and in-session plan edit sheet (`EditSessionPlanSheet`); weight inputs remain free-form for precision
+- [x] RIR and RPE use 0.5-step `Stepper` controls (RIR 0–5, RPE 5–10); active autoregulation mode controls which field is shown in prescription editors and plan preview
+- [x] RIR↔RPE conversion sync: editing either field writes the counterpart via `RPE = 10 − RIR` / `RIR = 10 − RPE`; `doubleStepperRow(active:paired:range:step:convert:)` helper handles display derivation and sync-on-write in both editors
+- [x] Plan preview (`SessionPlan.secondarySummary(autoregMode:)`) shows only the active autoregulation mode field — never both RIR and RPE simultaneously; `autoregMode` surfaced in `ActiveWorkoutView` via `@AppStorage` for this purpose
+- [x] Settings default RIR/RPE sync: editing `defaultRIR` updates `defaultRPE` and vice versa via `.onChange`; default RIR range corrected to 0–5 (was incorrectly 0–10)
+- [x] Tempo field replaced with structured 4-part `Stepper` editor: eccentric – stretch pause – concentric – squeeze pause (each 0–10 s); serializes to `"e-s-c-sq"` string (e.g. `"3-1-1-0"`); nil when all zero; 3-part legacy values parse safely (squeeze pause defaults to 0); `TempoEditorView` is a module-internal `View` shared by both prescription editors
 
 ### Phase 5.2 — Rest semantics cleanup + superset flow streamline
 
