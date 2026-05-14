@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-14 (KST) — Phase 5.2 superset transition rest in Details sheet complete
+Last updated: 2026-05-14 (KST) — Phase 5.2 superset execution & UI slice complete (dropset rest/focus, shared sets-per-exercise, reorder)
 
 ---
 
@@ -512,6 +512,11 @@ Reduce confusion by making rest fields consistent across routine editor and in-w
 - [x] End-to-end (live workout) verification: `supersetRoundRestSeconds` correctly drives the round-rest timer after each non-final completed round in an active superset workout
 - [x] Superset transition rest exposed as an editable "Rest before next block" `Stepper` in `SupersetDetailNoRest` (Superset Details sheet), bound to `RoutineBlock.restAfterSeconds`, range 0…600s step 15, 0 stored as nil. Block list (`BlockRow`) remains simplified — transition rest is not editable there
 - [x] Final-round behavior wired: on the final round of a superset, `block.restAfterSeconds` (transition rest) **replaces** `supersetRoundRestSeconds` when configured (>0); if transition rest is unset, the previously computed round-rest fallback chain still applies; last set of the last block of the workout is still suppressed; non-superset blocks retain the legacy additive `restAfterSeconds` behavior (UI hidden)
+- [x] Dropset-inside-superset rest timing fixed: the dropset final-drop path is now block-aware — inside a superset it never fires `restSecondsAfterExercise`; it only fires rest after every exercise's round at the parent set index is `isWorkingSetComplete` (parent + all configured drops). Non-final completed round → `supersetRoundRestSeconds` (fallback: max `plannedRestBetweenSets` across the round). Final completed round → `block.restAfterSeconds` (transition rest) replaces round rest when configured; otherwise round-rest fallback. Last set of the last block of the workout → suppressed. A defensive `supersetRoundComplete` guard was also added to the end-of-block transition-rest append branch so it cannot fire while drops are pending. Non-superset dropset rest semantics unchanged
+- [x] Dropset-aware superset focus/advance: `advanceForSupersetAfterLog` is now completeness-aware (`isWorkingSetComplete`) — parent-logging a dropset-attached exercise no longer advances focus while drops are pending; focus stays until the final drop. The final-drop `onLog` now invokes `advanceForSupersetAfterLog`, so completing the drops triggers the same "set completed" advance behavior a normal parent log triggers. `allExercisesLogged` was updated to the same completeness semantics for internal consistency
+- [x] Shared "Sets per exercise" control in `SupersetDetailNoRest`: a single `Stepper` in the Timing section drives all child `SlotPrescription.sets` for the block (range 0…20, step 1, 0 → nil). Per-exercise sets editing is suppressed in superset context via a new `hideSetsField: Bool` flag plumbed through `SlotPrescriptionSection` → `PrescriptionFields` (default `false` keeps non-superset blocks unchanged). Mismatched legacy data shows the **max** value across child prescriptions on first display — not silently truncated — and normalizes only when the user explicitly touches the shared Stepper
+- [x] Shared "Sets per exercise" Stepper display refresh fix: backed by `@State private var displayedSets: Int?` so SwiftUI re-renders the Stepper label when the user edits. Root cause was that `@Bindable var block: RoutineBlock` does not propagate observation through nested `@Model` mutations (`block.exercises[i].prescription?.sets`), so a purely-computed display value did not refresh. Setter writes both the local `@State` (immediate label update) and every child prescription (persisted)
+- [x] Superset exercise reordering: new "Exercises (drag to reorder)" section in `SupersetDetailNoRest` exposes `.onMove(perform: moveExercises)`, persisted by rewriting `RoutineExercise.order` based on the new sorted order; `EditButton()` added to the navigation toolbar to engage edit mode. No model changes. Active workout follows the new order via existing `block.exercises.sorted { $0.order < $1.order }` ordering. Non-superset block ordering UI is untouched
 
 **Rest ownership reference (current):**
 
@@ -535,8 +540,7 @@ The block list stays simplified — block transition rest is edited inside the S
 
 **Pending:**
 
-- [ ] Verify dropset-inside-superset rest timing: the dropset final-drop path currently uses `plannedRestAfterExercise(for:)` on the last working set without checking `block.isSuperset`, so a dropset attached to a superset exercise could cause `restSecondsAfterExercise` to fire mid-superset. Audit and patch so superset timing semantics are honored (no `restSecondsAfterExercise` mid-round even when a dropset technique is attached); fall through to round rest / transition rest as appropriate
-- [ ] Superset plan/edit UI polish: sets/reps/RIR/RPE editable per exercise; per-exercise rest fields hidden or de-emphasized in superset context (round rest and transition rest are the only superset-scoped rest fields)
+- [ ] Standardize reorder / edit-mode affordances across reorderable lists in the app. Superset Details now uses `EditButton()` + `.onMove` (engage edit mode → drag handles appear). Other reorderable lists in the app (e.g., warmup steps, technique plans, routine block list, routine list) may use different patterns. Decide the canonical interaction (EditButton + drag handles vs. always-visible drag handles vs. long-press to drag) and apply consistently. Also decide where `EditButton` is required vs. inferred (e.g., based on whether a list supports both delete and reorder). Goal: a user who learns reorder in one list should know how to reorder in any other
 
 **Manual verification:**
 
