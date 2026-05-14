@@ -2004,34 +2004,14 @@ private struct PrescriptionFields: View {
 
         switch autoregMode {
         case .rir:
-            HStack {
-                Text("RIR")
-                Spacer()
-                TextField("—", text: optionalDoubleString(\.rir))
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 80)
-            }
+            doubleStepperRow("RIR", binding: $prescription.rir, lowerBound: 0.0, upperBound: 5.0, step: 0.5)
         case .rpe:
-            HStack {
-                Text("RPE")
-                Spacer()
-                TextField("—", text: optionalDoubleString(\.rpe))
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 80)
-            }
+            doubleStepperRow("RPE", binding: $prescription.rpe, lowerBound: 5.0, upperBound: 10.0, step: 0.5)
         case .none:
             EmptyView()
         }
 
-        HStack {
-            Text("Tempo")
-            Spacer()
-            TextField("e.g. 3-1-2-0", text: optionalString(\.tempo))
-                .multilineTextAlignment(.trailing)
-                .frame(width: 120)
-        }
+        TempoEditorView(tempo: $prescription.tempo)
     }
 
     private func optionalIntStepper(
@@ -2055,31 +2035,73 @@ private struct PrescriptionFields: View {
         )
     }
 
-    private func optionalDoubleString(
-        _ kp: ReferenceWritableKeyPath<SlotPrescription, Double?>
-    ) -> Binding<String> {
-        Binding(
-            get: {
-                if let v = prescription[keyPath: kp] {
-                    return v.truncatingRemainder(dividingBy: 1) == 0
-                        ? String(Int(v)) : String(v)
-                }
-                return ""
-            },
-            set: {
-                let cleaned = $0.filter { $0.isNumber || $0 == "." }
-                prescription[keyPath: kp] = cleaned.isEmpty ? nil : Double(cleaned)
-            }
+    private func doubleStepperRow(
+        _ label: String,
+        binding: Binding<Double?>,
+        lowerBound: Double,
+        upperBound: Double,
+        step: Double
+    ) -> some View {
+        let sentinel = lowerBound - step
+        let formatted: (Double) -> String = { v in
+            v.truncatingRemainder(dividingBy: 1) == 0
+                ? String(Int(v)) : String(format: "%.1f", v)
+        }
+        return Stepper(
+            "\(label): \(binding.wrappedValue.map(formatted) ?? "—")",
+            value: Binding(
+                get: { binding.wrappedValue ?? sentinel },
+                set: { binding.wrappedValue = $0 < lowerBound ? nil : $0 }
+            ),
+            in: sentinel...upperBound,
+            step: step
         )
     }
+}
 
-    private func optionalString(
-        _ kp: ReferenceWritableKeyPath<SlotPrescription, String?>
-    ) -> Binding<String> {
-        Binding(
-            get: { prescription[keyPath: kp] ?? "" },
-            set: { prescription[keyPath: kp] = $0.isEmpty ? nil : $0 }
-        )
+// MARK: - Tempo Editor
+
+struct TempoEditorView: View {
+    @Binding var tempo: String?
+
+    @State private var eccentric: Int = 0
+    @State private var stretchPause: Int = 0
+    @State private var concentric: Int = 0
+    @State private var squeezePause: Int = 0
+
+    var body: some View {
+        Stepper("Eccentric: \(label(eccentric))", value: $eccentric, in: 0...10)
+            .onAppear { parseTempo() }
+            .onChange(of: eccentric) { serializeTempo() }
+        Stepper("Stretch pause: \(label(stretchPause))", value: $stretchPause, in: 0...10)
+            .onChange(of: stretchPause) { serializeTempo() }
+        Stepper("Concentric: \(label(concentric))", value: $concentric, in: 0...10)
+            .onChange(of: concentric) { serializeTempo() }
+        Stepper("Squeeze pause: \(label(squeezePause))", value: $squeezePause, in: 0...10)
+            .onChange(of: squeezePause) { serializeTempo() }
+        Text("Eccentric · Stretch · Concentric · Squeeze (seconds)")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private func label(_ v: Int) -> String { v == 0 ? "—" : "\(v)s" }
+
+    private func parseTempo() {
+        guard let t = tempo, !t.isEmpty else {
+            eccentric = 0; stretchPause = 0; concentric = 0; squeezePause = 0
+            return
+        }
+        let parts = t.split(separator: "-").compactMap { Int($0) }
+        eccentric    = parts.count > 0 ? parts[0] : 0
+        stretchPause = parts.count > 1 ? parts[1] : 0
+        concentric   = parts.count > 2 ? parts[2] : 0
+        squeezePause = parts.count > 3 ? parts[3] : 0
+    }
+
+    private func serializeTempo() {
+        let vals = [eccentric, stretchPause, concentric, squeezePause]
+        tempo = vals.allSatisfy({ $0 == 0 }) ? nil
+              : vals.map(String.init).joined(separator: "-")
     }
 }
 

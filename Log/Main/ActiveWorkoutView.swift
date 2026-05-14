@@ -2897,21 +2897,13 @@ private struct EditSessionPlanSheet: View {
                 Section("Intensity") {
                     switch autoregMode {
                     case .rir:
-                        fieldRow("RIR", binding: optionalDouble(\.rir), decimal: true)
+                        doubleStepperRow("RIR", binding: $plan.rir, lowerBound: 0.0, upperBound: 5.0, step: 0.5)
                     case .rpe:
-                        fieldRow("RPE", binding: optionalDouble(\.rpe), decimal: true)
+                        doubleStepperRow("RPE", binding: $plan.rpe, lowerBound: 5.0, upperBound: 10.0, step: 0.5)
                     case .none:
                         EmptyView()
                     }
-                    HStack {
-                        Text("Tempo")
-                        Spacer()
-                        TextField(
-                            "—", text: optionalString(\.tempo)
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 120)
-                    }
+                    TempoEditorView(tempo: $plan.tempo)
                 }
 
                 Section("Notes") {
@@ -2957,34 +2949,30 @@ private struct EditSessionPlanSheet: View {
         )
     }
 
-    /// Text field row for decimal or freeform fields (RIR, RPE, tempo).
-    private func fieldRow(
-        _ label: String, binding: Binding<String>, decimal: Bool = false
+    private func doubleStepperRow(
+        _ label: String,
+        binding: Binding<Double?>,
+        lowerBound: Double,
+        upperBound: Double,
+        step: Double
     ) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            TextField("—", text: binding)
-                .keyboardType(decimal ? .decimalPad : .numberPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 80)
+        let sentinel = lowerBound - step
+        let formatted: (Double) -> String = { v in
+            v.truncatingRemainder(dividingBy: 1) == 0
+                ? String(Int(v)) : String(format: "%.1f", v)
         }
+        return Stepper(
+            "\(label): \(binding.wrappedValue.map(formatted) ?? "—")",
+            value: Binding(
+                get: { binding.wrappedValue ?? sentinel },
+                set: { binding.wrappedValue = $0 < lowerBound ? nil : $0 }
+            ),
+            in: sentinel...upperBound,
+            step: step
+        )
     }
 
     // MARK: - Binding Helpers
-
-    private func optionalDouble(_ kp: WritableKeyPath<SessionPlan, Double?>)
-        -> Binding<String>
-    {
-        Binding(
-            get: {
-                guard let v = plan[keyPath: kp] else { return "" }
-                return v.truncatingRemainder(dividingBy: 1) == 0
-                    ? "\(Int(v))" : String(format: "%.1f", v)
-            },
-            set: { plan[keyPath: kp] = Double($0) }
-        )
-    }
 
     private func optionalString(_ kp: WritableKeyPath<SessionPlan, String?>)
         -> Binding<String>
