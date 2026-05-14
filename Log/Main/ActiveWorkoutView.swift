@@ -266,7 +266,7 @@ struct ActiveWorkoutView: View {
     }
 
     private func rehydrateFromWorkoutIfPresent() {
-        guard let w = workout else { return }
+        guard workout != nil else { return }
 
         var logged = loggedByExercise
         var inputs = inputsByExerciseID
@@ -274,7 +274,6 @@ struct ActiveWorkoutView: View {
         for block in plan.blocks {
             for ex in block.exercises {
                 let slotID = ex.id
-                let exerciseID = ex.currentExerciseID
 
                 // 🔒 Fix 2: if the exercise in this slot was swapped in this session,
                 // do NOT pull in logs from the workout (they belong to a different exercise).
@@ -284,9 +283,12 @@ struct ActiveWorkoutView: View {
 
                 var perSet = inputs[slotID] ?? [:]
 
-                let item = w.items.first(where: {
-                    $0.exercise?.id == exerciseID
-                })
+                // Primary: use pre-built cache (same key as suggestedDropWeight).
+                // Fallback: if rebuildItemsByExerciseID missed this item (e.g. exercise
+                // relationship still nil at that moment), search workout.items directly
+                // by routineSlotID so rehydration is never silently skipped.
+                let item: WorkoutItem? = itemsByExerciseID[slotID]
+                    ?? workout?.items.first(where: { $0.routineSlotID == ex.routineSlotID })
 
                 if let item = item {
                     // Exclude sub-drops (subIndex != nil) from the main logged-set tracking.
@@ -320,17 +322,43 @@ struct ActiveWorkoutView: View {
                     let tpl =
                         ex.templates[safe: i]
                         ?? defaultTemplate(for: ex, at: i)
-                    if let cached = activeGuard.inputsCache[slotID]?[i] {
-                        perSet[i] = cached
-                    } else if let log = item?.setLogs.last(where: {
-                        $0.indexInExercise == i
-                    }) {
+                    // Priority order:
+                    //   1. Persisted parent SetLog (logged set — field is disabled, log is truth).
+                    //   2. Persisted parent draft (UserDefaults) — un-logged user input that
+                    //      must survive force-quit/cold resume.
+                    //   3. In-memory inputsCache (un-logged draft from prior navigation in
+                    //      the same process). NOTE: on cold resume after force-quit this
+                    //      cache is empty UNTIL `ensureInputsInitializedFromPlan` seeds it
+                    //      with prescription defaults — so the persisted draft must be
+                    //      checked BEFORE the cache, otherwise prescription would clobber
+                    //      the user's typed value.
+                    //   4. Plan prescription default.
+                    let parentLog = item?.setLogs.last(where: {
+                        $0.indexInExercise == i && $0.subIndex == nil
+                    })
+                    if let log = parentLog {
                         let reps = String(max(0, log.reps))
                         let weight =
                             log.weight.map { String(Int($0.rounded())) } ?? ""
                         let duration =
                             log.durationSeconds.map(String.init) ?? ""
                         perSet[i] = (reps, weight, duration)
+                    } else if let draft = loadParentDraft(
+                        slotID: slotID, setIndex: i
+                    ) {
+                        // Backfill any field absent from the draft with the prescription
+                        // default so partially-filled drafts don't blank unrelated fields.
+                        let presReps = String(plannedRepTarget(for: ex, template: tpl))
+                        let presWeight = tpl.targetWeight.map { String($0) } ?? ""
+                        let presDuration = plannedDurationTarget(for: ex, template: tpl)
+                            .map { String($0) } ?? ""
+                        perSet[i] = (
+                            reps: draft.reps ?? presReps,
+                            weight: draft.weight ?? presWeight,
+                            duration: draft.duration ?? presDuration
+                        )
+                    } else if let cached = activeGuard.inputsCache[slotID]?[i] {
+                        perSet[i] = cached
                     } else {
                         perSet[i] = (
                             reps: String(
@@ -349,6 +377,9 @@ struct ActiveWorkoutView: View {
 
         loggedByExercise = logged
         inputsByExerciseID = inputs
+        // Restore any unlogged manual drop-weight drafts persisted to UserDefaults.
+        // Must run AFTER logged drops are restored so logged values are not overwritten.
+        restoreDropWeightDrafts()
         syncToGuardCaches()
     }
 
@@ -397,9 +428,12 @@ struct ActiveWorkoutView: View {
             },
             set: { newVal in
                 ensureEntry()
-                inputsByExerciseID[exID]?[setIndex]?.reps =
-                    newVal.filter(\.isNumber)
+                let filtered = newVal.filter(\.isNumber)
+                inputsByExerciseID[exID]?[setIndex]?.reps = filtered
                 syncToGuardCaches()
+                persistParentDraft(
+                    slotID: exID, setIndex: setIndex, field: .reps, value: filtered
+                )
             }
         )
 
@@ -410,9 +444,12 @@ struct ActiveWorkoutView: View {
             },
             set: { newVal in
                 ensureEntry()
-                inputsByExerciseID[exID]?[setIndex]?.weight =
-                    newVal.filter(\.isNumber)
+                let filtered = newVal.filter(\.isNumber)
+                inputsByExerciseID[exID]?[setIndex]?.weight = filtered
                 syncToGuardCaches()
+                persistParentDraft(
+                    slotID: exID, setIndex: setIndex, field: .weight, value: filtered
+                )
             }
         )
 
@@ -451,9 +488,12 @@ struct ActiveWorkoutView: View {
             },
             set: { newVal in
                 ensureEntry()
-                inputsByExerciseID[exID]?[setIndex]?.duration =
-                    newVal.filter(\.isNumber)
+                let filtered = newVal.filter(\.isNumber)
+                inputsByExerciseID[exID]?[setIndex]?.duration = filtered
                 syncToGuardCaches()
+                persistParentDraft(
+                    slotID: exID, setIndex: setIndex, field: .duration, value: filtered
+                )
             }
         )
     }
@@ -556,6 +596,8 @@ struct ActiveWorkoutView: View {
                         s.insert(idx)
                         loggedByExercise[exercise.id] = s
                         syncToGuardCaches()
+                        // SetLog is now the source of truth — discard the draft.
+                        clearParentDraft(slotID: exercise.id, setIndex: idx)
 
                         if let seconds = restSecondsAfterCurrentLog(
                             setIndex: idx,
@@ -615,6 +657,8 @@ struct ActiveWorkoutView: View {
                         s.insert(idx)
                         loggedByExercise[exercise.id] = s
                         syncToGuardCaches()
+                        // SetLog is now the source of truth — discard the draft.
+                        clearParentDraft(slotID: exercise.id, setIndex: idx)
 
                         if let seconds = restSecondsAfterCurrentLog(
                             setIndex: idx,
@@ -754,6 +798,11 @@ struct ActiveWorkoutView: View {
     }
 
     private func unlockAndDismiss() {
+        // Clear persisted drop-weight drafts before workout ID becomes inaccessible
+        clearAllDropWeightDrafts()
+        // Clear persisted parent working-set drafts as well
+        clearAllParentDrafts()
+
         // Fully terminate timers for this workout
         rest.stop()
         setTimer.stop()
@@ -962,17 +1011,21 @@ struct ActiveWorkoutView: View {
         guard let w = workout else { return }
         let planSlots = plan.blocks.flatMap(\.exercises)
         for item in w.items {
-            guard let ex = item.exercise else { continue }
-            // Match by routineSlotID first (stable across swaps)
+            // Primary path: match by routineSlotID — does NOT require the exercise
+            // relationship to be loaded. Previously this was gated behind a
+            // `guard let ex = item.exercise` which caused the item to be skipped
+            // when SwiftData hadn't resolved the relationship yet during onAppear,
+            // leaving itemsByExerciseID empty and making rehydration fall back to
+            // plan defaults even though logs exist in the persistent store.
             if let slotID = item.routineSlotID,
                let slot = planSlots.first(where: { $0.routineSlotID == slotID })
             {
                 itemsByExerciseID[slot.id] = item
-            } else {
-                // Fallback: match by exercise ID (pre-snapshot items)
-                if let slot = planSlots.first(where: { $0.currentExerciseID == ex.id }) {
-                    itemsByExerciseID[slot.id] = item
-                }
+            } else if let ex = item.exercise,
+                      let slot = planSlots.first(where: { $0.currentExerciseID == ex.id })
+            {
+                // Fallback: match by exercise ID (pre-snapshot items without routineSlotID)
+                itemsByExerciseID[slot.id] = item
             }
         }
     }
@@ -2224,11 +2277,157 @@ struct ActiveWorkoutView: View {
 
     private func undoSetLog(exerciseID: UUID, setIndex: Int) {
         guard let wi = itemsByExerciseID[exerciseID] else { return }
+        // Snapshot the parent SetLog's values into the parent draft BEFORE removing
+        // it, so the now-editable field retains those values across force-quit/
+        // cold-resume. Without this, a log→undo→force-quit→resume cycle would fall
+        // back to prescription because both the SetLog and the draft would be gone.
+        // The same logic applies whether the user logged earlier in this session
+        // (where the draft would already match) or in a previous session (where the
+        // draft was never written and only the SetLog carried the value).
+        if let log = wi.setLogs.last(where: {
+            $0.indexInExercise == setIndex && $0.subIndex == nil
+        }) {
+            let repsStr = String(max(0, log.reps))
+            let weightStr = log.weight.map { String(Int($0.rounded())) } ?? ""
+            persistParentDraft(
+                slotID: exerciseID, setIndex: setIndex, field: .reps, value: repsStr
+            )
+            persistParentDraft(
+                slotID: exerciseID, setIndex: setIndex, field: .weight, value: weightStr
+            )
+            if let durationStr = log.durationSeconds.map(String.init) {
+                persistParentDraft(
+                    slotID: exerciseID, setIndex: setIndex, field: .duration, value: durationStr
+                )
+            }
+        }
+        // Remove parent set log
         if let j = wi.setLogs.lastIndex(where: {
             $0.indexInExercise == setIndex && $0.subIndex == nil
         }) {
             wi.setLogs.remove(at: j)
-            try? ctx.save()
+        }
+        // Cascade: remove all drop sub-logs for this parent set
+        let loggedSubs = dropsLoggedByExercise[exerciseID]?[setIndex] ?? []
+        wi.setLogs.removeAll { $0.indexInExercise == setIndex && $0.subIndex != nil }
+        try? ctx.save()
+        // Clear drop UI state for each cascaded sub
+        for sub in loggedSubs {
+            let key = "\(exerciseID)_\(setIndex)_\(sub)"
+            dropWeightInput.removeValue(forKey: key)
+            dropWeightUserEdited.remove(key)
+            dropRepsInput.removeValue(forKey: key)
+            clearDropWeightDraft(slotKey: key)
+        }
+        // Also clear any UNLOGGED drop drafts under this parent set
+        // (e.g. user typed Drop 2 weight but never tapped Log for that drop).
+        // Without this, the orphan draft would resurface on next render / cold resume.
+        let prefix = "\(exerciseID)_\(setIndex)_"
+        for key in dropWeightInput.keys where key.hasPrefix(prefix) {
+            dropWeightInput.removeValue(forKey: key)
+            dropWeightUserEdited.remove(key)
+            dropRepsInput.removeValue(forKey: key)
+            clearDropWeightDraft(slotKey: key)
+        }
+        dropsLoggedByExercise[exerciseID]?.removeValue(forKey: setIndex)
+    }
+
+    // MARK: - Drop Weight Draft Persistence (UserDefaults)
+    // Unlogged manual drop-weight edits are @State-only and lost on force quit.
+    // These helpers persist the draft so it survives cold resume.
+    // Key format inside the per-workout dictionary: "<slotID>_<parentSetIndex>_<subIndex>"
+
+    private var dropWeightDraftsUDKey: String? {
+        workout.map { "dropWeightDrafts_\($0.id.uuidString)" }
+    }
+
+    private func persistDropWeightDraft(slotKey: String, value: String) {
+        guard let udKey = dropWeightDraftsUDKey else { return }
+        var dict = (UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]) ?? [:]
+        dict[slotKey] = value
+        UserDefaults.standard.set(dict, forKey: udKey)
+    }
+
+    private func clearDropWeightDraft(slotKey: String) {
+        guard let udKey = dropWeightDraftsUDKey else { return }
+        var dict = (UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]) ?? [:]
+        guard dict[slotKey] != nil else { return }
+        dict.removeValue(forKey: slotKey)
+        UserDefaults.standard.set(dict, forKey: udKey)
+    }
+
+    private func clearAllDropWeightDrafts() {
+        guard let udKey = dropWeightDraftsUDKey else { return }
+        UserDefaults.standard.removeObject(forKey: udKey)
+    }
+
+    // MARK: - Parent Working-Set Draft Persistence (UserDefaults)
+    // Un-logged manual edits to parent reps/weight/duration are @State-only and
+    // lost on force quit. These helpers persist the draft per parent set so it
+    // survives cold resume. Key format inside the per-workout dictionary:
+    //   "<slotID>_<setIndex>_<field>"   field ∈ {reps, weight, duration}
+
+    private enum ParentDraftField: String { case reps, weight, duration }
+
+    private var parentDraftsUDKey: String? {
+        workout.map { "parentDrafts_\($0.id.uuidString)" }
+    }
+
+    private func parentDraftSlotKey(
+        slotID: UUID, setIndex: Int, field: ParentDraftField
+    ) -> String {
+        "\(slotID)_\(setIndex)_\(field.rawValue)"
+    }
+
+    private func persistParentDraft(
+        slotID: UUID, setIndex: Int, field: ParentDraftField, value: String
+    ) {
+        guard let udKey = parentDraftsUDKey else { return }
+        var dict = (UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]) ?? [:]
+        dict[parentDraftSlotKey(slotID: slotID, setIndex: setIndex, field: field)] = value
+        UserDefaults.standard.set(dict, forKey: udKey)
+    }
+
+    private func clearParentDraft(slotID: UUID, setIndex: Int) {
+        guard let udKey = parentDraftsUDKey else { return }
+        var dict = (UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]) ?? [:]
+        let prefix = "\(slotID)_\(setIndex)_"
+        let toRemove = dict.keys.filter { $0.hasPrefix(prefix) }
+        guard !toRemove.isEmpty else { return }
+        for key in toRemove { dict.removeValue(forKey: key) }
+        UserDefaults.standard.set(dict, forKey: udKey)
+    }
+
+    private func clearAllParentDrafts() {
+        guard let udKey = parentDraftsUDKey else { return }
+        UserDefaults.standard.removeObject(forKey: udKey)
+    }
+
+    /// Returns persisted draft fields for a parent set, or nil if no fields are stored.
+    /// Each field may independently be nil (caller backfills with prescription).
+    private func loadParentDraft(
+        slotID: UUID, setIndex: Int
+    ) -> (reps: String?, weight: String?, duration: String?)? {
+        guard let udKey = parentDraftsUDKey,
+              let dict = UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]
+        else { return nil }
+        let reps = dict[parentDraftSlotKey(slotID: slotID, setIndex: setIndex, field: .reps)]
+        let weight = dict[parentDraftSlotKey(slotID: slotID, setIndex: setIndex, field: .weight)]
+        let duration = dict[parentDraftSlotKey(slotID: slotID, setIndex: setIndex, field: .duration)]
+        if reps == nil && weight == nil && duration == nil { return nil }
+        return (reps: reps, weight: weight, duration: duration)
+    }
+
+    /// Restores unlogged draft weights from UserDefaults into the in-memory buffers.
+    /// Only applies to slots NOT already populated by a logged SetLog (i.e. not in dropWeightUserEdited).
+    private func restoreDropWeightDrafts() {
+        guard let udKey = dropWeightDraftsUDKey,
+              let dict = UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]
+        else { return }
+        for (slotKey, value) in dict {
+            guard !dropWeightUserEdited.contains(slotKey) else { continue }
+            dropWeightInput[slotKey] = value
+            dropWeightUserEdited.insert(slotKey)
         }
     }
 
@@ -2391,8 +2590,10 @@ struct ActiveWorkoutView: View {
         try? ctx.save()
     }
 
-    /// Removes a logged drop sub-log and clears the user-edited flag so the weight
-    /// suggestion recomputes automatically on the next render.
+    /// Removes a logged drop sub-log. Intentionally preserves any manual weight override
+    /// in `dropWeightUserEdited`/`dropWeightInput` so the field shows the previously
+    /// entered value rather than reverting to auto-suggestion.
+    /// The only action that clears a manual override is the "↩ suggest" button.
     private func undoDropLog(exerciseID slotID: UUID, parentSetIndex: Int, subIndex: Int) {
         guard let wi = itemsByExerciseID[slotID] else { return }
         if let j = wi.setLogs.firstIndex(where: {
@@ -2402,10 +2603,6 @@ struct ActiveWorkoutView: View {
             var drops = dropsLoggedByExercise[slotID, default: [:]]
             drops[parentSetIndex]?.remove(subIndex)
             dropsLoggedByExercise[slotID] = drops
-            // Clear authoritative flag → weight binding will recompute suggestion.
-            let key = "\(slotID)_\(parentSetIndex)_\(subIndex)"
-            dropWeightUserEdited.remove(key)
-            dropWeightInput.removeValue(forKey: key)
             try? ctx.save()
         }
     }
@@ -2428,14 +2625,20 @@ struct ActiveWorkoutView: View {
                     && (sub == 1 || loggedSubs.contains(sub - 1))
                 // Compute weight in the @ViewBuilder body so @Observable setLogs accesses
                 // are tracked — this ensures re-render when the parent set weight changes.
-                let currentWeight: String = dropWeightUserEdited.contains(key)
+                let suggested = suggestedDropWeight(
+                    exerciseID: exercise.id,
+                    parentSetIndex: parentSetIndex,
+                    subIndex: sub,
+                    dropPercent: snap.dropPercent ?? 20
+                )
+                let isOverridden = dropWeightUserEdited.contains(key)
+                let currentWeight: String = isOverridden
                     ? (dropWeightInput[key] ?? "")
-                    : suggestedDropWeight(
-                        exerciseID: exercise.id,
-                        parentSetIndex: parentSetIndex,
-                        subIndex: sub,
-                        dropPercent: snap.dropPercent ?? 20
-                    )
+                    : suggested
+                // Show reset only when manually overridden, a suggestion exists, drop not yet logged,
+                // AND the visible value actually differs from the suggestion.
+                let canReset = isOverridden && !suggested.isEmpty && !isDropLogged
+                    && Double(currentWeight) != Double(suggested)
 
                 DropLogRow(
                     dropNumber: sub,
@@ -2457,6 +2660,7 @@ struct ActiveWorkoutView: View {
                         set: { newVal in
                             dropWeightInput[key] = newVal
                             dropWeightUserEdited.insert(key)
+                            persistDropWeightDraft(slotKey: key, value: newVal)
                         }
                     ),
                     onLog: { reps, weight in
@@ -2467,6 +2671,7 @@ struct ActiveWorkoutView: View {
                             reps: reps,
                             weight: weight
                         )
+                        clearDropWeightDraft(slotKey: key)
                         let isFinalDrop = (sub == dropCount)
                         if isFinalDrop {
                             // Final sub-log: fire between-sets or after-exercise rest.
@@ -2508,7 +2713,12 @@ struct ActiveWorkoutView: View {
                             subIndex: sub
                         )
                         UINotificationFeedbackGenerator().notificationOccurred(.warning)
-                    }
+                    },
+                    onResetWeight: canReset ? {
+                        dropWeightUserEdited.remove(key)
+                        dropWeightInput.removeValue(forKey: key)
+                        clearDropWeightDraft(slotKey: key)
+                    } : nil
                 )
             }
         }
@@ -3120,6 +3330,9 @@ private struct DropLogRow: View {
     @Binding var weight: String
     var onLog: (Int, Double?) -> Void
     var onUndo: () -> Void
+    /// Non-nil when the weight was manually overridden and a suggestion can be computed.
+    /// Tapping resets the field to the auto-suggested value.
+    var onResetWeight: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -3147,13 +3360,21 @@ private struct DropLogRow: View {
 
                 Text("×").foregroundStyle(.secondary).fixedSize()
 
-                TextField("Wt", text: $weight)
-                    .font(.dsBody.monospacedDigit())
-                    .keyboardType(.decimalPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 70)
-                    .disabled(isLogged)
-                    .focused($focused, equals: .weight)
+                VStack(alignment: .leading, spacing: 2) {
+                    TextField("Wt", text: $weight)
+                        .font(.dsBody.monospacedDigit())
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 70)
+                        .disabled(isLogged)
+                        .focused($focused, equals: .weight)
+                    if let reset = onResetWeight {
+                        Button("↩ suggest") { reset() }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .buttonStyle(.plain)
+                    }
+                }
 
                 Text(Units.weightIsKg ? "kg" : "lb")
                     .foregroundStyle(.secondary)
