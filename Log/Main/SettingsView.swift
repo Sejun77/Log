@@ -73,13 +73,15 @@ struct SettingsView: View {
             case .rir:
                 Stepper(
                     "Default RIR: \(formatted(defaultRIR))",
-                    value: $defaultRIR, in: 0...10, step: 0.5
+                    value: $defaultRIR, in: 0...5, step: 0.5
                 )
+                .onChange(of: defaultRIR) { _, new in defaultRPE = 10 - new }
             case .rpe:
                 Stepper(
                     "Default RPE: \(formatted(defaultRPE))",
                     value: $defaultRPE, in: 5...10, step: 0.5
                 )
+                .onChange(of: defaultRPE) { _, new in defaultRIR = 10 - new }
             case .none:
                 EmptyView()
             }
