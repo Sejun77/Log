@@ -508,6 +508,7 @@ Reduce confusion by making rest fields consistent across routine editor and in-w
 - [x] Non-final drops use only dropset-specific `restSeconds` if > 0; no fallback to `restSecondsBetweenSets`
 - [x] Final drop fires the real next rest: `restBetweenSets` if not the last working set, `restAfterExercise` (→ `restBetweenSets` fallback) if last working set, none if last set of entire workout
 - [x] Warmup rest and superset round rest behavior unchanged
+- [x] Mid-superset `restSecondsAfterExercise` suppression verified by code audit: `restSecondsAfterCurrentLog`'s `block.isSuperset` branch never consults `plannedRestAfterExercise`; per-exercise after-exercise rest cannot fire between exercises inside a round. Mid-round logs return `nil` until every exercise has logged the current set index, so no rest timer starts between exercises in a round
 
 **Rest ownership reference (current):**
 
@@ -515,14 +516,27 @@ Reduce confusion by making rest fields consistent across routine editor and in-w
 |---|---|---|---|
 | `restSecondsBetweenSets` | `SlotPrescription` | Routine editor + session plan | Non-final sets; final-set fallback |
 | `restSecondsAfterExercise` | `SlotPrescription` | Routine editor + session plan | Final working set of non-superset exercise only |
-| `restAfterSeconds` | `RoutineBlock` | UI removed (model retained) | Additive on final set if non-zero (legacy) |
+| `restAfterSeconds` | `RoutineBlock` | UI removed (model retained) | Additive on final set if non-zero (legacy). Pending: re-expose in Superset Details as block transition rest (see design refinement below) |
 | `supersetRoundRestSeconds` | `RoutineBlock` | Superset Details sheet | After each completed superset round |
+
+**Design refinement — superset timing decomposes into two distinct concepts:**
+
+Superset rest must be editable as two independent fields:
+
+1. **Rest after round** — `RoutineBlock.supersetRoundRestSeconds`. Fires after each **non-final** completed round of the superset. Already wired and edited in the Superset Details sheet.
+2. **Rest after superset / before next block** — block-level transition rest. Fires after the **final** round of the superset before advancing to the next block. The model field is `RoutineBlock.restAfterSeconds` (UI was removed from the block list during the rest cleanup; needs to be re-exposed in the Superset Details / plan sheet, not the block list).
+
+In a superset, the per-exercise `SlotPrescription.restSecondsAfterExercise` remains hidden / de-emphasized in editing UI and must never fire between exercises inside a round (already enforced; see verified completed item above).
+
+The block list stays simplified — block transition rest is edited inside the Superset Details sheet alongside round rest, not as an inline field on the block row.
 
 **Pending:**
 
-- [ ] Verify end-to-end: `supersetRoundRestSeconds` correctly drives the round-rest timer in an active superset workout
-- [ ] Enforce: `restSecondsAfterExercise` must not interrupt between exercises inside a superset (slot rest is irrelevant mid-round)
-- [ ] Superset plan/edit UI polish: sets/reps/RIR/RPE editable per exercise; rest fields hidden or de-emphasized in superset context
+- [ ] Verify end-to-end (live workout, not just code audit): `supersetRoundRestSeconds` correctly drives the round-rest timer after each non-final round in an active superset workout, and the timer ends with no duplicate notifications
+- [ ] Add a "Rest before next block" / "Rest after superset" control in the Superset Details sheet bound to the block-level transition rest field (`RoutineBlock.restAfterSeconds`); keep the block list simplified (no inline edit there)
+- [ ] Define final-round behavior: on the final round of a superset, use block transition rest **instead of** (not additive on top of) `supersetRoundRestSeconds` when transition rest is configured; if transition rest is unset, fall back to round rest; if this is the last block of the workout, suppress rest as today. Current implementation appends `block.restAfterSeconds` to round rest at end-of-block — this needs to change to a replace-on-final-round semantics
+- [ ] Verify dropset-inside-superset rest timing: the dropset final-drop path currently uses `plannedRestAfterExercise(for:)` on the last working set without checking `block.isSuperset`, so a dropset attached to a superset exercise could cause `restSecondsAfterExercise` to fire mid-superset. Audit and patch so superset timing semantics are honored (no `restSecondsAfterExercise` mid-round even when a dropset technique is attached); fall through to round rest / transition rest as appropriate
+- [ ] Superset plan/edit UI polish: sets/reps/RIR/RPE editable per exercise; per-exercise rest fields hidden or de-emphasized in superset context (round rest and transition rest are the only superset-scoped rest fields)
 
 **Manual verification:**
 
