@@ -2766,7 +2766,9 @@ struct ActiveWorkoutView: View {
     ///   falling back to restSecondsBetweenSets → template rest.
     /// • Supersets compute rest per “round”: wait until all exercises at this index are logged,
     ///   then apply the same rules; when combining, take the max of the explicit rests found.
-    /// • Finally, if this was the *last* set/round of the block, append block.restAfterSeconds (>0) to the computed rest.
+    /// • Finally, on the *last* set/round of the block:
+    ///     – Supersets: block.restAfterSeconds (transition rest) replaces the round rest when configured (>0).
+    ///     – Non-superset blocks: legacy additive behavior — block.restAfterSeconds is added to the computed rest.
     private func restSecondsAfterCurrentLog(
         setIndex idx: Int,
         template t: PlanSetTemplate,
@@ -2911,10 +2913,16 @@ struct ActiveWorkoutView: View {
                 : (idx == exSetCount - 1) && isLastExerciseOfBlock
 
             if isFinal, let extra = block.restAfterSeconds, extra != 0 {
-                if let base = restSec {
-                    restSec = max(0, base + extra)
-                } else {
+                if block.isSuperset {
+                    // Final round of a superset: transition rest replaces round rest.
                     restSec = max(0, extra)
+                } else {
+                    // Non-superset legacy: additive on top of the final-set rest.
+                    if let base = restSec {
+                        restSec = max(0, base + extra)
+                    } else {
+                        restSec = max(0, extra)
+                    }
                 }
             }
         }

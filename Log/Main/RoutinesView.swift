@@ -1004,7 +1004,7 @@ private struct SupersetDetailNoRest: View {
 
     var body: some View {
         List {
-            Section("Timing") {
+            Section {
                 Stepper(
                     (block.supersetRoundRestSeconds.map { "Rest after round: \($0)s" })
                         ?? "Rest after round: none",
@@ -1015,6 +1015,20 @@ private struct SupersetDetailNoRest: View {
                     in: 0...300,
                     step: 15
                 )
+                Stepper(
+                    (block.restAfterSeconds.map { "Rest before next block: \($0)s" })
+                        ?? "Rest before next block: none",
+                    value: Binding(
+                        get: { block.restAfterSeconds ?? 0 },
+                        set: { block.restAfterSeconds = $0 > 0 ? $0 : nil }
+                    ),
+                    in: 0...600,
+                    step: 15
+                )
+            } header: {
+                Text("Timing")
+            } footer: {
+                Text("Rest after round fires between completed rounds. Rest before next block fires after the final round of this superset, replacing round rest.")
             }
 
             ForEach(block.exercises.sorted { $0.order < $1.order }) { re in
