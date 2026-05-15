@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-14 (KST) — Phase 5.2 superset execution & UI slice complete (dropset rest/focus, shared sets-per-exercise, reorder)
+Last updated: 2026-05-14 (KST) — Phase 6.A notes semantics corrected: three distinct note types; Exercise Notes display in ActiveWorkoutView pending restoration
 
 ---
 
@@ -560,8 +560,22 @@ Upgrade history from string-based grouping to relationship-based, and add workou
 - [x] Exercise name resolved as: `exercise.name` → `exerciseNameSnapshot` → `"Deleted exercise"`; renaming an exercise does not alter history display
 - [x] Time-based sets display duration (`durationSeconds`); rep-based sets display reps + weight
 - [x] Set logs sorted by `(indexInExercise, subIndex ?? -1)` so dropset sub-logs follow their parent working set in order
-- [x] Session-level `Workout.notes` shown in Overview when non-empty; nil/whitespace-only produces no visible Notes row; "Session Notes" input added to active workout view; distinct from slot/template notes (`RoutineExercise.templateNotes`)
-- [x] Active workout notes semantics consolidated: **Session Notes** (`Workout.notes`) — user-typed workout-level notes, persisted to and shown in history; **Slot Guidance** (`RoutineExercise.templateNotes` snapshot) — routine-editor cues shown read-only in the active workout Plan section without requiring the plan sheet; "Exercise Notes" text field (which wrote to `Exercise.notes`) removed from active workout UI; `Exercise.notes` model field retained for compatibility, deprecation deferred to Phase 8
+- [x] **Session Notes** (`Workout.notes`) — user-typed workout-level notes specific to the current session; editable in `ActiveWorkoutView`; persisted on the `Workout`; shown in `WorkoutDetailView` Overview when non-empty (nil/whitespace-only produces no visible Notes row). Distinct from both `Exercise.notes` and `RoutineExercise.templateNotes`
+- [x] **Slot Guidance / Plan Notes** (`RoutineExercise.templateNotes` snapshot via `templateNotesSnapshot`) — per-slot coaching cues authored in the routine editor; shown read-only in the active workout Plan section without requiring the plan sheet. Distinct from both `Exercise.notes` and `Workout.notes`
+
+**Notes semantics — three distinct note types (canonical):**
+
+| Type | Field | Scope | Authored where | Shown where |
+|---|---|---|---|---|
+| Session Notes | `Workout.notes` | Per-workout | Active workout (editable) | Active workout + `WorkoutDetailView` |
+| Exercise Notes | `Exercise.notes` | Global per-exercise (reusable) | Exercise page | Exercise page; active workout (read-only display below Session Notes) — **display in active workout is pending; see below** |
+| Slot Guidance / Plan Notes | `RoutineExercise.templateNotes` (snapshotted to `WorkoutItem.templateNotesSnapshot`) | Per routine slot | Routine editor | Active workout Plan section (read-only); history detail when present |
+
+`Exercise.notes` is **retained** as the global notes field for an exercise. It is **not** being deprecated. The earlier 6.A consolidation that removed the "Exercise Notes" field from `ActiveWorkoutView` went too far: editing `Exercise.notes` belongs on the Exercise page (not in the active workout — that path was the source of historical silent mutation incidents), but a **read-only display** of `Exercise.notes` in the active workout — clearly labeled as global exercise notes, below Session Notes — is the intended design and is still missing in the UI.
+
+**Pending (6.A — notes semantics correction):**
+
+- [ ] Restore Exercise Notes display in `ActiveWorkoutView` as a read-only block, clearly labeled (e.g., "Exercise Notes — global"), positioned **below** the Session Notes editor. Source: `exercise.notes` (resolved via the same fallback chain used for the exercise name — live `exercise.notes` → `exerciseNameSnapshot`-style snapshot if it exists, otherwise hide). Editing must remain off this surface (Exercise.notes is editable only on the Exercise page) to preserve the no-silent-mutation invariant. Hide the block entirely when `exercise.notes` is nil/whitespace-only. Order in the active workout: Session Notes (editable) → Exercise Notes (read-only) → Slot Guidance / Plan Notes (read-only, inside the Plan section)
 
 **Pending (6.B — history relationship refactor):**
 
