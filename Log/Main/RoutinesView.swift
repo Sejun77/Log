@@ -301,8 +301,9 @@ struct RoutineEditor: View {
             StartWorkoutFromRoutineView(routine: routine)
         }
         .toolbar {
-            // Top-right "Start" button
+            // Top-right: Edit (reorder blocks) + Start
             ToolbarItemGroup(placement: .topBarTrailing) {
+                EditButton()
                 Button {
                     if let plan = activeGuard.activePlan,
                         plan.routineID != routine.id
@@ -1172,7 +1173,8 @@ private struct WarmupSchemeEditor: View {
         }
         .navigationTitle("Warmup")
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                EditButton()
                 Button { showAddStep = true } label: {
                     Image(systemName: "plus")
                 }
@@ -1418,7 +1420,8 @@ private struct TechniquePlanEditor: View {
         }
         .navigationTitle("Techniques")
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                EditButton()
                 Button { showAdd = true } label: {
                     Image(systemName: "plus")
                 }
