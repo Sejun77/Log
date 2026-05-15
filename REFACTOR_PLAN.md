@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-15 (KST) — Phase 6.A notes semantics complete: Session Notes, Exercise Notes (read-only display + focused edit sheet), Slot Guidance
+Last updated: 2026-05-15 (KST) — Edit-mode/reorder consistency complete across top-level routines, top-level exercises, routine blocks, warmup steps, technique plans, and superset exercises
 
 ---
 
@@ -110,13 +110,15 @@ Set inputs (reps / weight / duration) for parent working sets and dropset drops 
 ### Models
 
 - **Exercise**
-  - `id: UUID`, `name`, `bodyPart?`, `notes?`, `isCustom`, `isTimeBased`
+  - `id: UUID`, `name`, `bodyPart?`, `notes?`, `isCustom`, `isTimeBased`, `order: Int = 0`
+  - `order` — user-controlled display order on the Exercises tab; additive (default 0); legacy data normalized once via `ExercisesView.backfillExerciseOrderIfNeeded` on first appear
   - `defaultTemplates: [SetTemplate]` (.cascade) — **legacy; targeted for removal** (see Phase 9)
   - `routineUsages: [RoutineExercise]` (.cascade)
   - `workoutItems: [WorkoutItem]` (**.nullify** — history preserved on exercise deletion)
 
 - **Routine**
-  - `id: UUID`, `name`, `notes?`
+  - `id: UUID`, `name`, `notes?`, `order: Int = 0`
+  - `order` — user-controlled display order on the Routines tab; additive (default 0); legacy data normalized once via `RoutinesView.backfillRoutineOrderIfNeeded` on first appear
   - `blocks: [RoutineBlock]` (.cascade)
   - `variants: [RoutineVariant]` (.cascade)
 
@@ -538,9 +540,28 @@ In a superset, the per-exercise `SlotPrescription.restSecondsAfterExercise` rema
 
 The block list stays simplified — block transition rest is edited inside the Superset Details sheet alongside round rest, not as an inline field on the block row.
 
+**Edit-mode / reorder consistency — canonical app-wide rule:**
+
+- Any list that supports reorder, delete, or both exposes a standard SwiftUI `EditButton()` in its `NavigationStack` toolbar at `.topBarTrailing`.
+- When `EditButton` coexists with a primary action (e.g., `+` add, `Start`), both live inside a single `ToolbarItemGroup(placement: .topBarTrailing)` with `EditButton` first, primary action second.
+- `EditButton` engages SwiftUI edit mode, which surfaces drag handles for `.onMove` and inline minus-delete buttons for `.onDelete`. Swipe-to-delete continues to work outside edit mode where it was previously declared.
+- Active workout / routine / block / exercise locks are honored in edit mode the same way as in swipe mode: locked rows surface the existing "In use" alert instead of being silently deleted; `.moveDisabled(...)` still blocks reorder on locked rows.
+- All edit-mode delete paths route through the **existing** confirmation alert for that surface — no silent deletes, no bypass of impact-summary messages.
+
+**Completed (5.2 — reorder / edit-mode consistency):**
+
+- [x] Top-level **Saved Routines** list (`RoutinesView`): `EditButton` in `.topBarTrailing`; `@Query(sort: [\Routine.order, \Routine.name])`; `.onMove(perform: moveRoutines)` persists `Routine.order`; `.onDelete(perform: deleteRoutinesFromEdit)` routes to the existing `pendingDeleteRoutine` + `routineImpactMessage` alert; swipe-to-delete retained; locked routines surface the existing "In use" alert in both edit and swipe paths; new routines created via `addRoutine` get `order = max(existing) + 1`; one-shot `backfillRoutineOrderIfNeeded` on `.onAppear` normalizes legacy data only when every row has `order == 0` or values collide (idempotent)
+- [x] Top-level **All Exercises** list (`ExercisesView`): `EditButton` in `.topBarTrailing`; `@Query(sort: [\Exercise.order, \Exercise.name])`; `.onMove(perform: moveExercises)` persists `Exercise.order`; `.onDelete(perform: deleteExercisesFromEdit)` routes to the existing `pendingDeleteExercise` + `buildImpactMessage` alert (impact summary preserved); swipe-to-delete retained; locked exercises surface the existing "In use" alert in both edit and swipe paths; reorder is disabled while search is non-empty via `.moveDisabled(!search.isEmpty)` (placed after `.onMove` / `.onDelete` so the modifier chain compiles on `DynamicViewContent`); new exercises created via `addExercise` get `order = max(existing) + 1`; one-shot `backfillExerciseOrderIfNeeded` on `.onAppear`
+- [x] **Routine Editor → Blocks** list (`RoutineEditor` blocks section): `EditButton` in `.topBarTrailing` alongside Start; `.onMove(perform: moveBlocks)` (existing) with `.moveDisabled(activeGuard.isRoutineLocked(routine.id))` preserved; `.onDelete(perform: deleteBlocksFromEdit)` routes to the existing `DeletePrompt` alert; locked blocks surface the existing "In use" alert
+- [x] **Warmup steps** (`WarmupSchemeEditor`) and **Technique plans** (`TechniquePlanEditor`): `EditButton` in `.topBarTrailing` alongside the existing `+` button via `ToolbarItemGroup`; `.onMove` and `.onDelete` (existing) now reachable via standard edit mode
+- [x] **Superset Details — Exercises** (`SupersetDetailNoRest`): reorder via `EditButton` + `.onMove(perform: moveExercises)` persisting `RoutineExercise.order` (already shipped in the earlier superset slice; reaffirmed as part of the canonical pattern)
+
+**Additive schema changes from this slice:** `Routine.order: Int = 0`, `Exercise.order: Int = 0`. Both are optional-with-default fields, so SwiftData performs a lightweight migration. Legacy rows are normalized once per surface via the backfill helpers above. See updated model snapshot in §2.
+
 **Pending:**
 
-- [ ] Standardize reorder / edit-mode affordances across reorderable lists in the app. Superset Details now uses `EditButton()` + `.onMove` (engage edit mode → drag handles appear). Other reorderable lists in the app (e.g., warmup steps, technique plans, routine block list, routine list) may use different patterns. Decide the canonical interaction (EditButton + drag handles vs. always-visible drag handles vs. long-press to drag) and apply consistently. Also decide where `EditButton` is required vs. inferred (e.g., based on whether a list supports both delete and reorder). Goal: a user who learns reorder in one list should know how to reorder in any other
+- [ ] **Superset Details — exercise delete / remove path.** No existing safe "remove exercise from superset" path exists. Adding edit-mode delete here requires a design decision for the degenerate case where a superset drops to a single exercise: auto-collapse to a normal block, leave a single-exercise "superset" with a warning, or block the delete. Until that decision is made, edit mode in Superset Details surfaces drag handles only (no minus buttons)
+- [ ] **`ExerciseEditView` default-templates list** (`ExercisesView.swift`): still has `.onMove` + `.onDelete` but no `EditButton`. Deferred because `Exercise.defaultTemplates` is targeted for removal in **Phase 9**; revisit alongside that decision rather than adding a short-lived `EditButton`
 
 **Manual verification:**
 
@@ -703,7 +724,6 @@ These are NOT part of the current refactor scope but represent future prescripti
 These are product tweaks and must not block completion:
 
 - routine name editable
-- reorder routines by drag
 - **multi-select exercise add**
   - [ ] Selection UI: checkmark-based multi-select in exercise picker
   - [ ] Confirm-add action: selected exercises added in selection order
