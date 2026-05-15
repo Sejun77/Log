@@ -188,6 +188,7 @@ struct ActiveWorkoutView: View {
     @State private var showFinishConfirm = false
     @State private var sessionPlans: [UUID: SessionPlan] = [:]
     @State private var showEditPlanSheet = false
+    @State private var showExerciseNotesSheet = false
     /// Per-set planned targets captured before opening the edit sheet.
     @State private var preEditRepStrs: [UUID: [Int: String]] = [:]
     @State private var preEditDurStrs: [UUID: [Int: String]] = [:]
@@ -1362,22 +1363,31 @@ struct ActiveWorkoutView: View {
 
                     // --- Exercise-level notes (read-only display of Exercise.notes) ---
                     // Source: live Exercise.notes for the currently-focused exercise.
-                    // Hidden when nil or whitespace-only. Editing happens on the Exercise
-                    // page only — keeping this surface read-only preserves the
-                    // no-silent-mutation invariant established in Phase 2.
-                    if let liveExerciseNotes: String = {
-                        guard let live = fetchExercise(by: exercise.currentExerciseID),
-                            let raw = live.notes
-                        else { return nil }
-                        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                        return trimmed.isEmpty ? nil : raw
-                    }() {
+                    // Inline editing is intentionally disabled to preserve the
+                    // no-silent-mutation invariant (Phase 2). Explicit editing is
+                    // available via the "Edit Exercise Notes" button below, which
+                    // opens a focused sheet that writes through to Exercise.notes.
+                    if fetchExercise(by: exercise.currentExerciseID) != nil {
                         Section {
-                            Text(liveExerciseNotes)
-                                .font(.dsBody)
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text("Saved to this exercise. Editing is unavailable during an active workout — edit from the Exercise page after the session ends.")
+                            if let live = fetchExercise(by: exercise.currentExerciseID),
+                                let raw = live.notes,
+                                !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            {
+                                Text(raw)
+                                    .font(.dsBody)
+                                    .foregroundStyle(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text("No notes yet.")
+                                    .font(.dsBodySecondary)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Button {
+                                showExerciseNotesSheet = true
+                            } label: {
+                                Label("Edit Exercise Notes", systemImage: "square.and.pencil")
+                            }
+                            Text("Saved to this exercise. Editing here affects every routine and workout that uses this exercise.")
                                 .font(.dsCaption)
                                 .foregroundStyle(.secondary)
                         } header: {
@@ -1764,6 +1774,13 @@ struct ActiveWorkoutView: View {
             ) {
                 if let snap = techniqueDetailSnap {
                     TechniqueDetailSheet(snap: snap)
+                }
+            }
+            .sheet(isPresented: $showExerciseNotesSheet) {
+                if let ex = currentExercise,
+                    let liveEx = fetchExercise(by: ex.currentExerciseID)
+                {
+                    ExerciseNotesEditSheet(exercise: liveEx)
                 }
             }
         } else {
@@ -3603,6 +3620,72 @@ private struct SetTechniqueChipsRow: View {
 }
 
 /// Read-only detail sheet for a TechniquePlanSnapshot. No template mutation.
+// MARK: - Exercise Notes Edit Sheet (active workout)
+
+/// Focused editor for the global Exercise.notes field, presented from the read-only
+/// "Exercise Notes" section in the active workout. Writes through to the live
+/// Exercise (@Bindable). Save is triggered on "Done"; cancel discards in-flight
+/// edits by reverting the @Bindable surface to its original value before dismiss.
+/// This sheet is the only place in the active workout where Exercise.notes can be
+/// edited — the in-list display below Session Notes stays read-only.
+private struct ExerciseNotesEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var ctx
+    @Bindable var exercise: Exercise
+
+    @State private var originalNotes: String?
+    @State private var didCapture = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(
+                        "Notes…",
+                        text: Binding(
+                            get: { exercise.notes ?? "" },
+                            set: { newVal in
+                                let trimmed = newVal.trimmingCharacters(
+                                    in: .whitespacesAndNewlines)
+                                exercise.notes = trimmed.isEmpty ? nil : newVal
+                            }
+                        ),
+                        axis: .vertical
+                    )
+                    .lineLimit(3...10)
+                    .textInputAutocapitalization(.sentences)
+                } header: {
+                    Text("Exercise Notes")
+                } footer: {
+                    Text("These notes are saved to the exercise and reused across routines and workouts.")
+                }
+            }
+            .navigationTitle(exercise.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        exercise.notes = originalNotes
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        try? ctx.save()
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                if !didCapture {
+                    originalNotes = exercise.notes
+                    didCapture = true
+                }
+            }
+        }
+    }
+}
+
 private struct TechniqueDetailSheet: View {
     let snap: TechniquePlanSnapshot
     @Environment(\.dismiss) private var dismiss
