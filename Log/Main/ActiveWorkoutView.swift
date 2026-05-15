@@ -1377,7 +1377,7 @@ struct ActiveWorkoutView: View {
                                 .font(.dsBody)
                                 .foregroundStyle(.primary)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Text("Saved to this exercise. Edit on the Exercise page.")
+                            Text("Saved to this exercise. Editing is unavailable during an active workout — edit from the Exercise page after the session ends.")
                                 .font(.dsCaption)
                                 .foregroundStyle(.secondary)
                         } header: {
