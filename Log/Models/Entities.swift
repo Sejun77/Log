@@ -11,6 +11,10 @@ final class Exercise {
     var notes: String?
     var isCustom: Bool
     var isTimeBased: Bool = false
+    /// User-controlled display order on the Exercises tab. Additive (default 0)
+    /// so existing rows migrate cleanly; backfill normalizes legacy data on
+    /// first appear via `ExercisesView.backfillOrderIfNeeded`.
+    var order: Int = 0
 
     // Exercise owns its default templates
     @Relationship(deleteRule: .cascade)
@@ -153,6 +157,10 @@ final class Routine {
     @Attribute(.unique) var id: UUID
     var name: String
     var notes: String?
+    /// User-controlled display order on the Routines tab. Additive (default 0)
+    /// so existing rows migrate cleanly; backfill normalizes legacy data on
+    /// first appear via `RoutinesView.backfillOrderIfNeeded`.
+    var order: Int = 0
 
     @Relationship(deleteRule: .cascade)
     var blocks: [RoutineBlock]

@@ -11,7 +11,8 @@ struct ExercisesView: View {
     @FocusState private var restFieldFocused: Bool
 
     @Environment(\.modelContext) private var ctx
-    @Query(sort: \Exercise.name) private var exercises: [Exercise]
+    @Query(sort: [SortDescriptor(\Exercise.order), SortDescriptor(\Exercise.name)])
+    private var exercises: [Exercise]
     @State private var newName = ""
     @State private var search = ""
     @State private var dupAlert = false
@@ -91,11 +92,15 @@ struct ExercisesView: View {
         .scrollContentBackground(.hidden)
         .background(DSColor.bg.ignoresSafeArea())
         .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                EditButton()
+            }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { focusNewExercise = false }
             }
         }
+        .onAppear { backfillExerciseOrderIfNeeded() }
         .alert("Delete Exercise", isPresented: $showDeleteExerciseAlert) {
             Button("Cancel", role: .cancel) {
                 pendingDeleteExercise = nil
@@ -280,9 +285,28 @@ struct ExercisesView: View {
                     }
                 }
             }
+            .onMove(perform: moveExercises)
+            .onDelete(perform: deleteExercisesFromEdit)
+            .moveDisabled(!search.isEmpty)
         } header: {
             DSSectionHeader(title: "All Exercises", systemImage: "list.bullet")
         }
+    }
+
+    /// Edit-mode delete path for the Exercises list. Routes through the same
+    /// safety as swipe-to-delete: locked exercises surface the "in use" alert,
+    /// non-locked exercises queue the existing impact-summary confirmation.
+    private func deleteExercisesFromEdit(at offsets: IndexSet) {
+        guard let first = offsets.first, first < filtered.count else { return }
+        let ex = filtered[first]
+        if activeGuard.isLocked(ex.id) {
+            lockedName = ex.name
+            showLockedAlert = true
+            return
+        }
+        pendingDeleteExercise = ex
+        deleteImpactMessage = buildImpactMessage(for: ex)
+        showDeleteExerciseAlert = true
     }
 
     // MARK: - Default Rest Sheet
@@ -364,9 +388,41 @@ struct ExercisesView: View {
             return
         }
 
-        ctx.insert(Exercise(name: trimmed))
+        let ex = Exercise(name: trimmed)
+        ex.order = (exercises.map(\.order).max() ?? -1) + 1
+        ctx.insert(ex)
         try? ctx.save()
         newName = ""
+    }
+
+    /// Reorder handler for the top-level All Exercises list. Persists the new
+    /// display order by rewriting `Exercise.order` on every exercise to match
+    /// the post-move sequence. Only enabled when search is inactive — see
+    /// `.moveDisabled(!search.isEmpty)` on the ForEach — so the offsets always
+    /// refer to indices in the full `exercises` array.
+    private func moveExercises(from offsets: IndexSet, to newOffset: Int) {
+        guard search.isEmpty else { return }
+        var sorted = exercises
+        sorted.move(fromOffsets: offsets, toOffset: newOffset)
+        for (i, ex) in sorted.enumerated() {
+            ex.order = i
+        }
+        try? ctx.save()
+    }
+
+    /// One-shot normalization for legacy data: if every exercise has order 0
+    /// (or order values collide), rewrite them based on the current `exercises`
+    /// query order (`[order, name]` ascending — effectively alphabetical when
+    /// all orders are 0). Idempotent; no-op once orders are unique.
+    private func backfillExerciseOrderIfNeeded() {
+        guard exercises.count > 1 else { return }
+        let allZero = exercises.allSatisfy { $0.order == 0 }
+        let hasDuplicates = Set(exercises.map(\.order)).count != exercises.count
+        guard allZero || hasDuplicates else { return }
+        for (i, ex) in exercises.enumerated() {
+            ex.order = i
+        }
+        try? ctx.save()
     }
 }
 

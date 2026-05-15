@@ -7,7 +7,8 @@ struct RoutinesView: View {
     @Binding var resumeNavigationTrigger: Bool
 
     @Environment(\.modelContext) private var ctx
-    @Query(sort: \Routine.name) private var routines: [Routine]
+    @Query(sort: [SortDescriptor(\Routine.order), SortDescriptor(\Routine.name)])
+    private var routines: [Routine]
 
     @State private var newName = ""
     @State private var dupAlert = false
@@ -43,6 +44,9 @@ struct RoutinesView: View {
             .background(DSColor.bg.ignoresSafeArea())
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    EditButton()
+                }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
@@ -90,6 +94,7 @@ struct RoutinesView: View {
                     resumeNavigationTrigger = false
                 }
             }
+            .onAppear { backfillRoutineOrderIfNeeded() }
         }
     }
 
@@ -210,6 +215,8 @@ struct RoutinesView: View {
                         }
                     }
                 }
+                .onMove(perform: moveRoutines)
+                .onDelete(perform: deleteRoutinesFromEdit)
             }
         } header: {
             DSSectionHeader(
@@ -220,6 +227,22 @@ struct RoutinesView: View {
     }
 
     // MARK: - Helpers
+
+    /// Edit-mode delete path for the Routines list. Routes through the same
+    /// safety as swipe-to-delete: locked routines surface the "in use" alert,
+    /// non-locked routines queue the existing confirmation dialog.
+    private func deleteRoutinesFromEdit(at offsets: IndexSet) {
+        guard let first = offsets.first, first < routines.count else { return }
+        let r = routines[first]
+        if activeGuard.isRoutineLocked(r.id) {
+            lockedRoutineName = r.name
+            showLockedRoutineAlert = true
+            return
+        }
+        pendingDeleteRoutine = r
+        routineDeleteMessage = routineImpactMessage(r)
+        showDeleteRoutineAlert = true
+    }
 
     private func routineImpactMessage(_ r: Routine) -> String {
         let blocks = r.blocks.count
@@ -243,9 +266,39 @@ struct RoutinesView: View {
             return
         }
 
-        ctx.insert(Routine(name: t, blocks: []))
+        let r = Routine(name: t, blocks: [])
+        r.order = (routines.map(\.order).max() ?? -1) + 1
+        ctx.insert(r)
         try? ctx.save()
         newName = ""
+    }
+
+    /// Reorder handler for the top-level Saved Routines list. Persists the new
+    /// display order by rewriting `Routine.order` on every routine to match the
+    /// post-move sequence.
+    private func moveRoutines(from offsets: IndexSet, to newOffset: Int) {
+        var sorted = routines
+        sorted.move(fromOffsets: offsets, toOffset: newOffset)
+        for (i, r) in sorted.enumerated() {
+            r.order = i
+        }
+        try? ctx.save()
+    }
+
+    /// One-shot normalization for legacy data: if every routine has order 0
+    /// (or the order values collide), rewrite them based on the current
+    /// `routines` query order (which is `[order, name]` ascending — i.e.,
+    /// effectively alphabetical when all orders are 0). Idempotent; no-op once
+    /// orders are unique. Runs on `.onAppear`.
+    private func backfillRoutineOrderIfNeeded() {
+        guard routines.count > 1 else { return }
+        let allZero = routines.allSatisfy { $0.order == 0 }
+        let hasDuplicates = Set(routines.map(\.order)).count != routines.count
+        guard allZero || hasDuplicates else { return }
+        for (i, r) in routines.enumerated() {
+            r.order = i
+        }
+        try? ctx.save()
     }
 }
 
@@ -445,8 +498,27 @@ struct RoutineEditor: View {
                 }
             }
             .onMove(perform: moveBlocks)
+            .onDelete(perform: deleteBlocksFromEdit)
             .moveDisabled(activeGuard.isRoutineLocked(routine.id))
         }
+    }
+
+    /// Edit-mode delete path for the Blocks section. Routes through the same
+    /// safety as swipe-to-delete: locked blocks surface the "in use" alert,
+    /// non-locked blocks queue the existing confirmation dialog.
+    private func deleteBlocksFromEdit(at offsets: IndexSet) {
+        let blocks = sortedBlocks
+        guard let first = offsets.first, first < blocks.count else { return }
+        let block = blocks[first]
+        if blockContainsLockedExercise(block, guard: activeGuard) {
+            blockedBlocks = [blockTitle(block)]
+            showLockedBlockAlert = true
+            return
+        }
+        deletePrompt = DeletePrompt(
+            blockID: block.id,
+            title: blockTitle(block)
+        )
     }
 
     // MARK: - Block Rows & Actions
