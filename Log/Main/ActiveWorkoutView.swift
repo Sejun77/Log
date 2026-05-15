@@ -1360,6 +1360,31 @@ struct ActiveWorkoutView: View {
                         .submitLabel(.done)
                     }
 
+                    // --- Exercise-level notes (read-only display of Exercise.notes) ---
+                    // Source: live Exercise.notes for the currently-focused exercise.
+                    // Hidden when nil or whitespace-only. Editing happens on the Exercise
+                    // page only — keeping this surface read-only preserves the
+                    // no-silent-mutation invariant established in Phase 2.
+                    if let liveExerciseNotes: String = {
+                        guard let live = fetchExercise(by: exercise.currentExerciseID),
+                            let raw = live.notes
+                        else { return nil }
+                        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return trimmed.isEmpty ? nil : raw
+                    }() {
+                        Section {
+                            Text(liveExerciseNotes)
+                                .font(.dsBody)
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("Saved to this exercise. Edit on the Exercise page.")
+                                .font(.dsCaption)
+                                .foregroundStyle(.secondary)
+                        } header: {
+                            Text("Exercise Notes")
+                        }
+                    }
+
                     Section("Actions") {
                         Button {
                             exerciseToSwapIndex = currentExerciseIndex
