@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-15 (KST) — Phase 6.A Exercise Notes read-only display restored in ActiveWorkoutView; in-workout edit path pending
+Last updated: 2026-05-15 (KST) — Phase 6.A notes semantics complete: Session Notes, Exercise Notes (read-only display + focused edit sheet), Slot Guidance
 
 ---
 
@@ -562,21 +562,22 @@ Upgrade history from string-based grouping to relationship-based, and add workou
 - [x] Set logs sorted by `(indexInExercise, subIndex ?? -1)` so dropset sub-logs follow their parent working set in order
 - [x] **Session Notes** (`Workout.notes`) — user-typed workout-level notes specific to the current session; editable in `ActiveWorkoutView`; persisted on the `Workout`; shown in `WorkoutDetailView` Overview when non-empty (nil/whitespace-only produces no visible Notes row). Distinct from both `Exercise.notes` and `RoutineExercise.templateNotes`
 - [x] **Slot Guidance / Plan Notes** (`RoutineExercise.templateNotes` snapshot via `templateNotesSnapshot`) — per-slot coaching cues authored in the routine editor; shown read-only in the active workout Plan section without requiring the plan sheet. Distinct from both `Exercise.notes` and `Workout.notes`
-- [x] **Exercise Notes** (`Exercise.notes`) — read-only display restored in `ActiveWorkoutView` as a dedicated "Exercise Notes" `Section` positioned directly below Session Notes and above Actions. Source: live `Exercise.notes` fetched by `exercise.currentExerciseID` (via `fetchExercise(by:)`); hidden when the exercise lookup is nil or when the notes string is nil/whitespace-only. A secondary caption reads "Saved to this exercise. Edit on the Exercise page." The section uses plain `Text` — no `TextField`, no `Binding` — preserving the no-silent-mutation invariant (Phase 2). Order in the active workout: Session Notes (editable) → Exercise Notes (read-only) → Actions → Plan section (containing Slot Guidance / Plan Notes, read-only)
+- [x] **Exercise Notes** (`Exercise.notes`) — dedicated "Exercise Notes" `Section` in `ActiveWorkoutView`, positioned directly below Session Notes and above Actions. Source: live `Exercise.notes` fetched by `exercise.currentExerciseID` (via `fetchExercise(by:)`). The section renders whenever there is a focused exercise: it shows the notes text when present, and a "No notes yet." placeholder when nil/whitespace-only. The in-list display uses plain `Text` — **no inline `TextField` and no inline `Binding`** — preserving the no-silent-mutation invariant (Phase 2). Order in the active workout: Session Notes (editable) → Exercise Notes (read-only with edit affordance, see next item) → Actions → Plan section (containing Slot Guidance / Plan Notes, read-only)
+- [x] **Exercise Notes edit path** — explicit `Edit Exercise Notes` button (`square.and.pencil`) inside the Exercise Notes section opens a focused `ExerciseNotesEditSheet`. The sheet binds via `@Bindable` to the live `Exercise` resolved at present-time, exposes a multi-line `TextField` over `Exercise.notes` (writes `nil` when the trimmed value is empty), and shows a footer caption: "These notes are saved to the exercise and reused across routines and workouts." Toolbar: **Done** persists via `try? ctx.save()` then dismisses; **Cancel** reverts to the original `Exercise.notes` value captured `onAppear` then dismisses, discarding in-flight edits. This sheet is the **only** place in the active workout where `Exercise.notes` can be edited — the in-list display remains read-only. In-list caption updated to: "Saved to this exercise. Editing here affects every routine and workout that uses this exercise."
 
 **Notes semantics — three distinct note types (canonical):**
 
 | Type | Field | Scope | Authored where | Shown where |
 |---|---|---|---|---|
-| Session Notes | `Workout.notes` | Per-workout | Active workout (editable) | Active workout + `WorkoutDetailView` |
-| Exercise Notes | `Exercise.notes` | Global per-exercise (reusable) | Exercise page (editable) | Exercise page (editable); active workout (read-only display below Session Notes) |
+| Session Notes | `Workout.notes` | Per-workout | Active workout (inline editable) | Active workout + `WorkoutDetailView` |
+| Exercise Notes | `Exercise.notes` | Global per-exercise (reusable) | Exercise page (editable); active workout via focused `ExerciseNotesEditSheet` (editable); no inline editing in the active workout list | Active workout list (read-only display, with edit-via-sheet affordance); Exercise page |
 | Slot Guidance / Plan Notes | `RoutineExercise.templateNotes` (snapshotted to `WorkoutItem.templateNotesSnapshot`) | Per routine slot | Routine editor (editable on slot); session plan edit sheet for the in-progress workout's local copy | Active workout Plan section (read-only); history detail when present |
 
-`Exercise.notes` is **retained** as the global notes field for an exercise. It is **not** being deprecated. Editing belongs on the Exercise page (the in-workout `TextField` removed during the prior 6.A consolidation was the source of historical silent-mutation incidents). The in-workout surface is intentionally a read-only display so users see the reusable cues during workouts without that surface ever writing back to the global model.
+`Exercise.notes` is **retained** as the global notes field for an exercise. It is **not** being deprecated. The active workout exposes it as a read-only display surfacing reusable cues, plus an explicit, isolated edit sheet — there is no inline bound `TextField` on the active workout list (the historical silent-mutation source). All in-workout edits to `Exercise.notes` route exclusively through `ExerciseNotesEditSheet`.
 
 **Pending (6.A — notes semantics correction):**
 
-- [ ] Provide a safe "View / Edit Exercise" navigation path from the read-only Exercise Notes block in `ActiveWorkoutView`, **or** make the copy text accurately state that editing is unavailable during an active workout if that is the intentional UX. The current caption ("Saved to this exercise. Edit on the Exercise page.") implies the user can navigate to the Exercise page, but no in-workout navigation entry point exists today — and the broader active-workout UX historically restricts access to the Exercises tab while a workout is in progress, so a direct tab-switch may not be available. Acceptable resolutions: (a) a `NavigationLink` / sheet from the Exercise Notes section that pushes a focused Exercise detail/edit view (scoped to the currently-focused exercise; opens read-only or as a properly-isolated editor that writes through to `Exercise.notes` outside the workout's mutation surfaces); (b) revise the caption to clearly state editing is unavailable mid-workout and direct users to the Exercise page after the session ends. Inline editing in the active workout body remains explicitly **out of scope** — do not re-introduce a bound `TextField` here
+_None — Phase 6.A notes semantics are complete._
 
 **Pending (6.B — history relationship refactor):**
 
