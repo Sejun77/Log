@@ -233,6 +233,12 @@ struct WorkoutPlan: Identifiable {
     var id = UUID()
     var routineID: UUID
     var routineName: String
+    /// Phase 6.B: id of the `RoutineVariant` selected for this session, if any.
+    /// Carried through to the persisted `Workout.routineVariantID`. Optional
+    /// because legacy routines that pre-date variant backfill may not have one
+    /// when the start path runs, and because the fallback resume path
+    /// (planFromWorkoutItems) cannot recover this from items alone.
+    var routineVariantID: UUID?
     var blocks: [PlanBlock]
 }
 
@@ -334,8 +340,28 @@ struct StartWorkoutFromRoutineView: View {
         return WorkoutPlan(
             routineID: routine.id,
             routineName: routine.name,
+            routineVariantID: Self.preferredVariantID(for: routine),
             blocks: blocks
         )
+    }
+
+    /// Deterministic variant selection for Phase 6.B start path.
+    ///  1. A variant whose name case-insensitively matches "Default".
+    ///  2. Otherwise the variant with the lowest `order` (ties broken by name).
+    ///  3. Otherwise nil (no variants exist yet — legacy / pre-backfill data).
+    /// No mutation: this is read-only selection so the launch-time variant
+    /// backfill remains the single creator of variant rows.
+    private static func preferredVariantID(for routine: Routine) -> UUID? {
+        let variants = routine.variants
+        guard !variants.isEmpty else { return nil }
+        if let named = variants.first(where: {
+            $0.name.caseInsensitiveCompare("Default") == .orderedSame
+        }) {
+            return named.id
+        }
+        return variants
+            .sorted { ($0.order, $0.name) < ($1.order, $1.name) }
+            .first?.id
     }
 
     // MARK: - Body

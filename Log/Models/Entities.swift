@@ -692,6 +692,11 @@ final class Workout {
     var date: Date
     var routineName: String?
     var routineID: UUID?
+    /// Phase 6.B: stable per-variant identity, additive (default nil). Linked by
+    /// UUID rather than relationship to mirror `routineID` and to remain tolerant
+    /// of variant deletion (orphan UUIDs survive harmlessly; display path falls
+    /// back to live routine name then to `routineName` snapshot).
+    var routineVariantID: UUID?
     var completedAt: Date?
     @Relationship(deleteRule: .cascade)
     var items: [WorkoutItem]
@@ -701,6 +706,7 @@ final class Workout {
         date: Date = .now,
         routineName: String? = nil,
         routineID: UUID? = nil,
+        routineVariantID: UUID? = nil,
         items: [WorkoutItem],
         notes: String? = nil
     ) {
@@ -708,6 +714,7 @@ final class Workout {
         self.date = date
         self.routineName = routineName
         self.routineID = routineID
+        self.routineVariantID = routineVariantID
         self.items = items
         self.notes = notes
     }

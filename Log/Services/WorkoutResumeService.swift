@@ -165,6 +165,7 @@ enum WorkoutResumeService {
         return WorkoutPlan(
             routineID: routine.id,
             routineName: workoutName ?? routine.name,
+            routineVariantID: workout.routineVariantID,
             blocks: blocks
         )
     }
@@ -276,6 +277,7 @@ enum WorkoutResumeService {
         return WorkoutPlan(
             routineID: workout.routineID ?? UUID(),
             routineName: workout.routineName ?? "Resumed Workout",
+            routineVariantID: workout.routineVariantID,
             blocks: blocks
         )
     }

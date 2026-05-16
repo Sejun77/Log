@@ -1645,6 +1645,7 @@ struct ActiveWorkoutView: View {
                         date: .now,
                         routineName: plan.routineName,
                         routineID: plan.routineID,
+                        routineVariantID: plan.routineVariantID,
                         items: [],
                         notes: nil
                     )
