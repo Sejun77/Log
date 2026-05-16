@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-15 (KST) — Edit-mode/reorder consistency complete across top-level routines, top-level exercises, routine blocks, warmup steps, technique plans, and superset exercises
+Last updated: 2026-05-16 (KST) — Phase 6.B Slice A complete: additive Workout.routineVariantID populated on new workouts and preserved on resume; history UI unchanged
 
 ---
 
@@ -171,7 +171,7 @@ Set inputs (reps / weight / duration) for parent working sets and dropset drops 
   - `templateNotesSnapshot: String?` — copy of `RoutineExercise.templateNotes`
   - `plannedPrescriptionSnapshot: PlannedPrescriptionSnapshot?` (.cascade) — immutable prescription snapshot
   - `exerciseNameSnapshot: String?` (**Phase 4b**) — copy of `exercise.name` at creation time (survives exercise deletion)
-- **Workout** — `id: UUID`, `date`, `routineName: String?`, `routineID: UUID?`, `completedAt: Date?` (**Phase 4b**), `items: [WorkoutItem]` (.cascade), `notes?`
+- **Workout** — `id: UUID`, `date`, `routineName: String?`, `routineID: UUID?`, `routineVariantID: UUID?` (**Phase 6.B Slice A** — additive, default nil; stored by UUID rather than relationship to mirror `routineID` and tolerate variant deletion), `completedAt: Date?` (**Phase 4b**), `items: [WorkoutItem]` (.cascade), `notes?`
 
 - **AppState** — persisted singleton (`@Attribute(.unique) key: "appState"`)
   - `workoutState: WorkoutLifecycleState` (idle/active/finished)
@@ -600,14 +600,29 @@ Upgrade history from string-based grouping to relationship-based, and add workou
 
 _None — Phase 6.A notes semantics are complete._
 
-**Pending (6.B — history relationship refactor):**
+Phase 6.B is split into three sequential slices: **A** add + populate (additive schema), **B** backfill existing rows, **C** display switch (live-routed labels; sectioned grouping optional follow-up).
 
-- [ ] Add `routineVariantID: UUID?` (or relationship) on `Workout`
-- [ ] New sessions always populate `routineVariantID`
-- [ ] Backfill existing workouts: if `routineName` matches an existing Routine → link to its Default variant
-- [ ] Keep `routineName` for display fallback (read-only compatibility)
-- [ ] Update `HistoryView` grouping to use relationship/ID, falling back to `routineName` for unlinked records
-- [ ] Verify: renaming a routine or variant does not break history grouping
+**Completed (6.B Slice A — additive `routineVariantID` + populate on new workouts):**
+
+- [x] `Workout.routineVariantID: UUID?` added — additive, optional, default nil. Lightweight SwiftData migration (existing rows take nil). Stored by UUID (not relationship) to mirror `routineID` and to tolerate variant deletion (orphan UUIDs survive harmlessly; future display path falls back to live routine name, then to `routineName` snapshot). `Workout.init` accepts `routineVariantID: UUID? = nil`; pre-existing call sites compile because the parameter has a default
+- [x] `WorkoutPlan.routineVariantID: UUID?` added — carries the value from the start path through to insertion and from the existing `Workout` through resume
+- [x] `StartWorkoutFromRoutineView.preferredVariantID(for:)` — deterministic, read-only variant selection: (1) variant whose name case-insensitively equals "Default"; (2) otherwise lowest `(order, name)`; (3) otherwise nil. `makePlan(from:)` calls it and passes the result via `WorkoutPlan(routineVariantID:)`. No mutation: the launch-time variant backfill remains the single creator of variant rows
+- [x] `ActiveWorkoutView` new-Workout insertion site (≈L1644, gated by `else if workout == nil`) writes `Workout(…, routineVariantID: plan.routineVariantID, …)`. Resume binds to the existing `Workout` and does not re-insert, so the persisted value is never overwritten
+- [x] `WorkoutResumeService` preserves `routineVariantID` on **both** rebuild paths — primary `planFromRoutine(_:workout:workoutName:)` and fallback `planFromWorkoutItems(_:)` — by reading directly from the persisted `Workout` row
+- [x] History UI / `HistoryView` / `WorkoutDetailView` intentionally untouched in this slice — Slice C covers display
+- [x] No backfill of existing workouts in this slice — they remain `routineVariantID == nil` until Slice B
+- [x] Build passes; no debug print / `TEMP DEBUG` code remains. Project has no `XCTest` target so the schema-change test policy could not be exercised automatically — recommend adding a test target as a follow-up so future model changes can be covered
+
+**Pending (6.B Slice B — backfill existing workouts):**
+
+- [ ] Idempotent `backfillRoutineVariantIDs(in:)` (in `BootstrapRoot` or equivalent), scoped to `Workout`s with `routineVariantID == nil`. For each candidate: (1) if `routineID != nil` → fetch the `Routine` → assign its Default variant's `id`; (2) else if `routineName != nil` → case-insensitive match → assign its Default variant's `id`; (3) else → leave nil. Safe to re-run; no display change in this slice
+
+**Pending (6.B Slice C — relationship-driven display, with optional grouping):**
+
+- [ ] Replace direct `routineName` reads in `HistoryView` and `WorkoutDetailView` with a single `displayedRoutineLabel(_:)` helper that resolves: live `RoutineVariant.name` (when `routineVariantID` is non-nil and the variant still exists) → live `Routine.name` (when `routineID` resolves) → frozen `Workout.routineName` snapshot. Renaming a routine or variant must update history labels without rewriting any persisted field
+- [ ] Performance: per CLAUDE.md "no heavy regrouping inside SwiftUI `body`" — compute any per-workout label resolution against a memoized `[UUID: String]` cache keyed by `routineVariantID` / `routineID`, recomputed on `workouts` change rather than per row
+- [ ] **Design decision before implementing:** keep `HistoryView` as a flat reverse-chronological list with live labels (**C.1**, smallest), or switch to per-variant `Section` grouping with an "Other / Unlinked" bucket for nil-variant rows (**C.2**, larger UX change). Recommendation in the prior audit: **start with C.1**; only pursue C.2 after explicit confirmation
+- [ ] Verify: renaming a routine or its variant does not break history grouping/labels; deleting a routine still keeps prior workouts visible via the `routineName` snapshot fallback; resume of pre-Slice-A workouts (nil `routineVariantID`) continues to render correctly
 
 ### Phase 7 — Tests + performance pass
 
