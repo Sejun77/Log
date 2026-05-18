@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-18 (KST) — Phase 7 Slices 7.0 + 7.1 complete: `LogTests` XCTest target wired with an in-memory `ModelContainer` harness; first 9 tests cover `Routine.preferredVariantID` (5) and the `Workout.routineVariantID` schema field (4), all passing on a concrete iOS 26.5 simulator. Phase 6.B Slice C.1 (live routine labels via `RoutineLabelResolver`) and Slice B (idempotent launch-time variant backfill) remain shipped; Slice C.2 grouping and the rename verification are still pending
+Last updated: 2026-05-18 (KST) — Phase 7 Slices 7.0 + 7.1 + 7.5 complete: `LogTests` XCTest target wired with an in-memory `ModelContainer` harness; first 9 tests cover `Routine.preferredVariantID` (5) and the `Workout.routineVariantID` schema field (4); `LogTests` deployment target aligned with the app (18.5) and CLAUDE.md Build & Test Policy now documents the concrete-simulator requirement, app-hosted log noise, and the schema-mirror invariant. Host-less conversion attempted and reverted — iOS app targets can't link `@testable` symbols without `TEST_HOST` / `BUNDLE_LOADER`. Phase 6.B Slice C.1 (live routine labels via `RoutineLabelResolver`) and Slice B (idempotent launch-time variant backfill) remain shipped; Slice C.2 grouping and the rename verification are still pending
 
 ---
 
@@ -648,7 +648,7 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 - [x] `LogTests/SwiftDataTestHarness.swift` — `@MainActor` `XCTestCase` base class that builds a fresh in-memory `ModelContainer` per test via `ModelConfiguration(isStoredInMemoryOnly: true)`. Schema list **must be kept in sync with `LogApp.swift`** — drift will surface as fetch failures in any test that touches the missing entity
 - [x] Auto-generated Swift-Testing template (`LogTests/LogTests.swift`) removed so the target uses **XCTest consistently**. New tests use `import XCTest` + `@testable import Log`
 - [x] `LogTests.xctest` wired into the shared `Log.xcscheme` Test action so `cmd-U` and `xcodebuild ... test` discover it
-- [x] **Operational note:** `xcodebuild ... -destination 'generic/platform=iOS Simulator' test` is rejected with *"Tests must be run on a concrete device"* — the generic destination is fine for `build` (still used per slice) but `test` requires a concrete destination such as `-destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5'`. Build & Test Policy in CLAUDE.md should be updated when the rest of the suite lands
+- [x] **Operational note:** `xcodebuild ... -destination 'generic/platform=iOS Simulator' test` is rejected with *"Tests must be run on a concrete device"* — the generic destination is fine for `build` (still used per slice) but `test` requires a concrete destination such as `-destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5'`. This is now documented in CLAUDE.md's Build & Test Policy (Slice 7.5)
 
 **Completed (7.1 — first behavior tests, no production extraction required):**
 
@@ -673,11 +673,15 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 - [ ] Pure unit tests for `RestTimer.stableNotificationID(workoutID:slotID:)` — deterministic for same inputs, distinct for different workoutIDs / slotIDs. No SwiftData rig needed
 - [ ] Extract rest-decision logic from `ActiveWorkoutView` (≈L2722–3000 inline closures) into a `RestPlanner` returning `(seconds, fire)` without side effects, then test the dropset / superset / non-superset branches. **Large extraction — plan separately before touching**
 
-**Pending (7.5 — test target hygiene, optional):**
+**Completed (7.5 — test target hygiene):**
 
-- [ ] Lower `LogTests` `IPHONEOS_DEPLOYMENT_TARGET` from 26.5 → 18.5 to match the `Log` target, so the suite can run on the same simulator matrix as the app (currently constrained to iOS 26.5+ devices)
-- [ ] Decide whether to switch `LogTests` from app-hosted (`TEST_HOST` + `BUNDLE_LOADER` set) to **host-less** (both cleared). Host-less is faster per run and eliminates the noisy `CoreData: error: Failed to stat path .../default.store` log lines emitted by the host app booting under sandbox during test runs. Nothing in the current tests needs the app host
-- [ ] Update CLAUDE.md "Build & Test Policy" with the concrete-simulator requirement for `test`, and add the "schema list must mirror `LogApp.swift`" rule when adding a new `@Model`
+- [x] `LogTests` `IPHONEOS_DEPLOYMENT_TARGET` lowered from 26.5 → 18.5 in both Debug and Release `XCBuildConfiguration` blocks. Now matches the `Log` app target, so the suite runs on any iOS 18.5+ simulator instead of being constrained to iOS 26.5+ devices
+- [x] CLAUDE.md "Build & Test Policy" rewritten with: the concrete-simulator requirement (`test` rejects `'generic/platform=iOS Simulator'` with *"Tests must be run on a concrete device"*); the verified default command `-destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5'`; instructions to use `xcrun simctl list devices` to pick a different sim per machine; the app-hosted explanation (with expected `CoreData: error: Failed to stat path .../default.store` noise called out as non-failures, because tests use the in-memory `ModelContainer` via `SwiftDataTestHarness`); and the **schema-mirror invariant** — any new `@Model` registered in `LogApp.swift`'s `.modelContainer(for:)` must also be appended to the `Schema(...)` list in `LogTests/SwiftDataTestHarness.swift`, or every test touching that entity will fail to fetch
+- [x] Build and test both re-verified post-change: `xcodebuild ... -destination 'generic/platform=iOS Simulator' build` → `** BUILD SUCCEEDED **`; `xcodebuild ... -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' test` → 10/10 pass in ~0.17s
+
+**Pending (7.5 — host-less conversion, NOT currently recommended):**
+
+- [ ] Switch `LogTests` to host-less (clear `TEST_HOST` + `BUNDLE_LOADER`). **Attempted and reverted** during the 7.5 work: removing both keys caused the linker to fail with ~30 *Undefined symbol* errors for every `@testable`-imported Log type (e.g. `Log.Routine.blocks.getter`, `type metadata accessor for Log.Workout`, `protocol conformance descriptor for Log.AppState : SwiftData.PersistentModel in Log`). Root cause is structural: iOS app targets aren't framework targets, so a host-less test bundle has no way to resolve the app's internal Swift symbols at link/load time — `BUNDLE_LOADER = $(TEST_HOST)` is what defers resolution to the app binary at runtime. **Path forward (if pursued):** would require restructuring `Log` so the testable code lives in a separate framework / SwiftPM module that the test target can link directly. Out of scope for now; the only loss from staying app-hosted is the cosmetic CoreData log noise, which CLAUDE.md flags as expected
 
 **Pending (broader Phase 7 — original coverage gaps, unchanged):**
 
