@@ -35,6 +35,7 @@ enum ProgressMetric: String, CaseIterable, Identifiable {
 
 struct HistoryView: View {
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
+    @Query private var routines: [Routine]
 
     @State private var selectedExerciseID: UUID?
     @State private var selectedDays: Set<DateComponents> = []
@@ -318,7 +319,11 @@ struct HistoryView: View {
     }
 
     private var recentWorkoutsSection: some View {
-        Section {
+        // Build the label resolver once per body evaluation so per-row lookups
+        // are O(1). Routines/variants accessed during init make this section
+        // re-render when a rename happens — exactly what live labels need.
+        let resolver = RoutineLabelResolver(routines: routines)
+        return Section {
             if workouts.isEmpty {
                 Text("You don't have any workouts yet.")
                     .font(.dsBodySecondary)
@@ -356,7 +361,7 @@ struct HistoryView: View {
                                 }
                             }
 
-                            if let name = w.routineName {
+                            if let name = resolver.label(for: w) {
                                 Text(name)
                                     .font(.dsBodySecondary)
                                     .foregroundStyle(.secondary)
@@ -404,6 +409,7 @@ struct HistoryView: View {
 
 private struct WorkoutDetailView: View {
     let workout: Workout
+    @Query private var routines: [Routine]
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
 
     private var isActive: Bool { activeGuard.activeWorkoutID == workout.id }
@@ -415,7 +421,8 @@ private struct WorkoutDetailView: View {
     }
 
     var body: some View {
-        List {
+        let resolver = RoutineLabelResolver(routines: routines)
+        return List {
             Section {
                 LabeledContent("Date") {
                     Text(
@@ -426,7 +433,7 @@ private struct WorkoutDetailView: View {
                     )
                 }
 
-                if let name = workout.routineName {
+                if let name = resolver.label(for: workout) {
                     LabeledContent("Routine") {
                         Text(name)
                     }
@@ -701,5 +708,69 @@ private struct ProgressChart: View {
             let (date, v) = pair
             return Point(date: date, value: v, isPR: idx == firstMaxIdx)
         }
+    }
+}
+
+// MARK: - Routine Label Resolver (Phase 6.B Slice C.1)
+
+/// Builds O(1) lookup tables from a live `[Routine]` snapshot and resolves a
+/// display label for a `Workout` using the live relationship data first,
+/// falling back to the frozen `Workout.routineName` snapshot.
+///
+/// Priority:
+///  1. `workout.routineVariantID` → live `RoutineVariant` (and its owning
+///     `Routine`). If the variant is named "Default" (case-insensitive), show
+///     the routine name alone; otherwise show "Routine — Variant".
+///  2. `workout.routineID` → live `Routine.name`.
+///  3. Frozen `workout.routineName` snapshot (when non-empty).
+///  4. `nil` — the caller omits the label, matching pre-Slice-C behavior for
+///     workouts with no resolvable routine.
+///
+/// Initialize once per view body and reuse across rows; iterating routines'
+/// variants is O(R + V_total) and per-row resolution is O(1) lookup.
+private struct RoutineLabelResolver {
+    private let routineByID: [UUID: Routine]
+    private let variantByID: [UUID: RoutineVariant]
+    private let routineByVariantID: [UUID: Routine]
+
+    init(routines: [Routine]) {
+        var byID: [UUID: Routine] = [:]
+        var vByID: [UUID: RoutineVariant] = [:]
+        var rByVID: [UUID: Routine] = [:]
+        byID.reserveCapacity(routines.count)
+        for r in routines {
+            byID[r.id] = r
+            for v in r.variants {
+                vByID[v.id] = v
+                rByVID[v.id] = r
+            }
+        }
+        self.routineByID = byID
+        self.variantByID = vByID
+        self.routineByVariantID = rByVID
+    }
+
+    func label(for workout: Workout) -> String? {
+        if let vid = workout.routineVariantID,
+            let variant = variantByID[vid],
+            let routine = routineByVariantID[vid]
+        {
+            if variant.name.caseInsensitiveCompare("Default") == .orderedSame {
+                return routine.name
+            }
+            return "\(routine.name) — \(variant.name)"
+        }
+
+        if let rid = workout.routineID,
+            let routine = routineByID[rid]
+        {
+            return routine.name
+        }
+
+        if let snapshot = workout.routineName, !snapshot.isEmpty {
+            return snapshot
+        }
+
+        return nil
     }
 }
