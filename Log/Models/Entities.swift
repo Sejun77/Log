@@ -177,6 +177,29 @@ final class Routine {
     }
 }
 
+extension Routine {
+    /// Phase 6.B shared variant selection rule. Used by both the start path
+    /// (`StartWorkoutFromRoutineView.makePlan`) and the launch-time backfill
+    /// (`BootstrapRoot.backfillPhase6B`) so a workout backfilled to a routine
+    /// resolves to the same variant a newly-started workout would.
+    ///
+    /// Precedence:
+    ///  1. A variant whose `name` case-insensitively equals "Default".
+    ///  2. Otherwise the variant with the lowest `(order, name)`.
+    ///  3. Otherwise nil (no variants exist — legacy / pre-Phase-1-backfill data).
+    /// Read-only; never mutates the model.
+    var preferredVariantID: UUID? {
+        let vs = variants
+        guard !vs.isEmpty else { return nil }
+        if let named = vs.first(where: {
+            $0.name.caseInsensitiveCompare("Default") == .orderedSame
+        }) {
+            return named.id
+        }
+        return vs.sorted { ($0.order, $0.name) < ($1.order, $1.name) }.first?.id
+    }
+}
+
 // MARK: - Prescription & Techniques
 
 enum WarmupStepKind: String, Codable, CaseIterable {
