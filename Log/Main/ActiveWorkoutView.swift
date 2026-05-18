@@ -2799,73 +2799,53 @@ struct ActiveWorkoutView: View {
         var restSec: Int? = nil
 
         if block.isSuperset {
-            // Wait for every exercise in the round to be fully complete
-            // (parent log AND, if a dropset technique applies, all configured drops).
-            for ex in block.exercises {
-                let exSetCount = effectiveSetCount(
-                    for: ex, resolvedTemplates: ex.templates)
-                if idx >= exSetCount { continue }
-                if !isWorkingSetComplete(exercise: ex, setIndex: idx) {
-                    return nil
-                }
-            }
-
-            // Base round rest
-            if let rr = block.supersetRoundRestSeconds, rr > 0 {
-                restSec = rr
-            } else {
-                let roundHasDrop = block.exercises.contains { ex in
+            // Phase 7.4-C.2: superset rest computation extracted to RestPlanner.
+            // The planner handles mid-round suppression, base round rest +
+            // per-exercise fallback chain (normal-round and after-dropset
+            // variants), next-round-dropset skip, final-round transition
+            // replacement via `block.restAfterSeconds`, and last-set-of-workout
+            // suppression. The view returns the planner's result directly so
+            // the trailing non-superset post-processing below doesn't double-
+            // apply the additive `restAfterSeconds`.
+            let isLastBlock = currentBlockIndex == plan.blocks.count - 1
+            let isLastExerciseOfBlock =
+                currentExerciseIndex == block.exercises.count - 1
+            let participants: [SupersetRoundParticipant] =
+                block.exercises.map { ex in
                     let sc = effectiveSetCount(
                         for: ex, resolvedTemplates: ex.templates)
-                    return idx < sc
-                        && (ex.templates[safe: idx]?.kind ?? .working)
-                            == .dropset
+                    let participates = idx < sc
+                    let curKind: SetKind =
+                        ex.templates[safe: idx]?.kind ?? .working
+                    let nextKind: SetKind? =
+                        (idx + 1 < sc)
+                            ? (ex.templates[safe: idx + 1]?.kind ?? .working)
+                            : nil
+                    return SupersetRoundParticipant(
+                        participates: participates,
+                        isComplete: participates
+                            ? isWorkingSetComplete(exercise: ex, setIndex: idx)
+                            : true,
+                        plannedRestBetweenSets: plannedRestBetweenSets(for: ex),
+                        currentTemplateKind: curKind,
+                        currentTemplateRestSecondsAfter:
+                            ex.templates[safe: idx]?.restSecondsAfter,
+                        nextTemplateKind: nextKind,
+                        priorWorkingRest:
+                            priorWorkingRest(in: ex.templates, upTo: idx)
+                    )
                 }
-
-                if roundHasDrop {
-                    // After a dropset: planned rest → prior working round rest; take max
-                    var maxSeconds = 0
-                    var found = false
-                    for ex in block.exercises where idx < effectiveSetCount(
-                        for: ex, resolvedTemplates: ex.templates)
-                    {
-                        if let r = plannedRestBetweenSets(for: ex)
-                            ?? priorWorkingRest(in: ex.templates, upTo: idx),
-                            r > 0
-                        {
-                            maxSeconds = max(maxSeconds, r)
-                            found = true
-                        }
-                    }
-                    restSec = (found && maxSeconds > 0) ? maxSeconds : nil
-                } else {
-                    // Normal round: planned rest → template rest; combine via max
-                    var maxSeconds = 0
-                    var found = false
-                    for ex in block.exercises where idx < effectiveSetCount(
-                        for: ex, resolvedTemplates: ex.templates)
-                    {
-                        if let r = plannedRestBetweenSets(for: ex)
-                            ?? ex.templates[safe: idx]?.restSecondsAfter, r > 0
-                        {
-                            maxSeconds = max(maxSeconds, r)
-                            found = true
-                        }
-                    }
-                    // If the *next* round contains any dropset and there IS a next round, skip rest now
-                    let hasNextRound = idx < lastRoundIndex(in: block)
-                    let nextHasDrop = block.exercises.contains { ex in
-                        let sc = effectiveSetCount(
-                            for: ex, resolvedTemplates: ex.templates)
-                        return (idx + 1) < sc
-                            && (ex.templates[safe: idx + 1]?.kind ?? .working)
-                                == .dropset
-                    }
-                    restSec =
-                        (hasNextRound && nextHasDrop)
-                        ? nil : ((found && maxSeconds > 0) ? maxSeconds : nil)
-                }
-            }
+            return RestPlanner.restSecondsAfterSupersetRound(
+                SupersetRoundContext(
+                    setIndex: idx,
+                    participants: participants,
+                    lastRoundIndex: lastRoundIndex(in: block),
+                    supersetRoundRestSeconds: block.supersetRoundRestSeconds,
+                    blockRestAfterSeconds: block.restAfterSeconds,
+                    isLastBlockOfWorkout: isLastBlock,
+                    isLastExerciseOfBlock: isLastExerciseOfBlock
+                )
+            )
         } else {
             // Single exercise block
             if t.kind == .dropset {
@@ -2913,32 +2893,23 @@ struct ActiveWorkoutView: View {
             }
         }
 
-        // --- Append block rest if this was the final set/round of the block ---
+        // --- Append block rest if this was the final set of the block ---
+        // Non-superset only: the superset path returns from RestPlanner
+        // above (which already accounts for transition replacement).
         if let current = currentBlock, current.id == block.id {
             let isLastExerciseOfBlock =
                 (currentExerciseIndex == block.exercises.count - 1)
             let exSetCount = effectiveSetCount(
                 for: exercise, resolvedTemplates: exercise.templates)
-            let isFinal: Bool =
-                block.isSuperset
-                ? (idx == lastRoundIndex(in: block)) && isLastExerciseOfBlock
-                : (idx == exSetCount - 1) && isLastExerciseOfBlock
+            let isFinal =
+                (idx == exSetCount - 1) && isLastExerciseOfBlock
 
             if isFinal, let extra = block.restAfterSeconds, extra != 0 {
-                if block.isSuperset {
-                    // Final round of a superset: transition rest replaces round rest,
-                    // but only when the round is actually complete (parent + drops for
-                    // every exercise). Otherwise leave restSec untouched (typically nil).
-                    if supersetRoundComplete(block: block, setIndex: idx) {
-                        restSec = max(0, extra)
-                    }
+                // Non-superset legacy: additive on top of the final-set rest.
+                if let base = restSec {
+                    restSec = max(0, base + extra)
                 } else {
-                    // Non-superset legacy: additive on top of the final-set rest.
-                    if let base = restSec {
-                        restSec = max(0, base + extra)
-                    } else {
-                        restSec = max(0, extra)
-                    }
+                    restSec = max(0, extra)
                 }
             }
         }
