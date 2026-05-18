@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-16 (KST) — Phase 6.B Slice A complete: additive Workout.routineVariantID populated on new workouts and preserved on resume; history UI unchanged
+Last updated: 2026-05-18 (KST) — Phase 6.B Slice B complete: idempotent launch-time backfill links pre-existing workouts to a routine's preferred variant via routineID, with a lowercased routineName fallback; history UI still unchanged (Slice C pending)
 
 ---
 
@@ -613,9 +613,15 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 - [x] No backfill of existing workouts in this slice — they remain `routineVariantID == nil` until Slice B
 - [x] Build passes; no debug print / `TEMP DEBUG` code remains. Project has no `XCTest` target so the schema-change test policy could not be exercised automatically — recommend adding a test target as a follow-up so future model changes can be covered
 
-**Pending (6.B Slice B — backfill existing workouts):**
+**Completed (6.B Slice B — backfill existing workouts):**
 
-- [ ] Idempotent `backfillRoutineVariantIDs(in:)` (in `BootstrapRoot` or equivalent), scoped to `Workout`s with `routineVariantID == nil`. For each candidate: (1) if `routineID != nil` → fetch the `Routine` → assign its Default variant's `id`; (2) else if `routineName != nil` → case-insensitive match → assign its Default variant's `id`; (3) else → leave nil. Safe to re-run; no display change in this slice
+- [x] `BootstrapRoot.backfillPhase6B()` added — idempotent, `@MainActor`, scoped to `Workout`s with `routineVariantID == nil`. Invoked from `BootstrapRoot.body.task` **after** `backfillPhase1()` (which guarantees every routine has at least one variant) and `backfillPhase3_1()`, and **before** `validateActiveSession()` so resumed sessions see the freshly linked rows
+- [x] Candidate selection filters in Swift (`allWorkouts.filter { $0.routineVariantID == nil }`) rather than via a SwiftData `#Predicate { $0.routineVariantID == nil }` — optional-UUID predicates have been historically finicky and the candidate set is small, so an in-memory filter is the safer equivalent path (documented inline)
+- [x] Resolution precedence per candidate: (1) match by `routineID` → preferred variant of that routine; (2) else lowercased `routineName` → preferred variant of that routine; (3) else leave nil so the row stays eligible for a future pass if the routine reappears. **Never overwrites** a non-nil `routineVariantID`
+- [x] Preferred-variant selection extracted as `Routine.preferredVariantID` (in `Entities.swift`) — shared rule reused by both the start path (`StartWorkoutFromRoutineView.makePlan`) and this backfill so a backfilled workout resolves to the same variant a newly-started workout would: (1) variant whose name case-insensitively equals "Default"; (2) otherwise lowest `(order, name)`; (3) otherwise nil. Read-only; never mutates the model
+- [x] Lookup tables (`byID`, `byLowercaseName`, `preferredByRoutineID`) built once per pass. Duplicate lowercased routine names are deterministically resolved by keeping the routine with the lowest `(order, name)` so reruns are stable and not dependent on fetch order
+- [x] History UI / `HistoryView` / `WorkoutDetailView` intentionally still untouched — Slice C covers display. Existing `routineName` snapshot fallback remains the source of truth for rendering until then
+- [x] Idempotency verified by simulator runs with temporary debug instrumentation (since removed): cold run on already-linked data short-circuited at the empty-candidates guard with zero writes; after artificially nilling two rows in the persistent store (one with `routineID`, one with only `routineName`), the next run resolved 1 via the id path + 1 via the name fallback and wrote 2 rows; the immediately following relaunch reported 0 candidates and 0 writes. No temporary debug print / `TEMP DEBUG` code remains. Build passes
 
 **Pending (6.B Slice C — relationship-driven display, with optional grouping):**
 
