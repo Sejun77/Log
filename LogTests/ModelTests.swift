@@ -34,7 +34,7 @@ final class ModelTests: SwiftDataTestHarness {
         XCTAssertEqual(fetched.first?.name, "Leg Day")
         XCTAssertEqual(fetched.first?.blocks.first?.restAfterSeconds, 60)
         XCTAssertEqual(
-            fetched.first?.blocks.first?.exercises.first?.exercise.name,
+            fetched.first?.blocks.first?.exercises.first?.exercise?.name,
             "Back Squat"
         )
     }
