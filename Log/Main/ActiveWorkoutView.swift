@@ -800,7 +800,7 @@ struct ActiveWorkoutView: View {
 
     private func unlockAndDismiss() {
         // Clear persisted drop-weight drafts before workout ID becomes inaccessible
-        clearAllDropWeightDrafts()
+        dropWeightDraftStore?.clearAll()
         // Clear persisted parent working-set drafts as well
         parentDraftStore?.clearAll()
 
@@ -2360,7 +2360,7 @@ struct ActiveWorkoutView: View {
             dropWeightInput.removeValue(forKey: key)
             dropWeightUserEdited.remove(key)
             dropRepsInput.removeValue(forKey: key)
-            clearDropWeightDraft(slotKey: key)
+            dropWeightDraftStore?.clear(slotKey: key)
         }
         // Also clear any UNLOGGED drop drafts under this parent set
         // (e.g. user typed Drop 2 weight but never tapped Log for that drop).
@@ -2370,38 +2370,20 @@ struct ActiveWorkoutView: View {
             dropWeightInput.removeValue(forKey: key)
             dropWeightUserEdited.remove(key)
             dropRepsInput.removeValue(forKey: key)
-            clearDropWeightDraft(slotKey: key)
+            dropWeightDraftStore?.clear(slotKey: key)
         }
         dropsLoggedByExercise[exerciseID]?.removeValue(forKey: setIndex)
     }
 
     // MARK: - Drop Weight Draft Persistence (UserDefaults)
-    // Unlogged manual drop-weight edits are @State-only and lost on force quit.
-    // These helpers persist the draft so it survives cold resume.
-    // Key format inside the per-workout dictionary: "<slotID>_<parentSetIndex>_<subIndex>"
+    // Unlogged manual drop-weight edits are @State-only and lost on force
+    // quit. `DropWeightDraftStore` persists them per (slotID, parentSetIndex,
+    // subIndex) under the workout's UserDefaults key so they survive cold
+    // resume. Returns nil before the workout binds, so optional-chained call
+    // sites safely no-op at startup (matching prior behavior).
 
-    private var dropWeightDraftsUDKey: String? {
-        workout.map { "dropWeightDrafts_\($0.id.uuidString)" }
-    }
-
-    private func persistDropWeightDraft(slotKey: String, value: String) {
-        guard let udKey = dropWeightDraftsUDKey else { return }
-        var dict = (UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]) ?? [:]
-        dict[slotKey] = value
-        UserDefaults.standard.set(dict, forKey: udKey)
-    }
-
-    private func clearDropWeightDraft(slotKey: String) {
-        guard let udKey = dropWeightDraftsUDKey else { return }
-        var dict = (UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]) ?? [:]
-        guard dict[slotKey] != nil else { return }
-        dict.removeValue(forKey: slotKey)
-        UserDefaults.standard.set(dict, forKey: udKey)
-    }
-
-    private func clearAllDropWeightDrafts() {
-        guard let udKey = dropWeightDraftsUDKey else { return }
-        UserDefaults.standard.removeObject(forKey: udKey)
+    private var dropWeightDraftStore: DropWeightDraftStore? {
+        workout.map { DropWeightDraftStore(workoutID: $0.id) }
     }
 
     // MARK: - Parent Working-Set Draft Persistence (UserDefaults)
@@ -2418,10 +2400,8 @@ struct ActiveWorkoutView: View {
     /// Restores unlogged draft weights from UserDefaults into the in-memory buffers.
     /// Only applies to slots NOT already populated by a logged SetLog (i.e. not in dropWeightUserEdited).
     private func restoreDropWeightDrafts() {
-        guard let udKey = dropWeightDraftsUDKey,
-              let dict = UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]
-        else { return }
-        for (slotKey, value) in dict {
+        guard let store = dropWeightDraftStore else { return }
+        for (slotKey, value) in store.loadAll() {
             guard !dropWeightUserEdited.contains(slotKey) else { continue }
             dropWeightInput[slotKey] = value
             dropWeightUserEdited.insert(slotKey)
@@ -2658,7 +2638,7 @@ struct ActiveWorkoutView: View {
                         set: { newVal in
                             dropWeightInput[key] = newVal
                             dropWeightUserEdited.insert(key)
-                            persistDropWeightDraft(slotKey: key, value: newVal)
+                            dropWeightDraftStore?.persist(slotKey: key, value: newVal)
                         }
                     ),
                     onLog: { reps, weight in
@@ -2669,7 +2649,7 @@ struct ActiveWorkoutView: View {
                             reps: reps,
                             weight: weight
                         )
-                        clearDropWeightDraft(slotKey: key)
+                        dropWeightDraftStore?.clear(slotKey: key)
                         let isFinalDrop = (sub == dropCount)
                         if isFinalDrop {
                             if block.isSuperset {
@@ -2740,7 +2720,7 @@ struct ActiveWorkoutView: View {
                     onResetWeight: canReset ? {
                         dropWeightUserEdited.remove(key)
                         dropWeightInput.removeValue(forKey: key)
-                        clearDropWeightDraft(slotKey: key)
+                        dropWeightDraftStore?.clear(slotKey: key)
                     } : nil
                 )
             }
