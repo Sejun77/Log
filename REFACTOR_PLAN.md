@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-18 (KST) — Phase 6.B Slice C.1 complete: History rows and WorkoutDetailView resolve routine labels live via a shared `RoutineLabelResolver` (variantID → routineID → frozen `routineName` snapshot); history layout remains a flat reverse-chronological list (Slice C.2 grouping still pending; routine/variant rename verification pending the rename UI)
+Last updated: 2026-05-18 (KST) — Phase 7 Slices 7.0 + 7.1 complete: `LogTests` XCTest target wired with an in-memory `ModelContainer` harness; first 9 tests cover `Routine.preferredVariantID` (5) and the `Workout.routineVariantID` schema field (4), all passing on a concrete iOS 26.5 simulator. Phase 6.B Slice C.1 (live routine labels via `RoutineLabelResolver`) and Slice B (idempotent launch-time variant backfill) remain shipped; Slice C.2 grouping and the rename verification are still pending
 
 ---
 
@@ -642,7 +642,44 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 
 ### Phase 7 — Tests + performance pass
 
-**Pending:**
+**Completed (7.0 — `LogTests` target scaffold):**
+
+- [x] `LogTests` target added in Xcode (modern `PBXFileSystemSynchronizedRootGroup`, so any `.swift` file dropped into `LogTests/` is auto-included — no `project.pbxproj` edits needed for future test files)
+- [x] `LogTests/SwiftDataTestHarness.swift` — `@MainActor` `XCTestCase` base class that builds a fresh in-memory `ModelContainer` per test via `ModelConfiguration(isStoredInMemoryOnly: true)`. Schema list **must be kept in sync with `LogApp.swift`** — drift will surface as fetch failures in any test that touches the missing entity
+- [x] Auto-generated Swift-Testing template (`LogTests/LogTests.swift`) removed so the target uses **XCTest consistently**. New tests use `import XCTest` + `@testable import Log`
+- [x] `LogTests.xctest` wired into the shared `Log.xcscheme` Test action so `cmd-U` and `xcodebuild ... test` discover it
+- [x] **Operational note:** `xcodebuild ... -destination 'generic/platform=iOS Simulator' test` is rejected with *"Tests must be run on a concrete device"* — the generic destination is fine for `build` (still used per slice) but `test` requires a concrete destination such as `-destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5'`. Build & Test Policy in CLAUDE.md should be updated when the rest of the suite lands
+
+**Completed (7.1 — first behavior tests, no production extraction required):**
+
+- [x] `LogTests/PreferredVariantIDTests.swift` — 5 tests on `Routine.preferredVariantID` (the shared variant selection rule used by both the start path and `backfillPhase6B`): (1) empty variants → nil; (2) `Default`-named variant wins over a lower-`order` sibling; (3) match is case-insensitive (`default` / `DEFAULT` / `Default` all qualify); (4) lowest `order` wins when no Default; (5) `(order, name)` tiebreak is deterministic (lexicographic name)
+- [x] `LogTests/WorkoutModelTests.swift` — 4 smoke tests on the Phase 6.B Slice A additive field `Workout.routineVariantID`: (1) defaults to nil when constructed with no args beyond `items: []`; (2) initializer accepts an explicit UUID; (3) value round-trips through an in-memory `ModelContainer` save/fetch; (4) a nil value persists safely (mirrors a pre-Slice-A legacy row). Doubles as a schema-registration canary
+- [x] Pre-existing scaffold test `LogTests/ModelTests.swift` updated for the current schema: `RoutineExercise.exercise` is now `Exercise?`, so the assertion is now `.exercise?.name`. One-character fix; no production behavior change
+- [x] Suite green: **10/10 tests pass in ~0.16s** on iOS 26.5 iPhone 17 simulator (full suite includes the pre-existing `ModelTests.testRoutineRoundTrip`). Tests are `@MainActor` and reuse the shared `SwiftDataTestHarness`
+
+**Pending (7.2 — extract & test `RoutineLabelResolver`):**
+
+- [ ] Move `RoutineLabelResolver` from `HistoryView.swift` (currently file-private) to `Log/Services/RoutineLabelResolver.swift`, drop `private`. Behavior must remain identical at the row / detail-view call sites
+- [ ] `LogTests/RoutineLabelResolverTests.swift` covering all 4 priority branches: (a) variantID → `"Routine — Variant"` for non-Default; (b) variantID where variant is named "Default" (case-insensitive) → routine name alone; (c) orphaned variantID falls through to routineID resolution; (d) both id paths fail → frozen `routineName` snapshot; (e) snapshot also nil/empty → resolver returns nil and the caller omits the row
+
+**Pending (7.3 — extract & test launch-time backfill):**
+
+- [ ] Extract `backfillPhase6B` (and ideally sibling `backfillPhase1` / `backfillPhase3_1`) from `BootstrapRoot` into `Log/Services/BackfillService.swift` as `static @MainActor func` taking a `ModelContext`. `BootstrapRoot.body.task` becomes a 3-line caller
+- [ ] `LogTests/BackfillRoutineVariantIDsTests.swift` covering: (a) candidate with valid `routineID` is linked to that routine's preferred variant; (b) candidate with only `routineName` matches case-insensitively (name fallback); (c) candidate with neither stays nil; (d) **never overwrites** a non-nil `routineVariantID`; (e) **idempotency** — second run writes zero. Replaces / formalizes the manual simulator verification used in Slice B
+
+**Pending (7.4 — active workout draft persistence + rest timing):**
+
+- [ ] Extract `persistParentDraft` / `loadParentDraft` / `clearParentDraft` / `clearAllParentDrafts` from `ActiveWorkoutView` into a `Log/Services/ParentDraftStore.swift` that takes an injected `UserDefaults`. Tests use `UserDefaults(suiteName: UUID().uuidString)` per case for hermetic isolation. Covers: per-slot/per-field round trip; clearing one slot leaves siblings intact; full clear removes the entire suite key
+- [ ] Pure unit tests for `RestTimer.stableNotificationID(workoutID:slotID:)` — deterministic for same inputs, distinct for different workoutIDs / slotIDs. No SwiftData rig needed
+- [ ] Extract rest-decision logic from `ActiveWorkoutView` (≈L2722–3000 inline closures) into a `RestPlanner` returning `(seconds, fire)` without side effects, then test the dropset / superset / non-superset branches. **Large extraction — plan separately before touching**
+
+**Pending (7.5 — test target hygiene, optional):**
+
+- [ ] Lower `LogTests` `IPHONEOS_DEPLOYMENT_TARGET` from 26.5 → 18.5 to match the `Log` target, so the suite can run on the same simulator matrix as the app (currently constrained to iOS 26.5+ devices)
+- [ ] Decide whether to switch `LogTests` from app-hosted (`TEST_HOST` + `BUNDLE_LOADER` set) to **host-less** (both cleared). Host-less is faster per run and eliminates the noisy `CoreData: error: Failed to stat path .../default.store` log lines emitted by the host app booting under sandbox during test runs. Nothing in the current tests needs the app host
+- [ ] Update CLAUDE.md "Build & Test Policy" with the concrete-simulator requirement for `test`, and add the "schema list must mirror `LogApp.swift`" rule when adding a new `@Model`
+
+**Pending (broader Phase 7 — original coverage gaps, unchanged):**
 
 - [ ] Test: session creation snapshots prescription from template slot + stores routineSlotID
 - [ ] Test: session edits do not mutate template unless explicit apply action is invoked
