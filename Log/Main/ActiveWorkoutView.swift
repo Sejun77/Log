@@ -18,15 +18,16 @@ final class ActiveWorkoutGuard: ObservableObject {
     // 🔵 Global session timer (in-memory only)
     @Published var sessionStart: Date?
 
-    // UI/session caches that must survive navigation away/back
-    // Exercise.id -> setIndex -> tuple of text fields
+    // UI/session caches that must survive navigation away/back.
+    // Keyed by routineSlotID (per-slot identity) — NOT Exercise.id —
+    // so duplicate Exercise usage across slots doesn't collide.
     @Published var inputsCache:
         [UUID: [Int: (reps: String, weight: String, duration: String)]] = [:]
 
-    // Exercise.id -> set indexes that are logged (UI checkmarks)
+    // routineSlotID -> set indexes that are logged (UI checkmarks)
     @Published var loggedCache: [UUID: Set<Int>] = [:]
 
-    // Exercise.id -> session notes edits
+    // routineSlotID -> session notes edits
     @Published var notesCache: [UUID: String] = [:]
 
     // Exercises
@@ -192,8 +193,10 @@ struct ActiveWorkoutView: View {
     /// Per-set planned targets captured before opening the edit sheet.
     @State private var preEditRepStrs: [UUID: [Int: String]] = [:]
     @State private var preEditDurStrs: [UUID: [Int: String]] = [:]
+    // Phase 5.2 — keyed by routineSlotID (per-slot identity).
     @State private var loggedByExercise: [UUID: Set<Int>] = [:]
     /// Maps exerciseID → parentSetIndex → Set of logged drop subIndices (1-based).
+    // Phase 5.2 — keyed by routineSlotID (per-slot identity).
     @State private var dropsLoggedByExercise: [UUID: [Int: Set<Int>]] = [:]
     /// Reps/weight input buffers for drop rows. Key: "\(exerciseID)_\(parentSetIdx)_\(subIdx)".
     @State private var dropRepsInput: [String: String] = [:]
@@ -209,7 +212,9 @@ struct ActiveWorkoutView: View {
 
     @StateObject private var rest = RestTimer()
 
-    // Cache created WorkoutItems by Exercise.id during the session
+    // Phase 5.2 — keyed by routineSlotID (per-slot identity).
+    // The "ByExerciseID" suffix is legacy naming; the value is a per-slot
+    // WorkoutItem looked up by `WorkoutItem.routineSlotID`.
     @State private var itemsByExerciseID: [UUID: WorkoutItem] = [:]
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
@@ -221,6 +226,7 @@ struct ActiveWorkoutView: View {
         AutoregMode(rawValue: autoregModeRaw) ?? .rir
     }
 
+    // Phase 5.2 — keyed by routineSlotID (per-slot identity).
     @State private var inputsByExerciseID:
         [UUID: [Int: (reps: String, weight: String, duration: String)]] = [:]
 
@@ -229,7 +235,7 @@ struct ActiveWorkoutView: View {
     private func persistExerciseNotesOnlyForCurrentExercises() {
         for block in plan.blocks {
             for planEx in block.exercises {
-                let slotID = planEx.id
+                let slotID = planEx.routineSlotID
                 let exerciseID = planEx.currentExerciseID
                 guard let ex = fetchExercise(by: exerciseID) else { continue }
 
@@ -260,7 +266,7 @@ struct ActiveWorkoutView: View {
                             .map { String($0) } ?? ""
                     )
                 }
-                inputsByExerciseID[ex.id] = perSet
+                inputsByExerciseID[ex.routineSlotID] = perSet
             }
         }
         syncToGuardCaches()
@@ -274,7 +280,12 @@ struct ActiveWorkoutView: View {
 
         for block in plan.blocks {
             for ex in block.exercises {
-                let slotID = ex.id
+                // Per-slot identity for in-memory state dicts (Phase 5.2).
+                let slotID = ex.routineSlotID
+                // Legacy Exercise.id — still used for the drop-key string format
+                // and ParentDraftStore keys (Slice B will migrate the persistence
+                // format; this slice preserves it byte-for-byte).
+                let exerciseID = ex.id
 
                 // 🔒 Fix 2: if the exercise in this slot was swapped in this session,
                 // do NOT pull in logs from the workout (they belong to a different exercise).
@@ -303,7 +314,9 @@ struct ActiveWorkoutView: View {
                     for log in item.setLogs where log.subIndex != nil {
                         let sub = log.subIndex!
                         slotDrops[log.indexInExercise, default: []].insert(sub)
-                        let key = "\(slotID)_\(log.indexInExercise)_\(sub)"
+                        // Drop-key string still uses Exercise.id (Slice A — persistence
+                        // format preserved). Slice B will switch to slotID.
+                        let key = "\(exerciseID)_\(log.indexInExercise)_\(sub)"
                         dropRepsInput[key] = String(log.reps)
                         let wStr = log.weight.map {
                             $0.truncatingRemainder(dividingBy: 1) == 0
@@ -345,7 +358,7 @@ struct ActiveWorkoutView: View {
                             log.durationSeconds.map(String.init) ?? ""
                         perSet[i] = (reps, weight, duration)
                     } else if let draft = parentDraftStore?.load(
-                        slotID: slotID, setIndex: i
+                        slotID: exerciseID, setIndex: i
                     ) {
                         // Backfill any field absent from the draft with the prescription
                         // default so partially-filled drafts don't blank unrelated fields.
@@ -403,14 +416,18 @@ struct ActiveWorkoutView: View {
         setIndex: Int,
         template: PlanSetTemplate
     ) -> (Binding<String>, Binding<String>) {
-        let exID = exercise.id
+        // Phase 5.2 — `slotID` is the per-slot key for in-memory state.
+        // `exerciseID` is the legacy Exercise.id used by `ParentDraftStore`
+        // (Slice A preserves persistence format; Slice B will migrate).
+        let slotID = exercise.routineSlotID
+        let exerciseID = exercise.id
 
         func ensureEntry() {
-            if inputsByExerciseID[exID] == nil {
-                inputsByExerciseID[exID] = [:]
+            if inputsByExerciseID[slotID] == nil {
+                inputsByExerciseID[slotID] = [:]
             }
-            if inputsByExerciseID[exID]?[setIndex] == nil {
-                inputsByExerciseID[exID]?[setIndex] = (
+            if inputsByExerciseID[slotID]?[setIndex] == nil {
+                inputsByExerciseID[slotID]?[setIndex] = (
                     reps: String(
                         plannedRepTarget(for: exercise, template: template)),
                     weight: template.targetWeight.map { String($0) } ?? "",
@@ -423,33 +440,33 @@ struct ActiveWorkoutView: View {
 
         let repsB = Binding<String>(
             get: {
-                inputsByExerciseID[exID]?[setIndex]?.reps
+                inputsByExerciseID[slotID]?[setIndex]?.reps
                     ?? String(
                         plannedRepTarget(for: exercise, template: template))
             },
             set: { newVal in
                 ensureEntry()
                 let filtered = newVal.filter(\.isNumber)
-                inputsByExerciseID[exID]?[setIndex]?.reps = filtered
+                inputsByExerciseID[slotID]?[setIndex]?.reps = filtered
                 syncToGuardCaches()
                 parentDraftStore?.persist(
-                    slotID: exID, setIndex: setIndex, field: .reps, value: filtered
+                    slotID: exerciseID, setIndex: setIndex, field: .reps, value: filtered
                 )
             }
         )
 
         let weightB = Binding<String>(
             get: {
-                inputsByExerciseID[exID]?[setIndex]?.weight
+                inputsByExerciseID[slotID]?[setIndex]?.weight
                     ?? (template.targetWeight.map { String($0) } ?? "")
             },
             set: { newVal in
                 ensureEntry()
                 let filtered = newVal.filter(\.isNumber)
-                inputsByExerciseID[exID]?[setIndex]?.weight = filtered
+                inputsByExerciseID[slotID]?[setIndex]?.weight = filtered
                 syncToGuardCaches()
                 parentDraftStore?.persist(
-                    slotID: exID, setIndex: setIndex, field: .weight, value: filtered
+                    slotID: exerciseID, setIndex: setIndex, field: .weight, value: filtered
                 )
             }
         )
@@ -462,14 +479,17 @@ struct ActiveWorkoutView: View {
         setIndex: Int,
         template: PlanSetTemplate
     ) -> Binding<String> {
-        let exID = exercise.id
+        // Phase 5.2 — per-slot key for in-memory state; legacy Exercise.id
+        // for `ParentDraftStore` persistence (Slice A keeps format unchanged).
+        let slotID = exercise.routineSlotID
+        let exerciseID = exercise.id
 
         func ensureEntry() {
-            if inputsByExerciseID[exID] == nil {
-                inputsByExerciseID[exID] = [:]
+            if inputsByExerciseID[slotID] == nil {
+                inputsByExerciseID[slotID] = [:]
             }
-            if inputsByExerciseID[exID]?[setIndex] == nil {
-                inputsByExerciseID[exID]?[setIndex] = (
+            if inputsByExerciseID[slotID]?[setIndex] == nil {
+                inputsByExerciseID[slotID]?[setIndex] = (
                     reps: String(
                         plannedRepTarget(for: exercise, template: template)),
                     weight: template.targetWeight.map { String($0) } ?? "",
@@ -482,7 +502,7 @@ struct ActiveWorkoutView: View {
 
         return Binding<String>(
             get: {
-                inputsByExerciseID[exID]?[setIndex]?.duration
+                inputsByExerciseID[slotID]?[setIndex]?.duration
                     ?? (plannedDurationTarget(
                         for: exercise, template: template)
                         .map { String($0) } ?? "")
@@ -490,10 +510,10 @@ struct ActiveWorkoutView: View {
             set: { newVal in
                 ensureEntry()
                 let filtered = newVal.filter(\.isNumber)
-                inputsByExerciseID[exID]?[setIndex]?.duration = filtered
+                inputsByExerciseID[slotID]?[setIndex]?.duration = filtered
                 syncToGuardCaches()
                 parentDraftStore?.persist(
-                    slotID: exID, setIndex: setIndex, field: .duration, value: filtered
+                    slotID: exerciseID, setIndex: setIndex, field: .duration, value: filtered
                 )
             }
         )
@@ -508,7 +528,7 @@ struct ActiveWorkoutView: View {
         exercise: PlanExercise,
         setIndex: Int
     ) -> Bool {
-        let logged = loggedByExercise[exercise.id, default: []]
+        let logged = loggedByExercise[exercise.routineSlotID, default: []]
         if logged.contains(setIndex) { return false }
 
         // 1. Within this exercise: earlier sets must be fully complete
@@ -517,11 +537,12 @@ struct ActiveWorkoutView: View {
             if !isWorkingSetComplete(exercise: exercise, setIndex: j) { return false }
         }
 
-        // 2. Superset order: prior exercises at this set index must be complete first
+        // 2. Superset order: prior exercises at this set index must be complete first.
+        //    Matches by routineSlotID so duplicate Exercise across slots stay independent.
         if block.isSuperset {
             guard
                 let exIdx = block.exercises.firstIndex(where: {
-                    $0.id == exercise.id
+                    $0.routineSlotID == exercise.routineSlotID
                 })
             else {
                 return false
@@ -547,12 +568,13 @@ struct ActiveWorkoutView: View {
         exercise: PlanExercise,
         setIndex: Int
     ) -> Bool {
-        guard loggedByExercise[exercise.id, default: []].contains(setIndex) else {
+        let slotID = exercise.routineSlotID
+        guard loggedByExercise[slotID, default: []].contains(setIndex) else {
             return false
         }
         if let snap = dropsetTechniqueApplying(to: setIndex, in: exercise) {
             let required = max(1, snap.dropCount ?? 1)
-            let done = dropsLoggedByExercise[exercise.id, default: [:]][setIndex, default: []].count
+            let done = dropsLoggedByExercise[slotID, default: [:]][setIndex, default: []].count
             return done >= required
         }
         return true
@@ -564,7 +586,11 @@ struct ActiveWorkoutView: View {
         idx: Int,
         template: PlanSetTemplate
     ) -> some View {
-        let isLogged = loggedByExercise[exercise.id, default: []].contains(idx)
+        // Phase 5.2 — per-slot key for in-memory state; legacy Exercise.id
+        // for ParentDraftStore (Slice A preserves persistence format).
+        let slotID = exercise.routineSlotID
+        let exerciseID = exercise.id
+        let isLogged = loggedByExercise[slotID, default: []].contains(idx)
         let allowed = canLogSet(block: block, exercise: exercise, setIndex: idx)
 
         if exercise.isTimeBased {
@@ -588,17 +614,17 @@ struct ActiveWorkoutView: View {
                     },
                     onLog: { durationSeconds in
                         appendTimeSetLog(
-                            exerciseID: exercise.id,
+                            slotID: slotID,
                             setIndex: idx,
                             durationSeconds: durationSeconds,
                             kind: template.kind
                         )
-                        var s = loggedByExercise[exercise.id, default: []]
+                        var s = loggedByExercise[slotID, default: []]
                         s.insert(idx)
-                        loggedByExercise[exercise.id] = s
+                        loggedByExercise[slotID] = s
                         syncToGuardCaches()
                         // SetLog is now the source of truth — discard the draft.
-                        parentDraftStore?.clear(slotID: exercise.id, setIndex: idx)
+                        parentDraftStore?.clear(slotID: exerciseID, setIndex: idx)
 
                         if let seconds = restSecondsAfterCurrentLog(
                             setIndex: idx,
@@ -618,11 +644,11 @@ struct ActiveWorkoutView: View {
                         )
                     },
                     onUndo: {
-                        undoSetLog(exerciseID: exercise.id, setIndex: idx)
-                        var s = loggedByExercise[exercise.id, default: []]
+                        undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: idx)
+                        var s = loggedByExercise[slotID, default: []]
                         s.remove(idx)
                         syncToGuardCaches()
-                        loggedByExercise[exercise.id] = s
+                        loggedByExercise[slotID] = s
                         // Do not affect rest timer here; behavior mirrors reps/weight undo
                         UINotificationFeedbackGenerator().notificationOccurred(
                             .warning
@@ -648,18 +674,18 @@ struct ActiveWorkoutView: View {
                     weight: weightB,
                     onLog: { reps, weight in
                         appendSetLog(
-                            exerciseID: exercise.id,
+                            slotID: slotID,
                             setIndex: idx,
                             reps: reps,
                             weight: weight,
                             kind: template.kind
                         )
-                        var s = loggedByExercise[exercise.id, default: []]
+                        var s = loggedByExercise[slotID, default: []]
                         s.insert(idx)
-                        loggedByExercise[exercise.id] = s
+                        loggedByExercise[slotID] = s
                         syncToGuardCaches()
                         // SetLog is now the source of truth — discard the draft.
-                        parentDraftStore?.clear(slotID: exercise.id, setIndex: idx)
+                        parentDraftStore?.clear(slotID: exerciseID, setIndex: idx)
 
                         if let seconds = restSecondsAfterCurrentLog(
                             setIndex: idx,
@@ -679,12 +705,12 @@ struct ActiveWorkoutView: View {
                         )
                     },
                     onUndo: {
-                        undoSetLog(exerciseID: exercise.id, setIndex: idx)
+                        undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: idx)
                         rest.stop()
                         clearPersistedRestState()
-                        var s = loggedByExercise[exercise.id, default: []]
+                        var s = loggedByExercise[slotID, default: []]
                         s.remove(idx)
-                        loggedByExercise[exercise.id] = s
+                        loggedByExercise[slotID] = s
                         syncToGuardCaches()
                         UINotificationFeedbackGenerator().notificationOccurred(
                             .warning
@@ -704,8 +730,10 @@ struct ActiveWorkoutView: View {
         step: WarmupStepSnapshot
     ) -> some View {
         // Warmup SetLogs use negative indexInExercise to avoid collision with working-set indices.
+        let slotID = exercise.routineSlotID
+        let exerciseID = exercise.id
         let logIndex = -(step.order + 1)
-        let isLogged = loggedByExercise[exercise.id, default: []].contains(logIndex)
+        let isLogged = loggedByExercise[slotID, default: []].contains(logIndex)
         let restSec = step.restSecondsAfter ?? exercise.prescriptionSnapshot?.restSecondsBetweenSets
 
         HStack(spacing: 12) {
@@ -736,23 +764,23 @@ struct ActiveWorkoutView: View {
 
             Button {
                 if isLogged {
-                    undoSetLog(exerciseID: exercise.id, setIndex: logIndex)
-                    var s = loggedByExercise[exercise.id, default: []]
+                    undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: logIndex)
+                    var s = loggedByExercise[slotID, default: []]
                     s.remove(logIndex)
-                    loggedByExercise[exercise.id] = s
+                    loggedByExercise[slotID] = s
                     syncToGuardCaches()
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 } else {
                     appendSetLog(
-                        exerciseID: exercise.id,
+                        slotID: slotID,
                         setIndex: logIndex,
                         reps: step.reps ?? 0,
                         weight: step.weight.map { Int($0.rounded()) },
                         kind: .warmup
                     )
-                    var s = loggedByExercise[exercise.id, default: []]
+                    var s = loggedByExercise[slotID, default: []]
                     s.insert(logIndex)
-                    loggedByExercise[exercise.id] = s
+                    loggedByExercise[slotID] = s
                     syncToGuardCaches()
                     if let seconds = restSec, seconds > 0 {
                         startRestWithPersistence(
@@ -1021,12 +1049,18 @@ struct ActiveWorkoutView: View {
             if let slotID = item.routineSlotID,
                let slot = planSlots.first(where: { $0.routineSlotID == slotID })
             {
-                itemsByExerciseID[slot.id] = item
+                // Phase 5.2 — cache is keyed by routineSlotID (per-slot identity).
+                itemsByExerciseID[slot.routineSlotID] = item
             } else if let ex = item.exercise,
                       let slot = planSlots.first(where: { $0.currentExerciseID == ex.id })
             {
-                // Fallback: match by exercise ID (pre-snapshot items without routineSlotID)
-                itemsByExerciseID[slot.id] = item
+                // Fallback: match by exercise ID (pre-snapshot items without routineSlotID).
+                // Note: if the same Exercise occupies two slots, this picks whichever
+                // slot the linear scan finds first — pre-snapshot items predate the
+                // routineSlotID column, so they can't be disambiguated here. Mixed
+                // routines (some snapshot, some not) should hit the routineSlotID
+                // branch above first whenever possible.
+                itemsByExerciseID[slot.routineSlotID] = item
             }
         }
     }
@@ -1059,7 +1093,9 @@ struct ActiveWorkoutView: View {
     }
 
     private func notesBinding(for exercise: PlanExercise) -> Binding<String> {
-        let slotID = exercise.id
+        // Phase 5.2 — notesCache is keyed by routineSlotID. The library
+        // Exercise.notes fallback still uses `currentExerciseID`.
+        let slotID = exercise.routineSlotID
         let exerciseID = exercise.currentExerciseID
 
         return Binding<String>(
@@ -1280,7 +1316,9 @@ struct ActiveWorkoutView: View {
     private func applySessionPlanToInputs() {
         guard let exercise = currentExercise else { return }
         let slotKey = exercise.routineSlotID
-        let cacheKey = exercise.id  // inputsByExerciseID key
+        // Phase 5.2 — inputsByExerciseID is keyed by routineSlotID, so the
+        // cache key now matches `slotKey`. Variable preserved for clarity.
+        let cacheKey = exercise.routineSlotID
 
         let oldReps = preEditRepStrs[slotKey] ?? [:]
         let oldDurs = preEditDurStrs[slotKey] ?? [:]
@@ -1445,7 +1483,7 @@ struct ActiveWorkoutView: View {
                                 resolvedTemplates: exercise.templates)
                             // Warmup logs use negative indexInExercise — exclude them from working-set count.
                             let loggedCount = loggedByExercise[
-                                exercise.id,
+                                exercise.routineSlotID,
                                 default: []
                             ].filter { $0 >= 0 }.count
                             Text(
@@ -1836,7 +1874,7 @@ struct ActiveWorkoutView: View {
     private var hasNotesPending: Bool {
         for block in plan.blocks {
             for planEx in block.exercises {
-                let slotID = planEx.id
+                let slotID = planEx.routineSlotID
                 let exerciseID = planEx.currentExerciseID
                 guard let cached = activeGuard.notesCache[slotID] else { continue }
                 let current = fetchExercise(by: exerciseID)?.notes
@@ -2114,7 +2152,8 @@ struct ActiveWorkoutView: View {
             newEx.isTimeBased
 
         // 4) Build fresh per-set inputs for this slot from newTemplates
-        let slotID = plan.blocks[blockIndex].exercises[exIndex].id
+        // Phase 5.2 — slotID is the per-slot key (routineSlotID).
+        let slotID = plan.blocks[blockIndex].exercises[exIndex].routineSlotID
         let swappedPlanEx = plan.blocks[blockIndex].exercises[exIndex]
 
         let swappedCount = effectiveSetCount(
@@ -2226,7 +2265,7 @@ struct ActiveWorkoutView: View {
     // MARK: - Logging
 
     private func appendSetLog(
-        exerciseID slotID: UUID,
+        slotID: UUID,
         setIndex: Int,
         reps: Int,
         weight: Int?,
@@ -2234,11 +2273,12 @@ struct ActiveWorkoutView: View {
     ) {
         guard let workout else { return }
 
-        // Ensure we have a WorkoutItem for this *slot*.
+        // Ensure we have a WorkoutItem for this *slot* — matched by
+        // PlanExercise.routineSlotID (per-slot identity).
         if itemsByExerciseID[slotID] == nil {
             guard
                 let planEx = plan.blocks.flatMap(\.exercises).first(where: {
-                    $0.id == slotID
+                    $0.routineSlotID == slotID
                 }),
                 let ex = fetchExercise(by: planEx.currentExerciseID)
             else { return }
@@ -2272,7 +2312,7 @@ struct ActiveWorkoutView: View {
     }
 
     private func appendTimeSetLog(
-        exerciseID slotID: UUID,
+        slotID: UUID,
         setIndex: Int,
         durationSeconds: Int,
         kind: SetKind
@@ -2282,7 +2322,7 @@ struct ActiveWorkoutView: View {
         if itemsByExerciseID[slotID] == nil {
             guard
                 let planEx = plan.blocks.flatMap(\.exercises).first(where: {
-                    $0.id == slotID
+                    $0.routineSlotID == slotID
                 }),
                 let ex = fetchExercise(by: planEx.currentExerciseID)
             else { return }
@@ -2318,8 +2358,12 @@ struct ActiveWorkoutView: View {
         try? ctx.save()
     }
 
-    private func undoSetLog(exerciseID: UUID, setIndex: Int) {
-        guard let wi = itemsByExerciseID[exerciseID] else { return }
+    /// `slotID` is the per-slot identity (routineSlotID) for in-memory state
+    /// (`itemsByExerciseID`, `dropsLoggedByExercise`). `exerciseID` is the
+    /// legacy Exercise.id used by `ParentDraftStore` and the drop-key string
+    /// format — preserved byte-for-byte under Slice A; Slice B will migrate.
+    private func undoSetLog(slotID: UUID, exerciseID: UUID, setIndex: Int) {
+        guard let wi = itemsByExerciseID[slotID] else { return }
         // Snapshot the parent SetLog's values into the parent draft BEFORE removing
         // it, so the now-editable field retains those values across force-quit/
         // cold-resume. Without this, a log→undo→force-quit→resume cycle would fall
@@ -2351,10 +2395,11 @@ struct ActiveWorkoutView: View {
             wi.setLogs.remove(at: j)
         }
         // Cascade: remove all drop sub-logs for this parent set
-        let loggedSubs = dropsLoggedByExercise[exerciseID]?[setIndex] ?? []
+        let loggedSubs = dropsLoggedByExercise[slotID]?[setIndex] ?? []
         wi.setLogs.removeAll { $0.indexInExercise == setIndex && $0.subIndex != nil }
         try? ctx.save()
-        // Clear drop UI state for each cascaded sub
+        // Clear drop UI state for each cascaded sub. Drop-key strings still
+        // use Exercise.id (Slice A preserves persistence format).
         for sub in loggedSubs {
             let key = "\(exerciseID)_\(setIndex)_\(sub)"
             dropWeightInput.removeValue(forKey: key)
@@ -2372,7 +2417,7 @@ struct ActiveWorkoutView: View {
             dropRepsInput.removeValue(forKey: key)
             dropWeightDraftStore?.clear(slotKey: key)
         }
-        dropsLoggedByExercise[exerciseID]?.removeValue(forKey: setIndex)
+        dropsLoggedByExercise[slotID]?.removeValue(forKey: setIndex)
     }
 
     // MARK: - Drop Weight Draft Persistence (UserDefaults)
@@ -2488,13 +2533,15 @@ struct ActiveWorkoutView: View {
 
     /// Computes and rounds the suggested weight for a new drop.
     /// Base is previous drop's logged weight, or the parent set's logged weight.
+    /// `slotID` is the per-slot identity (routineSlotID) — looks up the
+    /// per-slot WorkoutItem so duplicate Exercise across slots is independent.
     private func suggestedDropWeight(
-        exerciseID: UUID,
+        slotID: UUID,
         parentSetIndex: Int,
         subIndex: Int,
         dropPercent: Double
     ) -> String {
-        guard let wi = itemsByExerciseID[exerciseID] else { return "" }
+        guard let wi = itemsByExerciseID[slotID] else { return "" }
         let base: Double?
         if subIndex > 1 {
             base = wi.setLogs.first(where: {
@@ -2521,8 +2568,9 @@ struct ActiveWorkoutView: View {
     }
 
     /// Appends (or updates) a drop sub-log under `parentSetIndex`.
+    /// `slotID` is the per-slot identity (routineSlotID).
     private func appendDropLog(
-        exerciseID slotID: UUID,
+        slotID: UUID,
         parentSetIndex: Int,
         subIndex: Int,
         reps: Int,
@@ -2532,7 +2580,7 @@ struct ActiveWorkoutView: View {
 
         if itemsByExerciseID[slotID] == nil {
             guard
-                let planEx = plan.blocks.flatMap(\.exercises).first(where: { $0.id == slotID }),
+                let planEx = plan.blocks.flatMap(\.exercises).first(where: { $0.routineSlotID == slotID }),
                 let ex = fetchExercise(by: planEx.currentExerciseID)
             else { return }
             let newItem = WorkoutItem(exercise: ex, setLogs: [])
@@ -2571,7 +2619,8 @@ struct ActiveWorkoutView: View {
     /// in `dropWeightUserEdited`/`dropWeightInput` so the field shows the previously
     /// entered value rather than reverting to auto-suggestion.
     /// The only action that clears a manual override is the "↩ suggest" button.
-    private func undoDropLog(exerciseID slotID: UUID, parentSetIndex: Int, subIndex: Int) {
+    /// `slotID` is the per-slot identity (routineSlotID).
+    private func undoDropLog(slotID: UUID, parentSetIndex: Int, subIndex: Int) {
         guard let wi = itemsByExerciseID[slotID] else { return }
         if let j = wi.setLogs.firstIndex(where: {
             $0.indexInExercise == parentSetIndex && $0.subIndex == subIndex
@@ -2592,19 +2641,24 @@ struct ActiveWorkoutView: View {
         parentSetIndex: Int
     ) -> some View {
         if let snap = dropsetTechniqueApplying(to: parentSetIndex, in: exercise) {
+            // Phase 5.2 — slotID drives in-memory state lookups; the drop-key
+            // string still uses Exercise.id under Slice A (drop-key + DropWeightDraftStore
+            // persistence format are migrated in Slice B).
+            let slotID = exercise.routineSlotID
+            let exerciseID = exercise.id
             let dropCount = max(1, snap.dropCount ?? 1)
-            let loggedSubs = dropsLoggedByExercise[exercise.id, default: [:]][parentSetIndex, default: []]
-            let parentLogged = loggedByExercise[exercise.id, default: []].contains(parentSetIndex)
+            let loggedSubs = dropsLoggedByExercise[slotID, default: [:]][parentSetIndex, default: []]
+            let parentLogged = loggedByExercise[slotID, default: []].contains(parentSetIndex)
 
             ForEach(1...dropCount, id: \.self) { sub in
-                let key = "\(exercise.id)_\(parentSetIndex)_\(sub)"
+                let key = "\(exerciseID)_\(parentSetIndex)_\(sub)"
                 let isDropLogged = loggedSubs.contains(sub)
                 let canLogDrop = parentLogged && !isDropLogged
                     && (sub == 1 || loggedSubs.contains(sub - 1))
                 // Compute weight in the @ViewBuilder body so @Observable setLogs accesses
                 // are tracked — this ensures re-render when the parent set weight changes.
                 let suggested = suggestedDropWeight(
-                    exerciseID: exercise.id,
+                    slotID: slotID,
                     parentSetIndex: parentSetIndex,
                     subIndex: sub,
                     dropPercent: snap.dropPercent ?? 20
@@ -2643,7 +2697,7 @@ struct ActiveWorkoutView: View {
                     ),
                     onLog: { reps, weight in
                         appendDropLog(
-                            exerciseID: exercise.id,
+                            slotID: slotID,
                             parentSetIndex: parentSetIndex,
                             subIndex: sub,
                             reps: reps,
@@ -2711,7 +2765,7 @@ struct ActiveWorkoutView: View {
                     },
                     onUndo: {
                         undoDropLog(
-                            exerciseID: exercise.id,
+                            slotID: slotID,
                             parentSetIndex: parentSetIndex,
                             subIndex: sub
                         )
