@@ -344,7 +344,7 @@ struct ActiveWorkoutView: View {
                         let duration =
                             log.durationSeconds.map(String.init) ?? ""
                         perSet[i] = (reps, weight, duration)
-                    } else if let draft = loadParentDraft(
+                    } else if let draft = parentDraftStore?.load(
                         slotID: slotID, setIndex: i
                     ) {
                         // Backfill any field absent from the draft with the prescription
@@ -432,7 +432,7 @@ struct ActiveWorkoutView: View {
                 let filtered = newVal.filter(\.isNumber)
                 inputsByExerciseID[exID]?[setIndex]?.reps = filtered
                 syncToGuardCaches()
-                persistParentDraft(
+                parentDraftStore?.persist(
                     slotID: exID, setIndex: setIndex, field: .reps, value: filtered
                 )
             }
@@ -448,7 +448,7 @@ struct ActiveWorkoutView: View {
                 let filtered = newVal.filter(\.isNumber)
                 inputsByExerciseID[exID]?[setIndex]?.weight = filtered
                 syncToGuardCaches()
-                persistParentDraft(
+                parentDraftStore?.persist(
                     slotID: exID, setIndex: setIndex, field: .weight, value: filtered
                 )
             }
@@ -492,7 +492,7 @@ struct ActiveWorkoutView: View {
                 let filtered = newVal.filter(\.isNumber)
                 inputsByExerciseID[exID]?[setIndex]?.duration = filtered
                 syncToGuardCaches()
-                persistParentDraft(
+                parentDraftStore?.persist(
                     slotID: exID, setIndex: setIndex, field: .duration, value: filtered
                 )
             }
@@ -598,7 +598,7 @@ struct ActiveWorkoutView: View {
                         loggedByExercise[exercise.id] = s
                         syncToGuardCaches()
                         // SetLog is now the source of truth — discard the draft.
-                        clearParentDraft(slotID: exercise.id, setIndex: idx)
+                        parentDraftStore?.clear(slotID: exercise.id, setIndex: idx)
 
                         if let seconds = restSecondsAfterCurrentLog(
                             setIndex: idx,
@@ -659,7 +659,7 @@ struct ActiveWorkoutView: View {
                         loggedByExercise[exercise.id] = s
                         syncToGuardCaches()
                         // SetLog is now the source of truth — discard the draft.
-                        clearParentDraft(slotID: exercise.id, setIndex: idx)
+                        parentDraftStore?.clear(slotID: exercise.id, setIndex: idx)
 
                         if let seconds = restSecondsAfterCurrentLog(
                             setIndex: idx,
@@ -802,7 +802,7 @@ struct ActiveWorkoutView: View {
         // Clear persisted drop-weight drafts before workout ID becomes inaccessible
         clearAllDropWeightDrafts()
         // Clear persisted parent working-set drafts as well
-        clearAllParentDrafts()
+        parentDraftStore?.clearAll()
 
         // Fully terminate timers for this workout
         rest.stop()
@@ -2332,14 +2332,14 @@ struct ActiveWorkoutView: View {
         }) {
             let repsStr = String(max(0, log.reps))
             let weightStr = log.weight.map { String(Int($0.rounded())) } ?? ""
-            persistParentDraft(
+            parentDraftStore?.persist(
                 slotID: exerciseID, setIndex: setIndex, field: .reps, value: repsStr
             )
-            persistParentDraft(
+            parentDraftStore?.persist(
                 slotID: exerciseID, setIndex: setIndex, field: .weight, value: weightStr
             )
             if let durationStr = log.durationSeconds.map(String.init) {
-                persistParentDraft(
+                parentDraftStore?.persist(
                     slotID: exerciseID, setIndex: setIndex, field: .duration, value: durationStr
                 )
             }
@@ -2405,60 +2405,14 @@ struct ActiveWorkoutView: View {
     }
 
     // MARK: - Parent Working-Set Draft Persistence (UserDefaults)
-    // Un-logged manual edits to parent reps/weight/duration are @State-only and
-    // lost on force quit. These helpers persist the draft per parent set so it
-    // survives cold resume. Key format inside the per-workout dictionary:
-    //   "<slotID>_<setIndex>_<field>"   field ∈ {reps, weight, duration}
+    // Un-logged manual edits to parent reps/weight/duration are @State-only
+    // and lost on force quit. `ParentDraftStore` persists them per parent set
+    // under the workout's UserDefaults key so they survive cold resume.
+    // Returns nil before the workout binds, so optional-chained call sites
+    // safely no-op at startup (matching prior behavior).
 
-    private enum ParentDraftField: String { case reps, weight, duration }
-
-    private var parentDraftsUDKey: String? {
-        workout.map { "parentDrafts_\($0.id.uuidString)" }
-    }
-
-    private func parentDraftSlotKey(
-        slotID: UUID, setIndex: Int, field: ParentDraftField
-    ) -> String {
-        "\(slotID)_\(setIndex)_\(field.rawValue)"
-    }
-
-    private func persistParentDraft(
-        slotID: UUID, setIndex: Int, field: ParentDraftField, value: String
-    ) {
-        guard let udKey = parentDraftsUDKey else { return }
-        var dict = (UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]) ?? [:]
-        dict[parentDraftSlotKey(slotID: slotID, setIndex: setIndex, field: field)] = value
-        UserDefaults.standard.set(dict, forKey: udKey)
-    }
-
-    private func clearParentDraft(slotID: UUID, setIndex: Int) {
-        guard let udKey = parentDraftsUDKey else { return }
-        var dict = (UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]) ?? [:]
-        let prefix = "\(slotID)_\(setIndex)_"
-        let toRemove = dict.keys.filter { $0.hasPrefix(prefix) }
-        guard !toRemove.isEmpty else { return }
-        for key in toRemove { dict.removeValue(forKey: key) }
-        UserDefaults.standard.set(dict, forKey: udKey)
-    }
-
-    private func clearAllParentDrafts() {
-        guard let udKey = parentDraftsUDKey else { return }
-        UserDefaults.standard.removeObject(forKey: udKey)
-    }
-
-    /// Returns persisted draft fields for a parent set, or nil if no fields are stored.
-    /// Each field may independently be nil (caller backfills with prescription).
-    private func loadParentDraft(
-        slotID: UUID, setIndex: Int
-    ) -> (reps: String?, weight: String?, duration: String?)? {
-        guard let udKey = parentDraftsUDKey,
-              let dict = UserDefaults.standard.dictionary(forKey: udKey) as? [String: String]
-        else { return nil }
-        let reps = dict[parentDraftSlotKey(slotID: slotID, setIndex: setIndex, field: .reps)]
-        let weight = dict[parentDraftSlotKey(slotID: slotID, setIndex: setIndex, field: .weight)]
-        let duration = dict[parentDraftSlotKey(slotID: slotID, setIndex: setIndex, field: .duration)]
-        if reps == nil && weight == nil && duration == nil { return nil }
-        return (reps: reps, weight: weight, duration: duration)
+    private var parentDraftStore: ParentDraftStore? {
+        workout.map { ParentDraftStore(workoutID: $0.id) }
     }
 
     /// Restores unlogged draft weights from UserDefaults into the in-memory buffers.
