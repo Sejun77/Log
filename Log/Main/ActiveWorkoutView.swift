@@ -2883,25 +2883,33 @@ struct ActiveWorkoutView: View {
                 // suppress parent-set rest; rest fires after the final sub-log.
                 restSec = nil
             } else {
-                // Before template-based dropset: skip
+                // Simple non-superset path — extracted to RestPlanner (Phase 7.4-C.1).
+                // Covers: between-set rest, final-set rest, skip-before-template-dropset,
+                // and last-set-of-workout suppression. All other branches (supersets,
+                // current-set dropset, technique-based dropsets, warmup) remain inline.
                 let exSetCount = effectiveSetCount(
                     for: exercise, resolvedTemplates: exercise.templates)
-                if idx + 1 < exSetCount,
-                    (exercise.templates[safe: idx + 1]?.kind ?? .working)
-                        == .dropset
-                {
-                    restSec = nil
-                } else {
-                    let isLastSet = idx == exSetCount - 1
-                    let afterEx = isLastSet ? plannedRestAfterExercise(for: exercise) : nil
-                    if let r = afterEx ?? plannedRestBetweenSets(for: exercise) ?? t.restSecondsAfter,
-                        r > 0
-                    {
-                        restSec = r
-                    } else {
-                        restSec = nil
-                    }
-                }
+                let isLastBlock = currentBlockIndex == plan.blocks.count - 1
+                let isLastExerciseOfBlock =
+                    currentExerciseIndex == block.exercises.count - 1
+                let isLastSetOfWorkout =
+                    isLastBlock && isLastExerciseOfBlock
+                    && (idx == exSetCount - 1)
+                let nextKind: SetKind? =
+                    (idx + 1 < exSetCount)
+                        ? (exercise.templates[safe: idx + 1]?.kind ?? .working)
+                        : nil
+                restSec = RestPlanner.restSecondsAfterLog(
+                    RestContext(
+                        setIndex: idx,
+                        nextTemplateKind: nextKind,
+                        effectiveSetCount: exSetCount,
+                        plannedRestBetweenSets: plannedRestBetweenSets(for: exercise),
+                        plannedRestAfterExercise: plannedRestAfterExercise(for: exercise),
+                        templateRestSecondsAfter: t.restSecondsAfter,
+                        isLastSetOfWorkout: isLastSetOfWorkout
+                    )
+                )
             }
         }
 
