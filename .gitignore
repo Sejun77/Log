@@ -1,3 +1,6 @@
 
 # Agent logs
 .agent_logs/
+
+# Local Claude Code metadata
+.claude/
