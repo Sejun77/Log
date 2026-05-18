@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-18 (KST) — Phase 7 Slices 7.0 + 7.1 + 7.5 complete: `LogTests` XCTest target wired with an in-memory `ModelContainer` harness; first 9 tests cover `Routine.preferredVariantID` (5) and the `Workout.routineVariantID` schema field (4); `LogTests` deployment target aligned with the app (18.5) and CLAUDE.md Build & Test Policy now documents the concrete-simulator requirement, app-hosted log noise, and the schema-mirror invariant. Host-less conversion attempted and reverted — iOS app targets can't link `@testable` symbols without `TEST_HOST` / `BUNDLE_LOADER`. Phase 6.B Slice C.1 (live routine labels via `RoutineLabelResolver`) and Slice B (idempotent launch-time variant backfill) remain shipped; Slice C.2 grouping and the rename verification are still pending
+Last updated: 2026-05-18 (KST) — Phase 7 Slices 7.0 + 7.1 + 7.2 + 7.5 complete: `LogTests` XCTest target wired with an in-memory `ModelContainer` harness and full suite at 19/19; Slice 7.2 extracted `RoutineLabelResolver` from `HistoryView.swift` into `Log/Services/RoutineLabelResolver.swift` (now `internal`) and added 9 tests covering all priority branches plus live-rename semantics — no user-facing behavior change. Slice 7.5 aligned the `LogTests` deployment target with the app (18.5) and documented the concrete-simulator + app-hosted test policy in CLAUDE.md. Host-less conversion attempted and reverted (iOS app targets can't link `@testable` symbols without `TEST_HOST` / `BUNDLE_LOADER`). Phase 6.B Slice C.1 / Slice B remain shipped; Slice C.2 grouping and rename verification still pending
 
 ---
 
@@ -657,10 +657,12 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 - [x] Pre-existing scaffold test `LogTests/ModelTests.swift` updated for the current schema: `RoutineExercise.exercise` is now `Exercise?`, so the assertion is now `.exercise?.name`. One-character fix; no production behavior change
 - [x] Suite green: **10/10 tests pass in ~0.16s** on iOS 26.5 iPhone 17 simulator (full suite includes the pre-existing `ModelTests.testRoutineRoundTrip`). Tests are `@MainActor` and reuse the shared `SwiftDataTestHarness`
 
-**Pending (7.2 — extract & test `RoutineLabelResolver`):**
+**Completed (7.2 — extract & test `RoutineLabelResolver`):**
 
-- [ ] Move `RoutineLabelResolver` from `HistoryView.swift` (currently file-private) to `Log/Services/RoutineLabelResolver.swift`, drop `private`. Behavior must remain identical at the row / detail-view call sites
-- [ ] `LogTests/RoutineLabelResolverTests.swift` covering all 4 priority branches: (a) variantID → `"Routine — Variant"` for non-Default; (b) variantID where variant is named "Default" (case-insensitive) → routine name alone; (c) orphaned variantID falls through to routineID resolution; (d) both id paths fail → frozen `routineName` snapshot; (e) snapshot also nil/empty → resolver returns nil and the caller omits the row
+- [x] Moved `RoutineLabelResolver` from `HistoryView.swift` (was file-private) to `Log/Services/RoutineLabelResolver.swift`. Default `internal` access (not `public`). API preserved verbatim: `init(routines: [Routine])` + `func label(for workout: Workout) -> String?`. Internal lookup tables (`routineByID`, `variantByID`, `routineByVariantID`) and resolution body are byte-for-byte unchanged
+- [x] Both consumers — `HistoryView.recentWorkoutsSection` and the nested `WorkoutDetailView` — continue to construct the resolver once per body and reuse it across rows. No call-site signature change. History layout still flat — no grouping introduced
+- [x] `LogTests/RoutineLabelResolverTests.swift` — **9 cases, all green**, extending `SwiftDataTestHarness`: (a) Default variant → routine name alone; (b) non-Default variant → `"Routine — Variant"`; (c) case-insensitive Default match (`"dEfAuLt"` collapses); (d) nil `routineVariantID` → routineID path returns `routine.name`; (e) orphaned `routineVariantID` (id not present in any routine's variants) falls through to routineID; (f) both id paths miss → frozen `routineName` snapshot; (g) nil snapshot → resolver returns nil; (h) empty-string snapshot also returns nil (caller omits row); (i) renaming `routine.name` updates the next `label(for:)` result without rebuilding — locks down the Slice C.1 live-label invariant currently blocked at the UI level by the missing rename action
+- [x] Build green; full suite **19/19 pass in ~0.23s** (1 ModelTests + 5 PreferredVariantIDTests + 9 RoutineLabelResolverTests + 4 WorkoutModelTests). No production behavior change beyond the file move
 
 **Pending (7.3 — extract & test launch-time backfill):**
 
