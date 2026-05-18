@@ -70,8 +70,24 @@ Run tests only when:
 
 Test command (when needed):
 - Prefer targeted / minimal tests when possible.
-- Otherwise:
-  xcodebuild -project Log.xcodeproj -scheme Log -configuration Debug -destination 'generic/platform=iOS Simulator' test
+- **`xcodebuild test` requires a CONCRETE simulator destination.** The generic
+  destination `'generic/platform=iOS Simulator'` works for `build` only — for
+  `test`, xcodebuild errors with *"Tests must be run on a concrete device."*
+- Default test command:
+  xcodebuild -project Log.xcodeproj -scheme Log -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' test
+- The exact simulator name/OS varies by machine. List installed simulators
+  with `xcrun simctl list devices` and pick any iOS 18.5+ device (the
+  `LogTests` target is set to deployment 18.5, matching the `Log` app). The
+  iPhone 17 / iOS 26.5 pair above is the verified default for this dev box.
+- `LogTests` is app-hosted (`BUNDLE_LOADER = $(TEST_HOST)`). This is required
+  because iOS app targets aren't frameworks — host-less linking fails with
+  undefined symbols for every `@testable`-imported Log type. Expect noisy
+  `CoreData: error: Failed to stat path .../default.store` lines in the test
+  log from the host app booting under sandbox; these are not test failures
+  (tests use an in-memory `ModelContainer` via `SwiftDataTestHarness`).
+- When adding a new `@Model` to `LogApp.swift`'s `.modelContainer(for:)`,
+  add it to the `Schema(...)` list in `LogTests/SwiftDataTestHarness.swift`
+  too, or every test that touches the new entity will fail to fetch.
 
 ---
 
