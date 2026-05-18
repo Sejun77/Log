@@ -537,9 +537,33 @@ struct ActiveWorkoutView: View {
             if !isWorkingSetComplete(exercise: exercise, setIndex: j) { return false }
         }
 
-        // 2. Superset order: prior exercises at this set index must be complete first.
-        //    Matches by routineSlotID so duplicate Exercise across slots stay independent.
+        // 2. Superset gating. Two complementary checks:
+        //    (a) Round-progression — round N+1 stays locked until round N
+        //        is complete across every participating exercise. Prevents
+        //        the user from manually navigating back to exercise A and
+        //        logging A2 before B1 is done.
+        //    (b) In-round ordering — within a round, exercises log in
+        //        block.exercises order (A1 → B1 → C1).
+        //    Both use isWorkingSetComplete so dropsets are respected
+        //    (parent logged AND all configured drops logged).
         if block.isSuperset {
+            // (a) Previous round must be complete for every participating
+            //     exercise (those whose effectiveSetCount reaches setIndex-1).
+            if setIndex > 0 {
+                let prevRound = setIndex - 1
+                for ex in block.exercises {
+                    let exSetCount = effectiveSetCount(
+                        for: ex, resolvedTemplates: ex.templates)
+                    guard prevRound < exSetCount else { continue }
+                    if !isWorkingSetComplete(exercise: ex, setIndex: prevRound) {
+                        return false
+                    }
+                }
+            }
+
+            // (b) In-round ordering: prior exercises at this set index must
+            //     be complete first. Matches by routineSlotID so duplicate
+            //     Exercise across slots stay independent.
             guard
                 let exIdx = block.exercises.firstIndex(where: {
                     $0.routineSlotID == exercise.routineSlotID
