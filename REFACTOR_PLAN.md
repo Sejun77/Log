@@ -7,7 +7,7 @@ Branches:
 - `refactor/architecture-v2` — plan & rules
 - `refactor/architecture-v2-exec` — execution (active)
 
-Last updated: 2026-05-18 (KST) — Phase 6.B Slice B complete: idempotent launch-time backfill links pre-existing workouts to a routine's preferred variant via routineID, with a lowercased routineName fallback; history UI still unchanged (Slice C pending)
+Last updated: 2026-05-18 (KST) — Phase 6.B Slice C.1 complete: History rows and WorkoutDetailView resolve routine labels live via a shared `RoutineLabelResolver` (variantID → routineID → frozen `routineName` snapshot); history layout remains a flat reverse-chronological list (Slice C.2 grouping still pending; routine/variant rename verification pending the rename UI)
 
 ---
 
@@ -623,12 +623,22 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 - [x] History UI / `HistoryView` / `WorkoutDetailView` intentionally still untouched — Slice C covers display. Existing `routineName` snapshot fallback remains the source of truth for rendering until then
 - [x] Idempotency verified by simulator runs with temporary debug instrumentation (since removed): cold run on already-linked data short-circuited at the empty-candidates guard with zero writes; after artificially nilling two rows in the persistent store (one with `routineID`, one with only `routineName`), the next run resolved 1 via the id path + 1 via the name fallback and wrote 2 rows; the immediately following relaunch reported 0 candidates and 0 writes. No temporary debug print / `TEMP DEBUG` code remains. Build passes
 
-**Pending (6.B Slice C — relationship-driven display, with optional grouping):**
+**Completed (6.B Slice C.1 — relationship-driven display labels, flat layout):**
 
-- [ ] Replace direct `routineName` reads in `HistoryView` and `WorkoutDetailView` with a single `displayedRoutineLabel(_:)` helper that resolves: live `RoutineVariant.name` (when `routineVariantID` is non-nil and the variant still exists) → live `Routine.name` (when `routineID` resolves) → frozen `Workout.routineName` snapshot. Renaming a routine or variant must update history labels without rewriting any persisted field
-- [ ] Performance: per CLAUDE.md "no heavy regrouping inside SwiftUI `body`" — compute any per-workout label resolution against a memoized `[UUID: String]` cache keyed by `routineVariantID` / `routineID`, recomputed on `workouts` change rather than per row
-- [ ] **Design decision before implementing:** keep `HistoryView` as a flat reverse-chronological list with live labels (**C.1**, smallest), or switch to per-variant `Section` grouping with an "Other / Unlinked" bucket for nil-variant rows (**C.2**, larger UX change). Recommendation in the prior audit: **start with C.1**; only pursue C.2 after explicit confirmation
-- [ ] Verify: renaming a routine or its variant does not break history grouping/labels; deleting a routine still keeps prior workouts visible via the `routineName` snapshot fallback; resume of pre-Slice-A workouts (nil `routineVariantID`) continues to render correctly
+- [x] **Design decision (C.1 over C.2):** kept `HistoryView` as a flat reverse-chronological list and routed labels through live relationship data. Per-variant `Section` grouping with an "Other / Unlinked" bucket (**C.2**) is intentionally deferred to a separate slice — see the pending C.2 block below
+- [x] `RoutineLabelResolver` added in `HistoryView.swift` (file-private) — single shared helper consumed by both the History row (`recentWorkoutsSection`) and `WorkoutDetailView`'s overview. Resolution priority: (1) `workout.routineVariantID` → live `RoutineVariant` + its owning `Routine` (formatted as `routine.name` when the variant is case-insensitively named "Default", else `"\(routine.name) — \(variant.name)"`); (2) `workout.routineID` → live `Routine.name`; (3) frozen `workout.routineName` snapshot (non-empty); (4) `nil` → caller omits the routine line, preserving the pre-Slice-C visual outcome for unattributable workouts. Pure read — no mutation, no writes to `routineName` / `routineID` / `routineVariantID`
+- [x] Performance: resolver built **once per view-body evaluation** via a `let` at the top of `recentWorkoutsSection` (and `WorkoutDetailView.body`) and captured by the row closures, so per-row lookups are O(1) dict reads — no `ctx.fetch` in the rendering path, no per-row recomputation. Internal caches: `routineByID`, `variantByID`, `routineByVariantID` (built by walking each `Routine.variants` once → O(R + V_total)). Reading routine/variant properties inside `init` ties the surrounding `body` to those models, so a rename will re-render automatically with the new label
+- [x] `@Query private var routines: [Routine]` added to both `HistoryView` and `WorkoutDetailView`. `WorkoutDetailView` is in the same file so the resolver type is in scope without a public API
+- [x] History layout intentionally still flat. No `Section` grouping by routine/variant. No "Other / Unlinked" bucket. No changes to the calendar or progression sections, the Workout overview's other rows (Date / Status / Duration / Notes), the per-exercise sections, the chart, the picker, or any active-workout / routine-editor / exercise / notes / warmup / dropset / superset / RIR / RPE / tempo code path
+- [x] Fallback paths exercised manually on simulator: variant-resolves path renders `"Routine — Variant"` for non-Default variants and `routine.name` alone for Default; nil-variantID workouts (pre-Slice-B legacy and post-Slice-B name-fallback-only rows) flow through the routineID path; rows with no resolvable relationship still render the frozen `routineName` snapshot; rows with no snapshot at all omit the routine line as before. Build passes
+
+**Pending (6.B Slice C — verification gated on rename UI):**
+
+- [ ] Verify renaming a routine or variant updates History/WorkoutDetail labels live without rewriting any persisted field. **Blocked:** the Routines tab does not currently expose a rename action; once routine/variant rename UI lands (or via a manual SwiftData edit harness), exercise: (a) rename a routine while its workouts are visible in History → labels update without a relaunch; (b) rename a non-Default variant → "Routine — Variant" labels update; (c) rename a variant to "Default" → label collapses to routine name; (d) rename away from "Default" → label expands back to "Routine — Variant"
+
+**Pending (6.B Slice C.2 — optional sectioned grouping):**
+
+- [ ] **Design decision before implementing:** decide whether to switch `HistoryView` from a flat list to per-variant `Section` grouping with an "Other / Unlinked" bucket for nil-variantID rows. C.1 (flat with live labels) is shipped; C.2 is a larger UX change and should not be started without explicit confirmation. If pursued, the existing `RoutineLabelResolver` cache strategy is reusable; only the section partitioning logic needs to be added — keep grouping work out of SwiftUI `body` per CLAUDE.md by precomputing partitions on `workouts` / `routines` change
 
 ### Phase 7 — Tests + performance pass
 
