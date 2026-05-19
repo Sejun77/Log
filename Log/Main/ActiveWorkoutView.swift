@@ -314,9 +314,13 @@ struct ActiveWorkoutView: View {
                     for log in item.setLogs where log.subIndex != nil {
                         let sub = log.subIndex!
                         slotDrops[log.indexInExercise, default: []].insert(sub)
-                        // Drop-key string still uses Exercise.id (Slice A — persistence
-                        // format preserved). Slice B will switch to slotID.
-                        let key = "\(exerciseID)_\(log.indexInExercise)_\(sub)"
+                        // Phase 5.2-B — drop-key uses routineSlotID. The
+                        // on-disk migration in restoreDropWeightDrafts
+                        // rewrites any legacy `<Exercise.id>_..._..._...`
+                        // entries before the bridge into in-memory dicts,
+                        // so by the time this loop reads logged drops the
+                        // dropWeight*Input dicts only see new-format keys.
+                        let key = "\(slotID)_\(log.indexInExercise)_\(sub)"
                         dropRepsInput[key] = String(log.reps)
                         let wStr = log.weight.map {
                             $0.truncatingRemainder(dividingBy: 1) == 0
@@ -357,9 +361,15 @@ struct ActiveWorkoutView: View {
                         let duration =
                             log.durationSeconds.map(String.init) ?? ""
                         perSet[i] = (reps, weight, duration)
-                    } else if let draft = parentDraftStore?.load(
-                        slotID: exerciseID, setIndex: i
-                    ) {
+                    } else if let draft =
+                        // Phase 5.2-B — dual-read: prefer the new
+                        // routineSlotID-keyed entry, fall back to the
+                        // legacy Exercise.id-keyed entry for in-flight
+                        // drafts that predate this slice. Legacy entries
+                        // die at `clearAll` on workout finish.
+                        parentDraftStore?.load(slotID: slotID, setIndex: i)
+                        ?? parentDraftStore?.load(slotID: exerciseID, setIndex: i)
+                    {
                         // Backfill any field absent from the draft with the prescription
                         // default so partially-filled drafts don't blank unrelated fields.
                         let presReps = String(plannedRepTarget(for: ex, template: tpl))
@@ -416,11 +426,9 @@ struct ActiveWorkoutView: View {
         setIndex: Int,
         template: PlanSetTemplate
     ) -> (Binding<String>, Binding<String>) {
-        // Phase 5.2 — `slotID` is the per-slot key for in-memory state.
-        // `exerciseID` is the legacy Exercise.id used by `ParentDraftStore`
-        // (Slice A preserves persistence format; Slice B will migrate).
+        // Phase 5.2-B — `slotID` is the per-slot key used for both
+        // in-memory state and `ParentDraftStore` writes.
         let slotID = exercise.routineSlotID
-        let exerciseID = exercise.id
 
         func ensureEntry() {
             if inputsByExerciseID[slotID] == nil {
@@ -450,7 +458,7 @@ struct ActiveWorkoutView: View {
                 inputsByExerciseID[slotID]?[setIndex]?.reps = filtered
                 syncToGuardCaches()
                 parentDraftStore?.persist(
-                    slotID: exerciseID, setIndex: setIndex, field: .reps, value: filtered
+                    slotID: slotID, setIndex: setIndex, field: .reps, value: filtered
                 )
             }
         )
@@ -466,7 +474,7 @@ struct ActiveWorkoutView: View {
                 inputsByExerciseID[slotID]?[setIndex]?.weight = filtered
                 syncToGuardCaches()
                 parentDraftStore?.persist(
-                    slotID: exerciseID, setIndex: setIndex, field: .weight, value: filtered
+                    slotID: slotID, setIndex: setIndex, field: .weight, value: filtered
                 )
             }
         )
@@ -479,10 +487,9 @@ struct ActiveWorkoutView: View {
         setIndex: Int,
         template: PlanSetTemplate
     ) -> Binding<String> {
-        // Phase 5.2 — per-slot key for in-memory state; legacy Exercise.id
-        // for `ParentDraftStore` persistence (Slice A keeps format unchanged).
+        // Phase 5.2-B — per-slot key for both in-memory state and
+        // ParentDraftStore persistence.
         let slotID = exercise.routineSlotID
-        let exerciseID = exercise.id
 
         func ensureEntry() {
             if inputsByExerciseID[slotID] == nil {
@@ -513,7 +520,7 @@ struct ActiveWorkoutView: View {
                 inputsByExerciseID[slotID]?[setIndex]?.duration = filtered
                 syncToGuardCaches()
                 parentDraftStore?.persist(
-                    slotID: exerciseID, setIndex: setIndex, field: .duration, value: filtered
+                    slotID: slotID, setIndex: setIndex, field: .duration, value: filtered
                 )
             }
         )
@@ -610,8 +617,11 @@ struct ActiveWorkoutView: View {
         idx: Int,
         template: PlanSetTemplate
     ) -> some View {
-        // Phase 5.2 — per-slot key for in-memory state; legacy Exercise.id
-        // for ParentDraftStore (Slice A preserves persistence format).
+        // Phase 5.2-B — `slotID` is the per-slot key for both in-memory
+        // state and `ParentDraftStore` persistence. `exerciseID` (the
+        // legacy Exercise.id) is still passed to `undoSetLog` because
+        // its cascade also defensively clears legacy drop-key entries
+        // in case a pre-Slice-B-format on-disk entry survived migration.
         let slotID = exercise.routineSlotID
         let exerciseID = exercise.id
         let isLogged = loggedByExercise[slotID, default: []].contains(idx)
@@ -648,6 +658,9 @@ struct ActiveWorkoutView: View {
                         loggedByExercise[slotID] = s
                         syncToGuardCaches()
                         // SetLog is now the source of truth — discard the draft.
+                        // Phase 5.2-B: new key by slotID, plus a defensive
+                        // legacy clear in case a pre-migration entry survived.
+                        parentDraftStore?.clear(slotID: slotID, setIndex: idx)
                         parentDraftStore?.clear(slotID: exerciseID, setIndex: idx)
 
                         if let seconds = restSecondsAfterCurrentLog(
@@ -709,6 +722,9 @@ struct ActiveWorkoutView: View {
                         loggedByExercise[slotID] = s
                         syncToGuardCaches()
                         // SetLog is now the source of truth — discard the draft.
+                        // Phase 5.2-B: new key by slotID, plus a defensive
+                        // legacy clear in case a pre-migration entry survived.
+                        parentDraftStore?.clear(slotID: slotID, setIndex: idx)
                         parentDraftStore?.clear(slotID: exerciseID, setIndex: idx)
 
                         if let seconds = restSecondsAfterCurrentLog(
@@ -2382,10 +2398,12 @@ struct ActiveWorkoutView: View {
         try? ctx.save()
     }
 
-    /// `slotID` is the per-slot identity (routineSlotID) for in-memory state
-    /// (`itemsByExerciseID`, `dropsLoggedByExercise`). `exerciseID` is the
-    /// legacy Exercise.id used by `ParentDraftStore` and the drop-key string
-    /// format — preserved byte-for-byte under Slice A; Slice B will migrate.
+    /// `slotID` is the per-slot identity (routineSlotID) for in-memory
+    /// state (`itemsByExerciseID`, `dropsLoggedByExercise`) **and** the
+    /// `ParentDraftStore` snapshot-on-undo path (Phase 5.2-B). `exerciseID`
+    /// is the legacy `Exercise.id` — retained so the drop-key cascade and
+    /// the parent-draft clear can defensively also clear legacy on-disk
+    /// entries that survived migration.
     private func undoSetLog(slotID: UUID, exerciseID: UUID, setIndex: Int) {
         guard let wi = itemsByExerciseID[slotID] else { return }
         // Snapshot the parent SetLog's values into the parent draft BEFORE removing
@@ -2400,15 +2418,16 @@ struct ActiveWorkoutView: View {
         }) {
             let repsStr = String(max(0, log.reps))
             let weightStr = log.weight.map { String(Int($0.rounded())) } ?? ""
+            // Phase 5.2-B — write under the new routineSlotID-based key.
             parentDraftStore?.persist(
-                slotID: exerciseID, setIndex: setIndex, field: .reps, value: repsStr
+                slotID: slotID, setIndex: setIndex, field: .reps, value: repsStr
             )
             parentDraftStore?.persist(
-                slotID: exerciseID, setIndex: setIndex, field: .weight, value: weightStr
+                slotID: slotID, setIndex: setIndex, field: .weight, value: weightStr
             )
             if let durationStr = log.durationSeconds.map(String.init) {
                 parentDraftStore?.persist(
-                    slotID: exerciseID, setIndex: setIndex, field: .duration, value: durationStr
+                    slotID: slotID, setIndex: setIndex, field: .duration, value: durationStr
                 )
             }
         }
@@ -2422,24 +2441,39 @@ struct ActiveWorkoutView: View {
         let loggedSubs = dropsLoggedByExercise[slotID]?[setIndex] ?? []
         wi.setLogs.removeAll { $0.indexInExercise == setIndex && $0.subIndex != nil }
         try? ctx.save()
-        // Clear drop UI state for each cascaded sub. Drop-key strings still
-        // use Exercise.id (Slice A preserves persistence format).
+        // Clear drop UI state for each cascaded sub. Phase 5.2-B: the
+        // in-memory dicts use routineSlotID-based keys; defensively also
+        // clear the legacy Exercise.id-based on-disk key in case a
+        // pre-migration entry survived.
         for sub in loggedSubs {
-            let key = "\(exerciseID)_\(setIndex)_\(sub)"
+            let newKey = "\(slotID)_\(setIndex)_\(sub)"
+            let legacyKey = "\(exerciseID)_\(setIndex)_\(sub)"
+            dropWeightInput.removeValue(forKey: newKey)
+            dropWeightUserEdited.remove(newKey)
+            dropRepsInput.removeValue(forKey: newKey)
+            dropWeightDraftStore?.clear(slotKey: newKey)
+            dropWeightDraftStore?.clear(slotKey: legacyKey)
+        }
+        // Also clear any UNLOGGED drop drafts under this parent set
+        // (e.g. user typed Drop 2 weight but never tapped Log for that drop).
+        // Without this, the orphan draft would resurface on next render / cold resume.
+        // In-memory dicts are routineSlotID-keyed (Slice A); the on-disk
+        // legacy prefix is cleared defensively below.
+        let newPrefix = "\(slotID)_\(setIndex)_"
+        for key in dropWeightInput.keys where key.hasPrefix(newPrefix) {
             dropWeightInput.removeValue(forKey: key)
             dropWeightUserEdited.remove(key)
             dropRepsInput.removeValue(forKey: key)
             dropWeightDraftStore?.clear(slotKey: key)
         }
-        // Also clear any UNLOGGED drop drafts under this parent set
-        // (e.g. user typed Drop 2 weight but never tapped Log for that drop).
-        // Without this, the orphan draft would resurface on next render / cold resume.
-        let prefix = "\(exerciseID)_\(setIndex)_"
-        for key in dropWeightInput.keys where key.hasPrefix(prefix) {
-            dropWeightInput.removeValue(forKey: key)
-            dropWeightUserEdited.remove(key)
-            dropRepsInput.removeValue(forKey: key)
-            dropWeightDraftStore?.clear(slotKey: key)
+        // Phase 5.2-B compat — sweep any legacy on-disk drop drafts that
+        // share the parent (exerciseID, setIndex) tuple. In-memory dicts
+        // no longer use legacy keys, so only the persistent store sweep.
+        if let store = dropWeightDraftStore {
+            let legacyPrefix = "\(exerciseID)_\(setIndex)_"
+            for legacyKey in store.loadAll().keys where legacyKey.hasPrefix(legacyPrefix) {
+                store.clear(slotKey: legacyKey)
+            }
         }
         dropsLoggedByExercise[slotID]?.removeValue(forKey: setIndex)
     }
@@ -2467,10 +2501,47 @@ struct ActiveWorkoutView: View {
     }
 
     /// Restores unlogged draft weights from UserDefaults into the in-memory buffers.
-    /// Only applies to slots NOT already populated by a logged SetLog (i.e. not in dropWeightUserEdited).
+    /// Only applies to slots NOT already populated by a logged SetLog
+    /// (i.e. not in `dropWeightUserEdited`).
+    ///
+    /// Phase 5.2-B — runs a one-shot legacy-key migration first so any
+    /// pre-Slice-B `"<Exercise.id>_<setIdx>_<sub>"` entries on disk are
+    /// rewritten to the new `"<routineSlotID>_<setIdx>_<sub>"` format.
+    /// For routines where the same `Exercise` occupies two slots, the
+    /// legacy entry's value is fanned out to both slot keys. After the
+    /// rewrite the on-disk dict and the in-memory dicts are aligned in
+    /// new format; subsequent persist/clear/load all use new format.
     private func restoreDropWeightDrafts() {
         guard let store = dropWeightDraftStore else { return }
-        for (slotKey, value) in store.loadAll() {
+
+        // Build the plan's identity map for the migration walker.
+        var legacyExerciseToSlots: [UUID: [UUID]] = [:]
+        var knownSlots: Set<UUID> = []
+        for block in plan.blocks {
+            for ex in block.exercises {
+                // Use `currentExerciseID` to also catch routines where a
+                // swap happened during the pre-update session — the
+                // originating Exercise.id may differ from `originalExerciseID`.
+                legacyExerciseToSlots[ex.currentExerciseID, default: []].append(ex.routineSlotID)
+                if ex.currentExerciseID != ex.originalExerciseID {
+                    legacyExerciseToSlots[ex.originalExerciseID, default: []].append(ex.routineSlotID)
+                }
+                knownSlots.insert(ex.routineSlotID)
+            }
+        }
+
+        let original = store.loadAll()
+        let migrated = DropWeightDraftStore.migrateLegacyKeys(
+            in: original,
+            legacyExerciseToSlots: legacyExerciseToSlots,
+            knownSlots: knownSlots
+        )
+        if migrated != original {
+            store.setAll(migrated)
+        }
+
+        // Bridge the migrated (now new-format) dict into the @State buffers.
+        for (slotKey, value) in migrated {
             guard !dropWeightUserEdited.contains(slotKey) else { continue }
             dropWeightInput[slotKey] = value
             dropWeightUserEdited.insert(slotKey)
@@ -2665,9 +2736,11 @@ struct ActiveWorkoutView: View {
         parentSetIndex: Int
     ) -> some View {
         if let snap = dropsetTechniqueApplying(to: parentSetIndex, in: exercise) {
-            // Phase 5.2 — slotID drives in-memory state lookups; the drop-key
-            // string still uses Exercise.id under Slice A (drop-key + DropWeightDraftStore
-            // persistence format are migrated in Slice B).
+            // Phase 5.2-B — drop key uses routineSlotID for both the
+            // in-memory dicts AND the `DropWeightDraftStore` persistence.
+            // `exerciseID` is retained so the "↩ suggest" / on-log
+            // cleanup paths can defensively clear any legacy on-disk
+            // entry that survived migration.
             let slotID = exercise.routineSlotID
             let exerciseID = exercise.id
             let dropCount = max(1, snap.dropCount ?? 1)
@@ -2675,7 +2748,8 @@ struct ActiveWorkoutView: View {
             let parentLogged = loggedByExercise[slotID, default: []].contains(parentSetIndex)
 
             ForEach(1...dropCount, id: \.self) { sub in
-                let key = "\(exerciseID)_\(parentSetIndex)_\(sub)"
+                let key = "\(slotID)_\(parentSetIndex)_\(sub)"
+                let legacyKey = "\(exerciseID)_\(parentSetIndex)_\(sub)"
                 let isDropLogged = loggedSubs.contains(sub)
                 let canLogDrop = parentLogged && !isDropLogged
                     && (sub == 1 || loggedSubs.contains(sub - 1))
@@ -2728,6 +2802,8 @@ struct ActiveWorkoutView: View {
                             weight: weight
                         )
                         dropWeightDraftStore?.clear(slotKey: key)
+                        // Compat: also clear any pre-migration legacy entry.
+                        dropWeightDraftStore?.clear(slotKey: legacyKey)
                         let isFinalDrop = (sub == dropCount)
                         if isFinalDrop {
                             if block.isSuperset {
@@ -2799,6 +2875,8 @@ struct ActiveWorkoutView: View {
                         dropWeightUserEdited.remove(key)
                         dropWeightInput.removeValue(forKey: key)
                         dropWeightDraftStore?.clear(slotKey: key)
+                        // Compat: also clear any pre-migration legacy entry.
+                        dropWeightDraftStore?.clear(slotKey: legacyKey)
                     } : nil
                 )
             }
