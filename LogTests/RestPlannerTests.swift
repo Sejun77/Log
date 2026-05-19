@@ -519,4 +519,207 @@ final class RestPlannerTests: XCTestCase {
         )
         XCTAssertNil(RestPlanner.restSecondsAfterSupersetRound(ctx))
     }
+
+    // MARK: - Phase 7.4-C.3 — Non-superset final-drop rest
+
+    func testFinalDropInExerciseNonFinalWorkingSetUsesPlannedRestBetweenSets() {
+        // Non-final working set in the exercise → planned-rest-between-sets.
+        // The planned-rest-after-exercise field is final-set-only and must
+        // not leak into the non-final chain.
+        let r = RestPlanner.restSecondsAfterFinalDropInExercise(
+            setIndex: 0,
+            effectiveSetCount: 3,
+            plannedRestBetweenSets: 75,
+            plannedRestAfterExercise: 999,
+            isLastSetOfWorkout: false
+        )
+        XCTAssertEqual(r, 75)
+    }
+
+    func testFinalDropInExerciseFinalWorkingSetPrefersPlannedRestAfterExercise() {
+        // Last working set + after-exercise rest configured → after-exercise wins.
+        let r = RestPlanner.restSecondsAfterFinalDropInExercise(
+            setIndex: 2,
+            effectiveSetCount: 3,
+            plannedRestBetweenSets: 60,
+            plannedRestAfterExercise: 120,
+            isLastSetOfWorkout: false
+        )
+        XCTAssertEqual(r, 120)
+    }
+
+    func testFinalDropInExerciseFinalWorkingSetFallsBackToPlannedRestBetweenSets() {
+        // Last working set, no after-exercise rest → between-sets fallback.
+        let r = RestPlanner.restSecondsAfterFinalDropInExercise(
+            setIndex: 2,
+            effectiveSetCount: 3,
+            plannedRestBetweenSets: 60,
+            plannedRestAfterExercise: nil,
+            isLastSetOfWorkout: false
+        )
+        XCTAssertEqual(r, 60)
+    }
+
+    func testFinalDropInExerciseLastSetOfWorkoutReturnsNil() {
+        // Last set of the very last block of the workout → suppress rest
+        // entirely, regardless of any planned rest values.
+        let r = RestPlanner.restSecondsAfterFinalDropInExercise(
+            setIndex: 2,
+            effectiveSetCount: 3,
+            plannedRestBetweenSets: 60,
+            plannedRestAfterExercise: 120,
+            isLastSetOfWorkout: true
+        )
+        XCTAssertNil(r)
+    }
+
+    func testFinalDropInExerciseNoPlannedRestReturnsNil() {
+        // Nothing planned at any tier → nil (no rest fires).
+        let r = RestPlanner.restSecondsAfterFinalDropInExercise(
+            setIndex: 1,
+            effectiveSetCount: 3,
+            plannedRestBetweenSets: nil,
+            plannedRestAfterExercise: nil,
+            isLastSetOfWorkout: false
+        )
+        XCTAssertNil(r)
+    }
+
+    // MARK: - Phase 7.4-C.3 — Superset final-drop rest
+
+    func testFinalDropInSupersetIncompleteRoundReturnsNil() {
+        // Mid-round suppression: even with configured round rest, any
+        // participating exercise that isn't complete blocks rest.
+        let ctx = makeSupersetCtx(
+            setIndex: 0,
+            participants: [
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 90),
+                makeParticipant(isComplete: false, plannedRestBetweenSets: 90),
+            ],
+            supersetRoundRestSeconds: 120
+        )
+        XCTAssertNil(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx))
+    }
+
+    func testFinalDropInSupersetCompleteRoundUsesSupersetRoundRestSeconds() {
+        // All participating exercises complete → base round rest wins.
+        let ctx = makeSupersetCtx(
+            setIndex: 0,
+            participants: [
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 30),
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 60),
+            ],
+            supersetRoundRestSeconds: 120
+        )
+        XCTAssertEqual(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx), 120)
+    }
+
+    func testFinalDropInSupersetFallsBackToMaxPlannedRestBetweenSets() {
+        // No block-level round rest → max planned rest across participants.
+        let ctx = makeSupersetCtx(
+            setIndex: 0,
+            participants: [
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 45),
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 90),
+            ]
+        )
+        XCTAssertEqual(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx), 90)
+    }
+
+    func testFinalDropInSupersetIgnoresCurrentTemplateRest() {
+        // Stricter than restSecondsAfterSupersetRound: the dropset-final-drop
+        // path does NOT fall back to currentTemplateRestSecondsAfter even
+        // when planned rest is absent. With no planned rest → nil.
+        let ctx = makeSupersetCtx(
+            setIndex: 0,
+            participants: [
+                makeParticipant(isComplete: true,
+                                plannedRestBetweenSets: nil,
+                                currentTemplateRestSecondsAfter: 9999),
+                makeParticipant(isComplete: true,
+                                plannedRestBetweenSets: nil,
+                                currentTemplateRestSecondsAfter: 9999),
+            ]
+        )
+        XCTAssertNil(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx))
+    }
+
+    func testFinalDropInSupersetFinalRoundUsesTransitionRest() {
+        // Final round + blockRestAfterSeconds > 0 → transition replaces
+        // base. Note: stricter `> 0` clamp here (unlike the `!= 0` gate
+        // in restSecondsAfterSupersetRound).
+        let ctx = makeSupersetCtx(
+            setIndex: 2,
+            participants: [
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 60),
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 60),
+            ],
+            lastRoundIndex: 2,
+            supersetRoundRestSeconds: 90,
+            blockRestAfterSeconds: 180
+        )
+        XCTAssertEqual(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx), 180)
+    }
+
+    func testFinalDropInSupersetFinalRoundIgnoresNonPositiveTransitionRest() {
+        // Negative blockRestAfterSeconds is silently ignored (the
+        // `> 0` clamp differs from the parent-log path's `!= 0`).
+        let ctx = makeSupersetCtx(
+            setIndex: 2,
+            participants: [
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 60),
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 60),
+            ],
+            lastRoundIndex: 2,
+            blockRestAfterSeconds: -5
+        )
+        XCTAssertEqual(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx), 60)
+    }
+
+    func testFinalDropInSupersetLastSetOfWorkoutReturnsNil() {
+        // Final round + last block of workout → suppress.
+        // Note: suppression is symmetric — does NOT require
+        // `isLastExerciseOfBlock`. Set it to `false` to pin that.
+        let ctx = makeSupersetCtx(
+            setIndex: 2,
+            participants: [
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 90),
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 90),
+            ],
+            lastRoundIndex: 2,
+            supersetRoundRestSeconds: 60,
+            blockRestAfterSeconds: 180,
+            isLastBlockOfWorkout: true,
+            isLastExerciseOfBlock: false
+        )
+        XCTAssertNil(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx))
+    }
+
+    func testFinalDropInSupersetTransitionDoesNotApplyOnNonFinalRound() {
+        // Defensive: blockRestAfterSeconds is configured but the current
+        // round isn't the final one — base rest stays in place.
+        let ctx = makeSupersetCtx(
+            setIndex: 0,
+            participants: [
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 60),
+                makeParticipant(isComplete: true, plannedRestBetweenSets: 60),
+            ],
+            lastRoundIndex: 2,
+            blockRestAfterSeconds: 180
+        )
+        XCTAssertEqual(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx), 60)
+    }
+
+    func testFinalDropInSupersetNoConfiguredRestReturnsNil() {
+        // All participating complete but no round rest, no planned rest,
+        // no transition rest → nil.
+        let ctx = makeSupersetCtx(
+            setIndex: 0,
+            participants: [
+                makeParticipant(isComplete: true),
+                makeParticipant(isComplete: true),
+            ]
+        )
+        XCTAssertNil(RestPlanner.restSecondsAfterFinalDropInSuperset(ctx))
+    }
 }

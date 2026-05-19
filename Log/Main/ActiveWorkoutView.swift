@@ -2749,53 +2749,102 @@ struct ActiveWorkoutView: View {
                         let isFinalDrop = (sub == dropCount)
                         if isFinalDrop {
                             if block.isSuperset {
-                                // Inside a superset: rest only fires when every exercise
-                                // in the round is fully complete (parent + all drops).
-                                // Round rest from supersetRoundRestSeconds; on the final
-                                // round, block.restAfterSeconds (transition rest) replaces
-                                // round rest when configured. Last set of workout: suppressed.
-                                if supersetRoundComplete(block: block, setIndex: parentSetIndex),
-                                    let r = computeSupersetEndOfRoundRest(block: block, setIndex: parentSetIndex),
+                                // Phase 7.4-C.3 — dropset-final-drop superset
+                                // rest decision extracted to RestPlanner. The
+                                // planner handles mid-round suppression,
+                                // base round rest, final-round transition
+                                // replacement, and last-set-of-workout
+                                // suppression. Side effects stay in the view.
+                                let participants: [SupersetRoundParticipant] =
+                                    block.exercises.map { ex in
+                                        let sc = effectiveSetCount(
+                                            for: ex, resolvedTemplates: ex.templates)
+                                        let participates = parentSetIndex < sc
+                                        return SupersetRoundParticipant(
+                                            participates: participates,
+                                            isComplete: participates
+                                                ? isWorkingSetComplete(
+                                                    exercise: ex,
+                                                    setIndex: parentSetIndex)
+                                                : true,
+                                            plannedRestBetweenSets:
+                                                plannedRestBetweenSets(for: ex),
+                                            // Unused by restSecondsAfterFinalDropInSuperset
+                                            // — fillers preserve the shared
+                                            // SupersetRoundParticipant API.
+                                            currentTemplateKind: .working,
+                                            currentTemplateRestSecondsAfter: nil,
+                                            nextTemplateKind: nil,
+                                            priorWorkingRest: nil
+                                        )
+                                    }
+                                let ctx = SupersetRoundContext(
+                                    setIndex: parentSetIndex,
+                                    participants: participants,
+                                    lastRoundIndex: lastRoundIndex(in: block),
+                                    supersetRoundRestSeconds:
+                                        block.supersetRoundRestSeconds,
+                                    blockRestAfterSeconds: block.restAfterSeconds,
+                                    isLastBlockOfWorkout:
+                                        currentBlockIndex == plan.blocks.count - 1,
+                                    // Unused by this planner entry-point.
+                                    isLastExerciseOfBlock: false
+                                )
+                                if let r = RestPlanner
+                                    .restSecondsAfterFinalDropInSuperset(ctx),
                                     r > 0
                                 {
                                     startRestWithPersistence(
                                         seconds: r, slotID: exercise.routineSlotID)
                                     showRestOverlay = true
                                 } else {
-                                    // Round not yet complete (another exercise is pending),
-                                    // or the helper returned nil (e.g., last set of workout).
-                                    // Clear any stale running rest from earlier in this round.
+                                    // Round incomplete, last set of workout, or
+                                    // no planned rest configured. Clear any
+                                    // stale running rest from earlier in the round.
                                     rest.stop()
                                     clearPersistedRestState()
                                 }
-                                // Advance focus the same way a normal parent log does once
-                                // the dropset set is now fully complete.
-                                advanceForSupersetAfterLog(setIndex: parentSetIndex, in: block)
+                                // Advance focus the same way a normal parent
+                                // log does once the dropset set is now fully
+                                // complete.
+                                advanceForSupersetAfterLog(
+                                    setIndex: parentSetIndex, in: block)
                             } else {
-                                // Non-superset: fire between-sets or after-exercise rest.
+                                // Phase 7.4-C.3 — non-superset dropset-final-drop
+                                // rest extracted to RestPlanner. No template-rest
+                                // fallback in this chain (the dropset parent
+                                // template's rest is intentionally bypassed).
                                 let exSetCount = effectiveSetCount(
                                     for: exercise, resolvedTemplates: exercise.templates)
-                                let isLastWorkingSet = parentSetIndex == exSetCount - 1
+                                let isLastWorkingSet =
+                                    parentSetIndex == exSetCount - 1
                                 let isLastSetOfWorkout: Bool = {
                                     guard let cb = currentBlock else { return false }
                                     return currentBlockIndex == plan.blocks.count - 1
-                                        && currentExerciseIndex == cb.exercises.count - 1
+                                        && currentExerciseIndex
+                                            == cb.exercises.count - 1
                                         && isLastWorkingSet
                                 }()
-                                if !isLastSetOfWorkout {
-                                    let restDur = isLastWorkingSet
-                                        ? (plannedRestAfterExercise(for: exercise)
-                                            ?? plannedRestBetweenSets(for: exercise))
-                                        : plannedRestBetweenSets(for: exercise)
-                                    if let r = restDur, r > 0 {
-                                        startRestWithPersistence(
-                                            seconds: r, slotID: exercise.routineSlotID)
-                                        showRestOverlay = true
-                                    }
+                                if let r = RestPlanner
+                                    .restSecondsAfterFinalDropInExercise(
+                                        setIndex: parentSetIndex,
+                                        effectiveSetCount: exSetCount,
+                                        plannedRestBetweenSets:
+                                            plannedRestBetweenSets(for: exercise),
+                                        plannedRestAfterExercise:
+                                            plannedRestAfterExercise(for: exercise),
+                                        isLastSetOfWorkout: isLastSetOfWorkout
+                                    ), r > 0
+                                {
+                                    startRestWithPersistence(
+                                        seconds: r, slotID: exercise.routineSlotID)
+                                    showRestOverlay = true
                                 }
                             }
                         } else {
-                            // Non-final drop: intra-drop rest (dropset-specific only; no prescription fallback)
+                            // Non-final drop: intra-drop rest (dropset-specific
+                            // only; no prescription fallback). Kept inline per
+                            // Phase 7.4-C.3 scope.
                             let restDur = snap.restSeconds.flatMap { $0 > 0 ? $0 : nil }
                             if let r = restDur, r > 0 {
                                 startRestWithPersistence(
@@ -3104,44 +3153,6 @@ struct ActiveWorkoutView: View {
             }
         }
         return true
-    }
-
-    /// Computes the rest to fire when a superset round completes at `setIndex`.
-    /// - Primary: `block.supersetRoundRestSeconds` (>0).
-    /// - Fallback: max `plannedRestBetweenSets` across exercises participating in the round.
-    /// - Final round: `block.restAfterSeconds` (transition rest) replaces round rest when configured (>0).
-    /// - Last set of the workout: returns nil (suppressed).
-    private func computeSupersetEndOfRoundRest(
-        block: PlanBlock,
-        setIndex: Int
-    ) -> Int? {
-        let isLastRound = setIndex == lastRoundIndex(in: block)
-        let isLastBlock = currentBlockIndex == plan.blocks.count - 1
-        if isLastRound && isLastBlock { return nil }
-
-        var restSec: Int? = nil
-        if let rr = block.supersetRoundRestSeconds, rr > 0 {
-            restSec = rr
-        } else {
-            var maxSeconds = 0
-            var found = false
-            for ex in block.exercises {
-                let sc = effectiveSetCount(
-                    for: ex, resolvedTemplates: ex.templates)
-                guard setIndex < sc else { continue }
-                if let r = plannedRestBetweenSets(for: ex), r > 0 {
-                    maxSeconds = max(maxSeconds, r)
-                    found = true
-                }
-            }
-            if found, maxSeconds > 0 { restSec = maxSeconds }
-        }
-
-        if isLastRound, let extra = block.restAfterSeconds, extra > 0 {
-            restSec = extra
-        }
-
-        return restSec
     }
 
     /// Advance focus after logging within a superset.

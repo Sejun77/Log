@@ -26,9 +26,21 @@ import Foundation
 ///     log happens on the last exercise of the block).
 ///   • Last-set-of-workout suppression.
 ///
+/// Slice 7.4-C.3 (dropset final-drop rest):
+///   • Non-superset final-drop: `plannedRestAfterExercise` (last
+///     working set) ?? `plannedRestBetweenSets`, suppressed on last
+///     set of workout. **No** template-rest fallback (the dropset's
+///     parent-template `restSecondsAfter` is intentionally bypassed).
+///   • Superset final-drop: mid-round suppression, base round rest
+///     from `supersetRoundRestSeconds` else max-combined
+///     `plannedRestBetweenSets`, final-round transition replacement
+///     gated on `blockRestAfterSeconds > 0`, last-set-of-workout
+///     suppression (symmetric across exercises — does NOT require
+///     `isLastExerciseOfBlock`).
+///
 /// NOT in scope (still handled inline in `ActiveWorkoutView`):
-///   • Current set is `.dropset` (final-drop logic).
-///   • Technique-based intra-drop rest.
+///   • Technique-based intra-drop (non-final) rest — single-line
+///     pass-through of `snap.restSeconds`.
 ///   • Warmup rest.
 ///   • `block.restAfterSeconds` additive post-processing for
 ///     non-superset blocks (planner returns the base for the simple
@@ -267,6 +279,104 @@ enum RestPlanner {
            ctx.isLastExerciseOfBlock
         {
             return nil
+        }
+
+        return restSec
+    }
+
+    /// Phase 7.4-C.3 — rest after a logged **final drop** in a
+    /// **non-superset** block. Returns `nil` to skip rest. Byte-identical
+    /// to the inline non-superset branch of `buildDropSection.onLog`:
+    ///   • `isLastSetOfWorkout` → nil
+    ///   • last working set → `plannedRestAfterExercise ?? plannedRestBetweenSets`
+    ///   • else → `plannedRestBetweenSets`
+    ///   • Parent-template `restSecondsAfter` is intentionally NOT in
+    ///     the chain — the dropset-final-drop contract uses planned
+    ///     rest only (the dropset's parent template typically carries 0
+    ///     or a short rest meant for inter-drop pacing, not for the
+    ///     post-dropset transition).
+    ///
+    /// Takes plain parameters rather than `RestContext` because the
+    /// `templateRestSecondsAfter` and `nextTemplateKind` fields on
+    /// `RestContext` are intentionally absent from this chain — the
+    /// caller would have to pass don't-care fillers and risk drift if
+    /// `restSecondsAfterLog`'s semantics ever changed.
+    static func restSecondsAfterFinalDropInExercise(
+        setIndex: Int,
+        effectiveSetCount: Int,
+        plannedRestBetweenSets: Int?,
+        plannedRestAfterExercise: Int?,
+        isLastSetOfWorkout: Bool
+    ) -> Int? {
+        if isLastSetOfWorkout { return nil }
+        let isLastWorkingSet = setIndex == effectiveSetCount - 1
+        let restDur =
+            isLastWorkingSet
+            ? (plannedRestAfterExercise ?? plannedRestBetweenSets)
+            : plannedRestBetweenSets
+        guard let r = restDur, r > 0 else { return nil }
+        return r
+    }
+
+    /// Phase 7.4-C.3 — rest after a logged **final drop** inside a
+    /// **superset** block. Returns `nil` to skip rest. Byte-identical
+    /// to the inline pair
+    /// `supersetRoundComplete(block:setIndex:) && computeSupersetEndOfRoundRest(block:setIndex:)`
+    /// that lived in `ActiveWorkoutView`:
+    ///   • Mid-round suppression: nil until every participating
+    ///     exercise is `isComplete`.
+    ///   • Last set of last block (`isLastRound && isLastBlockOfWorkout`)
+    ///     → nil. Note: this suppression is **symmetric** across all
+    ///     exercises in the round (does NOT require
+    ///     `isLastExerciseOfBlock`), because by the time a final-drop
+    ///     fires the caller is by definition on the dropset-attached
+    ///     exercise and "is this the last set of the workout?" depends
+    ///     only on block + round indices.
+    ///   • Base round rest: `supersetRoundRestSeconds > 0`, else max of
+    ///     per-exercise `plannedRestBetweenSets > 0`. **Template-rest
+    ///     fallback is intentionally NOT in this chain** (mirrors the
+    ///     inline helper — dropset-final-drop never reaches the parent
+    ///     template's `restSecondsAfter`).
+    ///   • Final-round transition replacement: `blockRestAfterSeconds
+    ///     > 0` replaces the base. **Stricter `> 0` clamp** here, not
+    ///     the `!= 0` gate used by the parent-log path's
+    ///     `restSecondsAfterSupersetRound` — a negative
+    ///     `blockRestAfterSeconds` in this branch silently leaves the
+    ///     base in place.
+    ///
+    /// Reuses `SupersetRoundContext` / `SupersetRoundParticipant` for
+    /// API symmetry. The fields not consumed by this function
+    /// (`currentTemplateKind`, `currentTemplateRestSecondsAfter`,
+    /// `nextTemplateKind`, `priorWorkingRest`, `isLastExerciseOfBlock`)
+    /// may be filled with don't-care values by the caller.
+    static func restSecondsAfterFinalDropInSuperset(
+        _ ctx: SupersetRoundContext
+    ) -> Int? {
+        let participating = ctx.participants.filter { $0.participates }
+        if participating.contains(where: { !$0.isComplete }) {
+            return nil
+        }
+
+        let isLastRound = ctx.setIndex == ctx.lastRoundIndex
+        if isLastRound && ctx.isLastBlockOfWorkout { return nil }
+
+        var restSec: Int? = nil
+        if let rr = ctx.supersetRoundRestSeconds, rr > 0 {
+            restSec = rr
+        } else {
+            var maxSeconds = 0
+            var found = false
+            for p in participating {
+                if let r = p.plannedRestBetweenSets, r > 0 {
+                    maxSeconds = max(maxSeconds, r)
+                    found = true
+                }
+            }
+            if found, maxSeconds > 0 { restSec = maxSeconds }
+        }
+
+        if isLastRound, let extra = ctx.blockRestAfterSeconds, extra > 0 {
+            restSec = extra
         }
 
         return restSec
