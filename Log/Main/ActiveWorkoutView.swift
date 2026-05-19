@@ -27,9 +27,6 @@ final class ActiveWorkoutGuard: ObservableObject {
     // routineSlotID -> set indexes that are logged (UI checkmarks)
     @Published var loggedCache: [UUID: Set<Int>] = [:]
 
-    // routineSlotID -> session notes edits
-    @Published var notesCache: [UUID: String] = [:]
-
     // Exercises
     func lockExercises<S: Sequence>(_ ids: S) where S.Element == UUID {
         lockedExerciseIDs.formUnion(ids)
@@ -75,7 +72,6 @@ final class ActiveWorkoutGuard: ObservableObject {
         sessionStart = nil  // 🔵 reset global timer
         inputsCache.removeAll()
         loggedCache.removeAll()
-        notesCache.removeAll()
     }
 }
 
@@ -229,22 +225,6 @@ struct ActiveWorkoutView: View {
     // Phase 5.2 — keyed by routineSlotID (per-slot identity).
     @State private var inputsByExerciseID:
         [UUID: [Int: (reps: String, weight: String, duration: String)]] = [:]
-
-    /// Apply session-edited notes only to the *current* exercises in each slot.
-    /// Replaced (swapped out) exercises are not touched.
-    private func persistExerciseNotesOnlyForCurrentExercises() {
-        for block in plan.blocks {
-            for planEx in block.exercises {
-                let slotID = planEx.routineSlotID
-                let exerciseID = planEx.currentExerciseID
-                guard let ex = fetchExercise(by: exerciseID) else { continue }
-
-                if let text = activeGuard.notesCache[slotID] {
-                    ex.notes = text.isEmpty ? nil : text
-                }
-            }
-        }
-    }
 
     private func ensureInputsInitializedFromPlan() {
         guard inputsByExerciseID.isEmpty else { return }
@@ -1132,23 +1112,6 @@ struct ActiveWorkoutView: View {
         return result
     }
 
-    private func notesBinding(for exercise: PlanExercise) -> Binding<String> {
-        // Phase 5.2 — notesCache is keyed by routineSlotID. The library
-        // Exercise.notes fallback still uses `currentExerciseID`.
-        let slotID = exercise.routineSlotID
-        let exerciseID = exercise.currentExerciseID
-
-        return Binding<String>(
-            get: {
-                activeGuard.notesCache[slotID]
-                    ?? (fetchExercise(by: exerciseID)?.notes ?? "")
-            },
-            set: { newValue in
-                activeGuard.notesCache[slotID] = newValue
-            }
-        )
-    }
-
     /// Binding for session-level Workout.notes.
     /// Reads and writes directly on the active Workout model object.
     /// Sets nil when the trimmed value is empty so the history detail row is suppressed.
@@ -1666,39 +1629,35 @@ struct ActiveWorkoutView: View {
                 titleVisibility: .visible
             ) {
                 Button("Finish (this workout only)") {
-                    finishWorkout(applySwaps: false, applyNotes: false)
+                    finishWorkout(applySwaps: false)
                 }
 
                 if hasSwapsPending {
                     Button("Finish + Update routine template") {
-                        finishWorkout(applySwaps: true, applyNotes: false)
-                    }
-                }
-
-                if hasNotesPending {
-                    Button("Finish + Update exercise notes") {
-                        finishWorkout(applySwaps: false, applyNotes: true)
+                        finishWorkout(applySwaps: true)
                     }
                 }
 
                 if hasSessionPlanPending {
                     Button("Finish + Update slot prescription") {
                         finishWorkout(
-                            applySwaps: false, applyNotes: false,
+                            applySwaps: false,
                             applySlotPrescription: true)
                     }
                 }
 
-                // Combined option when multiple categories are pending
+                // Combined option when multiple categories are pending.
+                // Exercise.notes is intentionally NOT in this list — it's
+                // edited write-through via ExerciseNotesEditSheet, so
+                // there's no "pending notes" state to apply at finish.
                 let pendingCount = [
-                    hasSwapsPending, hasNotesPending,
+                    hasSwapsPending,
                     hasSessionPlanPending,
                 ].filter(\.self).count
                 if pendingCount >= 2 {
                     Button("Finish + Apply all") {
                         finishWorkout(
                             applySwaps: hasSwapsPending,
-                            applyNotes: hasNotesPending,
                             applySlotPrescription: hasSessionPlanPending)
                     }
                 }
@@ -1895,10 +1854,10 @@ struct ActiveWorkoutView: View {
             currentExerciseIndex = 0
         } else {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            if hasSwapsPending || hasNotesPending || hasSessionPlanPending {
+            if hasSwapsPending || hasSessionPlanPending {
                 showFinishConfirm = true
             } else {
-                finishWorkout(applySwaps: false, applyNotes: false)
+                finishWorkout(applySwaps: false)
             }
         }
     }
@@ -1909,20 +1868,6 @@ struct ActiveWorkoutView: View {
         plan.blocks.flatMap(\.exercises).contains {
             $0.originalExerciseID != $0.currentExerciseID
         }
-    }
-
-    private var hasNotesPending: Bool {
-        for block in plan.blocks {
-            for planEx in block.exercises {
-                let slotID = planEx.routineSlotID
-                let exerciseID = planEx.currentExerciseID
-                guard let cached = activeGuard.notesCache[slotID] else { continue }
-                let current = fetchExercise(by: exerciseID)?.notes
-                let cachedNormalized: String? = cached.isEmpty ? nil : cached
-                if cachedNormalized != current { return true }
-            }
-        }
-        return false
     }
 
     /// True if the SessionPlan for this slot differs from the original snapshot.
@@ -1982,11 +1927,9 @@ struct ActiveWorkoutView: View {
 
     private func finishWorkout(
         applySwaps: Bool,
-        applyNotes: Bool,
         applySlotPrescription: Bool = false
     ) {
         if applySwaps { applyExerciseSwapsToRoutine() }
-        if applyNotes { persistExerciseNotesOnlyForCurrentExercises() }
         if applySlotPrescription { applySessionPlansToSlotPrescriptions() }
 
         // Mark the workout as completed (single point of truth for all finish paths).
@@ -2221,13 +2164,12 @@ struct ActiveWorkoutView: View {
 
         activeGuard.inputsCache[slotID] = perSet
         activeGuard.loggedCache[slotID] = []
-        // If the new exercise already has notes, start from those.
-        // Otherwise remove any old cache so the binding falls back to fetchExercise(...)
-        if let baseNotes = newEx.notes, !baseNotes.isEmpty {
-            activeGuard.notesCache[slotID] = baseNotes
-        } else {
-            activeGuard.notesCache.removeValue(forKey: slotID)
-        }
+        // Exercise.notes is sourced live via `fetchExercise(...)` in the
+        // active-workout Notes section, so swapping no longer needs to
+        // seed any per-slot notes cache. The library Exercise's `notes`
+        // field is whatever it was; the new slot's read-only display
+        // refreshes when SwiftUI re-renders against the new
+        // `currentExerciseID`.
         syncToGuardCaches()
 
         // 5) Update locks
