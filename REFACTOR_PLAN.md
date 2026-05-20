@@ -846,20 +846,39 @@ Phase 7 is **not closed** — two original coverage items (session-creation snap
 
 Save & Exit is the "I'll be back" exit; Finish is the "this workout is done" terminus; Discard is the "throw it away" path. All three are exercised by manual lifecycle regression and produce the expected History / Resume-banner / cold-restart behavior.
 
-**Automated regression coverage (added 2026-05-20, see Phase 7.7 / 8-B):** the Save & Exit lifecycle fix is now pinned by `LogTests/WorkoutLifecycleServiceTests.swift` (9 cases covering `saveAndExit` / `finish` / `discard` / `clearActiveAppState` / nil-workout defensive paths). The three SwiftData/AppState mutation primitives were extracted from `ActiveWorkoutView`'s inline button closures into the `@MainActor enum WorkoutLifecycleService` namespace, so any future code change that re-introduces the 8-A bug (Save & Exit writing `completedAt` or clearing `activeWorkoutID`) fails one of the new tests. See the 7.7 entry under Phase 7 for the full slice report.
+**Automated regression coverage (added 2026-05-20, see Phase 7.7 / 8-B-lifecycle):** the Save & Exit lifecycle fix is now pinned by `LogTests/WorkoutLifecycleServiceTests.swift` (9 cases covering `saveAndExit` / `finish` / `discard` / `clearActiveAppState` / nil-workout defensive paths). The three SwiftData/AppState mutation primitives were extracted from `ActiveWorkoutView`'s inline button closures into the `@MainActor enum WorkoutLifecycleService` namespace, so any future code change that re-introduces the 8-A bug (Save & Exit writing `completedAt` or clearing `activeWorkoutID`) fails one of the new tests. See the 7.7 entry under Phase 7 for the full slice report.
 
-**Pending (broader Phase 8 — defer to a later slice; Phase 8-A is intentionally a small safety slice):**
+**Completed (Phase 8-C — dead `Exercise.defaultTemplates` write-back helper removal, 2026-05-20):**
+
+> **Numbering note:** the prior cross-reference under the Phase 8-A lifecycle table labelled the `WorkoutLifecycleService` extraction "Phase 7.7 / 8-B"; this slice is the *second* small Phase 8 cleanup and is filed as **Phase 8-C** to keep the two distinguishable. Both share the Phase-8 "safe dead-state cleanup" spirit; neither is in scope for the broader Phase-8 deprecation items listed below.
+
+- [x] **Removed `ActiveWorkoutView.persistDefaultsOnlyForCurrentExercises()`** (former `L1823-1864`, 42 LOC including its 4-line doc comment). Zero-caller verification: `grep -rn "persistDefaultsOnlyForCurrentExercises" Log/ LogTests/ LogUITests/` returned only the definition line — no production, test, or UI-test reference. The function was a relic of the **pre-Phase-2 silent-mutation era**: it would have read every logged `SetLog`'s `reps` / `weight` / `durationSeconds` and written them back into `ex.defaultTemplates[idx]` for any Exercise still present in the final plan. Reachable from nowhere since the Phase-2 no-silent-mutation rule landed; survived Phase 8-A's debris audit because that pass swept commented-out code, not unreferenced functions. Found and recommended for removal by the **Phase 9 planning audit** (see the "Final recommendation" section of that audit), which also surfaced that defaultTemplates removal cannot proceed without a backfill plan
+- [x] **Does NOT remove `Exercise.defaultTemplates`.** The model field stays as-is in `Entities.swift:20-21`. The field remains **load-bearing**: the Exercises-tab editor UI, both `resolvedTemplates` Tier-3 fallbacks (`Entities.swift:560` + `RoutineExercise+Helpers.swift:63-64`), `WorkoutResumeService` cold-restart fallback (`WorkoutResumeService.swift:220`), the mid-workout `swapExercise` path (`ActiveWorkoutView.swift:1952`, post-removal line number), and the superset working-set-count gates (`Routines/RoutineEditor.swift:509-511`, `Routines/ExercisePickers.swift:62`) all continue to read it unchanged. Removal of the model field is **Phase 9 work** and remains blocked on a backfill plan + a TestFlight diagnostic measuring legacy-slot density (see the Phase 9 prelude below)
+- [x] **Side benefit — two pre-existing warnings eliminated.** The compiler "value 'idx' was never used" / "value 'block' was never used" warnings reported as pre-existing across Phase 7.7 / 8-B (verified at the time via a stash-rebuild on the un-modified tree) were emitted from inside the dead function's body. They went with it. Production build now emits zero warnings (filtered for non-system / non-deprecation noise)
+- [x] **No model changes**, no schema changes, no migrations, no test additions or modifications. View-side behavior preserved exactly: start workout, mid-workout swap, finish/save/discard, resume, history, routine editing, warmup/dropset/superset/rest/RIR/RPE/tempo — all untouched (no live code path crossed the removed function)
+- [x] Build green; full suite **159/159 pass in ~1.47s** (composition unchanged from Phase 7.7). Manual smoke test passed
+
+**Pending (broader Phase 8 — defer to a later slice; Phase 8-A, 8-B-lifecycle, and 8-C are intentionally small safety slices):**
 
 - [ ] Deprecate `Workout.routineName` as primary grouping link (keep as display fallback)
 - [ ] Evaluate deprecating `RoutineExercise.setTemplates` once prescription adoption is stable
 - [ ] Consider migration tool for existing device data cleanup
 - [ ] Keep fallback read-only until migration is proven stable across updates
 
-Phase 8 is **not closed** — the four items above remain. Phase 8-A only shipped the safe dead-state + lifecycle-bug subset.
+Phase 8 is **not closed** — the four items above remain. The shipped 8-A (lifecycle-bug fix + safe state cleanup), 8-B-lifecycle (`WorkoutLifecycleService` extraction, filed under Phase 7.7), and 8-C (dead `defaultTemplates` write-back helper) sub-slices together close the small-safety subset; the deprecation items above are independent larger work.
 
 ### Phase 9 — Remove Exercise.defaultTemplates
 
 Slot prescription becomes the single source of programming intent.
+
+**Status (2026-05-20): planning audit complete; implementation deferred.** A full Phase 9 audit on 2026-05-20 mapped every read/write of `Exercise.defaultTemplates` across `Log/`. Headline findings:
+
+- `Exercise.defaultTemplates` is **still load-bearing**, not merely a fallback. Live primary readers include the Exercises-tab editor UI (~17 sites), `RoutineEditor.appendBlock` + `SupersetPicker.setCount` (superset working-set-count gate), `ActiveWorkoutView.swapExercise` (mid-workout swap template seed), `RoutineEditor.normalizeRoutineModel` (exact-copy override detection), and both `resolvedTemplates` Tier-3 fallback arms. Cold-restart resume's last-ditch fallback in `WorkoutResumeService.swift:218-232` also reads it
+- **Pre-Phase-3.1 legacy slots** carry a backfilled `SlotPrescription` with all-nil fields (`hasContent == false`) and therefore resolve via Tier 3 today. Removing the field strands those slots with **empty template arrays** unless a backfill ships first
+- Phase 9 work splits cleanly into **five sub-slices** (9-A through 9-E): backfill prescription content → eliminate non-Tier-3 reads → remove Tier-3 arms → remove editor UI → drop the model field. Each is independently revertible. At least one app release should sit between 9-A (backfill ship) and 9-C (Tier-3 removal) so the backfill runs on real devices first
+- One pre-Phase-9 cleanup has shipped: the dead `persistDefaultsOnlyForCurrentExercises` write-back helper was removed in **Phase 8-C** (see entry under Phase 8). The `SlotPrescriptionResolutionTests` regression net + a TestFlight diagnostic measuring legacy-slot density are recommended next prep steps before 9-A begins
+
+**Removal of `Exercise.defaultTemplates` requires a backfill / compatibility plan.** Do not start Phase 9 work without first shipping (a) the regression-pinning tests for both `resolvedTemplates` helpers, and (b) the launch-time backfill that hydrates empty `SlotPrescription` rows from each slot's `setTemplates` → `Exercise.defaultTemplates` → `AppSettings.defaults`.
 
 **Pending:**
 
