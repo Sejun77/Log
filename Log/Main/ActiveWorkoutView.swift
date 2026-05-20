@@ -1071,73 +1071,67 @@ struct ActiveWorkoutView: View {
 
     // MARK: - Planned Target Resolution
 
-    /// Resolve planned rep target: session plan → snapshot → template.
+    // MARK: - Planned target wrappers (delegate to SessionPlanResolver)
+    //
+    // Phase 11.6-B: the per-tier fallback logic for these five helpers
+    // was extracted to `Log/Services/SessionPlanResolver.swift`. Each
+    // method below is a one-line forwarder that pulls the live
+    // `SessionPlan` and the immutable `PrescriptionSnapshotPayload` out
+    // of the view's @State surface and hands them to the pure resolver.
+    // Behavior is preserved byte-for-byte against the pre-11.6-B bodies.
+    // Wrappers are kept so the ~48 existing call sites stay textually
+    // unchanged (no large mechanical diff); they may be inlined in a
+    // future slice if direct call-site rewrites become preferred.
+
     private func plannedRepTarget(
         for exercise: PlanExercise,
         template: PlanSetTemplate
     ) -> Int {
-        if let sp = sessionPlans[exercise.routineSlotID],
-            let v = sp.repMax ?? sp.repMin
-        { return v }
-        if let snap = exercise.prescriptionSnapshot,
-            let v = snap.repMax ?? snap.repMin
-        { return v }
-        return template.targetReps
+        SessionPlanResolver.plannedRepTarget(
+            sessionPlan: sessionPlans[exercise.routineSlotID],
+            snapshot: exercise.prescriptionSnapshot,
+            template: template
+        )
     }
 
-    /// Resolve planned duration target: session plan → snapshot → template.
     private func plannedDurationTarget(
         for exercise: PlanExercise,
         template: PlanSetTemplate
     ) -> Int? {
-        if let sp = sessionPlans[exercise.routineSlotID],
-            let v = sp.durationMaxSeconds ?? sp.durationMinSeconds
-        { return v }
-        if let snap = exercise.prescriptionSnapshot,
-            let v = snap.durationMaxSeconds ?? snap.durationMinSeconds
-        { return v }
-        return template.durationSeconds
+        SessionPlanResolver.plannedDurationTarget(
+            sessionPlan: sessionPlans[exercise.routineSlotID],
+            snapshot: exercise.prescriptionSnapshot,
+            template: template
+        )
     }
 
-    /// Resolve planned rest between sets: session plan → snapshot → nil (fall through to template).
     private func plannedRestBetweenSets(
         for exercise: PlanExercise
     ) -> Int? {
-        if let sp = sessionPlans[exercise.routineSlotID],
-            let v = sp.restSecondsBetweenSets, v > 0
-        { return v }
-        if let snap = exercise.prescriptionSnapshot,
-            let v = snap.restSecondsBetweenSets, v > 0
-        { return v }
-        return nil
+        SessionPlanResolver.plannedRestBetweenSets(
+            sessionPlan: sessionPlans[exercise.routineSlotID],
+            snapshot: exercise.prescriptionSnapshot
+        )
     }
 
-    /// Resolve planned rest after exercise (used only on the final working set of a non-superset
-    /// exercise): session plan → snapshot → nil (falls back to restSecondsBetweenSets).
     private func plannedRestAfterExercise(
         for exercise: PlanExercise
     ) -> Int? {
-        if let sp = sessionPlans[exercise.routineSlotID],
-            let v = sp.restSecondsAfterExercise, v > 0
-        { return v }
-        if let snap = exercise.prescriptionSnapshot,
-            let v = snap.restSecondsAfterExercise, v > 0
-        { return v }
-        return nil
+        SessionPlanResolver.plannedRestAfterExercise(
+            sessionPlan: sessionPlans[exercise.routineSlotID],
+            snapshot: exercise.prescriptionSnapshot
+        )
     }
 
-    /// Effective set count for an exercise, resolving through session plan → snapshot → templates.
     private func effectiveSetCount(
         for ex: PlanExercise,
         resolvedTemplates: [PlanSetTemplate]
     ) -> Int {
-        if let sp = sessionPlans[ex.routineSlotID],
-            let s = sp.sets, s > 0
-        { return s }
-        if let snap = ex.prescriptionSnapshot,
-            let s = snap.sets, s > 0
-        { return s }
-        return max(1, resolvedTemplates.count)
+        SessionPlanResolver.effectiveSetCount(
+            sessionPlan: sessionPlans[ex.routineSlotID],
+            snapshot: ex.prescriptionSnapshot,
+            resolvedTemplates: resolvedTemplates
+        )
     }
 
     /// Snapshot current planned targets per set so we can detect user edits.
