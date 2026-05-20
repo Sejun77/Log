@@ -728,33 +728,24 @@ struct ActiveWorkoutView: View {
         // End the Live Activity (force remove widget)
         rest.endLiveActivityForWorkout()
 
-        // Clear persisted active session state
-        updateAppState(to: .idle)
+        // NB: AppState active* fields are cleared upstream by
+        // WorkoutLifecycleService.{finish,discard} at the call sites that
+        // lead here. Save & Exit deliberately does NOT call this helper.
 
         // Clear session locks and dismiss screen
         activeGuard.endSession()
         dismiss()
     }
 
-    /// Updates the persisted AppState singleton.
-    private func updateAppState(to state: WorkoutLifecycleState) {
+    /// Marks the persisted AppState singleton `.active` for cold-restart resume.
+    /// Sole caller is the session-start path in `onAppear`. The reverse
+    /// transition (`.idle` + clearing every `active*` field) is handled by
+    /// `WorkoutLifecycleService.clearActiveAppState(_:)` via Finish / Discard.
+    private func markAppStateActive() {
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
-        appState.workoutState = state
-
-        switch state {
-        case .active:
-            appState.activeWorkoutID = workout?.id
-            appState.activeWorkoutStartedAt = activeGuard.sessionStart
-        case .idle:
-            appState.activeWorkoutID = nil
-            appState.activeWorkoutStartedAt = nil
-            appState.activeRestEndsAt = nil
-            appState.activeRestSlotID = nil
-            appState.sessionPlansJSON = nil
-            appState.activeBlockIndex = nil
-            appState.activeExerciseIndex = nil
-        }
-
+        appState.workoutState = .active
+        appState.activeWorkoutID = workout?.id
+        appState.activeWorkoutStartedAt = activeGuard.sessionStart
         try? ctx.save()
     }
 
@@ -1446,20 +1437,19 @@ struct ActiveWorkoutView: View {
                 titleVisibility: .visible
             ) {
                 Button("Save & Exit") {
-                    // Resumable exit: do NOT set `completedAt`, do NOT clear
-                    // AppState/activeGuard/draft stores. The active-session
-                    // gates (RootTabView.checkForActiveSession + RoutinesView
-                    // "Resume workout" banner) key off `workoutState == .active`
-                    // + `activeWorkoutID` + `activeGuard.activePlan`, all of
-                    // which must remain set for resume to work.
-                    try? ctx.save()
+                    // Resumable exit: persist any in-flight writes only.
+                    // AppState / activeGuard / draft stores are intentionally
+                    // left intact so the workout is resumable via both the
+                    // in-memory `ActiveGuard` banner and the cold-restart
+                    // `RootTabView.checkForActiveSession` flow.
+                    WorkoutLifecycleService.saveAndExit(in: ctx)
                     dismiss()
                 }
                 Button("Discard Workout", role: .destructive) {
-                    if let w = workout {
-                        ctx.delete(w)
-                        try? ctx.save()
-                    }
+                    let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+                    WorkoutLifecycleService.discard(
+                        workout: workout, appState: appState, in: ctx
+                    )
                     unlockAndDismiss()
                 }
             } message: {
@@ -1560,7 +1550,7 @@ struct ActiveWorkoutView: View {
                 rehydrateFromWorkoutIfPresent()
 
                 // Persist active state for cold-restart resume
-                updateAppState(to: .active)
+                markAppStateActive()
 
                 // On cold resume, restore rest from AppState if UserDefaults
                 // didn't already rehydrate it (e.g. UserDefaults cleared).
@@ -1776,10 +1766,11 @@ struct ActiveWorkoutView: View {
         if applySwaps { applyExerciseSwapsToRoutine() }
         if applySlotPrescription { applySessionPlansToSlotPrescriptions() }
 
-        // Mark the workout as completed (single point of truth for all finish paths).
-        workout?.completedAt = Date()
-
-        try? ctx.save()
+        // Mark the workout as completed and clear AppState in one call.
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        WorkoutLifecycleService.finish(
+            workout: workout, appState: appState, in: ctx
+        )
         unlockAndDismiss()
     }
 
