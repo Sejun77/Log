@@ -1446,9 +1446,14 @@ struct ActiveWorkoutView: View {
                 titleVisibility: .visible
             ) {
                 Button("Save & Exit") {
-                    workout?.completedAt = Date()
+                    // Resumable exit: do NOT set `completedAt`, do NOT clear
+                    // AppState/activeGuard/draft stores. The active-session
+                    // gates (RootTabView.checkForActiveSession + RoutinesView
+                    // "Resume workout" banner) key off `workoutState == .active`
+                    // + `activeWorkoutID` + `activeGuard.activePlan`, all of
+                    // which must remain set for resume to work.
                     try? ctx.save()
-                    unlockAndDismiss()
+                    dismiss()
                 }
                 Button("Discard Workout", role: .destructive) {
                     if let w = workout {
