@@ -20,6 +20,15 @@ import UserNotifications
 //   `EditSessionPlanSheet` (+ its private
 //    `intStepperRow`, `doubleStepperRow`,
 //    `optionalString` helpers)              → `EditSessionPlanSheet.swift`
+//
+// Phase 11.6-A — pure helpers lifted to module-internal free functions
+// in `Log/Main/ActiveWorkout/ActiveWorkoutHelpers.swift` (no access bumps
+// on `ActiveWorkoutView` state required):
+//   `roundWeight(_:)`, `formatWeight(_:)`, `defaultTemplate(for:at:)`,
+//   `activeRestNotificationID(workoutID:slotID:)` (replaces the former
+//    `restNotificationID(slotID:)` method; callers now pass `workout?.id`
+//    explicitly so the "rest.unknown.<slot>" fallback shape is preserved
+//    byte-for-byte).
 
 struct ActiveWorkoutView: View {
     // Snapshot plan (mutable copy for this view)
@@ -749,16 +758,6 @@ struct ActiveWorkoutView: View {
         try? ctx.save()
     }
 
-    /// Builds a stable notification ID: "rest.<workoutID>.<slotID>"
-    private func restNotificationID(slotID: UUID) -> String {
-        guard let wID = workout?.id else {
-            return "rest.unknown.\(slotID.uuidString)"
-        }
-        return RestTimer.stableNotificationID(
-            workoutID: wID, slotID: slotID
-        )
-    }
-
     /// Persists rest timer state to AppState for cold-restart resume.
     private func persistRestState(endsAt: Date, slotID: UUID) {
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
@@ -840,13 +839,13 @@ struct ActiveWorkoutView: View {
     private func restoreStableRestID() {
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
         if let slotID = appState.activeRestSlotID {
-            rest.stableNotificationID = restNotificationID(slotID: slotID)
+            rest.stableNotificationID = activeRestNotificationID(workoutID: workout?.id, slotID: slotID)
         }
     }
 
     /// Starts a rest timer with stable notification ID and persisted state.
     private func startRestWithPersistence(seconds: Int, slotID: UUID) {
-        let stableID = restNotificationID(slotID: slotID)
+        let stableID = activeRestNotificationID(workoutID: workout?.id, slotID: slotID)
 
         // Cancel the OLD slot's notification before overwriting the stable ID.
         // Without this, switching slots would orphan the old notification.
@@ -875,7 +874,7 @@ struct ActiveWorkoutView: View {
               let slotID = appState.activeRestSlotID
         else { return }
 
-        let stableID = restNotificationID(slotID: slotID)
+        let stableID = activeRestNotificationID(workoutID: workout?.id, slotID: slotID)
         let remaining = Int(floor(endsAt.timeIntervalSinceNow))
         if remaining > 0 {
             rest.stableNotificationID = stableID
@@ -1139,20 +1138,6 @@ struct ActiveWorkoutView: View {
             let s = snap.sets, s > 0
         { return s }
         return max(1, resolvedTemplates.count)
-    }
-
-    /// Lightweight default template for set indices beyond the resolved templates array.
-    private func defaultTemplate(for exercise: PlanExercise, at index: Int)
-        -> PlanSetTemplate
-    {
-        PlanSetTemplate(
-            id: "\(exercise.currentExerciseID.uuidString)-extra\(index)",
-            kind: .working,
-            targetReps: 0,
-            targetWeight: nil,
-            restSecondsAfter: nil,
-            durationSeconds: nil
-        )
     }
 
     /// Snapshot current planned targets per set so we can detect user edits.
@@ -2452,16 +2437,6 @@ struct ActiveWorkoutView: View {
         guard let b = base, b > 0 else { return "" }
         let raw = b * (1.0 - dropPercent / 100.0)
         return formatWeight(roundWeight(raw))
-    }
-
-    private func roundWeight(_ raw: Double) -> Double {
-        Units.weightIsKg
-            ? (raw * 2).rounded() / 2  // nearest 0.5
-            : raw.rounded()             // nearest 1.0
-    }
-
-    private func formatWeight(_ w: Double) -> String {
-        w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(w)
     }
 
     /// Appends (or updates) a drop sub-log under `parentSetIndex`.
