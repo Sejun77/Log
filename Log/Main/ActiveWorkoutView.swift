@@ -1820,49 +1820,6 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    /// Persist exercise defaults based on what was actually logged in this Workout.
-    /// Only updates exercises that are still present in the final plan
-    /// (by currentExerciseID) so swapped-out exercises are never touched.
-    /// Uses the *ordered* templates so set index matches what the user saw/logged.
-    private func persistDefaultsOnlyForCurrentExercises() {
-        guard let w = workout else { return }
-
-        let activeExerciseIDs = Set(
-            plan.blocks.flatMap { $0.exercises.map(\.currentExerciseID) }
-        )
-
-        for item in w.items {
-            guard let ex = item.exercise else { continue }
-
-            guard activeExerciseIDs.contains(ex.id) else { continue }
-
-            let sortedDefaults = ex.defaultTemplates.sorted {
-                $0.order < $1.order
-            }
-
-            let logsByIndex = Dictionary(
-                grouping: item.setLogs,
-                by: { $0.indexInExercise }
-            )
-
-            for (idx, logs) in logsByIndex {
-                guard idx >= 0 && idx < sortedDefaults.count else { continue }
-                guard let last = logs.last else { continue }
-
-                let tpl = sortedDefaults[idx]
-
-                if ex.isTimeBased {
-                    if let dur = last.durationSeconds {
-                        tpl.durationSeconds = dur
-                    }
-                } else {
-                    tpl.targetReps = max(0, last.reps)
-                    tpl.targetWeight = last.weight
-                }
-            }
-        }
-    }
-
     /// Execute the deferred swap after the user chose keep/reset plan.
     private func performPendingSwap(resetPlan: Bool) {
         guard let idx = exerciseToSwapIndex,
