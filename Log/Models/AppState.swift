@@ -6,7 +6,6 @@ import SwiftData
 enum WorkoutLifecycleState: String, Codable {
     case idle
     case active
-    case finished
 }
 
 // MARK: - Persisted App State (singleton)

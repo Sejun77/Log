@@ -745,7 +745,7 @@ struct ActiveWorkoutView: View {
         case .active:
             appState.activeWorkoutID = workout?.id
             appState.activeWorkoutStartedAt = activeGuard.sessionStart
-        case .idle, .finished:
+        case .idle:
             appState.activeWorkoutID = nil
             appState.activeWorkoutStartedAt = nil
             appState.activeRestEndsAt = nil
