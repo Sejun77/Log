@@ -811,14 +811,30 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 
 ### Phase 8 — Deprecation cleanup
 
-**Pending:**
+**Completed (Phase 8-A — safe dead-state cleanup + Save & Exit lifecycle fix, 2026-05-20):**
+
+- [x] **Audited `ActiveWorkoutView` for commented-out silent-mutation debris** — none present. `grep` over `ActiveWorkoutView.swift`, `RoutinesView.swift`, `Entities.swift`, and every extracted file under `Log/Main/ActiveWorkout/` + `Log/Main/Routines/` for commented assignments, block comments, and the keywords *apply-back / silent-mut / pre-Phase-2 / formerly / previously* turned up no commented-out code blocks. The two surviving "silent-mutation" mentions (`ActiveWorkoutView.swift:1247` Exercise Notes section header, `Log/Models/SessionPlan.swift:11` type doc) are **live design comments** explaining the *current* no-silent-mutation invariant and were intentionally retained — deletion would obscure why the inline Exercise Notes TextField is read-only and why `SessionPlan` is an in-memory value type rather than a write-back
+- [x] **Removed `WorkoutLifecycleState.finished`** — the case was never assigned anywhere in production or tests. Verified by `grep` across `Log/` + `LogTests/` and by `git log -S` pickaxe over `AppState.swift` + `ActiveWorkoutView.swift` (no commit ever introduced an assignment). Workout completion is represented by `Workout.completedAt != nil`, not by a lifecycle-state case. The remaining two-case enum (`.idle`, `.active`) covers every assignment. Backward-compat safe: `WorkoutLifecycleState(rawValue: workoutStateRaw) ?? .idle` already falls back to `.idle` for any unknown raw string, so a device that somehow held a persisted `"finished"` string (none does — pickaxe confirms) degrades gracefully. No migration needed. The `case .idle, .finished:` switch arm in `updateAppState(to:)` (`ActiveWorkoutView.swift:748`) was collapsed to `case .idle:` — semantically identical since Save & Exit / Discard / Finish always passed `.idle`
+- [x] **Fixed Save & Exit lifecycle bug** found during Phase 8-A manual testing (pre-existing, introduced by commit `ea32164` on 2026-02-24; **not** caused by the enum cleanup). The Save & Exit button at `ActiveWorkoutView.swift:1448` was incorrectly wired to write `workout?.completedAt = Date()` and call `unlockAndDismiss()`, which made the workout (a) appear as a completed History entry and (b) unresumable (because `unlockAndDismiss()` → `updateAppState(to: .idle)` cleared `AppState.activeWorkoutID` + the `activeGuard` in-memory state). Replaced with a resumable-exit body: `try? ctx.save()` (persists any in-flight workout notes edits) + `dismiss()`. **Nothing else is cleared** — `appState.workoutState` stays `.active`, `appState.activeWorkoutID` stays set, `activeGuard.activePlan` stays bound, rest-timer + Live Activity + scheduled notification keep running, and the `DropWeightDraftStore` / `ParentDraftStore` UserDefaults entries are preserved so unsaved typed input survives. Resume works through both the in-memory path (`RoutinesView` "Active Session — Resume workout" banner gated on `activeGuard.activePlan != nil`, `RoutinesView.swift:105`) and the cold-restart path (`RootTabView.checkForActiveSession` → `WorkoutResumeService.rebuildPlan`, `RootTabView.swift:99-145`)
+
+**Lifecycle semantics (final, post Phase-8-A):**
+
+| Action | Sets `completedAt` | Clears active session | Shows in History | Resumable |
+|---|:---:|:---:|:---:|:---:|
+| **Save & Exit** (End → Save & Exit) | ✗ | ✗ | ✗ (in-progress only) | ✓ |
+| **Discard** (End → Discard) | — (workout deleted) | ✓ | ✗ | ✗ |
+| **Finish** (Next past last set → Finish) | ✓ | ✓ | ✓ (completed) | ✗ |
+
+Save & Exit is the "I'll be back" exit; Finish is the "this workout is done" terminus; Discard is the "throw it away" path. All three are exercised by manual lifecycle regression and produce the expected History / Resume-banner / cold-restart behavior.
+
+**Pending (broader Phase 8 — defer to a later slice; Phase 8-A is intentionally a small safety slice):**
 
 - [ ] Deprecate `Workout.routineName` as primary grouping link (keep as display fallback)
 - [ ] Evaluate deprecating `RoutineExercise.setTemplates` once prescription adoption is stable
-- [ ] Remove commented-out silent mutation calls from `ActiveWorkoutView`
-- [ ] Remove or use `WorkoutLifecycleState.finished` (currently unused — either remove it or use it in Phase 4b's "Save & Exit" path)
 - [ ] Consider migration tool for existing device data cleanup
 - [ ] Keep fallback read-only until migration is proven stable across updates
+
+Phase 8 is **not closed** — the four items above remain. Phase 8-A only shipped the safe dead-state + lifecycle-bug subset.
 
 ### Phase 9 — Remove Exercise.defaultTemplates
 
