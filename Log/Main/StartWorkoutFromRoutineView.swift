@@ -249,6 +249,39 @@ struct StartWorkoutFromRoutineView: View {
 
     @State private var cachedPlan: WorkoutPlan?
 
+    // 9-B2 bug-fix (Issue 4 Part B): when an active workout exists for
+    // this routine, the Start button must route through
+    // `WorkoutResumeService.rebuildPlan(for:in:)` so the swap
+    // reconciliation matches what `RoutinesView`'s in-memory resume
+    // banner already shows. Without these, navigating into the routine
+    // and tapping Start pushes a freshly-built plan that reflects the
+    // routine's original slot exercises — silently overriding any
+    // in-flight swap state.
+    @Environment(\.modelContext) private var ctx
+    @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
+
+    /// Returns the plan to push into `ActiveWorkoutView`. Prefers the
+    /// resume-rebuilt plan when an active workout exists for THIS
+    /// routine (so swap state survives); otherwise falls back to the
+    /// freshly-built `cachedPlan`.
+    @MainActor
+    private func resolvedStartPlan() -> WorkoutPlan? {
+        if let activeID = activeGuard.activeWorkoutID {
+            let descriptor = FetchDescriptor<Workout>(
+                predicate: #Predicate { $0.id == activeID }
+            )
+            if let workout = try? ctx.fetch(descriptor).first,
+               workout.routineID == routine.id,
+               let rebuilt = WorkoutResumeService.rebuildPlan(
+                for: workout, in: ctx
+               )
+            {
+                return rebuilt
+            }
+        }
+        return cachedPlan
+    }
+
     // MARK: - Plan Builder
 
     private func makePlan(from routine: Routine) -> WorkoutPlan {
@@ -367,9 +400,11 @@ struct StartWorkoutFromRoutineView: View {
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                // Use the cached snapshot plan
+                // Prefer the resume-rebuilt plan when this routine has an
+                // active in-flight workout (preserves swap state). Falls
+                // back to the cached freshly-built plan otherwise.
                 NavigationLink {
-                    if let plan = cachedPlan {
+                    if let plan = resolvedStartPlan() {
                         ActiveWorkoutView(plan: plan)
                     } else {
                         // Fallback (shouldn't happen once onAppear ran)

@@ -65,31 +65,30 @@ enum WorkoutResumeService {
                     .sorted { $0.order < $1.order }
                     .compactMap { re in
                         guard let ex = re.exercise else { return nil }
-                        let templates = re.resolvedTemplates().enumerated()
-                            .map { (i, tpl) in
-                                PlanSetTemplate(
-                                    id: "\(ex.id.uuidString)-set\(i)",
-                                    kind: tpl.kind,
-                                    targetReps: tpl.targetReps,
-                                    targetWeight: tpl.targetWeight.map {
-                                        Int($0.rounded())
-                                    },
-                                    restSecondsAfter: tpl.restSecondsAfter,
-                                    durationSeconds: tpl.durationSeconds
-                                )
-                            }
 
                         // Swap reconciliation: if the workout has a WorkoutItem
-                        // for this slot whose exercise differs from the template,
-                        // use the swapped exercise's ID and name instead.
+                        // for this slot whose exercise differs from the routine
+                        // slot's exercise, use the swapped exercise's ID,
+                        // name, mode, and notes. Pre-9-B2 bug-fix only
+                        // reconciled name + currentExerciseID, leaving
+                        // `isTimeBased` and `templates` reflecting the
+                        // original — so a rep ↔ duration swap would show
+                        // the new exercise's name but the old mode after
+                        // a cold-restart resume.
                         var currentID = ex.id
                         var currentName = ex.name
+                        var currentIsTimeBased = ex.isTimeBased
+                        var currentNotes = ex.notes
+                        var swappedExerciseForTemplates: Exercise? = nil
                         if let item = itemsBySlotID[re.slotID],
                            let swappedEx = item.exercise,
                            swappedEx.id != ex.id
                         {
                             currentID = swappedEx.id
                             currentName = swappedEx.name
+                            currentIsTimeBased = swappedEx.isTimeBased
+                            currentNotes = swappedEx.notes
+                            swappedExerciseForTemplates = swappedEx
                         } else if let item = itemsBySlotID[re.slotID],
                                   item.exercise == nil,
                                   let snap = item.exerciseNameSnapshot,
@@ -97,6 +96,43 @@ enum WorkoutResumeService {
                         {
                             // Exercise was deleted — keep original plan name
                             currentName = snap
+                        }
+
+                        // Templates: when a swap is reconciled, mirror what
+                        // `ActiveWorkoutView.swapExercise` does in 9-B2 —
+                        // derive from the slot's prescription via
+                        // `makeSwapDefaultTemplates` so the post-resume
+                        // plan matches the in-memory plan that the
+                        // RoutinesView resume banner already shows.
+                        // Non-swap slots keep the original `resolvedTemplates`
+                        // path (unchanged behavior).
+                        let templates: [PlanSetTemplate]
+                        if let swappedEx = swappedExerciseForTemplates {
+                            templates = makeSwapDefaultTemplates(
+                                forExerciseID: swappedEx.id,
+                                isTimeBased: swappedEx.isTimeBased,
+                                setsHint: re.prescription?.sets,
+                                restBetweenSetsHint:
+                                    re.prescription?.restSecondsBetweenSets,
+                                durationMinHint:
+                                    re.prescription?.durationMinSeconds,
+                                durationMaxHint:
+                                    re.prescription?.durationMaxSeconds
+                            )
+                        } else {
+                            templates = re.resolvedTemplates().enumerated()
+                                .map { (i, tpl) in
+                                    PlanSetTemplate(
+                                        id: "\(ex.id.uuidString)-set\(i)",
+                                        kind: tpl.kind,
+                                        targetReps: tpl.targetReps,
+                                        targetWeight: tpl.targetWeight.map {
+                                            Int($0.rounded())
+                                        },
+                                        restSecondsAfter: tpl.restSecondsAfter,
+                                        durationSeconds: tpl.durationSeconds
+                                    )
+                                }
                         }
 
                         let warmupStepsSnapshot: [WarmupStepSnapshot] =
@@ -141,9 +177,9 @@ enum WorkoutResumeService {
                             originalExerciseID: ex.id,
                             currentExerciseID: currentID,
                             name: currentName,
-                            notes: ex.notes,
+                            notes: currentNotes,
                             templates: templates,
-                            isTimeBased: ex.isTimeBased,
+                            isTimeBased: currentIsTimeBased,
                             routineSlotID: re.slotID,
                             templateNotesSnapshot: re.templateNotes,
                             prescriptionSnapshot: re.prescription.map(

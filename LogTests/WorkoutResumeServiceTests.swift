@@ -154,6 +154,118 @@ final class WorkoutResumeServiceTests: SwiftDataTestHarness {
         XCTAssertEqual(planEx?.originalExerciseID, original.id)
     }
 
+    // MARK: - 4b) Swap reconciliation — isTimeBased + notes follow the swapped exercise
+
+    /// Phase 9-B2 bug-fix: pre-fix `planFromRoutine` left `isTimeBased` and
+    /// `notes` reading from the routine slot's original exercise even when
+    /// a swap was reconciled, so a rep ↔ duration swap would show the
+    /// swapped name but the old mode after a cold-restart resume. The fix
+    /// reads `isTimeBased` and `notes` from the swapped exercise too.
+    func testRebuildPlanReconcilesSwapIsTimeBasedAndNotesFromSwappedExercise() {
+        // Original: rep-based Bench Press.
+        let original = makeExercise(name: "Bench Press", isTimeBased: false)
+        original.notes = "Original notes"
+
+        // Swap target: time-based Plank with different notes.
+        let swappedIn = makeExercise(name: "Plank", isTimeBased: true)
+        swappedIn.notes = "Hold straight"
+
+        let tpl = SetTemplate(kind: .working, targetReps: 8, targetWeight: 60)
+        let (routine, _, re) = makeRoutine(
+            name: "Mixed", slotExercise: original, setTemplates: [tpl]
+        )
+        // WorkoutItem points at the swapped (time-based) exercise.
+        let item = WorkoutItem(exercise: swappedIn, setLogs: [])
+        item.routineSlotID = re.slotID
+        context.insert(item)
+        let w = makeWorkout(
+            routineName: "Mixed", routineID: routine.id, items: [item]
+        )
+        try? context.save()
+
+        let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        let planEx = plan?.blocks.first?.exercises.first
+
+        // Name + currentExerciseID follow the swap (pre-fix behavior).
+        XCTAssertEqual(planEx?.name, "Plank")
+        XCTAssertEqual(planEx?.currentExerciseID, swappedIn.id)
+        // isTimeBased + notes also follow the swap (this slice's fix).
+        XCTAssertEqual(planEx?.isTimeBased, true)
+        XCTAssertEqual(planEx?.notes, "Hold straight")
+        // originalExerciseID still points at the routine slot's exercise.
+        XCTAssertEqual(planEx?.originalExerciseID, original.id)
+    }
+
+    // MARK: - 4c) Swap reconciliation — templates rebuild from the slot prescription
+
+    /// Phase 9-B2 bug-fix: pre-fix `planFromRoutine` always built templates
+    /// from `re.resolvedTemplates()` regardless of swap state, so a swap
+    /// into a time-based exercise still produced rep-based templates with
+    /// the original `targetWeight`. The fix routes swap templates through
+    /// `makeSwapDefaultTemplates(...)` driven by the slot's prescription —
+    /// mirroring what `ActiveWorkoutView.swapExercise` does in-process.
+    /// Pinned contract: kind=.working everywhere, targetWeight=nil, count
+    /// from slot prescription, duration set for time-based swaps.
+    func testRebuildPlanReconcilesSwapTemplatesFromSlotPrescription() {
+        let original = makeExercise(name: "Bench Press", isTimeBased: false)
+        let swappedIn = makeExercise(name: "Plank", isTimeBased: true)
+
+        // Pre-existing Tier-1 setTemplates with a non-nil targetWeight —
+        // would have leaked into the resumed plan pre-fix.
+        let tpl = SetTemplate(
+            kind: .working, targetReps: 8, targetWeight: 60
+        )
+        let (routine, _, re) = makeRoutine(
+            name: "Mixed", slotExercise: original, setTemplates: [tpl]
+        )
+        // Slot prescription dictates the expected count + duration hints
+        // after the swap.
+        let p = SlotPrescription(
+            sets: 4,
+            restSecondsBetweenSets: 30,
+            durationMinSeconds: 45,
+            durationMaxSeconds: 45,
+            usesDuration: true
+        )
+        context.insert(p)
+        re.prescription = p
+
+        let item = WorkoutItem(exercise: swappedIn, setLogs: [])
+        item.routineSlotID = re.slotID
+        context.insert(item)
+        let w = makeWorkout(
+            routineName: "Mixed", routineID: routine.id, items: [item]
+        )
+        try? context.save()
+
+        let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        let planEx = plan?.blocks.first?.exercises.first
+        let templates = planEx?.templates ?? []
+
+        XCTAssertEqual(
+            templates.count, 4,
+            "Template count must come from the slot prescription's `sets`, "
+            + "not the pre-existing setTemplates row count (which was 1)."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.kind == .working },
+            "Swap-reconciled templates are uniform .working rows."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.targetWeight == nil },
+            "9-A.5 contract: swap templates never carry targetWeight, even "
+            + "when the routine's setTemplates row had one."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.durationSeconds == 45 },
+            "Time-based swap derives duration from the slot prescription."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.restSecondsAfter == 30 },
+            "Rest derives from the slot prescription's restSecondsBetweenSets."
+        )
+    }
+
     // MARK: - 5) Snapshot fallback when the swapped Exercise is deleted
 
     func testRebuildPlanUsesNameSnapshotWhenSwappedExerciseIsNil() {

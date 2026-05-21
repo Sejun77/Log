@@ -496,6 +496,18 @@ struct ActiveWorkoutView: View {
                         showSetOverlay = true
                     },
                     onLog: { durationSeconds in
+                        // 9-B2 bug-fix: if the user logs before the
+                        // duration timer naturally hits zero, stop it
+                        // explicitly so the toolbar "Duration: Ns" label
+                        // is replaced by either the rest timer label or
+                        // nothing. Without this, the timer keeps ticking
+                        // (and the `if setTimer.isRunning` branch keeps
+                        // winning over the rest-timer branch) until the
+                        // original countdown finishes. `onChange(of:
+                        // setTimer.isRunning)` hides `showSetOverlay`
+                        // automatically when isRunning flips to false.
+                        setTimer.stop()
+
                         appendTimeSetLog(
                             slotID: slotID,
                             setIndex: idx,
@@ -1593,11 +1605,20 @@ struct ActiveWorkoutView: View {
                 if let idx = exerciseToSwapIndex,
                     let block = currentBlock
                 {
-                    let usedIDs = Set(
-                        plan.blocks.flatMap(\.exercises)
-                            .map(\.currentExerciseID))
+                    // Phase 9-B2 fix: per-slot identity is `routineSlotID`,
+                    // and both logging (`WorkoutItem.routineSlotID`) and
+                    // active draft state key on it — so duplicating an
+                    // Exercise across different routine slots is safe. The
+                    // old "exclude every used exercise across all blocks"
+                    // filter was a stale Phase-3-era guard. Now only the
+                    // current slot's own exercise is excluded (avoids a
+                    // no-op self-swap).
+                    let currentSlotExerciseID: UUID? =
+                        idx < block.exercises.count
+                            ? block.exercises[idx].currentExerciseID
+                            : nil
                     let filtered = allExercises.filter {
-                        !usedIDs.contains($0.id)
+                        $0.id != currentSlotExerciseID
                     }
 
                     ExercisePickerSingle(exercises: filtered) { picked in
@@ -1904,6 +1925,47 @@ struct ActiveWorkoutView: View {
 
         let oldExerciseID = plan.blocks[blockIndex].exercises[exIndex]
             .currentExerciseID
+        let oldIsTimeBased = plan.blocks[blockIndex].exercises[exIndex]
+            .isTimeBased
+        let modeChanged = oldIsTimeBased != newEx.isTimeBased
+
+        // 1a) Mode-change cleanup (9-B2 bug-fix): rep ↔ duration swaps
+        // strand mode-incompatible plan/draft state on the slot —
+        // dropset / warmup snapshots assume rep+weight semantics, drop
+        // draft inputs carry reps + weight strings, the session plan
+        // may carry the old mode's reps/duration fields, and the
+        // prescription snapshot mirrors the old mode. Force-reset
+        // these on a mode change regardless of the user's
+        // keep/reset-plan choice; the user is implicitly opting into
+        // fresh per-mode defaults by swapping across modes.
+        let slotID = plan.blocks[blockIndex].exercises[exIndex].routineSlotID
+        if modeChanged {
+            plan.blocks[blockIndex].exercises[exIndex]
+                .techniquePlansSnapshot = []
+            plan.blocks[blockIndex].exercises[exIndex]
+                .warmupStepsSnapshot = []
+            plan.blocks[blockIndex].exercises[exIndex]
+                .prescriptionSnapshot = nil
+            plan.blocks[blockIndex].exercises[exIndex]
+                .templateNotesSnapshot = nil
+            sessionPlans[slotID] = SessionPlan()
+
+            dropsLoggedByExercise[slotID] = nil
+            let dropPrefix = "\(slotID)_"
+            // Capture affected keys before pruning the in-memory dicts so
+            // the persistent store gets cleared for the right set of keys.
+            let affectedKeys = Set(
+                dropRepsInput.keys.filter { $0.hasPrefix(dropPrefix) }
+            ).union(
+                dropWeightInput.keys.filter { $0.hasPrefix(dropPrefix) }
+            )
+            for key in affectedKeys {
+                dropRepsInput.removeValue(forKey: key)
+                dropWeightInput.removeValue(forKey: key)
+                dropWeightUserEdited.remove(key)
+                dropWeightDraftStore?.clear(slotKey: key)
+            }
+        }
 
         // 2) Build new templates from the slot's existing session plan +
         // snapshot rather than from `newEx.defaultTemplates` (Phase 9-B2 —
@@ -1911,8 +1973,10 @@ struct ActiveWorkoutView: View {
         // contract and the 9-A.5 audit's documented `targetWeight` loss).
         // Preserving the slot's set count + rest across the swap keeps
         // the UI from shrinking/growing unexpectedly when the user
-        // substitutes a different exercise into a programmed slot.
-        let slotID = plan.blocks[blockIndex].exercises[exIndex].routineSlotID
+        // substitutes a different exercise into a programmed slot. On a
+        // mode change the snapshot/session plan above were just cleared,
+        // so the helper falls through to AppSettings defaults — correct
+        // for a fresh-mode authoring intent.
         let sp = sessionPlans[slotID]
         let snap = plan.blocks[blockIndex].exercises[exIndex]
             .prescriptionSnapshot
