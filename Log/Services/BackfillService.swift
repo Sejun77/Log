@@ -219,4 +219,122 @@ enum BackfillService {
             p.restSecondsAfterExercise = AppSettings.defaultRestAfterExercise
         }
     }
+
+    // MARK: - Phase 9 diagnostic
+
+    /// Pre-9-C / pre-9-E diagnostic snapshot. Counts the data shapes that
+    /// will become silently lossy or unreachable once `Exercise.defaultTemplates`
+    /// is unread (9-C) and then deleted (9-E). Pure read-only — no model
+    /// mutation, no save. Safe to call from a launch task in DEBUG builds.
+    ///
+    /// The 9-A.5 audit recorded specific decisions per counter:
+    ///   - `defaultTemplatesWithTargetWeight`: gates the 9-E weight-snapshot
+    ///     migration decision. Non-trivial → ship a one-shot copy into
+    ///     `re.setTemplates` for at-risk slots before deletion. Negligible
+    ///     → accept the loss in release notes.
+    ///   - `defaultTemplatesNonWorkingKind`: gates the 9-E warmup/dropset
+    ///     migration decision. Same shape as above.
+    ///   - `slotsNeedingTier3`: legacy slots whose only resolved-templates
+    ///     source after hydration is still `Exercise.defaultTemplates`.
+    ///     **Must be zero before 9-C ships** — non-zero signals the
+    ///     `hydrateEmptySlotPrescriptions` backfill missed a case (likely
+    ///     a slot whose `Exercise` is nil or whose `defaultTemplates` are
+    ///     all non-`.working` rows, so the mining produced empty
+    ///     `working` and the AppSettings fallback fired — which is fine,
+    ///     prescription is now content-bearing — but this counter
+    ///     defends against drift).
+    ///   - `slotsOrphanedNoSource`: nil-Exercise slot with empty/no-content
+    ///     prescription. These render as `[]` today via the Tier-3 +
+    ///     nil-Exercise guard in `resolvedTemplates`; 9-C will still
+    ///     render `[]`. Counter exists to detect a population that may
+    ///     warrant a routine-editor "unprogrammed slot" UX (per 9-C's
+    ///     own checklist).
+    ///   - `residualEmptyContentSlots`: top-line metric — any slot where
+    ///     `prescription == nil OR !hasContent` post-bootstrap.
+    ///     **Must be zero before 9-C ships** for the same reason as
+    ///     `slotsNeedingTier3`.
+    static func diagnoseDefaultTemplatesRisk(
+        in ctx: ModelContext
+    ) -> DefaultTemplatesDiagnostics {
+        let exercises =
+            (try? ctx.fetch(FetchDescriptor<Exercise>())) ?? []
+        let slots =
+            (try? ctx.fetch(FetchDescriptor<RoutineExercise>())) ?? []
+
+        var exercisesWithDefaultTemplates = 0
+        var defaultTemplatesWithTargetWeight = 0
+        var defaultTemplatesNonWorkingKind = 0
+        for ex in exercises {
+            let templates = ex.defaultTemplates
+            if !templates.isEmpty {
+                exercisesWithDefaultTemplates += 1
+            }
+            for t in templates {
+                if let w = t.targetWeight, w > 0 {
+                    defaultTemplatesWithTargetWeight += 1
+                }
+                if t.kind != .working {
+                    defaultTemplatesNonWorkingKind += 1
+                }
+            }
+        }
+
+        var slotsNeedingTier3 = 0
+        var slotsOrphanedNoSource = 0
+        var residualEmptyContentSlots = 0
+        for re in slots {
+            let hasContent = re.prescription?.hasContent ?? false
+            if !hasContent {
+                residualEmptyContentSlots += 1
+            }
+            if re.exercise == nil, !hasContent {
+                slotsOrphanedNoSource += 1
+            }
+            // Tier-3-needed: slot's only template source after hydration
+            // would still be defaults. setTemplates wins over prescription
+            // (Tier 1 > Tier 2), so a non-empty setTemplates means the
+            // slot is NOT defaults-dependent.
+            if !hasContent,
+               re.setTemplates.isEmpty,
+               let ex = re.exercise,
+               !ex.defaultTemplates.isEmpty
+            {
+                slotsNeedingTier3 += 1
+            }
+        }
+
+        return DefaultTemplatesDiagnostics(
+            exercisesWithDefaultTemplates: exercisesWithDefaultTemplates,
+            defaultTemplatesWithTargetWeight: defaultTemplatesWithTargetWeight,
+            defaultTemplatesNonWorkingKind: defaultTemplatesNonWorkingKind,
+            slotsNeedingTier3: slotsNeedingTier3,
+            slotsOrphanedNoSource: slotsOrphanedNoSource,
+            residualEmptyContentSlots: residualEmptyContentSlots
+        )
+    }
+}
+
+// MARK: - Diagnostic value type
+
+/// Phase 9 pre-9-C / pre-9-E risk snapshot returned by
+/// `BackfillService.diagnoseDefaultTemplatesRisk(in:)`. Pure value type;
+/// safe to log, store, or compare across launches. See the helper's
+/// doc-comment for per-counter semantics + the audit decisions each one
+/// gates.
+struct DefaultTemplatesDiagnostics: Equatable {
+    var exercisesWithDefaultTemplates: Int
+    var defaultTemplatesWithTargetWeight: Int
+    var defaultTemplatesNonWorkingKind: Int
+    var slotsNeedingTier3: Int
+    var slotsOrphanedNoSource: Int
+    var residualEmptyContentSlots: Int
+
+    static let zero = DefaultTemplatesDiagnostics(
+        exercisesWithDefaultTemplates: 0,
+        defaultTemplatesWithTargetWeight: 0,
+        defaultTemplatesNonWorkingKind: 0,
+        slotsNeedingTier3: 0,
+        slotsOrphanedNoSource: 0,
+        residualEmptyContentSlots: 0
+    )
 }

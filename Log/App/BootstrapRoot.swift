@@ -1,5 +1,8 @@
 import SwiftData
 import SwiftUI
+#if DEBUG
+import os
+#endif
 
 struct BootstrapRoot: View {
 
@@ -71,6 +74,15 @@ struct BootstrapRoot: View {
 
                 // Phase 4a: validate persisted active session state.
                 validateActiveSession()
+
+                // Phase 9 pre-9-C / pre-9-E diagnostic (DEBUG only).
+                // Counts the data shapes that gate 9-E's migration
+                // decisions and 9-C's "no slot stranded" guarantee.
+                // No model mutation, no save, no UI surface — pure read
+                // + os.Logger emit. Stripped from Release builds entirely.
+                #if DEBUG
+                logPhase9DefaultTemplatesDiagnostic()
+                #endif
 
                 // Enforce a minimum splash duration only for real users.
                 if !isUITesting {
@@ -249,6 +261,37 @@ struct BootstrapRoot: View {
             try? ctx.save()
         }
     }
+
+    // MARK: - Phase 9 diagnostic (DEBUG only)
+
+    #if DEBUG
+    /// Logs the pre-9-C / pre-9-E `defaultTemplates` risk counters once
+    /// per launch. No UI, no AppState, no model mutation — pure read
+    /// via `BackfillService.diagnoseDefaultTemplatesRisk(in:)` followed
+    /// by an `os.Logger` emit. Stripped from Release builds (and from
+    /// the production binary's binary footprint) by the surrounding
+    /// `#if DEBUG`. Removed in the same PR as 9-E field deletion (per
+    /// the 9-E checklist).
+    @MainActor
+    private func logPhase9DefaultTemplatesDiagnostic() {
+        let logger = Logger(
+            subsystem: "Gym.Log",
+            category: "phase9-diagnostic"
+        )
+        let d = BackfillService.diagnoseDefaultTemplatesRisk(in: ctx)
+        logger.info(
+            """
+            [Phase 9 defaultTemplates risk] \
+            exercisesWithDefaultTemplates=\(d.exercisesWithDefaultTemplates, privacy: .public) \
+            defaultTemplatesWithTargetWeight=\(d.defaultTemplatesWithTargetWeight, privacy: .public) \
+            defaultTemplatesNonWorkingKind=\(d.defaultTemplatesNonWorkingKind, privacy: .public) \
+            slotsNeedingTier3=\(d.slotsNeedingTier3, privacy: .public) \
+            slotsOrphanedNoSource=\(d.slotsOrphanedNoSource, privacy: .public) \
+            residualEmptyContentSlots=\(d.residualEmptyContentSlots, privacy: .public)
+            """
+        )
+    }
+    #endif
 }
 
 // MARK: - Safe-Area Ignoring Modifier
