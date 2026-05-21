@@ -256,4 +256,64 @@ final class BackfillServiceTests: SwiftDataTestHarness {
 
         XCTAssertEqual(w.routineVariantID, bulk.id)
     }
+
+    // MARK: - h) Phase 9-A2 bootstrap composition
+
+    /// Pins that the two `BackfillService` entry points compose cleanly when
+    /// invoked in the documented bootstrap order (post-`backfillPhase3_1`):
+    /// `hydrateEmptySlotPrescriptions(in:)` then `backfillRoutineVariantIDs(in:)`.
+    /// They touch disjoint entity surfaces (`RoutineExercise.prescription`
+    /// vs. `Workout.routineVariantID`), so neither should trip the other —
+    /// this is the integration safety net for the one-line `BootstrapRoot`
+    /// wiring that lands in Phase 9-A2.
+    func testBootstrapOrder_HydrateThenVariantIDsLeavesBothStatesConsistent() {
+        // Legacy slot: prescription exists but empty (mirrors a slot that
+        // `backfillPhase3_1` just attached an empty SlotPrescription to).
+        let ex = Exercise(name: "Bench Press", isCustom: true)
+        context.insert(ex)
+        let workingDefaults = SetTemplate(
+            kind: .working, targetReps: 8, restSecondsAfter: 90
+        )
+        workingDefaults.order = 0
+        context.insert(workingDefaults)
+        ex.defaultTemplates = [workingDefaults]
+        let emptyPrescription = SlotPrescription()
+        context.insert(emptyPrescription)
+        XCTAssertFalse(emptyPrescription.hasContent)
+        let re = RoutineExercise(exercise: ex, order: 0, setTemplates: [])
+        context.insert(re)
+        re.prescription = emptyPrescription
+
+        // Routine + variant so the variantID backfill has something to do.
+        let def = RoutineVariant(name: "Default", order: 0)
+        let routine = makeRoutine(name: "Push", variants: [def])
+        routine.blocks = [
+            RoutineBlock(isSuperset: false, order: 0, exercises: [re])
+        ]
+        let w = makeWorkout(
+            routineName: "Push",
+            routineID: routine.id,
+            routineVariantID: nil
+        )
+        try? context.save()
+
+        // Documented bootstrap order, just the two BackfillService steps.
+        BackfillService.hydrateEmptySlotPrescriptions(in: context)
+        BackfillService.backfillRoutineVariantIDs(in: context)
+
+        // Hydration outcome: legacy slot now content-bearing, mined from
+        // Exercise.defaultTemplates (the only source).
+        XCTAssertTrue(re.prescription?.hasContent ?? false)
+        XCTAssertEqual(re.prescription?.sets, 1)
+        XCTAssertEqual(re.prescription?.repMin, 8)
+        XCTAssertEqual(re.prescription?.repMax, 8)
+        XCTAssertEqual(re.prescription?.restSecondsBetweenSets, 90)
+        // VariantID outcome: workout linked to the Default variant.
+        XCTAssertEqual(w.routineVariantID, def.id)
+        // Re-running both is a verified no-op (idempotency composes too).
+        BackfillService.hydrateEmptySlotPrescriptions(in: context)
+        BackfillService.backfillRoutineVariantIDs(in: context)
+        XCTAssertEqual(re.prescription?.sets, 1)
+        XCTAssertEqual(w.routineVariantID, def.id)
+    }
 }

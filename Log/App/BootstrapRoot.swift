@@ -54,6 +54,16 @@ struct BootstrapRoot: View {
                 backfillPhase3_1()
                 // Phase 3.3a: no backfill needed — snapshots are nil for old items.
 
+                // Phase 9-A2: hydrate empty/missing SlotPrescription content
+                // from each slot's setTemplates → Exercise.defaultTemplates →
+                // AppSettings defaults so legacy slots become self-sufficient
+                // before Phase 9-C removes the Tier-3 fallback. MUST run
+                // after backfillPhase3_1() so every RoutineExercise already
+                // has a SlotPrescription instance attached. Idempotent — the
+                // service's `hasContent` guard makes every subsequent launch
+                // a no-op for already-hydrated slots.
+                BackfillService.hydrateEmptySlotPrescriptions(in: ctx)
+
                 // Phase 6.B Slice B: link pre-existing Workouts to their
                 // routine's preferred variant. Must run AFTER backfillPhase1()
                 // so every routine has at least one variant to point at.
