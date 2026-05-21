@@ -1905,19 +1905,28 @@ struct ActiveWorkoutView: View {
         let oldExerciseID = plan.blocks[blockIndex].exercises[exIndex]
             .currentExerciseID
 
-        // 2) New templates from newEx
-        let base = newEx.defaultTemplates.sorted { $0.order < $1.order }
-
-        let newTemplates = base.enumerated().map { (i, tpl) in
-            PlanSetTemplate(
-                id: "\(newEx.id.uuidString)-set\(i)",
-                kind: tpl.kind,
-                targetReps: tpl.targetReps,
-                targetWeight: tpl.targetWeight.map { Int($0.rounded()) },
-                restSecondsAfter: tpl.restSecondsAfter,
-                durationSeconds: tpl.durationSeconds
-            )
-        }
+        // 2) Build new templates from the slot's existing session plan +
+        // snapshot rather than from `newEx.defaultTemplates` (Phase 9-B2 —
+        // see `makeSwapDefaultTemplates` doc for the field-by-field
+        // contract and the 9-A.5 audit's documented `targetWeight` loss).
+        // Preserving the slot's set count + rest across the swap keeps
+        // the UI from shrinking/growing unexpectedly when the user
+        // substitutes a different exercise into a programmed slot.
+        let slotID = plan.blocks[blockIndex].exercises[exIndex].routineSlotID
+        let sp = sessionPlans[slotID]
+        let snap = plan.blocks[blockIndex].exercises[exIndex]
+            .prescriptionSnapshot
+        let newTemplates = makeSwapDefaultTemplates(
+            forExerciseID: newEx.id,
+            isTimeBased: newEx.isTimeBased,
+            setsHint: sp?.sets ?? snap?.sets,
+            restBetweenSetsHint:
+                sp?.restSecondsBetweenSets ?? snap?.restSecondsBetweenSets,
+            durationMinHint:
+                sp?.durationMinSeconds ?? snap?.durationMinSeconds,
+            durationMaxHint:
+                sp?.durationMaxSeconds ?? snap?.durationMaxSeconds
+        )
 
         // 3) Replace PlanExercise fields
         plan.blocks[blockIndex].exercises[exIndex].currentExerciseID = newEx.id
@@ -1927,8 +1936,8 @@ struct ActiveWorkoutView: View {
             newEx.isTimeBased
 
         // 4) Build fresh per-set inputs for this slot from newTemplates
-        // Phase 5.2 — slotID is the per-slot key (routineSlotID).
-        let slotID = plan.blocks[blockIndex].exercises[exIndex].routineSlotID
+        // Phase 5.2 — slotID is the per-slot key (routineSlotID); already
+        // bound above in step (2) for the template-build priority chain.
         let swappedPlanEx = plan.blocks[blockIndex].exercises[exIndex]
 
         let swappedCount = effectiveSetCount(

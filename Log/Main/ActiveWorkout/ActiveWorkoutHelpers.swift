@@ -67,3 +67,73 @@ func defaultTemplate(for exercise: PlanExercise, at index: Int) -> PlanSetTempla
         durationSeconds: nil
     )
 }
+
+// MARK: - Swap defaults (Phase 9-B2)
+
+/// Builds the `[PlanSetTemplate]` for the new exercise after a mid-workout
+/// `swapExercise(planExercise:with:)`. Pre-9-B2 the swap path read
+/// `newEx.defaultTemplates` directly and mapped each row 1:1 — including
+/// `targetWeight`, warmup/dropset kinds, and any per-row rest values.
+/// 9-A.5 audit accepted the loss of those fields here (no
+/// `SlotPrescription` landing for `targetWeight`; warmup/dropset rows on
+/// `Exercise.defaultTemplates` are vestigial relative to the new
+/// `WarmupScheme` / `TechniquePlan` authoring path). Per 9-B2 audit
+/// guidance, this helper produces N uniform `.working` rows whose count
+/// and rest are sourced from the slot's existing session plan or
+/// snapshot — preserving the slot's structure across the swap — and
+/// falls back to `AppSettings` defaults when neither is set.
+///
+/// Caller does the priority chain inline (`sessionPlan?.X ?? snapshot?.X`)
+/// so this helper stays trivial to unit-test with literals — no
+/// `SlotPrescription` / `ModelContext` fixture required.
+///
+/// Field-by-field contract:
+///   - `id`: `"<exerciseID>-set<i>"` (matches the pre-9-B2 stable composite key)
+///   - `kind`: `.working` always
+///   - `targetReps`: `0` — `SessionPlanResolver.plannedRepTarget` reads
+///     from sessionPlan/snapshot at row-render time; the template's
+///     `targetReps` is only used when both higher tiers are nil
+///   - `targetWeight`: `nil` — the 9-A.5 audit's documented loss; the
+///     weight column starts blank after a swap and the logged-history
+///     auto-suggest path takes over on subsequent sets
+///   - `restSecondsAfter`: from `restBetweenSetsHint` (caller composes
+///     this from sessionPlan/snapshot) else `AppSettings.defaultRestBetweenSets`
+///   - `durationSeconds`: nil for rep-based exercises; for time-based
+///     exercises, sourced from `durationMaxHint ?? durationMinHint`,
+///     falling back to a hardcoded 60s that matches the
+///     `BackfillService.hydrate(_:from:)` 9-A1 fallback
+///
+/// `setsHint` is the slot's expected working-set count from
+/// sessionPlan/snapshot; falls back to `AppSettings.defaultSets`. The
+/// final count is clamped to ≥1 so the active-workout UI always
+/// renders at least one row.
+func makeSwapDefaultTemplates(
+    forExerciseID exerciseID: UUID,
+    isTimeBased: Bool,
+    setsHint: Int?,
+    restBetweenSetsHint: Int?,
+    durationMinHint: Int?,
+    durationMaxHint: Int?
+) -> [PlanSetTemplate] {
+    let resolvedSets = setsHint.flatMap { $0 > 0 ? $0 : nil }
+        ?? AppSettings.defaultSets
+    let count = max(1, resolvedSets)
+
+    let rest = restBetweenSetsHint.flatMap { $0 > 0 ? $0 : nil }
+        ?? AppSettings.defaultRestBetweenSets
+
+    let duration: Int? = isTimeBased
+        ? (durationMaxHint ?? durationMinHint ?? 60)
+        : nil
+
+    return (0..<count).map { i in
+        PlanSetTemplate(
+            id: "\(exerciseID.uuidString)-set\(i)",
+            kind: .working,
+            targetReps: 0,
+            targetWeight: nil,
+            restSecondsAfter: rest,
+            durationSeconds: duration
+        )
+    }
+}
