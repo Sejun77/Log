@@ -871,7 +871,7 @@ Phase 8 is **not closed** — the four items above remain. The shipped 8-A (life
 
 Slot prescription becomes the single source of programming intent.
 
-**Status (2026-05-21): planning audits complete (full Phase-9 mapping + Phase-9-A backfill design); 9-pre regression-pinning tests shipped; 9-A backfill implementation still pending.** Two audits on 2026-05-20 mapped every read/write of `Exercise.defaultTemplates` and designed the legacy-slot backfill. On 2026-05-21 the 9-pre regression-pinning tests landed (`SlotPrescriptionResolutionTests`, 25 cases, +0 production LOC) — they freeze the current three-tier fallback so the upcoming 9-A backfill and 9-C Tier-3 removal cannot silently change resolution behavior. `Exercise.defaultTemplates` and both `resolvedTemplates` Tier-3 arms remain **load-bearing and untouched** at this point. Headline findings:
+**Status (2026-05-21): planning audits complete (full Phase-9 mapping + Phase-9-A backfill design + Phase-9-A field-mapping refinement); 9-pre regression-pinning tests shipped; 9-A backfill implementation still pending.** Two audits on 2026-05-20 mapped every read/write of `Exercise.defaultTemplates` and designed the legacy-slot backfill. On 2026-05-21 the 9-pre regression-pinning tests landed (`SlotPrescriptionResolutionTests`, 25 cases, +0 production LOC) — they freeze the current three-tier fallback so the upcoming 9-A backfill and 9-C Tier-3 removal cannot silently change resolution behavior. A **second 9-A audit pass on 2026-05-21** refined the exact `SetTemplate → SlotPrescription` field mapping, recorded which fields cannot be mined (autoreg, `targetWeight`, warmup, techniques), and surfaced a new **9-A.5 pre-9-C audit** (see below) to measure `targetWeight` / warmup / technique loss before Tier 3 removal. `Exercise.defaultTemplates` and both `resolvedTemplates` Tier-3 arms remain **load-bearing and untouched** at this point. Headline findings:
 
 - `Exercise.defaultTemplates` is **still load-bearing**, not merely a fallback. Live primary readers include the Exercises-tab editor UI (~17 sites), `RoutineEditor.appendBlock` + `SupersetPicker.setCount` (superset working-set-count gate), `ActiveWorkoutView.swapExercise` (mid-workout swap template seed), `RoutineEditor.normalizeRoutineModel` (exact-copy override detection), and both `resolvedTemplates` Tier-3 fallback arms. Cold-restart resume's last-ditch fallback in `WorkoutResumeService.swift:218-232` also reads it
 - **Pre-Phase-3.1 legacy slots** carry a backfilled `SlotPrescription` with all-nil fields (`hasContent == false`) and therefore resolve via Tier 3 today. Removing the field strands those slots with **empty template arrays** unless a backfill ships first
@@ -890,12 +890,46 @@ Slot prescription becomes the single source of programming intent.
 
 **9-A — Backfill empty `SlotPrescription` content:**
 
-- [ ] Add `BackfillService.hydrateEmptySlotPrescriptions(in: ctx)` — sibling of the existing `backfillRoutineVariantIDs(in:)`. Walks every `RoutineExercise` whose `prescription?.hasContent == false`. **Hydration priority (per 9-A audit):** (1) mine from `re.setTemplates` if non-empty (Tier 1); (2) else from `re.exercise?.defaultTemplates` (Tier 3 — typical legacy data); (3) else fall back to `AppSettings.defaultSets` / `defaultRepMin` / `defaultRepMax` / `defaultRestBetweenSets`. **Critical:** `makeDefaultPrescription` alone is insufficient because it skips the Tier 1 → Tier 3 mining and would silently overwrite user customization
-- [ ] Wire into `BootstrapRoot.body.task` immediately after `backfillPhase3_1()` so every slot has a prescription instance before hydration runs. Order: `backfillPhase1()` → `backfillPhase3_1()` → `BackfillService.hydrateEmptySlotPrescriptions(in: ctx)` → `BackfillService.backfillRoutineVariantIDs(in: ctx)`
+- [ ] Add `BackfillService.hydrateEmptySlotPrescriptions(in: ctx)` — sibling of the existing `backfillRoutineVariantIDs(in:)`. Walks every `RoutineExercise` whose `prescription?.hasContent == false`. **Hydration priority (per 9-A audit):** (1) mine from `re.setTemplates` if non-empty (Tier 1); (2) else from `re.exercise?.defaultTemplates` (Tier 3 — typical legacy data); (3) else fall back to `AppSettings.defaultSets` / `defaultRepMin` / `defaultRepMax` / `defaultRestBetweenSets`. **Critical:** `makeDefaultPrescription` alone is insufficient because it skips the Tier 1 → Tier 3 mining and would silently overwrite user customization; reusing it also risks divergence between new-slot defaults and migration behavior
+- [ ] **Field mapping (per 2026-05-21 audit refinement)** — given a non-empty source `[SetTemplate]` and the slot's `exercise.isTimeBased`:
+  - `working = source.filter { $0.kind == .working }.sorted { $0.order < $1.order }` (warmup and dropset rows do NOT contribute to `sets`)
+  - `p.usesDuration = exercise.isTimeBased` (Exercise owns its mode; wins over heuristics on template shape)
+  - **Rep-based** (`!usesDuration`): `p.repMin = working.compactMap { $0.targetReps > 0 ? $0.targetReps : nil }.min()`; `p.repMax = ...max()`; both nil → AppSettings fallback (`defaultRepMin` / `defaultRepMax`)
+  - **Time-based** (`usesDuration`): `p.durationMinSeconds = working.compactMap(\.durationSeconds).filter { $0 > 0 }.min()`; `p.durationMaxSeconds = ...max()`; both nil → hardcoded **60s** (no `AppSettings.defaultDuration` exists today — see 9-A risk register)
+  - `p.sets = max(1, working.count)` when `working` non-empty, else `AppSettings.defaultSets`
+  - `p.restSecondsBetweenSets = working.compactMap(\.restSecondsAfter).first { $0 > 0 } ?? AppSettings.defaultRestBetweenSets` (first positive — avoids accidentally locking to a longer late-set rest)
+  - `p.restSecondsAfterExercise = nil` (not derivable from templates; only set when full AppSettings fallback fires AND `AppSettings.defaultRestAfterExercise > 0`)
+  - **Never mined**: `rir` / `rpe` / `tempo` (templates carry no autoreg; adding values the user never set would be a behavior change). Diverges from `makeDefaultPrescription` deliberately
+  - **Never synthesized in 9-A**: `warmupScheme` and `techniquePlans`. Warmup rows in source templates are not promoted into `WarmupScheme`. See 9-A.5 audit below
+- [ ] Wire into `BootstrapRoot.body.task` immediately after `backfillPhase3_1()` so every slot has a prescription instance before hydration runs. Order: `backfillPhase1()` → `backfillPhase3_1()` → `BackfillService.hydrateEmptySlotPrescriptions(in: ctx)` → `BackfillService.backfillRoutineVariantIDs(in: ctx)` → `validateActiveSession()`. Order-independent vs `backfillRoutineVariantIDs` (different entities); ordering above keeps routine-related steps clustered
 - [ ] Idempotency: `hasContent` guard at the top skips already-populated slots on every subsequent launch
-- [ ] Overwrite-safety: never modifies a prescription where `hasContent == true`; never touches `re.setTemplates`; never touches `Exercise.defaultTemplates`
-- [ ] Add `LogTests/HydrateEmptySlotPrescriptionsTests.swift` — ~12 cases on `SwiftDataTestHarness`: hydrates from Tier 3 / hasContent-true left untouched / Tier 1 wins over Tier 3 / time-based exercise path / rep-based exercise path / both tiers empty falls to `AppSettings` / superset slot independence / idempotency / no-op when store empty / `working` set filter for count / rest mined from first working template / nil-exercise slot falls to `AppSettings`
-- [ ] **Ship 9-A standalone.** Do NOT bundle diagnostic, reader changes, or UI removal. Net diff: ~+60 LOC service + ~+250 LOC tests + 1-line `BootstrapRoot` wiring. Risk: low (additive only, mirrors Phase 7.3 pattern)
+- [ ] Overwrite-safety: never modifies a prescription where `hasContent == true`; never touches `re.setTemplates`; never touches `Exercise.defaultTemplates`; single `try? ctx.save()` at end, gated by a `dirty` flag (mirrors `backfillRoutineVariantIDs`)
+- [ ] Defensive `prescription == nil` branch: should be empty post-`backfillPhase3_1`, but defensively create a `SlotPrescription` then hydrate. Pin behavior via the create-if-nil test so the branch can't silently drift if `backfillPhase3_1` is ever retired
+- [ ] Add `LogTests/HydrateEmptySlotPrescriptionsTests.swift` — ~15 cases on `SwiftDataTestHarness`:
+  - hydrates from Tier 1 setTemplates (rep-based)
+  - hydrates from Tier 1 setTemplates (time-based, `isTimeBased=true`)
+  - hydrates from Tier 3 defaultTemplates (rep-based)
+  - hydrates from Tier 3 defaultTemplates (time-based)
+  - Tier 1 wins over Tier 3 when both present
+  - AppSettings fallback when all sources empty (`sets=3`, `repMin=8`, `repMax=12`, `restSecondsBetweenSets=90`)
+  - time-based AppSettings fallback uses hardcoded 60s for duration min/max (until a `defaultDuration` setting lands)
+  - skip when `prescription.hasContent == true` (untouched, object identity preserved)
+  - idempotent: second run produces zero state change
+  - working-set filter ignores warmup / dropset rows when computing `sets`
+  - first positive `restSecondsAfter` wins for `restSecondsBetweenSets`
+  - create-if-nil: `prescription == nil` → creates one and hydrates
+  - nil `exercise` slot with empty `setTemplates` → falls to AppSettings
+  - never touches `re.setTemplates` or `re.exercise?.defaultTemplates` (assert identity + contents)
+  - superset slots hydrate independently (no cross-contamination)
+- [ ] **Golden behavior preservation test** (separate small case, either in the above file or as a single addition to `SlotPrescriptionResolutionTests`): for a Class-B legacy slot (`hasContent == false`, `setTemplates` empty, `defaultTemplates` non-empty), assert `resolvedTemplates(in: ctx)` returns **identical** templates before vs. after the backfill runs (Tier 3 pre, Tier 2 post). One case is enough to catch any silent translation bug
+- [ ] **Ship 9-A standalone.** Do NOT bundle diagnostic, reader changes, or UI removal. Net diff: ~+60 LOC service + ~+300 LOC tests + 1-line `BootstrapRoot` wiring. Risk: low (additive only, mirrors Phase 7.3 pattern). Tier 3 remains intact through 9-C, so a missed slot is not a regression
+
+**9-A.5 — Pre-9-C audit: `targetWeight` + warmup/technique loss (planning, not implementation):**
+
+- [ ] **`targetWeight` loss audit.** `SlotPrescription` has no `targetWeight` field; per-set weights in `SetTemplate` only survive via Tier 1 (`setTemplates`) reads. 9-A is non-destructive, but **9-C is the actual loss event** for any slot whose only weight source is `Exercise.defaultTemplates[i].targetWeight`. Measure on real data: extend the 9-pre diagnostic to count `Exercise.defaultTemplates` rows where `targetWeight != nil`, broken down by whether the parent Exercise is referenced by at least one `RoutineExercise` whose `setTemplates` is empty (the at-risk population). If non-trivial, either (a) add a `targetWeight` field to `SlotPrescription` before 9-C, or (b) ship 9-C with an explicit one-shot per-slot weight snapshot to `setTemplates` for at-risk slots
+- [ ] **Warmup / technique loss audit.** `SetTemplate.kind == .warmup` rows in `Exercise.defaultTemplates` are read via `resolvedTemplates` today and surfaced as warmup-kind sets in the active workout. After 9-C they would resolve to `[]` because 9-A intentionally does not synthesize `WarmupScheme` from template rows. Same for `.dropset` rows vs `TechniquePlan`. Measure: count `defaultTemplates` rows with `kind != .working` whose parent Exercise has at least one Class-B slot. Decide before 9-C: synthesize `WarmupScheme` / `TechniquePlan` during 9-A (expand scope), defer to a dedicated 9-A.6 backfill, or accept the loss and surface it in release notes
+- [ ] **`AppSettings.defaultDuration` decision.** Time-based AppSettings fallback in 9-A hardcodes 60s because no `AppSettings.defaultDuration` exists. Decide whether to add one as part of 9-A.5 or accept the hardcode (matches `SlotPrescription.generateTemplates()`'s own 60s fallback at `Entities.swift:517`)
+- [ ] **Must ship a decision (not necessarily code) before 9-C.** 9-C is currently blocked on "9-A shipped + diagnostic clean"; this audit adds "+ 9-A.5 audit decisions made"
 
 **9-B — Eliminate non-Tier-3 reads of `defaultTemplates`:**
 
@@ -929,7 +963,7 @@ Slot prescription becomes the single source of programming intent.
 - [ ] Add migration acceptance test verifying old data + new schema produces zero orphan `SetTemplate` rows after the sweep
 - [ ] Final cumulative manual regression: full app smoke on a clean install + an upgrade-from-pre-9-A install + an upgrade-skipping-versions install
 
-Phase 9 is **not closed** — none of 9-A through 9-E has been implemented; only the pre-9 cleanup (8-C) has shipped. Sub-slices are independently revertible. Recommended ship spacing: **9-pre tests** → **9-pre diagnostic** (TestFlight only) → **9-A** → release gap + observe diagnostic → **9-B** → **9-C** → **9-D** → **9-E**.
+Phase 9 is **not closed** — none of 9-A through 9-E has been implemented; only the pre-9 cleanup (8-C) and the 9-pre regression tests have shipped. Sub-slices are independently revertible. Recommended ship spacing: **9-pre tests** ✅ → **9-pre diagnostic** (TestFlight only, optional) → **9-A** → release gap + observe diagnostic → **9-A.5 audit decisions** (planning, blocks 9-C) → **9-B** → **9-C** → **9-D** → **9-E**.
 
 ### Phase 10 — Equipment & setup migration + Exercise UI polish
 
