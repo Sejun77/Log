@@ -48,7 +48,16 @@ struct SupersetPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
     @State private var picked = Set<UUID>()
-    @State private var refSetCount: Int? = nil  // first pick establishes the count
+
+    // Phase 9-B1 removed the per-exercise working-set-count display,
+    // the matching-counts footer, and the togglePick guard that
+    // previously gated picks on `Exercise.defaultTemplates.filter
+    // { .working }.count`. Post-9-A every new slot's prescription is
+    // seeded by `makeDefaultPrescription` to `AppSettings.defaultSets`,
+    // so any honest replacement value here would be the same constant
+    // for every candidate — i.e. the gate would be trivially true. The
+    // 9-A.5 audit acknowledged and accepted the resulting authoring
+    // guardrail loss.
 
     private var filtered: [Exercise] {
         let key = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -58,37 +67,12 @@ struct SupersetPicker: View {
         }
     }
 
-    private func setCount(for ex: Exercise) -> Int {
-        let n = ex.defaultTemplates.filter { $0.kind == .working }.count
-        return n > 0 ? n : AppSettings.defaultSets
-    }
-
-    private func isCompatible(_ ex: Exercise) -> Bool {
-        guard let ref = refSetCount else { return true }
-        return setCount(for: ex) == ref
-    }
-
     private func togglePick(_ ex: Exercise) {
         let id = ex.id
         if picked.contains(id) {
             picked.remove(id)
-            if picked.isEmpty { refSetCount = nil }
         } else {
-            if let ref = refSetCount {
-                guard setCount(for: ex) == ref else {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    return
-                }
-                picked.insert(id)
-            } else {
-                let c = setCount(for: ex)
-                guard c > 0 else {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    return
-                }
-                refSetCount = c
-                picked.insert(id)
-            }
+            picked.insert(id)
         }
     }
 
@@ -97,31 +81,15 @@ struct SupersetPicker: View {
             Form {
                 Section("Exercises") {
                     ForEach(filtered, id: \.id) { ex in
-                        let count = setCount(for: ex)
-                        let compatible =
-                            isCompatible(ex) || picked.contains(ex.id)
                         HStack {
                             Text(ex.name)
                             Spacer()
-                            Text("×\(count)")
-                                .foregroundStyle(.secondary)
                             if picked.contains(ex.id) {
                                 Image(systemName: "checkmark")
                             }
                         }
                         .contentShape(Rectangle())
                         .onTapGesture { togglePick(ex) }
-                        .opacity(compatible ? 1.0 : 0.45)
-                    }
-                }
-
-                if let ref = refSetCount {
-                    Section {
-                        Text(
-                            "All selected exercises must have **exactly \(ref)** working sets."
-                        )
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                     }
                 }
             }

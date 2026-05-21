@@ -25,8 +25,16 @@ struct RoutineEditor: View {
     @State private var deletePrompt: DeletePrompt?
     @State private var showAddExercise = false
     @State private var showAddSuperset = false
-    @State private var showSupersetCountAlert = false
-    @State private var supersetCountMessage = ""
+    // Phase 9-B1 removed the superset working-set-count gate (the
+    // alert it drove is gone too). Pre-9-A the gate read
+    // `Exercise.defaultTemplates.filter { .working }.count`; post-9-A
+    // every new slot gets `makeDefaultPrescription`'s AppSettings-derived
+    // `sets`, so the only honest replacement value (at the moment a
+    // superset is being created, before any RoutineExercise exists for
+    // the candidates) is `AppSettings.defaultSets` uniformly. That makes
+    // the matching-counts check trivially true for every selection —
+    // i.e. an authoring guardrail loss the 9-A.5 audit acknowledged and
+    // accepted, not a correctness regression.
 
     @State private var showLockedBlockAlert = false
     @State private var blockedBlocks: [String] = []
@@ -88,14 +96,6 @@ struct RoutineEditor: View {
             }
         } message: {
             Text("Starting this routine will end your current workout.")
-        }
-        .alert(
-            "Superset requires matching set counts",
-            isPresented: $showSupersetCountAlert
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(supersetCountMessage)
         }
         .alert(
             "Can't delete while an active workout is using it",
@@ -316,58 +316,62 @@ struct RoutineEditor: View {
                         continue
                     }
 
-                    // Clear overrides if they exactly match defaults
-                    let a = re.setTemplates.sorted { lhs, rhs in
-                        if lhs.order != rhs.order {
-                            return lhs.order < rhs.order
+                    // Phase 9-B1: clear Tier 1 overrides if they exactly
+                    // match what the slot's prescription (Tier 2) would
+                    // generate — was a comparison against
+                    // `ex.defaultTemplates` (Tier 3) pre-9-B1. Only runs
+                    // when the prescription has content; otherwise we'd
+                    // generate against an empty/default prescription and
+                    // potentially strip a slot's only template source.
+                    if let p = re.prescription, p.hasContent {
+                        let a = re.setTemplates.sorted { lhs, rhs in
+                            if lhs.order != rhs.order {
+                                return lhs.order < rhs.order
+                            }
+                            return lhs.persistentModelID < rhs.persistentModelID
                         }
-                        return lhs.persistentModelID < rhs.persistentModelID
-                    }
-                    let d = ex.defaultTemplates.sorted { lhs, rhs in
-                        if lhs.order != rhs.order {
-                            return lhs.order < rhs.order
-                        }
-                        return lhs.persistentModelID < rhs.persistentModelID
-                    }
+                        let g = p.generateTemplates()
+                            .sorted { $0.order < $1.order }
 
-                    var isExactCopy = (a.count == d.count)
+                        var isExactCopy = (a.count == g.count)
 
-                    if isExactCopy {
-                        for i in 0..<a.count {
-                            if a[i].kind != d[i].kind {
-                                isExactCopy = false
-                                break
-                            }
-                            if a[i].targetReps != d[i].targetReps {
-                                isExactCopy = false
-                                break
-                            }
+                        if isExactCopy {
+                            for i in 0..<a.count {
+                                if a[i].kind != g[i].kind {
+                                    isExactCopy = false
+                                    break
+                                }
+                                if a[i].targetReps != g[i].targetReps {
+                                    isExactCopy = false
+                                    break
+                                }
 
-                            let aw = a[i].targetWeight ?? 0
-                            let dw = d[i].targetWeight ?? 0
-                            if aw != dw {
-                                isExactCopy = false
-                                break
-                            }
+                                let aw = a[i].targetWeight ?? 0
+                                let gw = g[i].targetWeight ?? 0
+                                if aw != gw {
+                                    isExactCopy = false
+                                    break
+                                }
 
-                            let ar = a[i].restSecondsAfter ?? 0
-                            let dr = d[i].restSecondsAfter ?? 0
-                            if ar != dr {
-                                isExactCopy = false
-                                break
-                            }
+                                let ar = a[i].restSecondsAfter ?? 0
+                                let gr = g[i].restSecondsAfter ?? 0
+                                if ar != gr {
+                                    isExactCopy = false
+                                    break
+                                }
 
-                            let ad = a[i].durationSeconds ?? 0
-                            let dd = d[i].durationSeconds ?? 0
-                            if ad != dd {
-                                isExactCopy = false
-                                break
+                                let ad = a[i].durationSeconds ?? 0
+                                let gd = g[i].durationSeconds ?? 0
+                                if ad != gd {
+                                    isExactCopy = false
+                                    break
+                                }
                             }
                         }
-                    }
 
-                    if isExactCopy && !re.setTemplates.isEmpty {
-                        re.setTemplates.removeAll()
+                        if isExactCopy && !re.setTemplates.isEmpty {
+                            re.setTemplates.removeAll()
+                        }
                     }
                 }
 
@@ -505,21 +509,11 @@ struct RoutineEditor: View {
         exercises: [Exercise],
         restAfter: Int?
     ) {
-        if isSuperset {
-            // Resolved count: prefer defaultTemplates, fall back to AppSettings.defaultSets
-            let counts = exercises.map { ex -> Int in
-                let n = ex.defaultTemplates.filter { $0.kind == .working }.count
-                return n > 0 ? n : AppSettings.defaultSets
-            }
-            if let first = counts.first, counts.allSatisfy({ $0 == first }) {
-                // OK
-            } else {
-                supersetCountMessage =
-                    "Selected exercises have working set counts: \(counts.map(String.init).joined(separator: ", ")). All must match."
-                showSupersetCountAlert = true
-                return
-            }
-        }
+        // Phase 9-B1 removed the superset matching-counts gate that used
+        // to read `Exercise.defaultTemplates.filter { .working }.count`;
+        // every new slot's prescription is seeded by
+        // `makeDefaultPrescription` to AppSettings defaults below, so
+        // every superset has uniform counts by construction.
 
         let nextOrder = (routine.blocks.map(\.order).max() ?? -1) + 1
         let res: [RoutineExercise] = exercises.enumerated().map { idx, ex in
