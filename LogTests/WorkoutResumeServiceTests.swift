@@ -361,4 +361,132 @@ final class WorkoutResumeServiceTests: SwiftDataTestHarness {
             XCTAssertNil(t.targetWeight)
         }
     }
+
+    // MARK: - 8) Orphan fallback (no logs, no snapshot) — Phase 9-C1
+
+    /// Phase 9-C1 contract: when an orphan `WorkoutItem` has neither
+    /// `setLogs` nor a `PlannedPrescriptionSnapshot`, the resume fallback
+    /// must NOT read `Exercise.defaultTemplates`. The replacement path
+    /// routes through `makeSwapDefaultTemplates(...)` so the resulting
+    /// rows are uniform `.working` templates at AppSettings defaults.
+    /// Accepted losses vs. pre-9-C1: `targetWeight`, the warmup/dropset
+    /// row kinds, and per-row rest values from `defaultTemplates` no
+    /// longer leak into the resumed plan. This test loads
+    /// `defaultTemplates` with values that would have leaked under the
+    /// old code path and asserts none of them appear in the plan.
+    func testOrphanFallbackIgnoresExerciseDefaultTemplatesRepBased() {
+        let ex = makeExercise(name: "Curl", isTimeBased: false)
+        // Load defaultTemplates with values that would have leaked under
+        // the old code path: a warmup row with a non-nil targetWeight
+        // and an exotic rest value.
+        let leakyWarmup = SetTemplate(
+            kind: .warmup, targetReps: 99, targetWeight: 999, restSecondsAfter: 999
+        )
+        leakyWarmup.order = 0
+        context.insert(leakyWarmup)
+        let leakyWorking = SetTemplate(
+            kind: .working, targetReps: 88, targetWeight: 888, restSecondsAfter: 888
+        )
+        leakyWorking.order = 1
+        context.insert(leakyWorking)
+        ex.defaultTemplates = [leakyWarmup, leakyWorking]
+
+        // Orphan WorkoutItem: no logs, no snapshot.
+        let item = WorkoutItem(exercise: ex, setLogs: [])
+        context.insert(item)
+        let w = makeWorkout(
+            routineName: "Pull", routineID: nil, items: [item]
+        )
+        try? context.save()
+
+        let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        let templates = plan?.blocks.first?.exercises.first?.templates ?? []
+
+        XCTAssertEqual(
+            templates.count, AppSettings.defaultSets,
+            "Orphan fallback row count must come from AppSettings.defaultSets, "
+            + "not the loaded defaultTemplates (which had 2 rows)."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.kind == .working },
+            "Orphan fallback must produce only .working rows; the warmup row "
+            + "from defaultTemplates must not leak through."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.targetWeight == nil },
+            "Phase 9-C1 accepted loss: orphan fallback never carries "
+            + "targetWeight, even when defaultTemplates had one."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.targetReps == 0 },
+            "Orphan fallback targetReps is 0; SessionPlanResolver fills in "
+            + "the real value at row-render time."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.restSecondsAfter == AppSettings.defaultRestBetweenSets },
+            "Rest must come from AppSettings, not from defaultTemplates."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.durationSeconds == nil },
+            "Rep-based orphan fallback must not carry a duration."
+        )
+    }
+
+    /// Phase 9-C1: time-based orphan fallback uses the
+    /// `makeSwapDefaultTemplates(...)` 60s duration fallback when neither
+    /// `defaultTemplates` nor a snapshot supplies a duration.
+    func testOrphanFallbackTimeBasedGetsDefaultDuration() {
+        let ex = makeExercise(name: "Plank", isTimeBased: true)
+        // No defaultTemplates rows at all — purest orphan path.
+
+        let item = WorkoutItem(exercise: ex, setLogs: [])
+        context.insert(item)
+        let w = makeWorkout(
+            routineName: "Core", routineID: nil, items: [item]
+        )
+        try? context.save()
+
+        let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        let templates = plan?.blocks.first?.exercises.first?.templates ?? []
+
+        XCTAssertEqual(templates.count, AppSettings.defaultSets)
+        XCTAssertTrue(
+            templates.allSatisfy { $0.kind == .working },
+            "Time-based orphan fallback emits only .working rows."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.durationSeconds == 60 },
+            "Time-based orphan fallback uses the makeSwapDefaultTemplates "
+            + "60s duration fallback when no hint is set (matches the "
+            + "BackfillService 9-A1 fallback)."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.targetWeight == nil },
+            "Orphan fallback never carries targetWeight."
+        )
+    }
+
+    /// Phase 9-C1: when the orphan `WorkoutItem.exercise` is nil (the
+    /// `Exercise` was deleted post-start), the block is skipped — the
+    /// existing `guard let ex = item.exercise else { return nil }` keeps
+    /// the resume safe (no crash, no fabricated plan with a placeholder
+    /// exercise). If every block is dropped, the whole plan is nil.
+    func testOrphanFallbackSkipsBlockWhenExerciseIsNil() {
+        let ex = makeExercise(name: "Squat")
+        let item = WorkoutItem(exercise: ex, setLogs: [])
+        // Simulate post-delete nullify: relationship cleared, snapshot
+        // string survives but the orphan branch only fires when there
+        // are no logs and no snapshot, which is the case here.
+        item.exercise = nil
+        context.insert(item)
+        let w = makeWorkout(
+            routineName: "Legs", routineID: nil, items: [item]
+        )
+        try? context.save()
+
+        let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        // Block was skipped (the guard returned nil); with no other
+        // items, the entire plan is nil.
+        XCTAssertNil(plan)
+    }
 }

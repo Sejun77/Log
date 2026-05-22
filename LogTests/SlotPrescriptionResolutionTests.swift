@@ -391,16 +391,30 @@ final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
         XCTAssertEqual(workingCount, 2)
     }
 
-    // MARK: - WorkoutResumeService fallback Tier 3 (defaults)
+    // MARK: - WorkoutResumeService fallback (Phase 9-C1 — no defaultTemplates)
 
-    /// `WorkoutResumeService.planFromWorkoutItems` is the cold-resume mirror
-    /// of `resolvedTemplates` Tier 3: when a WorkoutItem has no logs and
-    /// no `PlannedPrescriptionSnapshot`, it seeds the plan from
-    /// `Exercise.defaultTemplates`. This branch was previously uncovered
-    /// in `WorkoutResumeServiceTests` (which only pinned the snapshot and
-    /// logs branches), so Phase 9 cannot remove defaultTemplates without
-    /// regressing cold-resume of legacy in-flight workouts.
-    func testWorkoutResumeFallsBackToExerciseDefaultsWhenNoLogsAndNoSnapshot() {
+    /// Phase 9-C1 replaced the prior `defaultTemplates` read in
+    /// `WorkoutResumeService.planFromWorkoutItems` with a call to
+    /// `makeSwapDefaultTemplates(...)`. When a `WorkoutItem` has no logs
+    /// and no `PlannedPrescriptionSnapshot`, the orphan fallback now
+    /// synthesizes N uniform `.working` rows at AppSettings defaults
+    /// regardless of what `Exercise.defaultTemplates` carries.
+    ///
+    /// Accepted losses vs. pre-9-C1 (documented on
+    /// `makeSwapDefaultTemplates` and mirrored here):
+    ///   - `targetWeight` is always nil
+    ///   - `targetReps` is 0 (SessionPlanResolver fills it at row-render time)
+    ///   - per-row rest values from `defaultTemplates` are not preserved
+    ///   - the count is `AppSettings.defaultSets`, not
+    ///     `defaultTemplates.count`
+    ///
+    /// Companion coverage in `WorkoutResumeServiceTests`:
+    /// `testOrphanFallbackIgnoresExerciseDefaultTemplatesRepBased`,
+    /// `testOrphanFallbackTimeBasedGetsDefaultDuration`, and
+    /// `testOrphanFallbackSkipsBlockWhenExerciseIsNil`.
+    func testWorkoutResumeOrphanFallbackIgnoresDefaultTemplates() {
+        // Load defaultTemplates with values that would have leaked under
+        // the pre-9-C1 path; assert none of them appear in the plan.
         let defaults = [
             working(reps: 10, weight: 40, rest: 60, order: 0),
             working(reps: 8, weight: 45, rest: 60, order: 1),
@@ -421,9 +435,27 @@ final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
 
         let plan = WorkoutResumeService.rebuildPlan(for: workout, in: context)
         let templates = plan?.blocks.first?.exercises.first?.templates ?? []
-        XCTAssertEqual(templates.count, 2)
-        XCTAssertEqual(templates.map(\.targetReps), [10, 8])
-        XCTAssertEqual(templates.map(\.targetWeight), [40, 45])
-        XCTAssertEqual(templates.map(\.restSecondsAfter), [60, 60])
+        XCTAssertEqual(
+            templates.count, AppSettings.defaultSets,
+            "Row count comes from AppSettings.defaultSets, not "
+            + "defaultTemplates.count (which was 2)."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.targetReps == 0 },
+            "Phase 9-C1 contract: targetReps is 0; SessionPlanResolver "
+            + "fills the real value at row-render time."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy { $0.targetWeight == nil },
+            "Phase 9-C1 accepted loss: targetWeight from defaultTemplates "
+            + "no longer leaks into the resumed plan."
+        )
+        XCTAssertTrue(
+            templates.allSatisfy {
+                $0.restSecondsAfter == AppSettings.defaultRestBetweenSets
+            },
+            "Rest is sourced from AppSettings, not the per-row values "
+            + "on defaultTemplates."
+        )
     }
 }

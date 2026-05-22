@@ -252,20 +252,24 @@ enum WorkoutResumeService {
                     )
                 }
             } else if templates.isEmpty {
-                // No logs and no snapshot — use exercise defaults
-                finalTemplates = ex.defaultTemplates
-                    .sorted { $0.order < $1.order }
-                    .enumerated()
-                    .map { (i, tpl) in
-                        PlanSetTemplate(
-                            id: "\(ex.id.uuidString)-set\(i)",
-                            kind: tpl.kind,
-                            targetReps: tpl.targetReps,
-                            targetWeight: tpl.targetWeight.map { Int($0.rounded()) },
-                            restSecondsAfter: tpl.restSecondsAfter,
-                            durationSeconds: tpl.durationSeconds
-                        )
-                    }
+                // No logs and no PlannedPrescriptionSnapshot — synthesize
+                // default working rows via the same Phase 9-B2 helper used
+                // by mid-workout swaps. Phase 9-C1 removed the prior read
+                // of `ex.defaultTemplates` here; that field is being
+                // phased out as a runtime source. Accepted losses vs.
+                // pre-9-C1 in this orphan branch: `targetWeight`, the
+                // warmup/dropset row kinds, and per-row rest values that
+                // `Exercise.defaultTemplates` could carry no longer
+                // surface — the orphan plan starts with N uniform
+                // `.working` rows at AppSettings defaults.
+                finalTemplates = makeSwapDefaultTemplates(
+                    forExerciseID: ex.id,
+                    isTimeBased: ex.isTimeBased,
+                    setsHint: nil,
+                    restBetweenSetsHint: nil,
+                    durationMinHint: nil,
+                    durationMaxHint: nil
+                )
             } else {
                 finalTemplates = templates
             }
