@@ -244,11 +244,12 @@ enum BackfillService {
     ///     prescription is now content-bearing — but this counter
     ///     defends against drift).
     ///   - `slotsOrphanedNoSource`: nil-Exercise slot with empty/no-content
-    ///     prescription. These render as `[]` today via the Tier-3 +
-    ///     nil-Exercise guard in `resolvedTemplates`; 9-C will still
-    ///     render `[]`. Counter exists to detect a population that may
-    ///     warrant a routine-editor "unprogrammed slot" UX (per 9-C's
-    ///     own checklist).
+    ///     prescription. These render as `[]` — post-9-C2 the `[]` comes
+    ///     from `resolvedTemplates` falling through both Tier 1 (empty
+    ///     `setTemplates`) and Tier 2 (no prescription content), since
+    ///     the Tier 3 `Exercise.defaultTemplates` fallback is gone.
+    ///     Counter exists to detect a population that may warrant a
+    ///     routine-editor "unprogrammed slot" UX (per 9-C's own checklist).
     ///   - `residualEmptyContentSlots`: top-line metric — any slot where
     ///     `prescription == nil OR !hasContent` post-bootstrap.
     ///     **Must be zero before 9-C ships** for the same reason as

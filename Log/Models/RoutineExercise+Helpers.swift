@@ -40,9 +40,17 @@ extension RoutineExercise {
         return true
     }
 
+    /// Context-aware 2-tier template resolution (Tier 3 removed in
+    /// Phase 9-C2). Tier 1 still normalizes duplicate / out-of-range
+    /// `setTemplates` orders and persists the fix; the pre-9-C2 Tier 3
+    /// arm also normalized `Exercise.defaultTemplates` orders as a side
+    /// effect — that fix-up moved to `ExercisesView.normalizeTemplateOrderIfNeeded`
+    /// (9-D scope) since the resolver no longer reads `defaultTemplates`.
+    /// The `safeExercise(in:)` early-return guard was removed alongside
+    /// Tier 3 because Tier 1 + Tier 2 read only `self.setTemplates` /
+    /// `self.prescription`, which don't need a fresh fetch of the
+    /// `Exercise` relationship.
     func resolvedTemplates(in ctx: ModelContext) -> [SetTemplate] {
-        guard let ex = safeExercise(in: ctx) else { return [] }
-
         // Tier 1: explicit per-set overrides
         if !setTemplates.isEmpty {
             let didFix = normalizeOrderIfNeeded(setTemplates)
@@ -59,13 +67,6 @@ extension RoutineExercise {
             return p.generateTemplates()
         }
 
-        // Tier 3: exercise defaults
-        let didFix = normalizeOrderIfNeeded(ex.defaultTemplates)
-        let sorted = ex.defaultTemplates.sorted { a, b in
-            if a.order != b.order { return a.order < b.order }
-            return a.persistentModelID < b.persistentModelID
-        }
-        if didFix { try? ctx.save() }
-        return sorted
+        return []
     }
 }

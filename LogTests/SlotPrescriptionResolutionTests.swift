@@ -3,25 +3,23 @@ import XCTest
 
 @testable import Log
 
-/// Phase 9-pre stabilization — pins the 3-tier template resolution chain that
+/// Pins the 2-tier template resolution chain that
 /// `RoutineExercise.resolvedTemplates(in:)` and `RoutineExercise.resolvedTemplates()`
-/// implement today, plus the `SlotPrescription` building blocks they delegate to.
-///
-/// These tests are the safety net for the upcoming Phase 9 work that will
-/// backfill legacy slots into `SlotPrescription` and eventually retire
-/// `Exercise.defaultTemplates`. Pinning the *current* behavior first ensures the
-/// backfill does not silently change what existing routines resolve to.
+/// implement post-Phase-9-C2, plus the `SlotPrescription` building blocks
+/// they delegate to.
 ///
 /// Resolution precedence (mirrored in both `Entities.swift` and
 /// `RoutineExercise+Helpers.swift`):
 ///   Tier 1 — explicit `RoutineExercise.setTemplates` (non-empty)
 ///   Tier 2 — `SlotPrescription.generateTemplates()` when `prescription.hasContent`
-///   Tier 3 — `Exercise.defaultTemplates` (still load-bearing; see
-///            `REFACTOR_PLAN.md` Phase 9 audit notes — do NOT remove yet).
+///   Else: `[]` — Tier 3 (`Exercise.defaultTemplates`) was removed in
+///   Phase 9-C2. Legacy slots without prescription content are hydrated
+///   at bootstrap by `BackfillService.hydrateEmptySlotPrescriptions`,
+///   so the Tier 2 branch covers what Tier 3 used to.
 ///
-/// Also covers `WorkoutResumeService`'s defaults-fallback branch in
-/// `planFromWorkoutItems`, which is the cold-resume mirror of Tier 3 and
-/// was previously uncovered by `WorkoutResumeServiceTests`.
+/// Also covers `WorkoutResumeService`'s orphan-fallback contract
+/// (Phase 9-C1) and the `defaultTemplates`-working-count rule used by
+/// `SupersetPicker`.
 @MainActor
 final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
 
@@ -253,9 +251,15 @@ final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
         XCTAssertEqual(resolved.map(\.targetReps), [0, 0])
     }
 
-    // MARK: - resolvedTemplates(in:) — Tier 3 (defaults)
+    // MARK: - resolvedTemplates(in:) — Tier 3 removed in Phase 9-C2
 
-    func testResolvedInCtx_Tier3UsedWhenSetTemplatesEmptyAndPrescriptionNil() {
+    /// Phase 9-C2: when Tier 1 is empty AND prescription is nil, the
+    /// resolver returns `[]` even though the Exercise has non-empty
+    /// `defaultTemplates`. Pre-9-C2 this branch fell through to Tier 3
+    /// and surfaced the defaults; the fixture loads sentinel values
+    /// that would have been observable under the old code path so the
+    /// assertion actively catches a regression.
+    func testResolvedInCtx_ReturnsEmptyWhenSetTemplatesEmptyAndPrescriptionNilEvenWithDefaults() {
         let defaults = [
             working(reps: 10, weight: 40, rest: 60, order: 0),
             working(reps: 8, weight: 45, rest: 60, order: 1),
@@ -263,17 +267,18 @@ final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
         let ex = makeExercise(defaultTemplates: defaults)
         let re = makeSlot(exercise: ex)
 
-        let resolved = re.resolvedTemplates(in: context)
-        XCTAssertEqual(resolved.count, 2)
-        XCTAssertEqual(resolved.map(\.targetReps), [10, 8])
-        XCTAssertEqual(resolved.map(\.targetWeight), [40, 45])
+        XCTAssertTrue(
+            re.resolvedTemplates(in: context).isEmpty,
+            "Phase 9-C2: Tier 3 removed — `defaultTemplates` must not surface"
+        )
     }
 
-    func testResolvedInCtx_Tier3UsedWhenPrescriptionPresentButHasNoContent() {
-        // The legacy gap Phase 9 must backfill: an empty SlotPrescription
-        // exists but carries no `sets` / `duration`, so resolution must
-        // still fall through to Exercise.defaultTemplates rather than
-        // returning [] and stranding the slot with zero working sets.
+    /// Phase 9-C2: a prescription that exists but has no content no
+    /// longer falls through to `defaultTemplates` — it returns `[]`.
+    /// Legacy slots in this shape are hydrated at bootstrap by
+    /// `BackfillService.hydrateEmptySlotPrescriptions`, so production
+    /// users never see this state in practice.
+    func testResolvedInCtx_ReturnsEmptyWhenPrescriptionHasNoContentEvenWithDefaults() {
         let defaults = [working(reps: 12, order: 0)]
         let ex = makeExercise(defaultTemplates: defaults)
         let emptyPrescription = SlotPrescription()
@@ -281,22 +286,34 @@ final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
 
         let re = makeSlot(exercise: ex, prescription: emptyPrescription)
 
-        let resolved = re.resolvedTemplates(in: context)
-        XCTAssertEqual(resolved.count, 1)
-        XCTAssertEqual(resolved.first?.targetReps, 12)
+        XCTAssertTrue(
+            re.resolvedTemplates(in: context).isEmpty,
+            "Phase 9-C2: empty-content prescription no longer falls through "
+            + "to Exercise.defaultTemplates"
+        )
     }
 
-    func testResolvedInCtx_Tier3PreservesOrder() {
-        let defaults = [
-            working(reps: 10, order: 2),
-            working(reps: 8, order: 0),
-            working(reps: 6, order: 1),
-        ]
-        let ex = makeExercise(defaultTemplates: defaults)
+    /// Phase 9-C2: the pre-9-C2 Tier 3 arm also normalized
+    /// `ex.defaultTemplates[i].order` via `normalizeOrderIfNeeded` and
+    /// persisted the fix. With Tier 3 gone the resolver must NOT touch
+    /// `defaultTemplates` orders. `ExercisesView.normalizeTemplateOrderIfNeeded`
+    /// (9-D scope) still self-heals these on editor open.
+    func testResolvedInCtx_NoLongerNormalizesExerciseDefaultTemplatesOrder() {
+        // All three rows share order=0; pre-9-C2 the resolver would
+        // renormalize to [0, 1, 2] as a side effect of returning Tier 3.
+        let a = working(reps: 5, order: 0)
+        let b = working(reps: 5, order: 0)
+        let c = working(reps: 5, order: 0)
+        let ex = makeExercise(defaultTemplates: [a, b, c])
         let re = makeSlot(exercise: ex)
 
-        let resolved = re.resolvedTemplates(in: context)
-        XCTAssertEqual(resolved.map(\.targetReps), [8, 6, 10])
+        _ = re.resolvedTemplates(in: context)
+
+        XCTAssertEqual(
+            ex.defaultTemplates.map(\.order), [0, 0, 0],
+            "Phase 9-C2: resolver must not normalize defaultTemplates orders "
+            + "anymore — that side effect lived on the removed Tier 3 arm."
+        )
     }
 
     func testResolvedInCtx_AllTiersEmptyReturnsEmpty() {
@@ -335,7 +352,10 @@ final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
         XCTAssertEqual(resolved.map(\.targetReps), [8, 8])
     }
 
-    func testResolvedNoCtx_Tier3WhenSetTemplatesEmptyAndPrescriptionNil() {
+    /// Phase 9-C2 mirror of the `(in:)` variant test: with Tier 1
+    /// empty AND prescription nil, the no-context resolver also returns
+    /// `[]` even when `defaultTemplates` are present.
+    func testResolvedNoCtx_ReturnsEmptyWhenSetTemplatesEmptyAndPrescriptionNilEvenWithDefaults() {
         let defaults = [
             working(reps: 10, order: 0),
             working(reps: 8, order: 1),
@@ -343,23 +363,30 @@ final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
         let ex = makeExercise(defaultTemplates: defaults)
         let re = makeSlot(exercise: ex)
 
-        let resolved = re.resolvedTemplates()
-        XCTAssertEqual(resolved.map(\.targetReps), [10, 8])
+        XCTAssertTrue(
+            re.resolvedTemplates().isEmpty,
+            "Phase 9-C2: no-context resolver no longer reads "
+            + "Exercise.defaultTemplates"
+        )
     }
 
-    func testResolvedNoCtx_Tier3WhenPrescriptionPresentButHasNoContent() {
+    /// Phase 9-C2 mirror: empty-content prescription returns `[]` for
+    /// the no-context resolver as well.
+    func testResolvedNoCtx_ReturnsEmptyWhenPrescriptionHasNoContentEvenWithDefaults() {
         let defaults = [working(reps: 12, order: 0)]
         let ex = makeExercise(defaultTemplates: defaults)
         let re = makeSlot(exercise: ex, prescription: SlotPrescription())
 
-        let resolved = re.resolvedTemplates()
-        XCTAssertEqual(resolved.map(\.targetReps), [12])
+        XCTAssertTrue(re.resolvedTemplates().isEmpty)
     }
 
-    func testResolvedNoCtx_NilExerciseReturnsEmpty() {
-        // Building a RoutineExercise then nulling its exercise relationship
-        // simulates a deleted Exercise (`.nullify` rule on Exercise.routineUsages
-        // would normally clear this). Tier 3 needs `exercise` to be non-nil.
+    /// Phase 9-C2: nil-exercise still resolves to `[]` — but now the
+    /// `[]` comes from Tier 1 + Tier 2 both being empty rather than
+    /// from the old `guard let ex = exercise else { return [] }` at
+    /// the head of the Tier 3 arm. Pre-9-C2 this test pinned a Tier 3
+    /// edge case; post-9-C2 it pins that nulling the exercise
+    /// relationship is still safe (no crash, no fabricated rows).
+    func testResolvedNoCtx_NilExerciseStillReturnsEmpty() {
         let ex = makeExercise(defaultTemplates: [working(reps: 5, order: 0)])
         let re = makeSlot(exercise: ex)
         re.exercise = nil

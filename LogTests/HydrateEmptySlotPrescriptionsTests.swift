@@ -503,15 +503,18 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
         XCTAssertEqual(reB.prescription?.restSecondsBetweenSets, 180)
     }
 
-    // MARK: - 16. Golden behavior preservation (Tier 3 → Tier 2 round-trip)
+    // MARK: - 16. Hydration covers what Tier 3 used to (post Phase 9-C2)
 
-    /// For a Class-B legacy slot (empty `setTemplates`, non-empty
-    /// `defaultTemplates`, `prescription.hasContent == false`), the
-    /// `resolvedTemplates(in:)` result before the backfill (Tier 3)
-    /// must match the result after the backfill (Tier 2) on the
-    /// dimensions Tier 2 is capable of preserving: count, kind,
-    /// targetReps, restSecondsAfter. `targetWeight` is the known loss
-    /// the Phase 9-A.5 audit must address before Tier 3 is removed.
+    /// Phase 9-C2 removed the Tier 3 `Exercise.defaultTemplates` fallback
+    /// from `resolvedTemplates(in:)`. For a Class-B legacy slot (empty
+    /// `setTemplates`, non-empty `defaultTemplates`,
+    /// `prescription.hasContent == false`), the resolver therefore
+    /// returns `[]` until the hydration runs. Post-hydration the slot
+    /// resolves via Tier 2 to the equivalent of the original defaults
+    /// on the dimensions Tier 2 preserves: count, kind, targetReps,
+    /// restSecondsAfter. `targetWeight` is the known loss the 9-A.5
+    /// audit accepted (no `SlotPrescription` landing field — gated on
+    /// the 9-pre diagnostic counter for 9-E).
     func testGoldenBehaviorPreservation() {
         // Uniform defaults so a single (reps, rest) pair faithfully
         // round-trips through SlotPrescription.generateTemplates().
@@ -524,31 +527,43 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
         let p = SlotPrescription()  // empty → hasContent == false
         let re = makeSlot(exercise: ex, prescription: p)
 
-        // Pre-backfill: Tier 3 (defaults) wins.
-        let pre = re.resolvedTemplates(in: context)
-        XCTAssertEqual(pre.count, 3)
-        XCTAssertTrue(pre.allSatisfy { $0.kind == .working })
+        // Pre-backfill (post-9-C2): Tier 1 empty, Tier 2 has no content,
+        // Tier 3 removed → resolver returns []. This is exactly why the
+        // hydration is load-bearing in production.
+        XCTAssertTrue(
+            re.resolvedTemplates(in: context).isEmpty,
+            "Post-9-C2 the resolver returns [] for unhydrated Class-B slots — "
+            + "BackfillService.hydrateEmptySlotPrescriptions is what makes "
+            + "them resolve again."
+        )
 
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
         XCTAssertTrue(re.prescription?.hasContent ?? false)
 
-        // Post-backfill: Tier 2 (prescription.generateTemplates) wins.
+        // Post-backfill: Tier 2 produces the equivalent of the original
+        // defaults on the dimensions Tier 2 preserves.
         let post = re.resolvedTemplates(in: context)
-        XCTAssertEqual(post.count, pre.count)
         XCTAssertEqual(
-            post.map(\.kind), pre.map(\.kind),
-            "kind preserved across the Tier 3 → Tier 2 round-trip"
+            post.count, 3,
+            "Tier 2 set count comes from the working-row count of the "
+            + "source defaultTemplates."
         )
-        XCTAssertEqual(
-            post.map(\.targetReps), pre.map(\.targetReps),
-            "targetReps preserved across the Tier 3 → Tier 2 round-trip"
+        XCTAssertTrue(
+            post.allSatisfy { $0.kind == .working },
+            "Tier 2 emits only .working rows."
         )
-        XCTAssertEqual(
-            post.map(\.restSecondsAfter), pre.map(\.restSecondsAfter),
-            "restSecondsAfter preserved across the Tier 3 → Tier 2 round-trip"
+        XCTAssertTrue(
+            post.allSatisfy { $0.targetReps == 10 },
+            "targetReps preserved from defaults via the hydration's repMax."
+        )
+        XCTAssertTrue(
+            post.allSatisfy { $0.restSecondsAfter == 60 },
+            "restSecondsAfter preserved via the hydration's "
+            + "restSecondsBetweenSets (first positive)."
         )
         // targetWeight is intentionally NOT compared — it has no
-        // SlotPrescription landing field. Phase 9-A.5 will measure
-        // and decide on this loss before Tier 3 is removed.
+        // SlotPrescription landing field. Phase 9-A.5 accepted the loss
+        // for the routine flow; 9-E gates the field-deletion decision
+        // on the diagnostic's `defaultTemplatesWithTargetWeight` count.
     }
 }

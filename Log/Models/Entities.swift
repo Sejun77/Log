@@ -540,10 +540,13 @@ extension SlotPrescription {
 // MARK: - Template Resolution
 
 extension RoutineExercise {
-    /// Canonical 3-tier template resolution:
+    /// Canonical 2-tier template resolution (Tier 3 removed in Phase 9-C2):
     /// 1) Explicit per-set overrides (setTemplates non-empty)
     /// 2) Prescription-generated templates (prescription with content)
-    /// 3) Exercise default templates (fallback)
+    /// Else: `[]` — legacy slots without prescription content are
+    /// hydrated at bootstrap by
+    /// `BackfillService.hydrateEmptySlotPrescriptions`, so the Tier 2
+    /// branch covers what Tier 3 (`Exercise.defaultTemplates`) used to.
     func resolvedTemplates() -> [SetTemplate] {
         // Tier 1: explicit overrides
         if !setTemplates.isEmpty {
@@ -555,9 +558,7 @@ extension RoutineExercise {
             return p.generateTemplates()
         }
 
-        // Tier 3: exercise defaults
-        guard let ex = exercise else { return [] }
-        return ex.defaultTemplates.sorted { $0.order < $1.order }
+        return []
     }
 }
 
