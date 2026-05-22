@@ -461,4 +461,143 @@ final class WorkoutResumeServiceTests: SwiftDataTestHarness {
         // items, the entire plan is nil.
         XCTAssertNil(plan)
     }
+
+    // MARK: - 9) Phase 6.C1 — source-block snapshot round-trip
+
+    /// Phase 6.C1: `planFromRoutine` denormalizes `RoutineBlock.slotID`,
+    /// `RoutineBlock.isSuperset`, `RoutineBlock.order`, and
+    /// `RoutineExercise.order` onto each rebuilt `PlanExercise`. These
+    /// are the same fields `populateSnapshotFields(on:from:)` copies
+    /// into newly-created `WorkoutItem`s — so the resume path produces
+    /// plans that, if a user logs a set, generate WorkoutItems with
+    /// correctly populated block-snapshot fields.
+    func testRebuildPlanPrimaryPathCarriesBlockSnapshotFields() {
+        let exA = makeExercise(name: "Bench")
+        let exB = makeExercise(name: "Fly")
+
+        // One non-superset block + one superset block (two members).
+        let tplA = SetTemplate(kind: .working, targetReps: 8)
+        let reA = RoutineExercise(exercise: exA, order: 0, setTemplates: [tplA])
+        context.insert(tplA); context.insert(reA)
+
+        let tplB1 = SetTemplate(kind: .working, targetReps: 8)
+        let tplB2 = SetTemplate(kind: .working, targetReps: 8)
+        let reB1 = RoutineExercise(exercise: exA, order: 0, setTemplates: [tplB1])
+        let reB2 = RoutineExercise(exercise: exB, order: 1, setTemplates: [tplB2])
+        context.insert(tplB1); context.insert(tplB2)
+        context.insert(reB1); context.insert(reB2)
+
+        let blockA = RoutineBlock(
+            isSuperset: false, order: 0, exercises: [reA]
+        )
+        let blockB = RoutineBlock(
+            isSuperset: true, order: 1, exercises: [reB1, reB2]
+        )
+        context.insert(blockA); context.insert(blockB)
+
+        let routine = Routine(name: "Push", blocks: [blockA, blockB])
+        context.insert(routine)
+        let w = makeWorkout(
+            routineName: "Push", routineID: routine.id, items: []
+        )
+        try? context.save()
+
+        let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        XCTAssertEqual(plan?.blocks.count, 2)
+
+        // Non-superset block — single exercise.
+        let nonSuperset = plan?.blocks.first?.exercises.first
+        XCTAssertEqual(nonSuperset?.sourceBlockSlotID, blockA.slotID)
+        XCTAssertEqual(nonSuperset?.sourceBlockIsSuperset, false)
+        XCTAssertEqual(nonSuperset?.sourceBlockOrder, 0)
+        XCTAssertEqual(nonSuperset?.sourceExerciseOrderInBlock, 0)
+
+        // Superset block — two exercises share blockB.slotID, distinct re.order.
+        let supersetExs = plan?.blocks[1].exercises ?? []
+        XCTAssertEqual(supersetExs.count, 2)
+        XCTAssertEqual(
+            Set(supersetExs.compactMap(\.sourceBlockSlotID)),
+            Set([blockB.slotID]),
+            "both superset members share the source block's slotID"
+        )
+        XCTAssertTrue(
+            supersetExs.allSatisfy { $0.sourceBlockIsSuperset == true },
+            "both superset members report isSuperset == true"
+        )
+        XCTAssertTrue(
+            supersetExs.allSatisfy { $0.sourceBlockOrder == 1 }
+        )
+        XCTAssertEqual(
+            supersetExs.compactMap(\.sourceExerciseOrderInBlock),
+            [0, 1],
+            "intra-superset order mirrors RoutineExercise.order"
+        )
+    }
+
+    /// Phase 6.C1: when resuming via the orphan-fallback path (routine
+    /// deleted / no routineID), the rebuilt `PlanExercise` must read
+    /// the four block-snapshot fields back off the persisted
+    /// `WorkoutItem`. This is the cold-restart path that lets a
+    /// post-6.C1 in-flight workout survive a routine deletion with
+    /// its grouping intent intact.
+    func testRebuildPlanOrphanFallbackPreservesBlockSnapshotFields() {
+        let ex = makeExercise(name: "Curl")
+        let blockSlotID = UUID()
+
+        // Simulate a WorkoutItem written by the active workout post-6.C1:
+        // populator has stamped all four block fields on the item.
+        let log = SetLog(
+            indexInExercise: 0, kind: .working, reps: 10, weight: 20
+        )
+        context.insert(log)
+        let item = WorkoutItem(exercise: ex, setLogs: [log])
+        item.routineSlotID = UUID()
+        item.sourceBlockSlotID = blockSlotID
+        item.sourceBlockIsSuperset = true
+        item.sourceBlockOrder = 2
+        item.sourceExerciseOrderInBlock = 1
+        context.insert(item)
+
+        let w = makeWorkout(
+            routineName: "Resumed", routineID: nil, items: [item]
+        )
+        try? context.save()
+
+        let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        let planEx = plan?.blocks.first?.exercises.first
+        XCTAssertNotNil(planEx)
+        XCTAssertEqual(planEx?.sourceBlockSlotID, blockSlotID)
+        XCTAssertEqual(planEx?.sourceBlockIsSuperset, true)
+        XCTAssertEqual(planEx?.sourceBlockOrder, 2)
+        XCTAssertEqual(planEx?.sourceExerciseOrderInBlock, 1)
+    }
+
+    /// Phase 6.C1: a pre-6.C1 legacy `WorkoutItem` (all four block
+    /// fields nil) resumes through the orphan-fallback path without
+    /// crashing and with the rebuilt `PlanExercise` carrying nil
+    /// values — the future Phase 6.C2 display treats nil as "render
+    /// flat", preserving today's UI for legacy data.
+    func testRebuildPlanOrphanFallbackLegacyItemHasNilBlockFields() {
+        let ex = makeExercise(name: "Squat")
+        let log = SetLog(
+            indexInExercise: 0, kind: .working, reps: 5, weight: 100
+        )
+        context.insert(log)
+        let item = WorkoutItem(exercise: ex, setLogs: [log])
+        // Deliberately leave all four sourceBlock* fields nil (legacy shape).
+        context.insert(item)
+
+        let w = makeWorkout(
+            routineName: "Resumed", routineID: nil, items: [item]
+        )
+        try? context.save()
+
+        let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        let planEx = plan?.blocks.first?.exercises.first
+        XCTAssertNotNil(planEx)
+        XCTAssertNil(planEx?.sourceBlockSlotID)
+        XCTAssertNil(planEx?.sourceBlockIsSuperset)
+        XCTAssertNil(planEx?.sourceBlockOrder)
+        XCTAssertNil(planEx?.sourceExerciseOrderInBlock)
+    }
 }

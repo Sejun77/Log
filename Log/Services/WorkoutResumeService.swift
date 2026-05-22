@@ -186,7 +186,12 @@ enum WorkoutResumeService {
                                 PrescriptionSnapshotPayload.init(from:)
                             ),
                             techniquePlansSnapshot: techniquePlansSnapshot,
-                            warmupStepsSnapshot: warmupStepsSnapshot
+                            warmupStepsSnapshot: warmupStepsSnapshot,
+                            // Phase 6.C1 — mirror makePlan(from:)'s block snapshot
+                            sourceBlockSlotID: b.slotID,
+                            sourceBlockIsSuperset: b.isSuperset,
+                            sourceBlockOrder: b.order,
+                            sourceExerciseOrderInBlock: re.order
                         )
                     }
                 guard !exs.isEmpty else { return nil }
@@ -306,7 +311,15 @@ enum WorkoutResumeService {
                         templateNotesSnapshot: item.templateNotesSnapshot,
                         prescriptionSnapshot: prescriptionPayload,
                         techniquePlansSnapshot: techniquePlansSnapshot,
-                        warmupStepsSnapshot: warmupStepsSnapshot
+                        warmupStepsSnapshot: warmupStepsSnapshot,
+                        // Phase 6.C1 — preserve block snapshot fields when
+                        // resuming from an orphaned WorkoutItem. Legacy
+                        // pre-6.C1 items have nil for all four; the future
+                        // History display path treats nil as "render flat".
+                        sourceBlockSlotID: item.sourceBlockSlotID,
+                        sourceBlockIsSuperset: item.sourceBlockIsSuperset,
+                        sourceBlockOrder: item.sourceBlockOrder,
+                        sourceExerciseOrderInBlock: item.sourceExerciseOrderInBlock
                     )
                 ]
             )

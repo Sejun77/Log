@@ -1863,14 +1863,13 @@ struct ActiveWorkoutView: View {
         if resetPlan {
             let slotID = planEx.routineSlotID
             sessionPlans[slotID] = SessionPlan()
-            // Clear stale snapshot so input rebuild uses new template values
-            if let bi = plan.blocks.firstIndex(where: {
-                $0.exercises.contains(where: { $0.id == planEx.id })
-            }),
-                let ei = plan.blocks[bi].exercises.firstIndex(where: {
-                    $0.id == planEx.id
-                })
-            {
+            // Clear stale snapshot so input rebuild uses new template values.
+            // Phase 6.C1 follow-up — slot identity is `routineSlotID`, not
+            // `PlanExercise.id` (which is `Exercise.id` and collides when
+            // a superset has duplicate Exercise slots; see findSlotIndex).
+            if let (bi, ei) = findSlotIndex(
+                in: plan, routineSlotID: slotID
+            ) {
                 plan.blocks[bi].exercises[ei].prescriptionSnapshot = nil
                 plan.blocks[bi].exercises[ei].templateNotesSnapshot = nil
             }
@@ -1913,15 +1912,13 @@ struct ActiveWorkoutView: View {
 
     private func swapExercise(planExercise: PlanExercise, with newEx: Exercise)
     {
-        // 1) Locate slot
-        guard
-            let blockIndex = plan.blocks.firstIndex(where: {
-                $0.exercises.contains(where: { $0.id == planExercise.id })
-            }),
-            let exIndex = plan.blocks[blockIndex].exercises.firstIndex(where: {
-                $0.id == planExercise.id
-            })
-        else { return }
+        // 1) Locate slot by `routineSlotID` — the slot-unique identifier.
+        // Phase 6.C1 follow-up — must NOT key on `planExercise.id`, which is
+        // `Exercise.id` and collides when a superset has duplicate Exercise
+        // slots; see `findSlotIndex` doc for the original manual-test bug.
+        guard let (blockIndex, exIndex) = findSlotIndex(
+            in: plan, routineSlotID: planExercise.routineSlotID
+        ) else { return }
 
         let oldExerciseID = plan.blocks[blockIndex].exercises[exIndex]
             .currentExerciseID
@@ -2965,6 +2962,14 @@ struct ActiveWorkoutView: View {
                 planEx.techniquePlansSnapshot
             )
         }
+        // Phase 6.C1 — copy source-block snapshot for future History
+        // superset grouping. Nil values (e.g. swap-target PlanExercise
+        // built without block context in some edge case) propagate
+        // through unchanged and the future display treats them as flat.
+        item.sourceBlockSlotID = planEx.sourceBlockSlotID
+        item.sourceBlockIsSuperset = planEx.sourceBlockIsSuperset
+        item.sourceBlockOrder = planEx.sourceBlockOrder
+        item.sourceExerciseOrderInBlock = planEx.sourceExerciseOrderInBlock
     }
 
     /// True iff every exercise in the block has its round at `idx` fully complete

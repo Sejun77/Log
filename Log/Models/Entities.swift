@@ -705,6 +705,25 @@ final class WorkoutItem {
     var warmupStepsSnapshotData: Data? = nil
     var techniquePlansSnapshotData: Data? = nil
 
+    // Phase 6.C1: source-block snapshot fields driving future History
+    // superset grouping (Phase 6.C2). All optional / nil-default — legacy
+    // WorkoutItem rows migrate cleanly with nil values and the future
+    // display path treats nil as "render flat" (current behavior).
+    // Populated at session start by `populateSnapshotFields(on:from:)`.
+    // - sourceBlockSlotID: `RoutineBlock.slotID` of the source block;
+    //   grouping identity. Two items with the same value belong to the
+    //   same source block.
+    // - sourceBlockIsSuperset: `RoutineBlock.isSuperset` snapshot.
+    // - sourceBlockOrder: `RoutineBlock.order` in the source variant;
+    //   stable sort key across the workout's items regardless of
+    //   SwiftData @Relationship insertion order.
+    // - sourceExerciseOrderInBlock: `RoutineExercise.order` within the
+    //   source block; stable intra-superset display order.
+    var sourceBlockSlotID: UUID? = nil
+    var sourceBlockIsSuperset: Bool? = nil
+    var sourceBlockOrder: Int? = nil
+    var sourceExerciseOrderInBlock: Int? = nil
+
     init(exercise: Exercise, setLogs: [SetLog]) {
         self.exercise = exercise
         self.setLogs = setLogs

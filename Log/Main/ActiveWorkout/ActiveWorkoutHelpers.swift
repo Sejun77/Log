@@ -137,3 +137,41 @@ func makeSwapDefaultTemplates(
         )
     }
 }
+
+// MARK: - Slot lookup (Phase 6.C1 follow-up: duplicate-Exercise superset)
+
+/// Locate the `(blockIndex, exerciseIndex)` of the plan slot whose
+/// `routineSlotID` matches the given UUID. Returns nil if not found.
+///
+/// **Why this exists**: `PlanExercise.id` is set to `Exercise.id` at
+/// plan-build time (see `StartWorkoutFromRoutineView.makePlan`), so it
+/// is NOT unique across slots when the same `Exercise` appears in
+/// multiple superset members. Lookups that key on `planExercise.id`
+/// silently target the first matching slot, which corrupts swap and
+/// reset-plan flows for duplicate-Exercise supersets (the original
+/// 6.C1 manual-test bug: swapping the second of two same-Exercise
+/// superset slots was actually mutating the first, wiping its
+/// already-logged set).
+///
+/// The single source of slot identity is
+/// `RoutineExercise.slotID` (mirrored as `PlanExercise.routineSlotID`
+/// and `WorkoutItem.routineSlotID`). All in-workout state stores
+/// (`sessionPlans`, `loggedByExercise`, `itemsByExerciseID`,
+/// `dropsLoggedByExercise`, the drop-draft stores) already key on it;
+/// plan-graph lookups must too.
+///
+/// Pure. No SwiftData access. Safe in any context that has a
+/// `WorkoutPlan` in hand.
+func findSlotIndex(
+    in plan: WorkoutPlan,
+    routineSlotID: UUID
+) -> (blockIndex: Int, exerciseIndex: Int)? {
+    for (bi, block) in plan.blocks.enumerated() {
+        if let ei = block.exercises.firstIndex(
+            where: { $0.routineSlotID == routineSlotID }
+        ) {
+            return (bi, ei)
+        }
+    }
+    return nil
+}

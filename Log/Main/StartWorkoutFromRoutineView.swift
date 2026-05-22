@@ -195,7 +195,13 @@ extension PrescriptionSnapshotPayload {
 }
 
 struct PlanExercise: Identifiable {
-    // Stable identity tied to RoutineExercise
+    /// **NOT slot-unique.** This is set to `Exercise.id` at plan-build
+    /// time and collides when the same `Exercise` appears in two
+    /// superset slots. The per-slot identifier is `routineSlotID`
+    /// (below) — use it for any lookup that needs to address a
+    /// specific slot. See `findSlotIndex(in:routineSlotID:)` in
+    /// `ActiveWorkoutHelpers.swift` for the slot-keyed plan lookup
+    /// that all in-workout state stores already use.
     var id: UUID
 
     // NEW — original & current
@@ -219,6 +225,19 @@ struct PlanExercise: Identifiable {
 
     // Warmup steps snapshotted at plan-build time (read-only; no live SwiftData references)
     var warmupStepsSnapshot: [WarmupStepSnapshot] = []
+
+    // Phase 6.C1: source-block snapshot fields. Denormalized onto
+    // PlanExercise at plan-build time so the single populator
+    // `populateSnapshotFields(on:from:)` can copy them onto WorkoutItem
+    // without an enclosing-block lookup. Optional / nil-default so
+    // construction sites that don't have block context (e.g. orphan
+    // fallback rebuilding from a legacy WorkoutItem with nil snapshot
+    // fields, or test fixtures) can omit them — the future display
+    // path treats nil as "render flat".
+    var sourceBlockSlotID: UUID? = nil
+    var sourceBlockIsSuperset: Bool? = nil
+    var sourceBlockOrder: Int? = nil
+    var sourceExerciseOrderInBlock: Int? = nil
 }
 
 struct PlanBlock: Identifiable {
@@ -358,7 +377,12 @@ struct StartWorkoutFromRoutineView: View {
                                 PrescriptionSnapshotPayload.init(from:)
                             ),
                             techniquePlansSnapshot: techniquePlansSnapshot,
-                            warmupStepsSnapshot: warmupStepsSnapshot
+                            warmupStepsSnapshot: warmupStepsSnapshot,
+                            // Phase 6.C1 — block snapshot for History grouping
+                            sourceBlockSlotID: b.slotID,
+                            sourceBlockIsSuperset: b.isSuperset,
+                            sourceBlockOrder: b.order,
+                            sourceExerciseOrderInBlock: re.order
                         )
                     }
                 guard !exs.isEmpty else { return nil }
