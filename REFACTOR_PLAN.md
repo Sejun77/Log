@@ -694,6 +694,18 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 
 - [ ] **Design decision before implementing:** decide whether to switch `HistoryView` from a flat list to per-variant `Section` grouping with an "Other / Unlinked" bucket for nil-variantID rows. C.1 (flat with live labels) is shipped; C.2 is a larger UX change and should not be started without explicit confirmation. If pursued, the existing `RoutineLabelResolver` cache strategy is reusable; only the section partitioning logic needs to be added — keep grouping work out of SwiftUI `body` per CLAUDE.md by precomputing partitions on `workouts` / `routines` change
 
+**Pending (6.C — superset display in History; observed 2026-05-22 after Phase 9 completion):**
+
+Manual observation after Phase 9 close: in `HistoryView` / `WorkoutDetailView`, superset members render as independent exercise rows with no indication they were performed as a superset together. There is no superset label, no grouping container, and no visual distinction between a standalone exercise and one that was part of a superset block during the workout. From the user's perspective, a Push routine with one superset block (e.g. Incline DB Press + Cable Fly) shows in History as two unrelated entries instead of a single "Superset: Incline DB Press / Cable Fly" group.
+
+- [ ] **Display contract**: superset members in History should be rendered together — either inside a labeled "Superset" group/container or with a per-exercise "Superset" badge that visually pairs them. The exact treatment (sectioned container vs. badge + adjacency) is a UX call to make before implementation
+- [ ] **Source of truth**: the grouping signal must come from a snapshotted field on `WorkoutItem` (or a sibling model) rather than a live `RoutineBlock.isSuperset` read — history is append-only and must not change if the source routine is later edited or deleted. If no snapshot exists today, this slice has to add one (additive, optional, default nil so existing rows migrate cleanly), populate it at workout start, and only then update the display
+- [ ] **History data integrity invariant**: this is a display-only change for completed workouts. **Do not** mutate any persisted `WorkoutItem` / `SetLog` / `Workout` data; **do not** retroactively re-group existing history rows that lack the snapshot signal (legacy rows continue to render as standalone — acceptable per the "history is append-only" rule). Renaming an exercise must still flow through `exerciseNameSnapshot` (Phase 6.A) unchanged
+- [ ] **Composition with existing per-block restAfterSeconds + supersetRoundRestSeconds rendering** (if any) needs to be checked — the superset round-rest UX may already have a per-block model surface that can also drive the grouping label, in which case the snapshot can piggyback on existing fields
+- [ ] **Scope discipline**: this is a History UX / polish item, not a model rewrite. It does NOT touch routine editing, active workout flows, swap behavior, prescription content, or any Phase 9 surface. If implementation reveals it would require breaking those invariants, stop and re-scope
+
+Out of scope here: changing what data is captured for non-superset blocks; reorganizing the History list layout beyond grouping superset members; touching `WorkoutResumeService` (resume already restores the in-flight plan correctly per Phase 4c).
+
 ### Phase 7 — Tests + performance pass
 
 **Completed (7.0 — `LogTests` target scaffold):**
