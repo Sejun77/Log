@@ -366,30 +366,13 @@ final class WorkoutResumeServiceTests: SwiftDataTestHarness {
 
     /// Phase 9-C1 contract: when an orphan `WorkoutItem` has neither
     /// `setLogs` nor a `PlannedPrescriptionSnapshot`, the resume fallback
-    /// must NOT read `Exercise.defaultTemplates`. The replacement path
-    /// routes through `makeSwapDefaultTemplates(...)` so the resulting
-    /// rows are uniform `.working` templates at AppSettings defaults.
-    /// Accepted losses vs. pre-9-C1: `targetWeight`, the warmup/dropset
-    /// row kinds, and per-row rest values from `defaultTemplates` no
-    /// longer leak into the resumed plan. This test loads
-    /// `defaultTemplates` with values that would have leaked under the
-    /// old code path and asserts none of them appear in the plan.
-    func testOrphanFallbackIgnoresExerciseDefaultTemplatesRepBased() {
+    /// synthesizes N uniform `.working` rows at AppSettings defaults
+    /// (via `makeSwapDefaultTemplates(...)`). Pre-9-C1 the fallback
+    /// read `Exercise.defaultTemplates`; that field was deleted in 9-E2,
+    /// so the sentinel-leak version of this test was simplified to a
+    /// pure AppSettings-defaults assertion.
+    func testOrphanFallbackUsesAppSettingsDefaultsRepBased() {
         let ex = makeExercise(name: "Curl", isTimeBased: false)
-        // Load defaultTemplates with values that would have leaked under
-        // the old code path: a warmup row with a non-nil targetWeight
-        // and an exotic rest value.
-        let leakyWarmup = SetTemplate(
-            kind: .warmup, targetReps: 99, targetWeight: 999, restSecondsAfter: 999
-        )
-        leakyWarmup.order = 0
-        context.insert(leakyWarmup)
-        let leakyWorking = SetTemplate(
-            kind: .working, targetReps: 88, targetWeight: 888, restSecondsAfter: 888
-        )
-        leakyWorking.order = 1
-        context.insert(leakyWorking)
-        ex.defaultTemplates = [leakyWarmup, leakyWorking]
 
         // Orphan WorkoutItem: no logs, no snapshot.
         let item = WorkoutItem(exercise: ex, setLogs: [])
@@ -402,29 +385,18 @@ final class WorkoutResumeServiceTests: SwiftDataTestHarness {
         let plan = WorkoutResumeService.rebuildPlan(for: w, in: context)
         let templates = plan?.blocks.first?.exercises.first?.templates ?? []
 
-        XCTAssertEqual(
-            templates.count, AppSettings.defaultSets,
-            "Orphan fallback row count must come from AppSettings.defaultSets, "
-            + "not the loaded defaultTemplates (which had 2 rows)."
-        )
-        XCTAssertTrue(
-            templates.allSatisfy { $0.kind == .working },
-            "Orphan fallback must produce only .working rows; the warmup row "
-            + "from defaultTemplates must not leak through."
-        )
-        XCTAssertTrue(
-            templates.allSatisfy { $0.targetWeight == nil },
-            "Phase 9-C1 accepted loss: orphan fallback never carries "
-            + "targetWeight, even when defaultTemplates had one."
-        )
+        XCTAssertEqual(templates.count, AppSettings.defaultSets)
+        XCTAssertTrue(templates.allSatisfy { $0.kind == .working })
+        XCTAssertTrue(templates.allSatisfy { $0.targetWeight == nil })
         XCTAssertTrue(
             templates.allSatisfy { $0.targetReps == 0 },
-            "Orphan fallback targetReps is 0; SessionPlanResolver fills in "
-            + "the real value at row-render time."
+            "Orphan fallback targetReps is 0; SessionPlanResolver fills "
+            + "in the real value at row-render time."
         )
         XCTAssertTrue(
-            templates.allSatisfy { $0.restSecondsAfter == AppSettings.defaultRestBetweenSets },
-            "Rest must come from AppSettings, not from defaultTemplates."
+            templates.allSatisfy {
+                $0.restSecondsAfter == AppSettings.defaultRestBetweenSets
+            }
         )
         XCTAssertTrue(
             templates.allSatisfy { $0.durationSeconds == nil },

@@ -1,8 +1,5 @@
 import SwiftData
 import SwiftUI
-#if DEBUG
-import os
-#endif
 
 struct BootstrapRoot: View {
 
@@ -58,13 +55,14 @@ struct BootstrapRoot: View {
                 // Phase 3.3a: no backfill needed — snapshots are nil for old items.
 
                 // Phase 9-A2: hydrate empty/missing SlotPrescription content
-                // from each slot's setTemplates → Exercise.defaultTemplates →
-                // AppSettings defaults so legacy slots become self-sufficient
-                // before Phase 9-C removes the Tier-3 fallback. MUST run
-                // after backfillPhase3_1() so every RoutineExercise already
-                // has a SlotPrescription instance attached. Idempotent — the
-                // service's `hasContent` guard makes every subsequent launch
-                // a no-op for already-hydrated slots.
+                // from each slot's setTemplates → AppSettings defaults so
+                // legacy slots become self-sufficient (Tier 3 source was
+                // removed alongside the Exercise.defaultTemplates field
+                // deletion in Phase 9-E2). MUST run after backfillPhase3_1()
+                // so every RoutineExercise already has a SlotPrescription
+                // instance attached. Idempotent — the service's `hasContent`
+                // guard makes every subsequent launch a no-op for
+                // already-hydrated slots.
                 BackfillService.hydrateEmptySlotPrescriptions(in: ctx)
 
                 // Phase 6.B Slice B: link pre-existing Workouts to their
@@ -72,17 +70,17 @@ struct BootstrapRoot: View {
                 // so every routine has at least one variant to point at.
                 BackfillService.backfillRoutineVariantIDs(in: ctx)
 
+                // Phase 9-E2: sweep SetTemplate rows that were children
+                // of the (now deleted) Exercise.defaultTemplates
+                // relationship. No-op on stores where the relationship
+                // was already empty (the pre-9-E2 Debug diagnostic showed
+                // 0 such rows on the maintainer's data). Idempotent on
+                // subsequent launches. Runs AFTER hydration so any
+                // RoutineExercise.setTemplates references stay intact.
+                BackfillService.purgeOrphanSetTemplates(in: ctx)
+
                 // Phase 4a: validate persisted active session state.
                 validateActiveSession()
-
-                // Phase 9 pre-9-C / pre-9-E diagnostic (DEBUG only).
-                // Counts the data shapes that gate 9-E's migration
-                // decisions and 9-C's "no slot stranded" guarantee.
-                // No model mutation, no save, no UI surface — pure read
-                // + os.Logger emit. Stripped from Release builds entirely.
-                #if DEBUG
-                logPhase9DefaultTemplatesDiagnostic()
-                #endif
 
                 // Enforce a minimum splash duration only for real users.
                 if !isUITesting {
@@ -262,36 +260,6 @@ struct BootstrapRoot: View {
         }
     }
 
-    // MARK: - Phase 9 diagnostic (DEBUG only)
-
-    #if DEBUG
-    /// Logs the pre-9-C / pre-9-E `defaultTemplates` risk counters once
-    /// per launch. No UI, no AppState, no model mutation — pure read
-    /// via `BackfillService.diagnoseDefaultTemplatesRisk(in:)` followed
-    /// by an `os.Logger` emit. Stripped from Release builds (and from
-    /// the production binary's binary footprint) by the surrounding
-    /// `#if DEBUG`. Removed in the same PR as 9-E field deletion (per
-    /// the 9-E checklist).
-    @MainActor
-    private func logPhase9DefaultTemplatesDiagnostic() {
-        let logger = Logger(
-            subsystem: "Gym.Log",
-            category: "phase9-diagnostic"
-        )
-        let d = BackfillService.diagnoseDefaultTemplatesRisk(in: ctx)
-        logger.info(
-            """
-            [Phase 9 defaultTemplates risk] \
-            exercisesWithDefaultTemplates=\(d.exercisesWithDefaultTemplates, privacy: .public) \
-            defaultTemplatesWithTargetWeight=\(d.defaultTemplatesWithTargetWeight, privacy: .public) \
-            defaultTemplatesNonWorkingKind=\(d.defaultTemplatesNonWorkingKind, privacy: .public) \
-            slotsNeedingTier3=\(d.slotsNeedingTier3, privacy: .public) \
-            slotsOrphanedNoSource=\(d.slotsOrphanedNoSource, privacy: .public) \
-            residualEmptyContentSlots=\(d.residualEmptyContentSlots, privacy: .public)
-            """
-        )
-    }
-    #endif
 }
 
 // MARK: - Safe-Area Ignoring Modifier

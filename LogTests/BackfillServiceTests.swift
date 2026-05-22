@@ -263,20 +263,17 @@ final class BackfillServiceTests: SwiftDataTestHarness {
     /// invoked in the documented bootstrap order (post-`backfillPhase3_1`):
     /// `hydrateEmptySlotPrescriptions(in:)` then `backfillRoutineVariantIDs(in:)`.
     /// They touch disjoint entity surfaces (`RoutineExercise.prescription`
-    /// vs. `Workout.routineVariantID`), so neither should trip the other —
-    /// this is the integration safety net for the one-line `BootstrapRoot`
-    /// wiring that lands in Phase 9-A2.
+    /// vs. `Workout.routineVariantID`), so neither should trip the other.
+    /// Post-9-E2 the hydration source priority collapsed to Tier 1
+    /// `setTemplates` → AppSettings (Tier 3 `Exercise.defaultTemplates`
+    /// was removed with the model field), so the fixture exercises the
+    /// remaining AppSettings-fallback branch.
     func testBootstrapOrder_HydrateThenVariantIDsLeavesBothStatesConsistent() {
         // Legacy slot: prescription exists but empty (mirrors a slot that
         // `backfillPhase3_1` just attached an empty SlotPrescription to).
+        // Empty setTemplates → hydration falls through to AppSettings.
         let ex = Exercise(name: "Bench Press", isCustom: true)
         context.insert(ex)
-        let workingDefaults = SetTemplate(
-            kind: .working, targetReps: 8, restSecondsAfter: 90
-        )
-        workingDefaults.order = 0
-        context.insert(workingDefaults)
-        ex.defaultTemplates = [workingDefaults]
         let emptyPrescription = SlotPrescription()
         context.insert(emptyPrescription)
         XCTAssertFalse(emptyPrescription.hasContent)
@@ -301,19 +298,22 @@ final class BackfillServiceTests: SwiftDataTestHarness {
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
         BackfillService.backfillRoutineVariantIDs(in: context)
 
-        // Hydration outcome: legacy slot now content-bearing, mined from
-        // Exercise.defaultTemplates (the only source).
+        // Hydration outcome: legacy slot now content-bearing, mined
+        // from AppSettings (the only remaining fallback post-9-E2).
         XCTAssertTrue(re.prescription?.hasContent ?? false)
-        XCTAssertEqual(re.prescription?.sets, 1)
-        XCTAssertEqual(re.prescription?.repMin, 8)
-        XCTAssertEqual(re.prescription?.repMax, 8)
-        XCTAssertEqual(re.prescription?.restSecondsBetweenSets, 90)
+        XCTAssertEqual(re.prescription?.sets, AppSettings.defaultSets)
+        XCTAssertEqual(re.prescription?.repMin, AppSettings.defaultRepMin)
+        XCTAssertEqual(re.prescription?.repMax, AppSettings.defaultRepMax)
+        XCTAssertEqual(
+            re.prescription?.restSecondsBetweenSets,
+            AppSettings.defaultRestBetweenSets
+        )
         // VariantID outcome: workout linked to the Default variant.
         XCTAssertEqual(w.routineVariantID, def.id)
         // Re-running both is a verified no-op (idempotency composes too).
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
         BackfillService.backfillRoutineVariantIDs(in: context)
-        XCTAssertEqual(re.prescription?.sets, 1)
+        XCTAssertEqual(re.prescription?.sets, AppSettings.defaultSets)
         XCTAssertEqual(w.routineVariantID, def.id)
     }
 }

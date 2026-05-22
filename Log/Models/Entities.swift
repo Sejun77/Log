@@ -16,9 +16,13 @@ final class Exercise {
     /// first appear via `ExercisesView.backfillOrderIfNeeded`.
     var order: Int = 0
 
-    // Exercise owns its default templates
-    @Relationship(deleteRule: .cascade)
-    var defaultTemplates: [SetTemplate] = []
+    // Phase 9-E2 (2026-05-22): the former `defaultTemplates` relationship
+    // was removed. Programming intent now lives entirely on
+    // `RoutineExercise.setTemplates` (Tier 1) and `SlotPrescription`
+    // (Tier 2). SwiftData performs lightweight migration for the property
+    // drop; any pre-9-E `SetTemplate` rows that were children of this
+    // relationship are swept by `BackfillService.purgeOrphanSetTemplates`
+    // at bootstrap.
 
     // Exercise usages in routines and workouts
     @Relationship(deleteRule: .cascade)
@@ -540,13 +544,11 @@ extension SlotPrescription {
 // MARK: - Template Resolution
 
 extension RoutineExercise {
-    /// Canonical 2-tier template resolution (Tier 3 removed in Phase 9-C2):
-    /// 1) Explicit per-set overrides (setTemplates non-empty)
-    /// 2) Prescription-generated templates (prescription with content)
-    /// Else: `[]` — legacy slots without prescription content are
-    /// hydrated at bootstrap by
-    /// `BackfillService.hydrateEmptySlotPrescriptions`, so the Tier 2
-    /// branch covers what Tier 3 (`Exercise.defaultTemplates`) used to.
+    /// Canonical 2-tier template resolution:
+    /// 1) Explicit per-set overrides (`setTemplates` non-empty)
+    /// 2) Prescription-generated templates (`prescription.hasContent == true`)
+    /// Else: `[]`. Legacy slots without prescription content are
+    /// hydrated at bootstrap by `BackfillService.hydrateEmptySlotPrescriptions`.
     func resolvedTemplates() -> [SetTemplate] {
         // Tier 1: explicit overrides
         if !setTemplates.isEmpty {

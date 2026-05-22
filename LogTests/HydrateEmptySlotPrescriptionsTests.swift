@@ -5,18 +5,15 @@ import XCTest
 
 /// Phase 9-A — `BackfillService.hydrateEmptySlotPrescriptions(in:)` is the
 /// launch-time backfill that hydrates every `RoutineExercise.prescription`
-/// whose `hasContent == false` from (in priority order)
-/// `re.setTemplates` → `re.exercise?.defaultTemplates` → `AppSettings`
-/// defaults. These tests pin the contract before bootstrap wiring lands
-/// in 9-A2 and before `Exercise.defaultTemplates` is removed in 9-C/9-E.
+/// whose `hasContent == false`. Post-9-E2 the source priority collapsed
+/// to Tier 1 `re.setTemplates` → `AppSettings` defaults (Tier 3
+/// `Exercise.defaultTemplates` was removed with the model field).
 ///
 /// Resolution-side behavior is pinned separately by
-/// `SlotPrescriptionResolutionTests`; the golden-behavior test at the
-/// bottom of this file is the bridge between the two — it verifies a
-/// legacy Class-B slot (`hasContent == false`, empty `setTemplates`,
-/// non-empty `defaultTemplates`) resolves to the same working-set
-/// `(count, reps, rest, kind)` tuple via Tier 2 post-backfill as it did
-/// via Tier 3 pre-backfill.
+/// `SlotPrescriptionResolutionTests`. The golden-behavior test at the
+/// bottom of this file verifies an unhydrated legacy slot resolves to
+/// `[]` pre-backfill and to a content-bearing Tier 2 template set
+/// post-backfill.
 @MainActor
 final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
 
@@ -25,14 +22,11 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
     @discardableResult
     private func makeExercise(
         name: String = "Bench Press",
-        isTimeBased: Bool = false,
-        defaultTemplates: [SetTemplate] = []
+        isTimeBased: Bool = false
     ) -> Exercise {
         let ex = Exercise(name: name, isCustom: true)
         ex.isTimeBased = isTimeBased
         context.insert(ex)
-        for tpl in defaultTemplates { context.insert(tpl) }
-        ex.defaultTemplates = defaultTemplates
         return ex
     }
 
@@ -159,74 +153,15 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
 
     // MARK: - 3. Tier 3 defaultTemplates rep-based
 
-    func testHydratesFromDefaultTemplatesRepBased() {
-        let defaults = [
-            working(reps: 5, rest: 120, order: 0),
-            working(reps: 5, rest: 120, order: 1),
-        ]
-        let ex = makeExercise(defaultTemplates: defaults)
-        let p = SlotPrescription()
-        let re = makeSlot(exercise: ex, prescription: p)
+    // Phase 9-E2: Tier 3 defaultTemplates branch deleted from the
+    // hydration service. The former tests #3 (Tier-3 rep-based),
+    // #4 (Tier-3 time-based), and #5 (Tier-1-wins-over-Tier-3) were
+    // dropped because the Tier-3 source no longer exists.
 
-        BackfillService.hydrateEmptySlotPrescriptions(in: context)
-
-        XCTAssertEqual(re.prescription?.usesDuration, false)
-        XCTAssertEqual(re.prescription?.sets, 2)
-        XCTAssertEqual(re.prescription?.repMin, 5)
-        XCTAssertEqual(re.prescription?.repMax, 5)
-        XCTAssertEqual(re.prescription?.restSecondsBetweenSets, 120)
-    }
-
-    // MARK: - 4. Tier 3 defaultTemplates time-based
-
-    func testHydratesFromDefaultTemplatesTimeBased() {
-        let defaults = [
-            timeWorking(seconds: 20, rest: 30, order: 0),
-            timeWorking(seconds: 40, rest: 30, order: 1),
-            timeWorking(seconds: 60, rest: 30, order: 2),
-        ]
-        let ex = makeExercise(
-            name: "Hold", isTimeBased: true, defaultTemplates: defaults
-        )
-        let p = SlotPrescription()
-        let re = makeSlot(exercise: ex, prescription: p)
-
-        BackfillService.hydrateEmptySlotPrescriptions(in: context)
-
-        XCTAssertEqual(re.prescription?.usesDuration, true)
-        XCTAssertEqual(re.prescription?.sets, 3)
-        XCTAssertEqual(re.prescription?.durationMinSeconds, 20)
-        XCTAssertEqual(re.prescription?.durationMaxSeconds, 60)
-        XCTAssertEqual(re.prescription?.restSecondsBetweenSets, 30)
-    }
-
-    // MARK: - 5. Tier 1 wins over Tier 3
-
-    func testSetTemplatesWinsOverDefaultTemplates() {
-        let defaults = [working(reps: 99, rest: 999, order: 0)]
-        let ex = makeExercise(defaultTemplates: defaults)
-        let overrides = [
-            working(reps: 6, rest: 90, order: 0),
-            working(reps: 8, rest: 90, order: 1),
-        ]
-        let p = SlotPrescription()
-        let re = makeSlot(
-            exercise: ex, setTemplates: overrides, prescription: p
-        )
-
-        BackfillService.hydrateEmptySlotPrescriptions(in: context)
-
-        // Mining must use overrides, not defaults — no 99s anywhere.
-        XCTAssertEqual(re.prescription?.sets, 2)
-        XCTAssertEqual(re.prescription?.repMin, 6)
-        XCTAssertEqual(re.prescription?.repMax, 8)
-        XCTAssertEqual(re.prescription?.restSecondsBetweenSets, 90)
-    }
-
-    // MARK: - 6. AppSettings fallback when both sources empty
+    // MARK: - 6. AppSettings fallback when source is empty
 
     func testAppSettingsFallbackWhenAllSourcesEmpty() {
-        let ex = makeExercise(defaultTemplates: [])
+        let ex = makeExercise()
         let p = SlotPrescription()
         let re = makeSlot(exercise: ex, prescription: p)
 
@@ -246,9 +181,7 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
     // MARK: - 7. Skips content-bearing prescription
 
     func testSkipsContentBearingPrescription() {
-        let ex = makeExercise(
-            defaultTemplates: [working(reps: 99, rest: 99, order: 0)]
-        )
+        let ex = makeExercise()
         // Pre-populated, content-bearing prescription.
         let p = SlotPrescription(
             sets: 5, repMin: 4, repMax: 6, restSecondsBetweenSets: 180
@@ -269,13 +202,15 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
     // MARK: - 8. Idempotent second run
 
     func testIdempotentSecondRunNoChange() {
-        let defaults = [
+        let overrides = [
             working(reps: 10, rest: 60, order: 0),
             working(reps: 8, rest: 60, order: 1),
         ]
-        let ex = makeExercise(defaultTemplates: defaults)
+        let ex = makeExercise()
         let p = SlotPrescription()
-        let re = makeSlot(exercise: ex, prescription: p)
+        let re = makeSlot(
+            exercise: ex, setTemplates: overrides, prescription: p
+        )
 
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
         let snapshotA = (
@@ -314,9 +249,11 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
             working(reps: 8, rest: 90, order: 4),
             dropset(reps: 6, order: 5),
         ]
-        let ex = makeExercise(defaultTemplates: mixed)
+        let ex = makeExercise()
         let p = SlotPrescription()
-        let re = makeSlot(exercise: ex, prescription: p)
+        let re = makeSlot(
+            exercise: ex, setTemplates: mixed, prescription: p
+        )
 
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
 
@@ -330,15 +267,17 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
     func testFirstPositiveRestWins() {
         // Sequence: nil, 0, 90, 120 → backfill picks 90 (skips nil and 0,
         // does not jump to the 120 later in the list).
-        let defaults = [
+        let overrides = [
             working(reps: 5, rest: nil, order: 0),
             working(reps: 5, rest: 0, order: 1),
             working(reps: 5, rest: 90, order: 2),
             working(reps: 5, rest: 120, order: 3),
         ]
-        let ex = makeExercise(defaultTemplates: defaults)
+        let ex = makeExercise()
         let p = SlotPrescription()
-        let re = makeSlot(exercise: ex, prescription: p)
+        let re = makeSlot(
+            exercise: ex, setTemplates: overrides, prescription: p
+        )
 
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
 
@@ -348,11 +287,13 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
     // MARK: - 11. Creates prescription if nil
 
     func testCreatesPrescriptionIfNil() {
-        let defaults = [working(reps: 12, rest: 45, order: 0)]
-        let ex = makeExercise(defaultTemplates: defaults)
+        let overrides = [working(reps: 12, rest: 45, order: 0)]
+        let ex = makeExercise()
         // Deliberately NO prescription — defensive branch (should be empty
         // post-backfillPhase3_1, but pinned so the branch can't drift).
-        let re = makeSlot(exercise: ex, prescription: nil)
+        let re = makeSlot(
+            exercise: ex, setTemplates: overrides, prescription: nil
+        )
         XCTAssertNil(re.prescription)
 
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
@@ -416,36 +357,9 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
         XCTAssertEqual(pre.map(\.3), post.map(\.3))
     }
 
-    // MARK: - 14. Does not mutate defaultTemplates
-
-    func testDoesNotMutateDefaultTemplates() {
-        let defaults = [
-            working(reps: 10, weight: 40, rest: 60, order: 0),
-            working(reps: 10, weight: 45, rest: 60, order: 1),
-        ]
-        let ex = makeExercise(defaultTemplates: defaults)
-        let p = SlotPrescription()
-        _ = makeSlot(exercise: ex, prescription: p)
-        // Canonical sort by `.order` — see note in testDoesNotMutateSetTemplates.
-        let pre = ex.defaultTemplates
-            .sorted { $0.order < $1.order }
-            .map {
-                ($0.order, $0.targetReps, $0.targetWeight, $0.restSecondsAfter)
-            }
-
-        BackfillService.hydrateEmptySlotPrescriptions(in: context)
-
-        let post = ex.defaultTemplates
-            .sorted { $0.order < $1.order }
-            .map {
-                ($0.order, $0.targetReps, $0.targetWeight, $0.restSecondsAfter)
-            }
-        XCTAssertEqual(ex.defaultTemplates.count, 2)
-        XCTAssertEqual(pre.map(\.0), post.map(\.0))
-        XCTAssertEqual(pre.map(\.1), post.map(\.1))
-        XCTAssertEqual(pre.map(\.2), post.map(\.2))
-        XCTAssertEqual(pre.map(\.3), post.map(\.3))
-    }
+    // Phase 9-E2: former test #14 `testDoesNotMutateDefaultTemplates`
+    // was dropped because the `Exercise.defaultTemplates` field no
+    // longer exists.
 
     // MARK: - 15. Superset slots hydrate independently
 
@@ -465,16 +379,10 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
         context.insert(reA)
         reA.prescription = pA
 
-        // Slot B: hydrate from Exercise.defaultTemplates (Tier 3) with
-        // a very different shape so cross-contamination is detectable.
-        let exB = makeExercise(
-            name: "B",
-            defaultTemplates: [
-                working(reps: 5, rest: 180, order: 0),
-                working(reps: 5, rest: 180, order: 1),
-                working(reps: 5, rest: 180, order: 2),
-            ]
-        )
+        // Slot B: empty setTemplates + empty prescription → hydrates from
+        // AppSettings (post-9-E2 the Tier-3 source is gone). Different
+        // shape from slot A so cross-contamination is detectable.
+        let exB = makeExercise(name: "B")
         let pB = SlotPrescription()
         context.insert(pB)
         let reB = RoutineExercise(
@@ -496,74 +404,52 @@ final class HydrateEmptySlotPrescriptionsTests: SwiftDataTestHarness {
         XCTAssertEqual(reA.prescription?.repMin, 8)
         XCTAssertEqual(reA.prescription?.repMax, 8)
         XCTAssertEqual(reA.prescription?.restSecondsBetweenSets, 60)
-        // B mined from defaults: 3 × 5, rest 180. No bleed-through from A.
-        XCTAssertEqual(reB.prescription?.sets, 3)
-        XCTAssertEqual(reB.prescription?.repMin, 5)
-        XCTAssertEqual(reB.prescription?.repMax, 5)
-        XCTAssertEqual(reB.prescription?.restSecondsBetweenSets, 180)
+        // B from AppSettings (the only remaining branch post-9-E2);
+        // no bleed-through from A.
+        XCTAssertEqual(reB.prescription?.sets, AppSettings.defaultSets)
+        XCTAssertEqual(reB.prescription?.repMin, AppSettings.defaultRepMin)
+        XCTAssertEqual(reB.prescription?.repMax, AppSettings.defaultRepMax)
+        XCTAssertEqual(
+            reB.prescription?.restSecondsBetweenSets,
+            AppSettings.defaultRestBetweenSets
+        )
     }
 
-    // MARK: - 16. Hydration covers what Tier 3 used to (post Phase 9-C2)
+    // MARK: - 16. Hydration drives an unhydrated slot from [] to Tier 2
 
-    /// Phase 9-C2 removed the Tier 3 `Exercise.defaultTemplates` fallback
-    /// from `resolvedTemplates(in:)`. For a Class-B legacy slot (empty
-    /// `setTemplates`, non-empty `defaultTemplates`,
-    /// `prescription.hasContent == false`), the resolver therefore
-    /// returns `[]` until the hydration runs. Post-hydration the slot
-    /// resolves via Tier 2 to the equivalent of the original defaults
-    /// on the dimensions Tier 2 preserves: count, kind, targetReps,
-    /// restSecondsAfter. `targetWeight` is the known loss the 9-A.5
-    /// audit accepted (no `SlotPrescription` landing field — gated on
-    /// the 9-pre diagnostic counter for 9-E).
+    /// Post-9-C2 + 9-E2: an unhydrated slot (empty `setTemplates`, empty
+    /// prescription, no Tier-3 source) resolves to `[]` until the
+    /// bootstrap hydration runs. Post-hydration the slot resolves via
+    /// Tier 2 to AppSettings-shaped templates. This is the load-bearing
+    /// reason `hydrateEmptySlotPrescriptions` runs on every launch.
     func testGoldenBehaviorPreservation() {
-        // Uniform defaults so a single (reps, rest) pair faithfully
-        // round-trips through SlotPrescription.generateTemplates().
-        let defaults = [
-            working(reps: 10, rest: 60, order: 0),
-            working(reps: 10, rest: 60, order: 1),
-            working(reps: 10, rest: 60, order: 2),
-        ]
-        let ex = makeExercise(defaultTemplates: defaults)
+        let ex = makeExercise()
         let p = SlotPrescription()  // empty → hasContent == false
         let re = makeSlot(exercise: ex, prescription: p)
 
-        // Pre-backfill (post-9-C2): Tier 1 empty, Tier 2 has no content,
-        // Tier 3 removed → resolver returns []. This is exactly why the
-        // hydration is load-bearing in production.
+        // Pre-backfill: Tier 1 empty, Tier 2 has no content → []
         XCTAssertTrue(
             re.resolvedTemplates(in: context).isEmpty,
-            "Post-9-C2 the resolver returns [] for unhydrated Class-B slots — "
-            + "BackfillService.hydrateEmptySlotPrescriptions is what makes "
-            + "them resolve again."
+            "The resolver returns [] for unhydrated slots — "
+            + "BackfillService.hydrateEmptySlotPrescriptions is what "
+            + "makes them resolve again."
         )
 
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
         XCTAssertTrue(re.prescription?.hasContent ?? false)
 
-        // Post-backfill: Tier 2 produces the equivalent of the original
-        // defaults on the dimensions Tier 2 preserves.
+        // Post-backfill: Tier 2 produces AppSettings-shaped templates.
         let post = re.resolvedTemplates(in: context)
-        XCTAssertEqual(
-            post.count, 3,
-            "Tier 2 set count comes from the working-row count of the "
-            + "source defaultTemplates."
+        XCTAssertEqual(post.count, AppSettings.defaultSets)
+        XCTAssertTrue(post.allSatisfy { $0.kind == .working })
+        XCTAssertTrue(
+            post.allSatisfy { $0.targetReps == AppSettings.defaultRepMax },
+            "targetReps from AppSettings.defaultRepMax (Tier 2 chooser)"
         )
         XCTAssertTrue(
-            post.allSatisfy { $0.kind == .working },
-            "Tier 2 emits only .working rows."
+            post.allSatisfy {
+                $0.restSecondsAfter == AppSettings.defaultRestBetweenSets
+            }
         )
-        XCTAssertTrue(
-            post.allSatisfy { $0.targetReps == 10 },
-            "targetReps preserved from defaults via the hydration's repMax."
-        )
-        XCTAssertTrue(
-            post.allSatisfy { $0.restSecondsAfter == 60 },
-            "restSecondsAfter preserved via the hydration's "
-            + "restSecondsBetweenSets (first positive)."
-        )
-        // targetWeight is intentionally NOT compared — it has no
-        // SlotPrescription landing field. Phase 9-A.5 accepted the loss
-        // for the routine flow; 9-E gates the field-deletion decision
-        // on the diagnostic's `defaultTemplatesWithTargetWeight` count.
     }
 }
