@@ -296,8 +296,13 @@ final class SlotPrescriptionResolutionTests: SwiftDataTestHarness {
     /// Phase 9-C2: the pre-9-C2 Tier 3 arm also normalized
     /// `ex.defaultTemplates[i].order` via `normalizeOrderIfNeeded` and
     /// persisted the fix. With Tier 3 gone the resolver must NOT touch
-    /// `defaultTemplates` orders. `ExercisesView.normalizeTemplateOrderIfNeeded`
-    /// (9-D scope) still self-heals these on editor open.
+    /// `defaultTemplates` orders. The companion editor-side healer
+    /// (`ExercisesView.normalizeTemplateOrderIfNeeded`) was also removed
+    /// in Phase 9-D alongside the Exercise-tab Sets editor — nothing
+    /// reads `defaultTemplates[i].order` at runtime anymore (the field
+    /// stays load-bearing through 9-E only for `BackfillService`
+    /// hydration + diagnostic counters, neither of which depends on
+    /// row order).
     func testResolvedInCtx_NoLongerNormalizesExerciseDefaultTemplatesOrder() {
         // All three rows share order=0; pre-9-C2 the resolver would
         // renormalize to [0, 1, 2] as a side effect of returning Tier 3.
