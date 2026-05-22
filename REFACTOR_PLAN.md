@@ -694,17 +694,63 @@ Phase 6.B is split into three sequential slices: **A** add + populate (additive 
 
 - [ ] **Design decision before implementing:** decide whether to switch `HistoryView` from a flat list to per-variant `Section` grouping with an "Other / Unlinked" bucket for nil-variantID rows. C.1 (flat with live labels) is shipped; C.2 is a larger UX change and should not be started without explicit confirmation. If pursued, the existing `RoutineLabelResolver` cache strategy is reusable; only the section partitioning logic needs to be added — keep grouping work out of SwiftUI `body` per CLAUDE.md by precomputing partitions on `workouts` / `routines` change
 
-**Pending (6.C — superset display in History; observed 2026-05-22 after Phase 9 completion):**
+**Pending (6.C — superset display in History; observed 2026-05-22 after Phase 9 completion; planning audit recorded 2026-05-22):**
 
 Manual observation after Phase 9 close: in `HistoryView` / `WorkoutDetailView`, superset members render as independent exercise rows with no indication they were performed as a superset together. There is no superset label, no grouping container, and no visual distinction between a standalone exercise and one that was part of a superset block during the workout. From the user's perspective, a Push routine with one superset block (e.g. Incline DB Press + Cable Fly) shows in History as two unrelated entries instead of a single "Superset: Incline DB Press / Cable Fly" group.
 
-- [ ] **Display contract**: superset members in History should be rendered together — either inside a labeled "Superset" group/container or with a per-exercise "Superset" badge that visually pairs them. The exact treatment (sectioned container vs. badge + adjacency) is a UX call to make before implementation
-- [ ] **Source of truth**: the grouping signal must come from a snapshotted field on `WorkoutItem` (or a sibling model) rather than a live `RoutineBlock.isSuperset` read — history is append-only and must not change if the source routine is later edited or deleted. If no snapshot exists today, this slice has to add one (additive, optional, default nil so existing rows migrate cleanly), populate it at workout start, and only then update the display
-- [ ] **History data integrity invariant**: this is a display-only change for completed workouts. **Do not** mutate any persisted `WorkoutItem` / `SetLog` / `Workout` data; **do not** retroactively re-group existing history rows that lack the snapshot signal (legacy rows continue to render as standalone — acceptable per the "history is append-only" rule). Renaming an exercise must still flow through `exerciseNameSnapshot` (Phase 6.A) unchanged
-- [ ] **Composition with existing per-block restAfterSeconds + supersetRoundRestSeconds rendering** (if any) needs to be checked — the superset round-rest UX may already have a per-block model surface that can also drive the grouping label, in which case the snapshot can piggyback on existing fields
-- [ ] **Scope discipline**: this is a History UX / polish item, not a model rewrite. It does NOT touch routine editing, active workout flows, swap behavior, prescription content, or any Phase 9 surface. If implementation reveals it would require breaking those invariants, stop and re-scope
+**6.C planning audit (recorded 2026-05-22, no code changed):**
 
-Out of scope here: changing what data is captured for non-superset blocks; reorganizing the History list layout beyond grouping superset members; touching `WorkoutResumeService` (resume already restores the in-flight plan correctly per Phase 4c).
+Audit traced the model and render paths and identified the root cause: **`WorkoutItem` does not snapshot any source-block information.** Current state:
+- `WorkoutItem` carries `routineSlotID` (the per-exercise `RoutineExercise.slotID`), `exerciseNameSnapshot`, `templateNotesSnapshot`, `plannedPrescriptionSnapshot`, `warmupStepsSnapshotData`, `techniquePlansSnapshotData` — but **zero block-level fields**: no source block slotID, no source block order, no `isSuperset` flag snapshot, no exercise order within block. `RoutineBlock.slotID`/`isSuperset`/`order` live only on the routine side
+- `WorkoutDetailView.body` (`HistoryView.swift:471`) renders a flat `ForEach(workout.items, id: \.id) { Section { … } header: { Text(exerciseName(for: item)) } }` — one section per item, no partitioning, no grouping container, no superset-aware sort. The display path has no signal to group on, even if it wanted to
+- `RoutineBlock` has no `name` field in the model — block identity is `slotID` (UUID) + `order` (Int); the display label for a superset block is purely "Superset" (plus optional rest values)
+- `workout.items` iteration relies on SwiftData `@Relationship` insertion order (items are appended lazily on first `appendSetLog` / `appendTimeSetLog` / `swapExercise`). For sequential workouts the insertion order roughly matches plan-block order, but a workout where the user jumps between blocks/exercises interleaves the insertion order with no stable sort key
+
+**Audit recommendation:** split 6.C into two slices (6.C1 additive snapshot groundwork + grouping helper; 6.C2 display change). Ship 6.C1 first so by the time 6.C2 lands every post-6.C1 workout has the snapshot fields populated and only true legacy rows fall back to flat rendering. Both slices remain independently revertible.
+
+**6.C1 — Additive snapshot groundwork (pending — pure additive, no UI change):**
+
+- [ ] **Add four optional fields to `WorkoutItem`** (`Entities.swift:684`), all default nil so SwiftData lightweight migration handles the property addition for legacy rows:
+  - `sourceBlockSlotID: UUID?` — `RoutineBlock.slotID` of the source block; grouping identity (two items with the same value belong to the same source block)
+  - `sourceBlockIsSuperset: Bool?` — `RoutineBlock.isSuperset` snapshot; nil = legacy row, treat as flat in the future display
+  - `sourceBlockOrder: Int?` — `RoutineBlock.order` in the source variant; drives source-order rendering even when `workout.items` insertion order is shuffled
+  - `sourceExerciseOrderInBlock: Int?` — `RoutineExercise.order` within the source block; drives stable intra-superset ordering
+- [ ] **Add the same four fields to `PlanExercise`** (`StartWorkoutFromRoutineView.swift:197`). Denormalizing onto the plan struct means the existing `populateSnapshotFields(on:from:)` populator signature stays unchanged — caller still passes only `planEx`
+- [ ] **Populate at plan-build time** in two production sites:
+  - `StartWorkoutFromRoutineView.makePlan(from:)` — iterate `routine.blocks` with `(blockIndex, block)` enumeration; read `block.slotID`, `block.isSuperset`, `block.order`, then for each `RoutineExercise` use its `.order` for `sourceExerciseOrderInBlock`
+  - `WorkoutResumeService.planFromRoutine` — same pattern, mirrors the start path
+  - `WorkoutResumeService.planFromWorkoutItems` (orphan fallback) — read the snapshot fields back off the existing `WorkoutItem` and put them on the rebuilt `PlanExercise`. For pre-6.C1 legacy items every field is nil; the rebuilt plan defaults to a flat-block layout (current behavior)
+- [ ] **Extend `populateSnapshotFields(on:from:)`** (`ActiveWorkoutView.swift:2943`) to copy the four new fields from `planEx` to `item`. **Single point of change** — the four lazy `WorkoutItem` creation sites (`appendSetLog` ~L2114, `appendTimeSetLog` ~L2161, the dropset path ~L2475, and the `swapExercise` swap-target creator at L2054) all already route through this one populator
+- [ ] **Add pure grouping helper** — `func groupItemsBySourceBlock(_ items: [WorkoutItem]) -> [WorkoutItemGroup]` as a free function in a new file (e.g. `Log/Services/WorkoutItemGrouping.swift`). Partitions items by `sourceBlockSlotID`, sorts groups by `(sourceBlockOrder ?? Int.max, …timestamp tiebreaker for legacy nil rows)`, sorts members within a group by `sourceExerciseOrderInBlock ?? Int.max`. Ready for 6.C2 to consume; this slice ships it unused
+- [ ] **Add tests:**
+  - `LogTests/PopulateSnapshotFieldsTests.swift` (new) — build a `PlanExercise` with denormalized block fields, create a `WorkoutItem`, call the extended populator, assert all four fields round-trip. Cover non-superset block, superset block with multiple members, and idempotency (calling populate twice doesn't change values)
+  - `LogTests/WorkoutItemGroupingTests.swift` (new) — pure-function tests for `groupItemsBySourceBlock`: all flat, one superset of 2, mixed (one superset + two standalone), legacy mixed (some nil snapshot + some populated), interleaved insertion order with correct `sourceBlockOrder`-driven sort
+  - Extend `WorkoutResumeServiceTests` — assert the four fields round-trip via `planFromRoutine` (primary path) and that `planFromWorkoutItems` reads them back correctly from a fixture item with snapshot vs. legacy nil values
+- [ ] **Zero observable behavior change** — `HistoryView` still renders flat in this slice. The display change is 6.C2's responsibility. Estimated diff: ~80 LOC production + ~150 LOC tests; suite +5 to +8 tests
+- [ ] **Ship 6.C1 standalone** — let the snapshot fields bake on at least one post-6.C1 workout before shipping 6.C2 so the display change has data to operate on
+
+**6.C2 — History display grouping (pending — gated on 6.C1; pure UI change, no model edits):**
+
+- [ ] **Update `WorkoutDetailView.body`** (`HistoryView.swift:471`) — replace the flat `ForEach(workout.items)` with `ForEach(groupItemsBySourceBlock(workout.items))`. For each group:
+  - If `sourceBlockIsSuperset == true` AND group has ≥2 members → render a single `Section` with header `"Superset"` (optionally `"Superset (N rounds)"` if the snapshot or live block carries `supersetRoundRestSeconds`), containing all members rendered as inline subviews with their exercise names as labels
+  - Otherwise → render the current per-item `Section` verbatim (preserves legacy nil-snapshot behavior and standalone-exercise behavior unchanged)
+- [ ] **Recommendation: grouped container, not per-row badge.** A badge on each member row still leaves them as visually independent sections, which is exactly the failure mode the user observed. A grouped container makes the relationship visually unmistakable and uses iOS-native list grouping
+- [ ] **Manual regression**: (a) workout started post-6.C1 with a superset → renders as a single labeled "Superset" section with members in source order; (b) pre-6.C1 legacy workout → unchanged flat display; (c) workout with a mid-superset swap → swapped-in exercise joins the same group (since `swapExercise` populator copies `sourceBlockSlotID` from the slot's `planEx`); (d) duplicate same exercise inside a superset → both items render under the same group with distinct `routineSlotID` rows
+- [ ] **Out of scope for the first display slice**: showing per-block `restAfterSeconds` / `supersetRoundRestSeconds` values; adding an interleaved "round" view (R1: ExA + ExB, R2: ExA + ExB). Ship these only after basic grouping lands and is comfortable
+- [ ] Estimated diff: ~50 LOC production; no new test files (grouping helper covered in 6.C1)
+
+**Risks recorded by the audit:**
+
+- **SwiftData migration**: all four new fields are optional with default nil → lightweight migration handles the property addition automatically. Same pattern as the existing `routineSlotID` / `templateNotesSnapshot` / `warmupStepsSnapshotData` fields already in production
+- **Routine deletion**: snapshot fields are pure `UUID/Int/Bool` with no `@Relationship`, so upstream block deletion cannot nullify them. History stays append-only
+- **Routine rename**: `RoutineBlock` has no `name` field; nothing to rename at the block level. Routine-level renames already flow through `RoutineLabelResolver` (Phase 6.B Slice C.1) which is untouched here
+- **Workout resume (primary path)**: `WorkoutResumeService.planFromRoutine` will denormalize the same four fields from the live routine onto rebuilt `PlanExercise`s
+- **Workout resume (orphan fallback)**: `planFromWorkoutItems` reads the snapshot fields off persisted `WorkoutItem`s. Pre-6.C1 legacy items have nil → resume produces a flat plan, matching today's behavior
+- **Superset with duplicate same exercise**: per Phase 9-B2, duplicate exercises across slots have distinct `slotID`s and distinct `routineSlotID`s. The new `sourceBlockSlotID` is the BLOCK's slotID and is shared across superset members — exactly what we want for grouping. Different `routineSlotID` values keep them as distinct rows within the group; `sourceExerciseOrderInBlock` keeps them in stable display order
+- **Mid-superset swap**: `swapExercise` at `ActiveWorkoutView.swift:2054` creates a new `WorkoutItem` for the swapped-in exercise via the same populator. Since `planEx.sourceBlockSlotID` etc. don't change across a swap (the slot stays in the same block), the new `WorkoutItem` joins the same group as any prior set logs from that slot
+- **Legacy rows**: do NOT retroactively guess source block by walking live `Routine.blocks` — that would re-introduce the very append-only violation 6.C is fixing. Legacy workouts stay flat; users get the new grouped UX from the first post-6.C1 workout onward
+
+Out of scope for both 6.C1 and 6.C2: changing what data is captured for non-superset blocks; reorganizing the History list layout beyond grouping superset members; adding block-level `restAfterSeconds` / `supersetRoundRestSeconds` display (deferred); touching `WorkoutResumeService` resume-correctness behavior (Phase 4c).
 
 ### Phase 7 — Tests + performance pass
 
