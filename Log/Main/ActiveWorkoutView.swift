@@ -2055,10 +2055,125 @@ struct ActiveWorkoutView: View {
             itemsByExerciseID[slotID] = newItem
         }
 
+        // 7a) Phase 6.C3 — superset round-order consistency. When the
+        // replaced slot belongs to a superset block, clearing only the
+        // swapped slot's logs can strand later members' logs ahead of
+        // the now-empty earlier required member (e.g. A1 + B1 logged →
+        // swap A → B1 is orphaned ahead of the unlogged A1). Cascade
+        // a clear of any extraneous logs in the block so the surviving
+        // logs form a valid prefix of the round sequence. Non-superset
+        // blocks are unaffected — the helper is only invoked when
+        // `isSuperset == true`.
+        if plan.blocks[blockIndex].isSuperset {
+            cascadeClearSupersetRoundOrderViolations(
+                in: plan.blocks[blockIndex]
+            )
+        }
+
         try? ctx.save()
 
         // 8) Keep global plan in guard for resume
         activeGuard.activePlan = plan
+    }
+
+    /// Phase 6.C3 — clear any logs in the given superset block that
+    /// violate the round-prefix invariant after a member's logs have
+    /// already been cleared (e.g. by the swap path). Delegates to the
+    /// pure `supersetLogsToInvalidate(...)` helper to decide which
+    /// `(slotID, setIndex)` pairs are extraneous, then mirrors that
+    /// clear across every in-memory + persisted store the swap path
+    /// also touches for the replaced slot itself.
+    @MainActor
+    private func cascadeClearSupersetRoundOrderViolations(in block: PlanBlock)
+    {
+        let slotOrder = block.exercises.map(\.routineSlotID)
+        var setCounts: [UUID: Int] = [:]
+        for ex in block.exercises {
+            setCounts[ex.routineSlotID] = effectiveSetCount(
+                for: ex, resolvedTemplates: ex.templates
+            )
+        }
+        var loggedBySlot: [UUID: Set<Int>] = [:]
+        for slot in slotOrder {
+            loggedBySlot[slot] = loggedByExercise[slot] ?? []
+        }
+        let extraneous = supersetLogsToInvalidate(
+            slotOrder: slotOrder,
+            setCounts: setCounts,
+            loggedBySlot: loggedBySlot
+        )
+        guard !extraneous.isEmpty else { return }
+
+        for (cSlotID, indices) in extraneous {
+            // Look up the *current* exercise ID for the slot so legacy
+            // drop-draft keys (which key on Exercise.id, not slotID)
+            // can be defensively swept.
+            guard let cPlanEx = block.exercises.first(where: {
+                $0.routineSlotID == cSlotID
+            }) else { continue }
+            let exerciseID = cPlanEx.currentExerciseID
+            for setIndex in indices.sorted() {
+                clearLoggedSetForSupersetCascade(
+                    slotID: cSlotID,
+                    exerciseID: exerciseID,
+                    setIndex: setIndex
+                )
+            }
+        }
+
+        syncToGuardCaches()
+    }
+
+    /// Phase 6.C3 — cascade-clear a single logged set for a slot in
+    /// the same superset block as the just-swapped slot. Mirrors the
+    /// state cleared by the swap path for its own slot:
+    ///   - persisted `SetLog` rows (parent + drop sub-logs) on the
+    ///     `WorkoutItem`
+    ///   - `loggedByExercise[slotID]` membership
+    ///   - `dropsLoggedByExercise[slotID][setIndex]`
+    ///   - `ParentDraftStore` (reps/weight/duration drafts)
+    ///   - `DropWeightDraftStore` and the in-memory drop input dicts
+    ///     under the new `<slotID>_<set>_` key prefix; defensively
+    ///     also sweeps any legacy `<exerciseID>_<set>_` prefix on disk
+    ///     (matches the sweep in `undoSetLog(...)`)
+    /// Caller is responsible for the trailing `ctx.save()` /
+    /// `syncToGuardCaches()` (we batch one save at the end of the
+    /// swap path).
+    @MainActor
+    private func clearLoggedSetForSupersetCascade(
+        slotID: UUID,
+        exerciseID: UUID,
+        setIndex: Int
+    ) {
+        if let wi = itemsByExerciseID[slotID] {
+            wi.setLogs.removeAll { $0.indexInExercise == setIndex }
+        }
+        if loggedByExercise[slotID] != nil {
+            loggedByExercise[slotID]?.remove(setIndex)
+        }
+        dropsLoggedByExercise[slotID]?.removeValue(forKey: setIndex)
+
+        parentDraftStore?.clear(slotID: slotID, setIndex: setIndex)
+
+        let newPrefix = "\(slotID)_\(setIndex)_"
+        let affectedKeys = Set(
+            dropWeightInput.keys.filter { $0.hasPrefix(newPrefix) }
+        ).union(
+            dropRepsInput.keys.filter { $0.hasPrefix(newPrefix) }
+        )
+        for key in affectedKeys {
+            dropWeightInput.removeValue(forKey: key)
+            dropWeightUserEdited.remove(key)
+            dropRepsInput.removeValue(forKey: key)
+            dropWeightDraftStore?.clear(slotKey: key)
+        }
+        if let store = dropWeightDraftStore {
+            let legacyPrefix = "\(exerciseID)_\(setIndex)_"
+            for legacyKey in store.loadAll().keys
+            where legacyKey.hasPrefix(legacyPrefix) {
+                store.clear(slotKey: legacyKey)
+            }
+        }
     }
 
     private func applyExerciseSwapsToRoutine() {
