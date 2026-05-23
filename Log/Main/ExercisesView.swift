@@ -435,6 +435,12 @@ struct ExerciseDetailView: View {
 
     @FocusState private var focusedField: String?
 
+    fileprivate static let canonicalBodyParts: [String] = [
+        "Chest", "Back", "Shoulders", "Arms", "Biceps", "Triceps",
+        "Legs", "Quads", "Hamstrings", "Glutes", "Calves",
+        "Core", "Full Body", "Cardio"
+    ]
+
     var body: some View {
         DetailForm
             .probe("ExerciseDetail.Form")
@@ -471,6 +477,31 @@ struct ExerciseDetailView: View {
                     .submitLabel(.done)
                     .onSubmit { focusedField = nil }
                     .disabled(isLocked)
+
+                NavigationLink {
+                    BodyPartPicker(
+                        current: exercise.bodyPart,
+                        canonicalOptions: ExerciseDetailView
+                            .canonicalBodyParts,
+                        onSelect: { newValue in
+                            let trimmed = newValue?.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+                            exercise.bodyPart =
+                                (trimmed?.isEmpty ?? true) ? nil : trimmed
+                        }
+                    )
+                } label: {
+                    HStack {
+                        Text("Body Part")
+                            .font(.dsBody)
+                        Spacer()
+                        Text(exercise.bodyPart ?? "Not set")
+                            .font(.dsBodySecondary)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(isLocked)
 
                 TextField(
                     "Notes",
@@ -557,5 +588,103 @@ private struct LockBadge: View {
             .clipShape(Capsule())
             .foregroundStyle(.secondary)
             .accessibilityLabel("Exercise currently in use")
+    }
+}
+
+// MARK: - Body Part Picker
+
+/// Push-style picker for `Exercise.bodyPart`. Lists the canonical 14 options
+/// plus "Not set" and an "Other…" entry that opens a free-text alert.
+/// Legacy `bodyPart` values that don't match any canonical option are
+/// surfaced as a dedicated row so they remain visible and selectable —
+/// the picker never silently rewrites or hides them.
+private struct BodyPartPicker: View {
+    let current: String?
+    let canonicalOptions: [String]
+    let onSelect: (String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var showOtherEntry = false
+    @State private var otherDraft = ""
+
+    private var legacyCustom: String? {
+        guard
+            let bp = current?.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ),
+            !bp.isEmpty,
+            !canonicalOptions.contains(bp)
+        else { return nil }
+        return bp
+    }
+
+    var body: some View {
+        List {
+            Section {
+                selectionRow(label: "Not set", value: nil)
+                if let legacy = legacyCustom {
+                    selectionRow(label: legacy, value: legacy)
+                }
+                ForEach(canonicalOptions, id: \.self) { name in
+                    selectionRow(label: name, value: name)
+                }
+            }
+
+            Section {
+                Button {
+                    otherDraft = ""
+                    showOtherEntry = true
+                } label: {
+                    HStack {
+                        Text("Other…")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "pencil")
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+            }
+        }
+        .navigationTitle("Body Part")
+        .alert("Custom Body Part", isPresented: $showOtherEntry) {
+            TextField("e.g. Forearms", text: $otherDraft)
+                .textInputAutocapitalization(.words)
+            Button("Save") {
+                let trimmed = otherDraft.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                guard !trimmed.isEmpty else { return }
+                onSelect(trimmed)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enter a body part not in the list.")
+        }
+    }
+
+    @ViewBuilder
+    private func selectionRow(label: String, value: String?) -> some View {
+        Button {
+            onSelect(value)
+            dismiss()
+        } label: {
+            HStack {
+                Text(label)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if isSelected(value) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+    }
+
+    private func isSelected(_ value: String?) -> Bool {
+        if value == nil { return current == nil }
+        return value == current
     }
 }
