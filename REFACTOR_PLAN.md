@@ -1218,25 +1218,75 @@ Path A's safety observation step was performed against the maintainer's local de
 
 ### Phase 10 — Equipment & setup migration + Exercise UI polish
 
-Move equipment/setup to Exercise-level and fill UI gaps.
+Move equipment/setup to Exercise-level and fill the Exercise-detail UI gaps left by the Phase 9-D Sets-editor removal.
 
-**Pending:**
+**Planning audit (2026-05-23):** Phase 10 reshaped into six dependency-ordered sub-slices (10-A through 10-F). Two pieces of stale wording from the original Phase-10 draft were corrected during this audit and are noted inline below: (a) the slot→Exercise backfill is **defensive**, not data-rescue — `SlotPrescription.equipment` / `setupNotes` have no known UI write path (no editor in `Log/Main/Routines/PrescriptionFields.swift`, `RoutineEditor`, or `ActiveWorkoutView`); the only consumer is `StartWorkoutFromRoutineView.PrescriptionSnapshotPayload.init(from: SlotPrescription)`, which reads them at session start and never writes them. Existing rows are expected to be all-nil in production, so 10-D is a one-shot safety net rather than a load-bearing migration. (b) The original "deprecate and remove OR keep as optional slot-level override" wording was ambiguous and is now split: **10-E removes the slot fields**; any slot-level override is **10-F**, optional, gated on a real use case. (c) The acceptance criterion for snapshot immutability is now explicit: `PlannedPrescriptionSnapshot` captures `Exercise.equipmentType` / `setupDefaults` **at session start**, and later edits to those Exercise-level fields do **not** mutate existing workout snapshots or history rows.
 
-- [ ] Add `equipmentType: String?` and `setupDefaults: String?` to Exercise model
-- [ ] Migrate existing `SlotPrescription.equipment` / `setupNotes` values to Exercise fields (one-time backfill)
-- [ ] Deprecate and remove `equipment` / `setupNotes` from `SlotPrescription` (or keep as optional slot-level override)
-- [ ] Add equipment and setup display/editing in Exercise detail UI
-- [ ] Display `bodyPart` / muscle group in Exercise detail screens
-- [ ] Optional: slot-level equipment override field
+**Sub-slice roadmap:**
+
+**10-A — bodyPart read+edit in ExerciseDetailView (next recommended implementation slice):**
+
+- [ ] Add a "Body Part" `TextField` (or muscle-group picker, scope TBD at slice start) to `ExerciseDetailView.DetailForm` (`Log/Main/ExercisesView.swift:453-498`) bound to `$exercise.bodyPart` via the existing `Binding(_:replacingNilWith:)` helper (the same pattern used today for `$exercise.notes`)
+- [ ] `.disabled(isLocked)` mirror of the other Info-section editors so locked-routine semantics are preserved
+- [ ] No schema change (field already declared at `Entities.swift:10`); no migration; no test additions required per CLAUDE.md's Build & Test Policy (pure UI on existing optional field)
+- [ ] **Risk: very low.** Single file touched. Build-only safety gate sufficient. Independent of the equipment/setup migration chain
+- [ ] Manual regression: edit body part → returns to list → row label at `ExercisesView.swift:252` reflects the new value; close + reopen detail to verify persistence (relies on the existing `onDisappear { try? ctx.save() }`)
+- [ ] Proposed commit scope: `feat(exercise): edit body part in detail view`
+
+**10-B — Add `Exercise.equipmentType` + `Exercise.setupDefaults` model fields:**
+
+- [ ] Add `var equipmentType: String?` and `var setupDefaults: String?` to `Exercise` in `Log/Models/Entities.swift` (additive, nil defaults; matches every additive `@Model` change since Phase 3.1, so SwiftData lightweight migration handles it without a migration plan)
+- [ ] Extend the `Exercise.init(...)` with the two new optional parameters
+- [ ] No schema-mirror update needed in `LogTests/SwiftDataTestHarness.swift` (Exercise is already registered)
+- [ ] **Risk: low.** Pure additive schema. CLAUDE.md requires tests on schema changes — add a 1-case round-trip test (mirror of `WorkoutModelTests`): write `Exercise(equipmentType:setupDefaults:)`, save, refetch, assert. Optional but recommended: pin that legacy rows with `nil` for both fields decode safely (canary against future migration drift)
+- [ ] Proposed commit scope: `feat(model): add Exercise.equipmentType and setupDefaults`
+
+**10-C — Equipment + Setup editor rows in ExerciseDetailView:**
+
+- [ ] Add "Equipment" and "Setup defaults" `TextField` rows to `ExerciseDetailView.DetailForm` bound to the two new optional fields via `Binding(_:replacingNilWith:)`. Place them in the existing Info section after Notes / Time-based
+- [ ] `.disabled(isLocked)` mirror on each
+- [ ] **Risk: very low.** UI only; depends on 10-B's schema. Build-only gate
+- [ ] Manual regression: edit both fields → relaunch → values persist; locked-routine path disables editors
+- [ ] Proposed commit scope: `feat(exercise): edit equipment and setup defaults in detail view`
+
+**10-D — Defensive one-time backfill (slot → Exercise):**
+
+- [ ] Add `BackfillService.migrateEquipmentSetupToExercise(in: ctx)` (`Log/Services/BackfillService.swift`) — sibling of the existing `hydrateEmptySlotPrescriptions` and `purgeOrphanSetTemplates` helpers. Walk every `RoutineExercise`; for any slot whose `prescription?.equipment` or `prescription?.setupNotes` is non-nil AND whose linked `exercise.equipmentType` / `setupDefaults` is currently nil, copy the value across. Last-writer-wins protection: NEVER overwrite a non-nil Exercise field
+- [ ] Wire in `BootstrapRoot.body.task` after `BackfillService.hydrateEmptySlotPrescriptions(in: ctx)` (every `RoutineExercise` has a non-nil `SlotPrescription` by that point) and before `purgeOrphanSetTemplates`
+- [ ] **Defensive only — not data-rescue.** No UI today writes `SlotPrescription.equipment` / `setupNotes`; the only consumer is `PrescriptionSnapshotPayload.init(from: SlotPrescription)` (`Log/Main/StartWorkoutFromRoutineView.swift:143`). Production rows are expected to be all-nil. Helper exists as a safety net for any test-seeded or future-imported data, and as the canonical migration record so 10-E can run without leaving the door open
+- [ ] **Risk: low** (per CLAUDE.md: persistence change → tests required). Add ~4 cases on `SwiftDataTestHarness`: (a) empty-store no-op; (b) non-nil slot value copies to linked Exercise when Exercise field is nil; (c) does NOT overwrite a non-nil Exercise field; (d) idempotent — second invocation produces no diff
+- [ ] Manual regression: cold launch on an existing simulator install → no errors → spot-check a handful of Exercises (almost certainly unchanged in practice)
+- [ ] Proposed commit scope: `chore(migration): backfill equipment and setup from slot to exercise`
+
+**10-E — Drop `SlotPrescription.equipment` + `setupNotes`; snapshot reads from Exercise at session start:**
+
+- [ ] Remove `equipment: String?` and `setupNotes: String?` from `SlotPrescription` in `Log/Models/Entities.swift` (and from its initializer). SwiftData lightweight migration handles the property drop, mirroring the Phase 9-E2 `Exercise.defaultTemplates` drop
+- [ ] **Keep** `PlannedPrescriptionSnapshot.equipment` + `setupNotes` fields — they continue to record session-start values for immutability. Repoint the convenience initializer: `convenience init(from source: SlotPrescription)` becomes either `init(from source: SlotPrescription, exercise: Exercise?)` or a new `init(slot:exercise:)` that reads `equipment` / `setupNotes` from `exercise.equipmentType` / `exercise.setupDefaults` instead of from the (now-deleted) slot fields
+- [ ] Update `PrescriptionSnapshotPayload.init(from:)` at `Log/Main/StartWorkoutFromRoutineView.swift:143` to thread the `Exercise` through alongside the `SlotPrescription`. Same pattern for `init(from snapshot:)` (resume path) — that one already reads from the snapshot, no source change needed
+- [ ] Update test fixtures: `LogTests/SessionSnapshotInvariantTests.swift` (lines 69, 92, 474 — currently seed via `SlotPrescription.equipment` / `setupNotes`) and `LogTests/SessionPlanResolverTests.swift` (the test-only `PrescriptionSnapshotPayload` memberwise extension at line 348 — keep the parameter on the test init for snapshot-immutability assertions). Update assertion sites at `SessionSnapshotInvariantTests.swift:165-166`, `:192-193`, `:386-387`, `:441-442` to seed from Exercise instead
+- [ ] **New test required** (acceptance criterion 6): `testEditingExerciseEquipment_DoesNotMutateExistingSnapshot` — start a workout (snapshot captures `equipmentType`), then edit `Exercise.equipmentType`, refetch the `PlannedPrescriptionSnapshot`, assert the snapshot field is unchanged. Mirrors the no-silent-mutation invariant already pinned for `SlotPrescription` fields by 7.8
+- [ ] **Risk: medium.** Subtractive schema + snapshot contract change; touches the test surface 7.8 pinned. Ship after 10-D has run on TestFlight for at least one release (precedent: Phase 9 required at least one release between 9-A backfill ship and 9-C Tier-3 removal so the backfill ran on real devices first)
+- [ ] Manual regression: start workout → snapshot captures `Exercise.equipmentType` at start; edit `Exercise.equipmentType` mid-workout → finish → History → snapshot still shows pre-edit value
+- [ ] Proposed commit scope: `refactor(model): drop SlotPrescription.equipment and setupNotes; snapshot reads from Exercise`
+
+**10-F (optional) — Slot-level equipment override:**
+
+- [ ] **Skip unless** a concrete use case surfaces (e.g. "same Exercise with cable in routine A, dumbbell in routine B"). Adding it speculatively conflicts with the "Don't add features beyond what the task requires" rule in CLAUDE.md
+- [ ] If pursued, add `var equipmentOverride: String?` to `SlotPrescription` (new field, additive — not a revival of the deleted `equipment` field), surface it as an optional row in the slot's `SlotPrescriptionSection` editor in `Log/Main/Routines/PrescriptionFields.swift`, and update the snapshot to prefer `slot.equipmentOverride ?? exercise.equipmentType`
 
 **Acceptance criteria:**
 
-- [ ] Exercise detail screen shows `bodyPart` / muscle group (read + edit)
-- [ ] Equipment and setup are edited on Exercise (not SlotPrescription) after migration
-- [ ] `SlotPrescription.equipment` / `setupNotes` either removed or demoted to "override only"
-- [ ] Migration backfill is idempotent and non-destructive
-- [ ] Snapshots remain immutable: `PlannedPrescriptionSnapshot` equipment/setup reflect session-start state
-- [ ] No silent mutations: editing Exercise-level equipment does not propagate to history
+- [ ] Exercise detail screen shows `bodyPart` / muscle group (read + edit) (10-A)
+- [ ] Exercise detail screen shows Equipment and Setup defaults (read + edit) (10-C)
+- [ ] Equipment and Setup are edited on `Exercise` (not `SlotPrescription`) after migration (10-B, 10-C, 10-E)
+- [ ] `SlotPrescription.equipment` / `setupNotes` removed from the schema (10-E). Slot-level override is NOT shipped as part of Phase 10 unless 10-F is explicitly green-lit
+- [ ] Defensive migration backfill is idempotent and non-destructive (10-D)
+- [ ] `PlannedPrescriptionSnapshot.equipment` / `setupNotes` capture `Exercise.equipmentType` / `setupDefaults` **at session start** (10-E)
+- [ ] No silent mutations: editing `Exercise.equipmentType` / `setupDefaults` after a workout starts does **not** propagate to that workout's snapshot or to History rows for any prior workout (10-E test)
+
+**Phase 7 dependency check:** none of the remaining Phase 7 optional / performance items (end-to-end cold-restart resume test, history-grouping-survives-rename test, history `body` perf audit, summary-field caching, `resolvedTemplates(in:)` fetch audit, `RestTimer.stableNotificationID` nil-slotID, host-less `LogTests` conversion) block Phase 10. They touch independent surfaces; Phase 10 may proceed without them.
+
+**Next recommended implementation slice: 10-A.** Rationale: closes one acceptance criterion immediately; zero schema/migration/test work; single file (`Log/Main/ExercisesView.swift`); independent of the equipment/setup migration chain; lowest blast radius. After 10-A ships, the natural order is 10-B → 10-C → 10-D → 10-E, with 10-F left optional.
 
 ### Phase 11 — View decomposition / file architecture
 
