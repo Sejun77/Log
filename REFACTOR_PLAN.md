@@ -1238,13 +1238,19 @@ Move equipment/setup to Exercise-level and fill the Exercise-detail UI gaps left
 - [x] Full XCTest suite **268/268 pass in ~2.07s** (matches the post-7.8 baseline; no test count change since this slice is pure UI)
 - [x] Manual regression passed (canonical-pick, legacy-preserve, `Other…` round-trip, `Other…` Cancel/empty Save no-op, locked-exercise disable, create + delete flows, keyboard Done toolbar still works)
 
-**10-B — Add `Exercise.equipmentType` + `Exercise.setupDefaults` model fields:**
+**Completed (10-B — Exercise.equipmentType + setupDefaults model fields, 2026-05-23):**
 
-- [ ] Add `var equipmentType: String?` and `var setupDefaults: String?` to `Exercise` in `Log/Models/Entities.swift` (additive, nil defaults; matches every additive `@Model` change since Phase 3.1, so SwiftData lightweight migration handles it without a migration plan)
-- [ ] Extend the `Exercise.init(...)` with the two new optional parameters
-- [ ] No schema-mirror update needed in `LogTests/SwiftDataTestHarness.swift` (Exercise is already registered)
-- [ ] **Risk: low.** Pure additive schema. CLAUDE.md requires tests on schema changes — add a 1-case round-trip test (mirror of `WorkoutModelTests`): write `Exercise(equipmentType:setupDefaults:)`, save, refetch, assert. Optional but recommended: pin that legacy rows with `nil` for both fields decode safely (canary against future migration drift)
-- [ ] Proposed commit scope: `feat(model): add Exercise.equipmentType and setupDefaults`
+- [x] Added `var equipmentType: String?` and `var setupDefaults: String?` to `Exercise` in `Log/Models/Entities.swift`. Placed between `notes` and `isCustom` to group the string-optional metadata together. A Phase 10-B comment block above the new fields explains the lightweight-migration safety (nil decode for legacy rows) and the deferred-removal contract for `SlotPrescription.equipment` / `setupNotes` (touched by 10-D, removed by 10-E)
+- [x] Extended `Exercise.init(...)` to `init(name:bodyPart:notes:equipmentType:setupDefaults:isCustom:)` — the two new parameters default to `nil` and were inserted in property order. **All ~25 existing call sites continue to compile unchanged**: a `grep` across `Log/` + `LogTests/` + `LogUITests/` confirmed every `Exercise(...)` invocation uses named arguments (`Exercise(name:)`, `Exercise(name:isCustom:)`), so inserting the new defaulted params in the middle of the parameter list is invisible to callers
+- [x] No `LogTests/SwiftDataTestHarness.swift` schema-mirror update needed (`Exercise.self` is already registered; the schema list pins types, not properties)
+- [x] **SwiftData lightweight migration handles the schema change with no migration plan**. Both new fields are declared `String?` with no SwiftData default attribute — legacy rows decode with `nil` for both. Pattern matches every additive `@Model` change since Phase 3.1 (e.g. `Workout.routineVariantID` in 6.B Slice A, `Exercise.isTimeBased` in Phase 3.6)
+- [x] Added `LogTests/ExerciseModelTests.swift` (66 LOC, **4 XCTest cases on `SwiftDataTestHarness`**, all green in 0.049s) modeled on `WorkoutModelTests`: (1) `testExerciseDefaultsEquipmentAndSetupToNil` — `Exercise(name:)` constructs with both new fields nil (constructor-default canary); (2) `testExerciseAcceptsEquipmentAndSetupViaInit` — explicit-value init wiring works through the `@Bindable` surface before save; (3) `testExerciseEquipmentAndSetupRoundTripThroughStore` — write → `ctx.save()` → `FetchDescriptor<Exercise>()` → assert both fields persist; (4) `testExerciseCanBePersistedWithNilEquipmentAndSetup` — simulates a legacy pre-10-B row via the old-shape `Exercise(name:isCustom:)` call, persists, refetches, asserts both fields decoded as nil (the schema canary against future migration drift)
+- [x] **No UI change** — `ExercisesView.swift` / `ExerciseDetailView` untouched; equipment/setup editor rows are 10-C work
+- [x] **No snapshot-source change** — `PlannedPrescriptionSnapshot.init(from: SlotPrescription)` and `PrescriptionSnapshotPayload.init(from: SlotPrescription)` still read `equipment` / `setupNotes` from the slot, unchanged. The repoint to `Exercise` is 10-E work
+- [x] **No `SlotPrescription` change** — `equipment` / `setupNotes` stay on `SlotPrescription` for 10-D backfill and 10-E removal
+- [x] No service / backfill / lifecycle / rest / history changes. `BackfillService.swift` was not touched in this slice (`migrateEquipmentSetupToExercise` is 10-D)
+- [x] Build green (`xcodebuild ... -destination 'generic/platform=iOS Simulator' build` → `** BUILD SUCCEEDED **`). Two warnings present are pre-existing (`WarmupSchemeEditor.swift:90` unused `scheme`, `RoutineEditor.swift:314` unused `ex`) — no new warnings introduced
+- [x] Full XCTest suite **272/272 pass in ~2.09s** (was 268; +4 from `ExerciseModelTests`). No existing tests rewritten; no fixtures modified
 
 **10-C — Equipment + Setup editor rows in ExerciseDetailView:**
 
@@ -1291,7 +1297,7 @@ Move equipment/setup to Exercise-level and fill the Exercise-detail UI gaps left
 
 **Phase 7 dependency check:** none of the remaining Phase 7 optional / performance items (end-to-end cold-restart resume test, history-grouping-survives-rename test, history `body` perf audit, summary-field caching, `resolvedTemplates(in:)` fetch audit, `RestTimer.stableNotificationID` nil-slotID, host-less `LogTests` conversion) block Phase 10. They touch independent surfaces; Phase 10 may proceed without them.
 
-**Next recommended implementation slice: 10-B** (10-A shipped 2026-05-23). Rationale: 10-B is the schema prerequisite for 10-C and 10-D; additive optional fields with SwiftData lightweight migration; single file (`Log/Models/Entities.swift`) plus a 1-case round-trip test per CLAUDE.md's Build & Test Policy. After 10-B ships, the natural order is 10-C → 10-D → 10-E, with 10-F left optional.
+**Next recommended implementation slice: 10-C** (10-A and 10-B both shipped 2026-05-23). Rationale: 10-C is the UI consumer of the 10-B schema additions — a small, build-only-gated slice that closes one Phase 10 acceptance criterion ("Exercise detail screen shows Equipment and Setup defaults (read + edit)"). Single file (`Log/Main/ExercisesView.swift`); zero new tests required per CLAUDE.md's Build & Test Policy (pure UI on optional fields whose schema-canary coverage is already in `ExerciseModelTests`). After 10-C ships, the order is 10-D → 10-E, with 10-F left optional.
 
 ### Phase 11 — View decomposition / file architecture
 
