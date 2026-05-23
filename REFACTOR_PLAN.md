@@ -1224,14 +1224,19 @@ Move equipment/setup to Exercise-level and fill the Exercise-detail UI gaps left
 
 **Sub-slice roadmap:**
 
-**10-A — bodyPart read+edit in ExerciseDetailView (next recommended implementation slice):**
+**Completed (10-A — bodyPart read+edit in ExerciseDetailView, picker-based, 2026-05-23):**
 
-- [ ] Add a "Body Part" `TextField` (or muscle-group picker, scope TBD at slice start) to `ExerciseDetailView.DetailForm` (`Log/Main/ExercisesView.swift:453-498`) bound to `$exercise.bodyPart` via the existing `Binding(_:replacingNilWith:)` helper (the same pattern used today for `$exercise.notes`)
-- [ ] `.disabled(isLocked)` mirror of the other Info-section editors so locked-routine semantics are preserved
-- [ ] No schema change (field already declared at `Entities.swift:10`); no migration; no test additions required per CLAUDE.md's Build & Test Policy (pure UI on existing optional field)
-- [ ] **Risk: very low.** Single file touched. Build-only safety gate sufficient. Independent of the equipment/setup migration chain
-- [ ] Manual regression: edit body part → returns to list → row label at `ExercisesView.swift:252` reflects the new value; close + reopen detail to verify persistence (relies on the existing `onDisappear { try? ctx.save() }`)
-- [ ] Proposed commit scope: `feat(exercise): edit body part in detail view`
+- [x] Added Body Part row to `ExerciseDetailView.DetailForm` (`Log/Main/ExercisesView.swift`). **Slice initially shipped as a free-text `TextField` (the lowest-cost path the planning audit had flagged), then refined to a push-style picker the same day** after a UX requirement landed: body parts should be selected from a predefined list, not typed freely
+- [x] **Picker UI**: the row is a `NavigationLink` whose label shows `"Body Part"` + `exercise.bodyPart ?? "Not set"` (`.dsBodySecondary`, `.secondary` foreground) + chevron. Destination is a new `private struct BodyPartPicker` (~95 LOC, appended after `LockBadge` at the file end) presenting a `List` with two sections: (1) selection rows — `Not set` → optional legacy-custom row → 14 canonical options in this order: `Chest, Back, Shoulders, Arms, Biceps, Triceps, Legs, Quads, Hamstrings, Glutes, Calves, Core, Full Body, Cardio` — with a trailing tinted `checkmark` SF Symbol on the currently selected row; (2) a single `Other…` button that opens an iOS `.alert` with a `TextField` (`.textInputAutocapitalization(.words)`) for free-text custom entry
+- [x] **Canonical list location**: `fileprivate static let canonicalBodyParts: [String]` on `ExerciseDetailView`. This is the first canonical body-part enumeration in the codebase (`grep` for "Chest"/"Shoulders"/"Hamstrings"/"Glutes" across `Log/` confirmed no prior list)
+- [x] **Legacy/custom value preservation** — the picker **never silently rewrites or hides** non-canonical values. `BodyPartPicker.legacyCustom` computes a non-empty, non-canonical `current` value and inserts it between `Not set` and the canonical options. Combined with the unchanged detail-row label (always reads `exercise.bodyPart ?? "Not set"`), an Exercise carrying e.g. `"Forearms"` opens the picker showing `Not set / Forearms ✓ / Chest / Back / …` and can be kept by simply backing out. Case-sensitive — `"chest"` (lowercase legacy) surfaces as a custom row distinct from canonical `Chest`. The same path also surfaces values just saved via `Other…` as legacy rows on the next open, so custom entries round-trip
+- [x] **Save semantics**: tapping any selection row calls `onSelect(value)` → writes `exercise.bodyPart` (trimmed whitespace; empty collapses to `nil` matching the prior `Binding(_:replacingNilWith:)` semantics) → `dismiss()`. The Form's existing `onDisappear { try? ctx.save() }` persists. The `Other…` alert's `Save` button enforces `guard !trimmed.isEmpty else { return }` so whitespace-only or empty inputs are silent no-ops. `Cancel` does nothing
+- [x] **`.disabled(isLocked)` mirror** preserved on the `NavigationLink`. When locked, the row dims and chevron grays out, taps don't push; the Form remains scrollable. Matches Name/Notes/Time-based lock treatment
+- [x] **Behavior preserved end-to-end**: Name editing, Notes editing, Time-based toggle, exercise create flow (`addExercise()` at `ExercisesView.swift:377` still creates rows with `bodyPart = nil` → label shows "Not set"), delete flow + locked-delete alert, list row display at `ExercisesView.swift:252`, keyboard "Done" toolbar (still relevant for Name/Notes — picker push is keyboard-free except inside the `Other…` alert which uses iOS's built-in alert keyboard). No model changes
+- [x] **No schema change** (field already declared at `Entities.swift:10`); no migration; no service changes; no test additions required per CLAUDE.md's Build & Test Policy (pure UI on existing optional field)
+- [x] Build green (`xcodebuild ... -destination 'generic/platform=iOS Simulator' build` → `** BUILD SUCCEEDED **`). Two warnings present in the build are pre-existing (`WarmupSchemeEditor.swift:90` unused `scheme`, `RoutineEditor.swift:314` unused `ex`) — no new warnings introduced
+- [x] Full XCTest suite **268/268 pass in ~2.07s** (matches the post-7.8 baseline; no test count change since this slice is pure UI)
+- [x] Manual regression passed (canonical-pick, legacy-preserve, `Other…` round-trip, `Other…` Cancel/empty Save no-op, locked-exercise disable, create + delete flows, keyboard Done toolbar still works)
 
 **10-B — Add `Exercise.equipmentType` + `Exercise.setupDefaults` model fields:**
 
@@ -1276,7 +1281,7 @@ Move equipment/setup to Exercise-level and fill the Exercise-detail UI gaps left
 
 **Acceptance criteria:**
 
-- [ ] Exercise detail screen shows `bodyPart` / muscle group (read + edit) (10-A)
+- [x] Exercise detail screen shows `bodyPart` / muscle group (read + edit) (10-A — shipped 2026-05-23 as a picker with legacy/custom value preservation)
 - [ ] Exercise detail screen shows Equipment and Setup defaults (read + edit) (10-C)
 - [ ] Equipment and Setup are edited on `Exercise` (not `SlotPrescription`) after migration (10-B, 10-C, 10-E)
 - [ ] `SlotPrescription.equipment` / `setupNotes` removed from the schema (10-E). Slot-level override is NOT shipped as part of Phase 10 unless 10-F is explicitly green-lit
@@ -1286,7 +1291,7 @@ Move equipment/setup to Exercise-level and fill the Exercise-detail UI gaps left
 
 **Phase 7 dependency check:** none of the remaining Phase 7 optional / performance items (end-to-end cold-restart resume test, history-grouping-survives-rename test, history `body` perf audit, summary-field caching, `resolvedTemplates(in:)` fetch audit, `RestTimer.stableNotificationID` nil-slotID, host-less `LogTests` conversion) block Phase 10. They touch independent surfaces; Phase 10 may proceed without them.
 
-**Next recommended implementation slice: 10-A.** Rationale: closes one acceptance criterion immediately; zero schema/migration/test work; single file (`Log/Main/ExercisesView.swift`); independent of the equipment/setup migration chain; lowest blast radius. After 10-A ships, the natural order is 10-B → 10-C → 10-D → 10-E, with 10-F left optional.
+**Next recommended implementation slice: 10-B** (10-A shipped 2026-05-23). Rationale: 10-B is the schema prerequisite for 10-C and 10-D; additive optional fields with SwiftData lightweight migration; single file (`Log/Models/Entities.swift`) plus a 1-case round-trip test per CLAUDE.md's Build & Test Policy. After 10-B ships, the natural order is 10-C → 10-D → 10-E, with 10-F left optional.
 
 ### Phase 11 — View decomposition / file architecture
 
