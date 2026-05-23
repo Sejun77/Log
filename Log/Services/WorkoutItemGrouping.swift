@@ -8,13 +8,14 @@ import Foundation
 ///     one-or-more members sharing the same `sourceBlockSlotID`), or
 ///   * a legacy item with no snapshot fields (`isSuperset == false`,
 ///     `sourceBlockSlotID == nil`, one member — renders flat under the
-///     future Phase 6.C2 display path, matching pre-6.C1 behavior).
-struct WorkoutItemGroup {
+///     Phase 6.C2 display path, matching pre-6.C1 behavior).
+struct WorkoutItemGroup: Identifiable {
     var items: [WorkoutItem]
     /// `true` only when the source block was a superset *and* the items
     /// in this group all share its `sourceBlockSlotID`. A superset block
-    /// with a single surviving member still reports `true` — display
-    /// code (Phase 6.C2) can choose how to render single-member supersets.
+    /// with a single surviving member still reports `true` — the
+    /// Phase 6.C2 display path renders single-member supersets as flat
+    /// singletons to avoid a "Superset" header with only one member.
     var isSuperset: Bool
     /// Group identity for superset members. `nil` for standalone /
     /// legacy items.
@@ -24,6 +25,37 @@ struct WorkoutItemGroup {
     /// legacy items in the workout's chronological order of first
     /// appearance).
     var sourceBlockOrder: Int?
+
+    /// Stable identity for SwiftUI `ForEach` diffing (Phase 6.C2 — the
+    /// History detail consumes `groupItemsBySourceBlock(...)` and needs
+    /// per-group ids so members of one superset don't get conflated
+    /// with members of another in the diff).
+    ///
+    /// Precedence:
+    ///   1. Superset groups (`isSuperset == true` AND
+    ///      `sourceBlockSlotID != nil`) → the block UUID. Shared
+    ///      across the group's members and unique across the workout's
+    ///      superset blocks.
+    ///   2. Otherwise (singleton / legacy) → the first item's
+    ///      `ObjectIdentifier`. Singleton groups have exactly one
+    ///      member, so this is one-to-one. Uses `ObjectIdentifier`
+    ///      rather than `persistentModelID` because SwiftData's
+    ///      temporary (unsaved, in-memory) persistent identifiers all
+    ///      stringify to the same value, which would collapse two
+    ///      distinct in-memory items into the same `ForEach` id in
+    ///      preview / test contexts.
+    ///   3. Empty group → a fresh `UUID()`. Unreachable in practice
+    ///      (`groupItemsBySourceBlock` never produces empty groups)
+    ///      but keeps the property total.
+    var id: AnyHashable {
+        if isSuperset, let block = sourceBlockSlotID {
+            return AnyHashable(block)
+        }
+        if let first = items.first {
+            return AnyHashable(ObjectIdentifier(first))
+        }
+        return AnyHashable(UUID())
+    }
 }
 
 /// Partition `WorkoutItem`s into source-block groups, then sort.

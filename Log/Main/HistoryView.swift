@@ -468,54 +468,31 @@ private struct WorkoutDetailView: View {
                 Text("Overview")
             }
 
-            ForEach(workout.items, id: \.id) { item in
-                Section {
-                    let logs = item.setLogs.sorted {
-                        if $0.indexInExercise != $1.indexInExercise {
-                            return $0.indexInExercise < $1.indexInExercise
+            // Phase 6.C2 — group items by source block snapshot.
+            // Superset blocks with ≥2 surviving members render as one
+            // "Superset" section with each member labeled inline.
+            // Singletons, single-member supersets, and legacy nil-
+            // snapshot items render exactly as before (one Section per
+            // item, header = exercise name).
+            let groups = groupItemsBySourceBlock(workout.items)
+            ForEach(groups) { group in
+                if group.isSuperset && group.items.count >= 2 {
+                    Section {
+                        ForEach(group.items, id: \.id) { item in
+                            supersetMemberHeader(
+                                name: exerciseName(for: item)
+                            )
+                            setLogList(for: item)
                         }
-                        return ($0.subIndex ?? -1) < ($1.subIndex ?? -1)
+                    } header: {
+                        Text("Superset")
                     }
-                    if logs.isEmpty {
-                        Text("No sets logged")
-                            .font(.dsBodySecondary)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(logs, id: \.id) { log in
-                            HStack {
-                                Text(
-                                    "\(log.indexInExercise + 1). \(log.kindRaw.capitalized)"
-                                )
-                                .font(.dsBody)
-                                Spacer()
-
-                                if let dur = log.durationSeconds, dur > 0 {
-                                    Text("\(dur)s")
-                                        .font(.dsBodySecondary.monospacedDigit())
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    if let w = log.weight, w > 0 {
-                                        let unit =
-                                            Units.weightIsKg ? "kg" : "lb"
-                                        Text(
-                                            "\(Int(w.rounded())) \(unit)"
-                                        )
-                                        .font(
-                                            .dsBodySecondary.monospacedDigit()
-                                        )
-                                        .foregroundStyle(.secondary)
-                                    }
-                                    Text(
-                                        "\(log.reps) rep\(log.reps == 1 ? "" : "s")"
-                                    )
-                                    .font(.dsBodySecondary.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
+                } else if let item = group.items.first {
+                    Section {
+                        setLogList(for: item)
+                    } header: {
+                        Text(exerciseName(for: item))
                     }
-                } header: {
-                    Text(exerciseName(for: item))
                 }
             }
         }
@@ -523,6 +500,69 @@ private struct WorkoutDetailView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(DSColor.bg.ignoresSafeArea())
+    }
+
+    /// Renders the inline label for one exercise inside a "Superset"
+    /// section. Visually subordinate to the section header but more
+    /// prominent than the set-log rows below it, so the member's
+    /// identity is immediately legible without nesting another Section.
+    @ViewBuilder
+    private func supersetMemberHeader(name: String) -> some View {
+        Text(name)
+            .font(.dsSection)
+            .foregroundStyle(DSColor.textPrimary)
+    }
+
+    /// Renders the set-log rows for one `WorkoutItem`. Extracted from
+    /// the pre-6.C2 inline body so the same row layout drives both the
+    /// singleton-section path and the superset-section path — keeps the
+    /// per-row visual identical to flat rendering.
+    @ViewBuilder
+    private func setLogList(for item: WorkoutItem) -> some View {
+        let logs = item.setLogs.sorted {
+            if $0.indexInExercise != $1.indexInExercise {
+                return $0.indexInExercise < $1.indexInExercise
+            }
+            return ($0.subIndex ?? -1) < ($1.subIndex ?? -1)
+        }
+        if logs.isEmpty {
+            Text("No sets logged")
+                .font(.dsBodySecondary)
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(logs, id: \.id) { log in
+                HStack {
+                    Text(
+                        "\(log.indexInExercise + 1). \(log.kindRaw.capitalized)"
+                    )
+                    .font(.dsBody)
+                    Spacer()
+
+                    if let dur = log.durationSeconds, dur > 0 {
+                        Text("\(dur)s")
+                            .font(.dsBodySecondary.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    } else {
+                        if let w = log.weight, w > 0 {
+                            let unit =
+                                Units.weightIsKg ? "kg" : "lb"
+                            Text(
+                                "\(Int(w.rounded())) \(unit)"
+                            )
+                            .font(
+                                .dsBodySecondary.monospacedDigit()
+                            )
+                            .foregroundStyle(.secondary)
+                        }
+                        Text(
+                            "\(log.reps) rep\(log.reps == 1 ? "" : "s")"
+                        )
+                        .font(.dsBodySecondary.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
     }
 }
 
