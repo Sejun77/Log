@@ -9,6 +9,15 @@ final class Exercise {
     var name: String
     var bodyPart: String?
     var notes: String?
+    // Phase 10-B (2026-05-23): definition-level equipment + setup defaults.
+    // Additive optional fields; nil on every legacy row so SwiftData
+    // lightweight migration handles existing stores without a migration
+    // plan. Source of truth for these fields moves to Exercise here;
+    // SlotPrescription.equipment / setupNotes remain in place until
+    // Phase 10-D backfills any non-nil slot values forward and Phase 10-E
+    // removes them.
+    var equipmentType: String?
+    var setupDefaults: String?
     var isCustom: Bool
     var isTimeBased: Bool = false
     /// User-controlled display order on the Exercises tab. Additive (default 0)
@@ -35,12 +44,16 @@ final class Exercise {
         name: String,
         bodyPart: String? = nil,
         notes: String? = nil,
+        equipmentType: String? = nil,
+        setupDefaults: String? = nil,
         isCustom: Bool = true
     ) {
         self.id = UUID()
         self.name = name
         self.bodyPart = bodyPart
         self.notes = notes
+        self.equipmentType = equipmentType
+        self.setupDefaults = setupDefaults
         self.isCustom = isCustom
     }
 }
