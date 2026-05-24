@@ -9,13 +9,13 @@ final class Exercise {
     var name: String
     var bodyPart: String?
     var notes: String?
-    // Phase 10-B (2026-05-23): definition-level equipment + setup defaults.
-    // Additive optional fields; nil on every legacy row so SwiftData
-    // lightweight migration handles existing stores without a migration
-    // plan. Source of truth for these fields moves to Exercise here;
-    // SlotPrescription.equipment / setupNotes remain in place until
-    // Phase 10-D backfills any non-nil slot values forward and Phase 10-E
-    // removes them.
+    // Phase 10-E (2026-05-24): equipment + setup are now sourced
+    // exclusively from `Exercise` here. The matching fields on
+    // `SlotPrescription` were removed; the `PlannedPrescriptionSnapshot`
+    // initializer reads `equipmentType` / `setupDefaults` from the
+    // linked `Exercise` at session start (see `init(from:exercise:)`
+    // below) so later edits to these fields never mutate already-
+    // written workout snapshots or History rows.
     var equipmentType: String?
     var setupDefaults: String?
     var isCustom: Bool
@@ -468,9 +468,11 @@ final class SlotPrescription {
     var durationMaxSeconds: Int?
     var usesDuration: Bool = false
 
-    // Context overrides
-    var equipment: String?
-    var setupNotes: String?
+    // Phase 10-E (2026-05-24): the former `equipment` / `setupNotes`
+    // slot fields were removed. Source of truth lives on `Exercise`
+    // (`equipmentType` / `setupDefaults`); the session-start snapshot
+    // reads from there via `PlannedPrescriptionSnapshot.init(from:exercise:)`.
+    // SwiftData lightweight migration handles the property drop.
 
     // Warmup: reusable across slots (.nullify preserves scheme when prescription deleted)
     @Relationship(deleteRule: .nullify)
@@ -491,9 +493,7 @@ final class SlotPrescription {
         tempo: String? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
-        usesDuration: Bool = false,
-        equipment: String? = nil,
-        setupNotes: String? = nil
+        usesDuration: Bool = false
     ) {
         self.sets = sets
         self.repMin = repMin
@@ -506,8 +506,6 @@ final class SlotPrescription {
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
-        self.equipment = equipment
-        self.setupNotes = setupNotes
         self.techniquePlans = []
     }
 }
@@ -632,8 +630,12 @@ final class PlannedPrescriptionSnapshot {
         self.setupNotes = setupNotes
     }
 
-    /// Build a snapshot by copying fields from a live SlotPrescription.
-    convenience init(from source: SlotPrescription) {
+    /// Build a snapshot by copying fields from a live `SlotPrescription`
+    /// (programming surface) plus the linked `Exercise` (equipment + setup
+    /// source after Phase 10-E). The copy is taken once at session start
+    /// and is durable on the snapshot row: later edits to
+    /// `exercise.equipmentType` / `setupDefaults` do not mutate it.
+    convenience init(from source: SlotPrescription, exercise: Exercise?) {
         self.init(
             sets: source.sets,
             repMin: source.repMin,
@@ -646,8 +648,8 @@ final class PlannedPrescriptionSnapshot {
             durationMinSeconds: source.durationMinSeconds,
             durationMaxSeconds: source.durationMaxSeconds,
             usesDuration: source.usesDuration,
-            equipment: source.equipment,
-            setupNotes: source.setupNotes
+            equipment: exercise?.equipmentType,
+            setupNotes: exercise?.setupDefaults
         )
     }
 }

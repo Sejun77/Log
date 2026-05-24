@@ -52,7 +52,9 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
     /// Build a rep-based `SlotPrescription` with every meaningful field
     /// set so the snapshot can be asserted field-by-field. The values
     /// are deliberately distinctive (no defaults) so a regression that
-    /// dropped a single field would fail loudly.
+    /// dropped a single field would fail loudly. Phase 10-E: equipment
+    /// + setup are sourced from `Exercise`; per-test setup seeds them
+    /// directly on the linked Exercise.
     private func makeRepBasedPrescription() -> SlotPrescription {
         let p = SlotPrescription(
             sets: 4,
@@ -65,9 +67,7 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
             tempo: "3-1-1-0",
             durationMinSeconds: nil,
             durationMaxSeconds: nil,
-            usesDuration: false,
-            equipment: "Barbell",
-            setupNotes: "Bench, narrow grip"
+            usesDuration: false
         )
         context.insert(p)
         return p
@@ -88,9 +88,7 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
             tempo: nil,
             durationMinSeconds: 30,
             durationMaxSeconds: 45,
-            usesDuration: true,
-            equipment: "Mat",
-            setupNotes: nil
+            usesDuration: true
         )
         context.insert(p)
         return p
@@ -140,6 +138,9 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
     /// "session-creation snapshots prescription" invariant.
     func testStart_SnapshotsAllRepBasedPrescriptionFields() {
         let ex = makeExercise(name: "Bench")
+        // Phase 10-E: equipment + setup live on Exercise.
+        ex.equipmentType = "Barbell"
+        ex.setupDefaults = "Bench, narrow grip"
         let p = makeRepBasedPrescription()
         let fx = makeRoutineAndWorkout(
             prescription: p, slotExercise: ex, slotNotes: "Slow eccentric"
@@ -170,6 +171,8 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
     /// `usesDuration` carries the flag.
     func testStart_SnapshotsAllTimeBasedPrescriptionFields() {
         let ex = makeExercise(name: "Plank", isTimeBased: true)
+        // Phase 10-E: equipment is on Exercise; setup deliberately nil.
+        ex.equipmentType = "Mat"
         let p = makeTimeBasedPrescription()
         let fx = makeRoutineAndWorkout(
             prescription: p, slotExercise: ex
@@ -383,13 +386,13 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
         let baselineUsesDuration = p.usesDuration
         let baselineDurationMin = p.durationMinSeconds
         let baselineDurationMax = p.durationMaxSeconds
-        let baselineEquipment = p.equipment
-        let baselineSetupNotes = p.setupNotes
         let baselineTemplateNotes = fx.slot.templateNotes
 
         // Build a SessionPlan from the snapshot payload and mutate
-        // every field to a deliberately distinct value.
-        let payload = PrescriptionSnapshotPayload(from: p)
+        // every field to a deliberately distinct value. Phase 10-E:
+        // payload init requires the linked Exercise so equipment +
+        // setup are sourced from there.
+        let payload = PrescriptionSnapshotPayload(from: p, exercise: ex)
         var sp = SessionPlan(
             from: payload,
             notes: fx.slot.templateNotes
@@ -438,8 +441,10 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
         XCTAssertEqual(fetched?.usesDuration, baselineUsesDuration)
         XCTAssertEqual(fetched?.durationMinSeconds, baselineDurationMin)
         XCTAssertEqual(fetched?.durationMaxSeconds, baselineDurationMax)
-        XCTAssertEqual(fetched?.equipment, baselineEquipment)
-        XCTAssertEqual(fetched?.setupNotes, baselineSetupNotes)
+        // Phase 10-E: SlotPrescription no longer carries equipment /
+        // setupNotes — the immutability invariant for those fields
+        // now lives on `PlannedPrescriptionSnapshot` and is pinned by
+        // `testEditingExerciseEquipment_DoesNotMutateExistingSnapshot`.
 
         // Refetch the slot's templateNotes by slotID so we likewise
         // bypass any in-memory caching.
@@ -470,9 +475,7 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
             tempo: "2-0-1-0",
             durationMinSeconds: nil,
             durationMaxSeconds: nil,
-            usesDuration: false,
-            equipment: "Cable",
-            setupNotes: "Heavy"
+            usesDuration: false
         )
         context.insert(pB)
 
@@ -501,7 +504,7 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
         // Mutate a SessionPlan derived from slot A. Slot B's
         // prescription must remain untouched.
         var spA = SessionPlan(
-            from: PrescriptionSnapshotPayload(from: pA),
+            from: PrescriptionSnapshotPayload(from: pA, exercise: ex),
             notes: reA.templateNotes
         )
         spA.sets = 11
@@ -544,7 +547,7 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
         )
 
         var sp = SessionPlan(
-            from: PrescriptionSnapshotPayload(from: p),
+            from: PrescriptionSnapshotPayload(from: p, exercise: ex),
             notes: fx.slot.templateNotes
         )
         sp.sets = 42
@@ -593,5 +596,85 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
     /// gap.
     func testApplyBack_PositiveControl_SKIPPED_documentedRationale() {
         // No-op; the rationale above is the test artifact.
+    }
+
+    // MARK: - 7) Phase 10-E — equipment/setup sourced from Exercise
+
+    /// Phase 10-E acceptance: `PlannedPrescriptionSnapshot.equipment` /
+    /// `setupNotes` capture `Exercise.equipmentType` / `setupDefaults`
+    /// at session start. The slot prescription no longer carries
+    /// those fields; the snapshot reads them off the linked Exercise.
+    func testStart_SnapshotsEquipmentAndSetupFromExercise() {
+        let ex = makeExercise(name: "Squat")
+        ex.equipmentType = "Barbell"
+        ex.setupDefaults = "High-bar, narrow stance"
+        let p = makeRepBasedPrescription()
+        let fx = makeRoutineAndWorkout(
+            prescription: p, slotExercise: ex
+        )
+
+        let plan = WorkoutResumeService.rebuildPlan(
+            for: fx.workout, in: context
+        )
+        let snap = plan?.blocks.first?.exercises.first?.prescriptionSnapshot
+
+        XCTAssertNotNil(snap)
+        XCTAssertEqual(snap?.equipment, "Barbell")
+        XCTAssertEqual(snap?.setupNotes, "High-bar, narrow stance")
+    }
+
+    /// Phase 10-E acceptance criterion (no silent mutation): editing
+    /// `Exercise.equipmentType` / `setupDefaults` after a snapshot is
+    /// written does NOT propagate into the existing
+    /// `PlannedPrescriptionSnapshot`. The snapshot stores its own
+    /// captured copy and remains immutable for History.
+    ///
+    /// Drives the snapshot through `PrescriptionSnapshotPayload.toModel()`
+    /// + `context.insert(...)` so the inserted row is the same shape
+    /// `ActiveWorkoutView.populateSnapshotFields(on:from:)` produces
+    /// at session start — without instantiating the View.
+    func testEditingExerciseEquipment_DoesNotMutateExistingSnapshot() {
+        let ex = makeExercise(name: "Press")
+        ex.equipmentType = "Barbell"
+        ex.setupDefaults = "Original setup"
+        let p = makeRepBasedPrescription()
+        _ = makeRoutineAndWorkout(prescription: p, slotExercise: ex)
+
+        // Build the payload (Phase 10-E: equipment + setup come from
+        // the Exercise here) and materialize the persisted snapshot.
+        let payload = PrescriptionSnapshotPayload(from: p, exercise: ex)
+        let snap = payload.toModel()
+        context.insert(snap)
+        try? context.save()
+        let snapID = snap.persistentModelID
+
+        // Mutate the Exercise's equipment + setup fields and save.
+        ex.equipmentType = "Cable"
+        ex.setupDefaults = "Mutated setup"
+        try? context.save()
+
+        // Refetch the snapshot by id and assert the captured values
+        // are still the pre-edit ones.
+        let fetched: PlannedPrescriptionSnapshot? = {
+            let desc = FetchDescriptor<PlannedPrescriptionSnapshot>(
+                predicate: #Predicate { $0.persistentModelID == snapID }
+            )
+            return try? context.fetch(desc).first
+        }()
+
+        XCTAssertNotNil(fetched)
+        XCTAssertEqual(
+            fetched?.equipment, "Barbell",
+            "Snapshot captured at session start must not see later Exercise edits"
+        )
+        XCTAssertEqual(
+            fetched?.setupNotes, "Original setup",
+            "Snapshot setupNotes is durable on the snapshot row"
+        )
+
+        // Exercise itself reflects the mutation — verifies the test
+        // actually mutated state and the assertion above is meaningful.
+        XCTAssertEqual(ex.equipmentType, "Cable")
+        XCTAssertEqual(ex.setupDefaults, "Mutated setup")
     }
 }

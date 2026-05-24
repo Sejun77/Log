@@ -65,16 +65,14 @@ struct BootstrapRoot: View {
                 // already-hydrated slots.
                 BackfillService.hydrateEmptySlotPrescriptions(in: ctx)
 
-                // Phase 10-D: defensive one-shot slot→Exercise backfill
-                // for legacy equipment / setupNotes values. Runs AFTER
-                // hydrateEmptySlotPrescriptions so every RoutineExercise
-                // has a non-nil SlotPrescription to read from. Idempotent
-                // — the helper's per-field "target empty" gate short-
-                // circuits every candidate on subsequent launches once
-                // the first pass has filled the Exercise-level fields.
-                // Slot fields are NOT cleared here; Phase 10-E owns the
-                // SlotPrescription schema drop.
-                BackfillService.migrateEquipmentSetupToExercise(in: ctx)
+                // Phase 10-E (2026-05-24): the Phase 10-D
+                // `migrateEquipmentSetupToExercise(in: ctx)` call site
+                // was removed here once `SlotPrescription.equipment` /
+                // `setupNotes` were dropped from the schema. The
+                // helper had already populated `Exercise.equipmentType`
+                // / `setupDefaults` on every launch since 10-D
+                // shipped, so the migration was complete on every
+                // active device before the field deletion.
 
                 // Phase 6.B Slice B: link pre-existing Workouts to their
                 // routine's preferred variant. Must run AFTER backfillPhase1()

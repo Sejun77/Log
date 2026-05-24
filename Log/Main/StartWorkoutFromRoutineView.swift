@@ -140,7 +140,12 @@ struct PrescriptionSnapshotPayload {
     var equipment: String?
     var setupNotes: String?
 
-    init(from source: SlotPrescription) {
+    /// Phase 10-E: equipment + setup are sourced from the linked
+    /// `Exercise` rather than from the slot. The captured values are
+    /// durable on the snapshot row — later edits to
+    /// `exercise.equipmentType` / `setupDefaults` do not mutate already-
+    /// written workout snapshots or History rows.
+    init(from source: SlotPrescription, exercise: Exercise?) {
         self.sets = source.sets
         self.repMin = source.repMin
         self.repMax = source.repMax
@@ -152,8 +157,8 @@ struct PrescriptionSnapshotPayload {
         self.durationMinSeconds = source.durationMinSeconds
         self.durationMaxSeconds = source.durationMaxSeconds
         self.usesDuration = source.usesDuration
-        self.equipment = source.equipment
-        self.setupNotes = source.setupNotes
+        self.equipment = exercise?.equipmentType
+        self.setupNotes = exercise?.setupDefaults
     }
 
     func toModel() -> PlannedPrescriptionSnapshot {
@@ -373,9 +378,11 @@ struct StartWorkoutFromRoutineView: View {
                             isTimeBased: ex.isTimeBased,
                             routineSlotID: re.slotID,
                             templateNotesSnapshot: re.templateNotes,
-                            prescriptionSnapshot: re.prescription.map(
-                                PrescriptionSnapshotPayload.init(from:)
-                            ),
+                            prescriptionSnapshot: re.prescription.map {
+                                PrescriptionSnapshotPayload(
+                                    from: $0, exercise: ex
+                                )
+                            },
                             techniquePlansSnapshot: techniquePlansSnapshot,
                             warmupStepsSnapshot: warmupStepsSnapshot,
                             // Phase 6.C1 — block snapshot for History grouping

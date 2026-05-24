@@ -213,99 +213,13 @@ enum BackfillService {
 
     // MARK: - Phase 9 diagnostic
 
-    // MARK: - Phase 10-D equipment/setup migration
-
-    /// Phase 10-D defensive one-shot backfill: copy any non-empty
-    /// `SlotPrescription.equipment` / `setupNotes` values onto the
-    /// linked `Exercise.equipmentType` / `setupDefaults` so Phase 10-E
-    /// can drop the slot fields without losing any user data.
-    ///
-    /// **Defensive, not data-rescue.** No production UI writes to
-    /// `SlotPrescription.equipment` / `setupNotes` — the only consumer
-    /// is `PlannedPrescriptionSnapshot.init(from: SlotPrescription)` /
-    /// `PrescriptionSnapshotPayload.init(from: SlotPrescription)`,
-    /// which copy them into session snapshots at workout start. The
-    /// helper exists for test-seeded data, future imports, and as the
-    /// canonical migration record so 10-E can run safely.
-    ///
-    /// Conflict policy:
-    ///   - Per-field: never overwrite a non-nil / non-empty target. A
-    ///     value the user (or 10-C editor) already set on `Exercise`
-    ///     wins over any slot value.
-    ///   - Multi-slot for the same Exercise: deterministic
-    ///     first-non-nil-wins, scanned in stable `slotID.uuidString`
-    ///     order. Once a target field is filled, later slots' values
-    ///     for that field are ignored.
-    ///   - The two fields are migrated independently; copying one
-    ///     does not require the other to be non-nil.
-    ///
-    /// Other invariants:
-    ///   - Whitespace-only slot values are treated as empty (matches
-    ///     the 10-C editor's nil-collapse semantics) and skipped.
-    ///   - `re.exercise == nil` slots are skipped silently — no target
-    ///     to write to.
-    ///   - The slot fields are NOT cleared here; 10-E owns the schema
-    ///     drop.
-    ///
-    /// Idempotent: re-runs short-circuit because every previously-
-    /// eligible target field is non-nil after the first pass, so the
-    /// "target empty" gate skips every candidate on subsequent runs.
-    /// Save fires only when `dirty`.
-    static func migrateEquipmentSetupToExercise(in ctx: ModelContext) {
-        guard let slots = try? ctx.fetch(FetchDescriptor<RoutineExercise>())
-        else { return }
-        guard !slots.isEmpty else { return }
-
-        // Stable order across runs so multi-slot/same-Exercise winner is
-        // deterministic. `slotID` is unique per RoutineExercise (pinned
-        // by `BootstrapRoot.backfillPhase1`) and never re-assigned by
-        // any later migration, so its uuidString is a safe key.
-        let ordered = slots.sorted {
-            $0.slotID.uuidString < $1.slotID.uuidString
-        }
-
-        var dirty = false
-        for re in ordered {
-            guard let ex = re.exercise else { continue }
-            guard let p = re.prescription else { continue }
-
-            // Equipment field — independent of setup.
-            if isEmpty(ex.equipmentType),
-                let value = nonEmptyTrimmed(p.equipment)
-            {
-                ex.equipmentType = value
-                dirty = true
-            }
-
-            // Setup field — independent of equipment.
-            if isEmpty(ex.setupDefaults),
-                let value = nonEmptyTrimmed(p.setupNotes)
-            {
-                ex.setupDefaults = value
-                dirty = true
-            }
-        }
-
-        if dirty {
-            try? ctx.save()
-        }
-    }
-
-    /// True when the optional string is nil, empty, or whitespace-only.
-    /// Mirrors the 10-C editor's nil-collapse so an Exercise field that
-    /// was saved as `"   "` (legacy) is still considered "empty" and
-    /// thus eligible to be filled by a slot value.
-    private static func isEmpty(_ s: String?) -> Bool {
-        guard let s else { return true }
-        return s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    /// Returns the trimmed value when non-empty; nil otherwise.
-    private static func nonEmptyTrimmed(_ s: String?) -> String? {
-        guard let s else { return nil }
-        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
+    // Phase 10-E (2026-05-24): the Phase 10-D helper
+    // `migrateEquipmentSetupToExercise(in:)` retired here. It read
+    // `SlotPrescription.equipment` / `setupNotes` to backfill the
+    // matching `Exercise` fields; once those slot columns were
+    // dropped by 10-E it could no longer compile. The helper had
+    // already run on every launch since 10-D shipped, so all
+    // eligible Exercises were populated before the schema drop.
 
     // MARK: - Phase 9-E2 orphan sweep
 

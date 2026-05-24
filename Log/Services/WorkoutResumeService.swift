@@ -182,9 +182,16 @@ enum WorkoutResumeService {
                             isTimeBased: currentIsTimeBased,
                             routineSlotID: re.slotID,
                             templateNotesSnapshot: re.templateNotes,
-                            prescriptionSnapshot: re.prescription.map(
-                                PrescriptionSnapshotPayload.init(from:)
-                            ),
+                            // Phase 10-E: equipment + setup are sourced from
+                            // the linked `Exercise`. Use the slot's original
+                            // `ex` (re.exercise) — mirrors `makePlan` and
+                            // preserves "snapshot captures the slot's
+                            // original Exercise" semantics across swaps.
+                            prescriptionSnapshot: re.prescription.map {
+                                PrescriptionSnapshotPayload(
+                                    from: $0, exercise: ex
+                                )
+                            },
                             techniquePlansSnapshot: techniquePlansSnapshot,
                             warmupStepsSnapshot: warmupStepsSnapshot,
                             // Phase 6.C1 — mirror makePlan(from:)'s block snapshot
