@@ -360,9 +360,18 @@ struct ExerciseDetailView: View {
 
     @FocusState private var focusedField: String?
 
+    // Phase 10-polish-G (2026-05-24): "Legs" removed from the canonical list.
+    // The seed catalogue uses the specific lower-body buckets (Quads /
+    // Hamstrings / Glutes / Calves), so a broad "Legs" canonical option was
+    // redundant and confused the picker. Any pre-existing exercise whose
+    // `bodyPart` is still "Legs" surfaces as the `legacyCustom` row in
+    // `BodyPartPicker` (it's non-nil, non-empty, and not in this list), so
+    // the value is preserved and remains selectable — no migration of
+    // existing data, no silent rewrite. Users who want to move off "Legs"
+    // can pick a specific bucket or use the new "Remove custom value" action.
     fileprivate static let canonicalBodyParts: [String] = [
         "Chest", "Back", "Shoulders", "Arms", "Biceps", "Triceps",
-        "Legs", "Quads", "Hamstrings", "Glutes", "Calves",
+        "Quads", "Hamstrings", "Glutes", "Calves",
         "Core", "Full Body", "Cardio"
     ]
 
@@ -580,27 +589,52 @@ private struct LockBadge: View {
 
 // MARK: - Body Part Picker
 
-/// Push-style picker for `Exercise.bodyPart`. Lists the canonical 14 options
+/// Push-style picker for `Exercise.bodyPart`. Lists the canonical 13 options
 /// plus "Not set" and an "Other…" entry that opens a free-text alert.
-/// Legacy `bodyPart` values that don't match any canonical option are
-/// surfaced as a dedicated row so they remain visible and selectable —
-/// the picker never silently rewrites or hides them.
+/// Legacy `bodyPart` values that don't match any canonical option AND are
+/// not present in the shared custom-options store are surfaced as a
+/// dedicated row so they remain visible and selectable — the picker never
+/// silently rewrites or hides them.
+///
+/// Phase 10-polish-H (2026-05-24): custom Body Part options are now
+/// shared across exercises via `CustomOptionStore.bodyParts` (backed by
+/// UserDefaults). Entering a value through "Other…" both writes the
+/// current exercise's field and appends to the shared store. The shared
+/// store renders as its own "Custom" section between canonical options
+/// and "Other…", with swipe-to-delete on each row. Deleting a shared
+/// custom option never touches any `Exercise.bodyPart` — an exercise
+/// already using that value continues to show it as a legacy/custom row.
+///
+/// Phase 10-polish-G (2026-05-24): when the current exercise's value is
+/// non-canonical AND not in the shared store, a destructive "Remove
+/// custom value" footer section is shown. This is the per-exercise
+/// clearing affordance — distinct from removing the value from the
+/// shared store, which is one-by-one swipe in the Custom section.
 private struct BodyPartPicker: View {
     let current: String?
     let canonicalOptions: [String]
     let onSelect: (String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var customStore = CustomOptionStore.bodyParts
     @State private var showOtherEntry = false
     @State private var otherDraft = ""
 
+    /// Surface the current exercise's value as a dedicated legacy row only
+    /// when it is non-empty, not in the canonical list, AND not already in
+    /// the shared custom store (otherwise the Custom section would render
+    /// the same value, producing a duplicate row). The shared-store check
+    /// is case-insensitive because the store dedupes on case.
     private var legacyCustom: String? {
         guard
             let bp = current?.trimmingCharacters(
                 in: .whitespacesAndNewlines
             ),
             !bp.isEmpty,
-            !canonicalOptions.contains(bp)
+            !canonicalOptions.contains(bp),
+            !customStore.options.contains(where: {
+                $0.caseInsensitiveCompare(bp) == .orderedSame
+            })
         else { return nil }
         return bp
     }
@@ -614,6 +648,37 @@ private struct BodyPartPicker: View {
                 }
                 ForEach(canonicalOptions, id: \.self) { name in
                     selectionRow(label: name, value: name)
+                }
+            }
+
+            if !customStore.options.isEmpty {
+                Section {
+                    ForEach(customStore.options, id: \.self) { custom in
+                        Button {
+                            onSelect(custom)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(custom)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if isCustomSelected(custom) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.tint)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                    }
+                    .onDelete { offsets in
+                        customStore.remove(at: offsets)
+                    }
+                } header: {
+                    Text("Custom")
+                } footer: {
+                    Text(
+                        "Swipe a row to remove it from the list. Exercises that already use the value keep it."
+                    )
                 }
             }
 
@@ -632,6 +697,24 @@ private struct BodyPartPicker: View {
                     .contentShape(Rectangle())
                 }
             }
+
+            if let legacy = legacyCustom {
+                Section {
+                    Button(role: .destructive) {
+                        onSelect(nil)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("Remove custom value")
+                        }
+                    }
+                } footer: {
+                    Text(
+                        "Clears “\(legacy)” from this exercise. Other exercises are not affected."
+                    )
+                }
+            }
         }
         .navigationTitle("Body Part")
         .alert("Custom Body Part", isPresented: $showOtherEntry) {
@@ -642,6 +725,9 @@ private struct BodyPartPicker: View {
                     in: .whitespacesAndNewlines
                 )
                 guard !trimmed.isEmpty else { return }
+                customStore.add(
+                    trimmed, excludingCanonical: canonicalOptions
+                )
                 onSelect(trimmed)
                 dismiss()
             }
@@ -674,23 +760,47 @@ private struct BodyPartPicker: View {
         if value == nil { return current == nil }
         return value == current
     }
+
+    /// Case-insensitive selection check used for shared custom rows. The
+    /// store normalizes to a single canonical case on insert (via the
+    /// dedupe rule), so an exercise whose `bodyPart` differs only in case
+    /// from a stored custom option should still render the checkmark on
+    /// the stored row.
+    private func isCustomSelected(_ custom: String) -> Bool {
+        guard let curr = current else { return false }
+        return curr.caseInsensitiveCompare(custom) == .orderedSame
+    }
 }
 
 // MARK: - Equipment Picker
 
 /// Push-style picker for `Exercise.equipmentType`. Mirrors `BodyPartPicker`'s
 /// shape: canonical options + a leading "Not set" + a legacy/custom row when
-/// the current value isn't canonical + an "Other…" alert for free-text entry.
-/// Kept as a sibling concrete type (rather than generalizing into a shared
-/// "canonical-string picker") because the codebase pattern favors concrete
-/// named views and the two pickers are conceptually distinct domains —
-/// generalization is appropriate if a third canonical-list picker lands.
+/// the current value isn't canonical AND not in the shared custom store +
+/// a "Custom" section for the shared user-added options + an "Other…" alert
+/// for free-text entry. Kept as a sibling concrete type (rather than
+/// generalizing into a shared "canonical-string picker") because the
+/// codebase pattern favors concrete named views and the two pickers are
+/// conceptually distinct domains.
+///
+/// Phase 10-polish-H (2026-05-24): custom Equipment options are now
+/// shared across exercises via `CustomOptionStore.equipment`. Same
+/// semantics as the Body Part picker — adding through "Other…" appends
+/// to the shared list, swipe-to-delete removes one entry at a time, and
+/// removing a shared option never silently mutates any
+/// `Exercise.equipmentType`.
+///
+/// Phase 10-polish-G (2026-05-24): the per-exercise "Remove custom value"
+/// destructive footer is retained for the case where an exercise's value
+/// is non-canonical AND not in the shared store (typically pre-existing
+/// data that predates the shared store).
 private struct EquipmentPicker: View {
     let current: String?
     let canonicalOptions: [String]
     let onSelect: (String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var customStore = CustomOptionStore.equipment
     @State private var showOtherEntry = false
     @State private var otherDraft = ""
 
@@ -700,7 +810,10 @@ private struct EquipmentPicker: View {
                 in: .whitespacesAndNewlines
             ),
             !v.isEmpty,
-            !canonicalOptions.contains(v)
+            !canonicalOptions.contains(v),
+            !customStore.options.contains(where: {
+                $0.caseInsensitiveCompare(v) == .orderedSame
+            })
         else { return nil }
         return v
     }
@@ -714,6 +827,37 @@ private struct EquipmentPicker: View {
                 }
                 ForEach(canonicalOptions, id: \.self) { name in
                     selectionRow(label: name, value: name)
+                }
+            }
+
+            if !customStore.options.isEmpty {
+                Section {
+                    ForEach(customStore.options, id: \.self) { custom in
+                        Button {
+                            onSelect(custom)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(custom)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if isCustomSelected(custom) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.tint)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                    }
+                    .onDelete { offsets in
+                        customStore.remove(at: offsets)
+                    }
+                } header: {
+                    Text("Custom")
+                } footer: {
+                    Text(
+                        "Swipe a row to remove it from the list. Exercises that already use the value keep it."
+                    )
                 }
             }
 
@@ -732,6 +876,24 @@ private struct EquipmentPicker: View {
                     .contentShape(Rectangle())
                 }
             }
+
+            if let legacy = legacyCustom {
+                Section {
+                    Button(role: .destructive) {
+                        onSelect(nil)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("Remove custom value")
+                        }
+                    }
+                } footer: {
+                    Text(
+                        "Clears “\(legacy)” from this exercise. Other exercises are not affected."
+                    )
+                }
+            }
         }
         .navigationTitle("Equipment")
         .alert("Custom Equipment", isPresented: $showOtherEntry) {
@@ -742,6 +904,9 @@ private struct EquipmentPicker: View {
                     in: .whitespacesAndNewlines
                 )
                 guard !trimmed.isEmpty else { return }
+                customStore.add(
+                    trimmed, excludingCanonical: canonicalOptions
+                )
                 onSelect(trimmed)
                 dismiss()
             }
@@ -773,5 +938,12 @@ private struct EquipmentPicker: View {
     private func isSelected(_ value: String?) -> Bool {
         if value == nil { return current == nil }
         return value == current
+    }
+
+    /// See `BodyPartPicker.isCustomSelected` — same case-insensitive
+    /// matching rationale.
+    private func isCustomSelected(_ custom: String) -> Bool {
+        guard let curr = current else { return false }
+        return curr.caseInsensitiveCompare(custom) == .orderedSame
     }
 }
