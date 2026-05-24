@@ -441,6 +441,12 @@ struct ExerciseDetailView: View {
         "Core", "Full Body", "Cardio"
     ]
 
+    fileprivate static let canonicalEquipment: [String] = [
+        "Barbell", "Dumbbell", "Cable", "Machine", "Smith Machine",
+        "Kettlebell", "Resistance Band", "Bodyweight",
+        "EZ Bar", "Trap Bar", "Plate", "Sled"
+    ]
+
     var body: some View {
         DetailForm
             .probe("ExerciseDetail.Form")
@@ -501,6 +507,45 @@ struct ExerciseDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .disabled(isLocked)
+
+                NavigationLink {
+                    EquipmentPicker(
+                        current: exercise.equipmentType,
+                        canonicalOptions: ExerciseDetailView
+                            .canonicalEquipment,
+                        onSelect: { newValue in
+                            let trimmed = newValue?.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+                            exercise.equipmentType =
+                                (trimmed?.isEmpty ?? true) ? nil : trimmed
+                        }
+                    )
+                } label: {
+                    HStack {
+                        Text("Equipment")
+                            .font(.dsBody)
+                        Spacer()
+                        Text(exercise.equipmentType ?? "Not set")
+                            .font(.dsBodySecondary)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(isLocked)
+
+                TextField(
+                    "Setup defaults",
+                    text: Binding(
+                        $exercise.setupDefaults,
+                        replacingNilWith: ""
+                    ),
+                    axis: .vertical
+                )
+                .font(.dsBodySecondary)
+                .lineLimit(2...5)
+                .textInputAutocapitalization(.sentences)
+                .focused($focusedField, equals: "setupDefaults")
                 .disabled(isLocked)
 
                 TextField(
@@ -661,6 +706,106 @@ private struct BodyPartPicker: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Enter a body part not in the list.")
+        }
+    }
+
+    @ViewBuilder
+    private func selectionRow(label: String, value: String?) -> some View {
+        Button {
+            onSelect(value)
+            dismiss()
+        } label: {
+            HStack {
+                Text(label)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if isSelected(value) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+    }
+
+    private func isSelected(_ value: String?) -> Bool {
+        if value == nil { return current == nil }
+        return value == current
+    }
+}
+
+// MARK: - Equipment Picker
+
+/// Push-style picker for `Exercise.equipmentType`. Mirrors `BodyPartPicker`'s
+/// shape: canonical options + a leading "Not set" + a legacy/custom row when
+/// the current value isn't canonical + an "Other…" alert for free-text entry.
+/// Kept as a sibling concrete type (rather than generalizing into a shared
+/// "canonical-string picker") because the codebase pattern favors concrete
+/// named views and the two pickers are conceptually distinct domains —
+/// generalization is appropriate if a third canonical-list picker lands.
+private struct EquipmentPicker: View {
+    let current: String?
+    let canonicalOptions: [String]
+    let onSelect: (String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var showOtherEntry = false
+    @State private var otherDraft = ""
+
+    private var legacyCustom: String? {
+        guard
+            let v = current?.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ),
+            !v.isEmpty,
+            !canonicalOptions.contains(v)
+        else { return nil }
+        return v
+    }
+
+    var body: some View {
+        List {
+            Section {
+                selectionRow(label: "Not set", value: nil)
+                if let legacy = legacyCustom {
+                    selectionRow(label: legacy, value: legacy)
+                }
+                ForEach(canonicalOptions, id: \.self) { name in
+                    selectionRow(label: name, value: name)
+                }
+            }
+
+            Section {
+                Button {
+                    otherDraft = ""
+                    showOtherEntry = true
+                } label: {
+                    HStack {
+                        Text("Other…")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "pencil")
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+            }
+        }
+        .navigationTitle("Equipment")
+        .alert("Custom Equipment", isPresented: $showOtherEntry) {
+            TextField("e.g. Landmine", text: $otherDraft)
+                .textInputAutocapitalization(.words)
+            Button("Save") {
+                let trimmed = otherDraft.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                guard !trimmed.isEmpty else { return }
+                onSelect(trimmed)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enter equipment not in the list.")
         }
     }
 
