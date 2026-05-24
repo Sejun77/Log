@@ -54,6 +54,18 @@ struct BootstrapRoot: View {
                 backfillPhase3_1()
                 // Phase 3.3a: no backfill needed — snapshots are nil for old items.
 
+                // Phase 10-polish-F (2026-05-24): seed the built-in exercise
+                // catalogue on first launch so new installs do not start with
+                // an empty Exercises tab. Idempotent — gated by a
+                // UserDefaults version flag; subsequent launches are a no-op
+                // under the same `ExerciseCatalog.currentVersion`. Placed
+                // after Phase 1/3.1 backfills (no ordering dependency, but
+                // keeps "schema-shaping backfills first, then data
+                // population") and before `hydrateEmptySlotPrescriptions`
+                // (which only walks pre-existing `RoutineExercise` rows, so
+                // ordering between the two is purely defensive).
+                ExerciseSeedService.seedIfNeeded(in: ctx)
+
                 // Phase 9-A2: hydrate empty/missing SlotPrescription content
                 // from each slot's setTemplates → AppSettings defaults so
                 // legacy slots become self-sufficient (Tier 3 source was
@@ -127,6 +139,16 @@ struct BootstrapRoot: View {
         deleteAll(SetTemplate.self)
         deleteAll(Exercise.self)
         try? ctx.save()
+
+        // Phase 10-polish-F: clear the seed-version flag so UI tests
+        // starting from a clean store also start from a clean "never
+        // seeded" state. Without this, the in-memory data is wiped but
+        // `ExerciseSeedService.seedIfNeeded` would short-circuit on the
+        // persisted UserDefaults flag and the seeded rows would never
+        // reappear under UI tests.
+        UserDefaults.standard.removeObject(
+            forKey: ExerciseSeedService.seedVersionKey
+        )
     }
 
     /// Deletes all instances of a given SwiftData model type.
