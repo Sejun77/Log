@@ -4,12 +4,6 @@ import SwiftUI
 // MARK: - Top-level list of exercises
 
 struct ExercisesView: View {
-    @AppStorage("universalDefaultRestSeconds") private
-        var universalDefaultRestSeconds: Int = 0
-    @State private var editingDefaultRest = false
-    @State private var restDraft = ""
-    @FocusState private var restFieldFocused: Bool
-
     /// Persisted via `@AppStorage`. Stored as the enum's raw `String` so
     /// the cases can be reordered without invalidating saved preferences.
     /// Default `.manual` preserves the pre-Phase-10-polish behavior for
@@ -98,7 +92,6 @@ struct ExercisesView: View {
 
     private var ListContent: some View {
         List {
-            defaultsSection
             addExerciseSection
             allExercisesSection
         }
@@ -188,52 +181,9 @@ struct ExercisesView: View {
         } message: {
             Text("“\(lockedName)” is currently used in an active workout.")
         }
-        .sheet(isPresented: $editingDefaultRest) {
-            DefaultRestEditorSheet(
-                restDraft: $restDraft,
-                isPresented: $editingDefaultRest,
-                universalDefaultRestSeconds: $universalDefaultRestSeconds
-            )
-        }
     }
 
     // MARK: - Sections
-
-    private var defaultsSection: some View {
-        Section {
-            HStack {
-                Image(systemName: "timer")
-                    .foregroundStyle(.secondary)
-
-                Text("Default rest between sets")
-                    .font(.dsBody)
-
-                Spacer()
-
-                Button {
-                    restDraft =
-                        universalDefaultRestSeconds > 0
-                        ? String(universalDefaultRestSeconds)
-                        : ""
-                    editingDefaultRest = true
-                } label: {
-                    Text(
-                        universalDefaultRestSeconds > 0
-                            ? "\(universalDefaultRestSeconds)s"
-                            : "Set"
-                    )
-                    .font(.dsCaption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.thinMaterial)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        } header: {
-            DSSectionHeader(title: "Defaults", systemImage: "timer")
-        }
-    }
 
     private var addExerciseSection: some View {
         Section {
@@ -345,69 +295,6 @@ struct ExercisesView: View {
         pendingDeleteExercise = ex
         deleteImpactMessage = buildImpactMessage(for: ex)
         showDeleteExerciseAlert = true
-    }
-
-    // MARK: - Default Rest Sheet
-
-    private struct DefaultRestEditorSheet: View {
-        @Binding var restDraft: String
-        @Binding var isPresented: Bool
-        @Binding var universalDefaultRestSeconds: Int
-        @FocusState private var fieldFocused: Bool
-
-        var body: some View {
-            NavigationStack {
-                Form {
-                    Section {
-                        HStack(spacing: 8) {
-                            Image(systemName: "timer")
-                                .foregroundStyle(.secondary)
-                            TextField(
-                                "Seconds",
-                                text: Binding(
-                                    get: { restDraft },
-                                    set: { restDraft = $0.filter(\.isNumber) }
-                                )
-                            )
-                            .keyboardType(.numberPad)
-                            .focused($fieldFocused)
-                            .submitLabel(.done)
-                            .onSubmit { fieldFocused = false }
-
-                            Text("s")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Text(
-                            "Applied automatically to newly added sets in all exercises (dropsets still have no rest)."
-                        )
-                        .font(.dsCaption)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                .navigationTitle("Default Rest")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { isPresented = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
-                            fieldFocused = false
-                            let v = Int(restDraft) ?? 0
-                            universalDefaultRestSeconds = v > 0 ? v : 0
-                            isPresented = false
-                        }
-                    }
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") { fieldFocused = false }
-                    }
-                }
-            }
-            .onAppear {
-                DispatchQueue.main.async { fieldFocused = true }
-            }
-        }
     }
 
     // MARK: - Add Exercise
