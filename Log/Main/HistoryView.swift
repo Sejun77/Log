@@ -482,6 +482,7 @@ private struct WorkoutDetailView: View {
                             supersetMemberHeader(
                                 name: exerciseName(for: item)
                             )
+                            equipmentAndSetupRows(for: item)
                             setLogList(for: item)
                         }
                     } header: {
@@ -489,6 +490,7 @@ private struct WorkoutDetailView: View {
                     }
                 } else if let item = group.items.first {
                     Section {
+                        equipmentAndSetupRows(for: item)
                         setLogList(for: item)
                     } header: {
                         Text(exerciseName(for: item))
@@ -511,6 +513,52 @@ private struct WorkoutDetailView: View {
         Text(name)
             .font(.dsSection)
             .foregroundStyle(DSColor.textPrimary)
+    }
+
+    /// Trim and treat empty/whitespace-only as nil so a blank snapshot
+    /// value never renders an empty row. Mirrors the `ActiveWorkoutView`
+    /// helper used at workout time.
+    private func trimmedOrNil(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Equipment / Setup rows for one history item, sourced exclusively
+    /// from the immutable `plannedPrescriptionSnapshot` captured at
+    /// session start. Never reads live `Exercise.equipmentType` /
+    /// `setupDefaults` — that would violate the snapshot-immutability
+    /// invariant pinned by `testEditingExerciseEquipment_DoesNotMutateExistingSnapshot`.
+    /// Empty/whitespace-only values are hidden; legacy items with a nil
+    /// snapshot or both fields nil add zero rows.
+    @ViewBuilder
+    private func equipmentAndSetupRows(for item: WorkoutItem) -> some View {
+        let equipment = trimmedOrNil(item.plannedPrescriptionSnapshot?.equipment)
+        let setup = trimmedOrNil(item.plannedPrescriptionSnapshot?.setupNotes)
+
+        if let equipment {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Equipment")
+                    .font(.dsCaption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 80, alignment: .leading)
+                Text(equipment)
+                    .font(.dsBody)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        if let setup {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Setup")
+                    .font(.dsCaption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(setup)
+                    .font(.dsBody)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     /// Renders the set-log rows for one `WorkoutItem`. Extracted from
