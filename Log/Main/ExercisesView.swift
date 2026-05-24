@@ -619,6 +619,28 @@ private struct BodyPartPicker: View {
     @ObservedObject private var customStore = CustomOptionStore.bodyParts
     @State private var showOtherEntry = false
     @State private var otherDraft = ""
+    /// Set by the per-row `.swipeActions` Delete button on the shared
+    /// Custom section. Non-nil drives the "Remove Custom Body Part?"
+    /// confirmation alert. Stores the option's value (not its `IndexSet`)
+    /// so the confirm path can route through `customStore.remove(_:)` —
+    /// the value-based remover is case-insensitive and resilient to the
+    /// list shifting between swipe and confirm. **`.onDelete` is
+    /// deliberately not used here**: SwiftUI's swipe-revealed Delete
+    /// button (the `.onDelete` mechanism) assumes the data source will
+    /// mutate inside its closure and animates a row-collapse on tap; if
+    /// the closure only stashes state (as Slice A originally did), the
+    /// row briefly collapses then springs back when the data hasn't
+    /// changed and the Section's footer text overlaps mid-animation.
+    /// `.swipeActions` with an explicit `Button` has no such "assumed
+    /// mutation" animation — the row stays in place until the actual
+    /// `customStore.remove(...)` happens inside `withAnimation`, giving
+    /// one clean animation pass for the deletion.
+    @State private var pendingSharedRemoval: String? = nil
+    /// Set by the legacy-row "Remove custom value" button. Non-nil drives
+    /// the "Clear Body Part?" confirmation alert. The current exercise's
+    /// `bodyPart` is cleared (and the picker dismissed) only after the
+    /// Clear button is tapped.
+    @State private var pendingLegacyClear: String? = nil
 
     /// Surface the current exercise's value as a dedicated legacy row only
     /// when it is non-empty, not in the canonical list, AND not already in
@@ -669,9 +691,13 @@ private struct BodyPartPicker: View {
                             }
                             .contentShape(Rectangle())
                         }
-                    }
-                    .onDelete { offsets in
-                        customStore.remove(at: offsets)
+                        .swipeActions(allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                pendingSharedRemoval = custom
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                 } header: {
                     Text("Custom")
@@ -701,8 +727,7 @@ private struct BodyPartPicker: View {
             if let legacy = legacyCustom {
                 Section {
                     Button(role: .destructive) {
-                        onSelect(nil)
-                        dismiss()
+                        pendingLegacyClear = legacy
                     } label: {
                         HStack {
                             Image(systemName: "trash")
@@ -734,6 +759,47 @@ private struct BodyPartPicker: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Enter a body part not in the list.")
+        }
+        .alert(
+            "Remove Custom Body Part?",
+            isPresented: Binding(
+                get: { pendingSharedRemoval != nil },
+                set: { if !$0 { pendingSharedRemoval = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingSharedRemoval = nil
+            }
+            Button("Remove", role: .destructive) {
+                if let opt = pendingSharedRemoval {
+                    withAnimation {
+                        customStore.remove(opt)
+                    }
+                }
+                pendingSharedRemoval = nil
+            }
+        } message: {
+            Text(
+                "This removes the option from the picker list. Exercises already using this value will keep it until you change them."
+            )
+        }
+        .alert(
+            "Clear Body Part?",
+            isPresented: Binding(
+                get: { pendingLegacyClear != nil },
+                set: { if !$0 { pendingLegacyClear = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingLegacyClear = nil
+            }
+            Button("Clear", role: .destructive) {
+                pendingLegacyClear = nil
+                onSelect(nil)
+                dismiss()
+            }
+        } message: {
+            Text("This clears the custom value from this exercise only.")
         }
     }
 
@@ -803,6 +869,19 @@ private struct EquipmentPicker: View {
     @ObservedObject private var customStore = CustomOptionStore.equipment
     @State private var showOtherEntry = false
     @State private var otherDraft = ""
+    /// Mirrors `BodyPartPicker.pendingSharedRemoval` — non-nil drives the
+    /// "Remove Custom Equipment?" confirmation alert. Stores the option's
+    /// value so the confirm path can route through the case-insensitive
+    /// value-based `customStore.remove(_:)`. **`.onDelete` is deliberately
+    /// not used here** — see the matching comment on
+    /// `BodyPartPicker.pendingSharedRemoval` for the row-collapse /
+    /// footer-overlap rationale.
+    @State private var pendingSharedRemoval: String? = nil
+    /// Mirrors `BodyPartPicker.pendingLegacyClear` — non-nil drives the
+    /// "Clear Equipment?" confirmation alert for the legacy-row clear
+    /// button. The current exercise's `equipmentType` is cleared only
+    /// after the user confirms.
+    @State private var pendingLegacyClear: String? = nil
 
     private var legacyCustom: String? {
         guard
@@ -848,9 +927,13 @@ private struct EquipmentPicker: View {
                             }
                             .contentShape(Rectangle())
                         }
-                    }
-                    .onDelete { offsets in
-                        customStore.remove(at: offsets)
+                        .swipeActions(allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                pendingSharedRemoval = custom
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                 } header: {
                     Text("Custom")
@@ -880,8 +963,7 @@ private struct EquipmentPicker: View {
             if let legacy = legacyCustom {
                 Section {
                     Button(role: .destructive) {
-                        onSelect(nil)
-                        dismiss()
+                        pendingLegacyClear = legacy
                     } label: {
                         HStack {
                             Image(systemName: "trash")
@@ -913,6 +995,47 @@ private struct EquipmentPicker: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Enter equipment not in the list.")
+        }
+        .alert(
+            "Remove Custom Equipment?",
+            isPresented: Binding(
+                get: { pendingSharedRemoval != nil },
+                set: { if !$0 { pendingSharedRemoval = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingSharedRemoval = nil
+            }
+            Button("Remove", role: .destructive) {
+                if let opt = pendingSharedRemoval {
+                    withAnimation {
+                        customStore.remove(opt)
+                    }
+                }
+                pendingSharedRemoval = nil
+            }
+        } message: {
+            Text(
+                "This removes the option from the picker list. Exercises already using this value will keep it until you change them."
+            )
+        }
+        .alert(
+            "Clear Equipment?",
+            isPresented: Binding(
+                get: { pendingLegacyClear != nil },
+                set: { if !$0 { pendingLegacyClear = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingLegacyClear = nil
+            }
+            Button("Clear", role: .destructive) {
+                pendingLegacyClear = nil
+                onSelect(nil)
+                dismiss()
+            }
+        } message: {
+            Text("This clears the custom value from this exercise only.")
         }
     }
 

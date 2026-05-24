@@ -8,6 +8,15 @@ struct WarmupSchemeEditor: View {
     @Environment(\.modelContext) private var ctx
     @Bindable var prescription: SlotPrescription
     @State private var showAddStep = false
+    /// Non-nil drives the "Delete Warmup Step?" confirmation alert.
+    /// Both the per-row swipe (`.swipeActions`) and edit-mode batch
+    /// delete (`.onDelete`) route here without mutating; the actual
+    /// `deleteSteps(at:)` call lives inside the alert's destructive
+    /// button (wrapped in `withAnimation`). See the Slice A glitch
+    /// rationale on `BodyPartPicker.pendingSharedRemoval` — `.onDelete`
+    /// alone would assume mutation and animate a row-collapse on tap
+    /// before springing back.
+    @State private var pendingDeleteOffsets: IndexSet? = nil
 
     private var sortedSteps: [WarmupStep] {
         (prescription.warmupScheme?.steps ?? []).sorted { $0.order < $1.order }
@@ -32,6 +41,27 @@ struct WarmupSchemeEditor: View {
                 addStep(kind: kind, reps: reps, pct: pct, rest: rest, note: note, weight: weight)
             })
         }
+        .alert(
+            "Delete Warmup Step?",
+            isPresented: Binding(
+                get: { pendingDeleteOffsets != nil },
+                set: { if !$0 { pendingDeleteOffsets = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingDeleteOffsets = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let offsets = pendingDeleteOffsets {
+                    withAnimation {
+                        deleteSteps(at: offsets)
+                    }
+                }
+                pendingDeleteOffsets = nil
+            }
+        } message: {
+            Text("This warmup step will be removed from this slot.")
+        }
     }
 
     private var schemeSummarySection: some View {
@@ -50,8 +80,21 @@ struct WarmupSchemeEditor: View {
         Section {
             ForEach(sortedSteps) { step in
                 WarmupStepRow(step: step)
+                    .swipeActions(allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            if let idx = sortedSteps.firstIndex(where: {
+                                $0.id == step.id
+                            }) {
+                                pendingDeleteOffsets = IndexSet(integer: idx)
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
             }
-            .onDelete(perform: deleteSteps)
+            .onDelete { offsets in
+                pendingDeleteOffsets = offsets
+            }
             .onMove(perform: moveSteps)
         }
     }

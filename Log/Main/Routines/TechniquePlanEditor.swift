@@ -12,6 +12,14 @@ struct TechniquePlanEditor: View {
     @Bindable var prescription: SlotPrescription
     @State private var showAdd = false
     @State private var addType: TechniqueType = .dropset
+    /// Non-nil drives the "Delete Technique?" confirmation alert. Both
+    /// per-row swipe (`.swipeActions`) and edit-mode batch delete
+    /// (`.onDelete`) route here without mutating; the actual
+    /// `deletePlans(at:)` call lives inside the alert's destructive
+    /// button (wrapped in `withAnimation`). See the Slice A rationale
+    /// on `BodyPartPicker.pendingSharedRemoval` for why `.onDelete`
+    /// alone produces a row-collapse-then-spring-back glitch.
+    @State private var pendingDeleteOffsets: IndexSet? = nil
 
     private var sorted: [TechniquePlan] {
         prescription.techniquePlans.sorted { $0.order < $1.order }
@@ -34,8 +42,21 @@ struct TechniquePlanEditor: View {
                     } label: {
                         TechniquePlanRow(plan: plan)
                     }
+                    .swipeActions(allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            if let idx = sorted.firstIndex(where: {
+                                $0.id == plan.id
+                            }) {
+                                pendingDeleteOffsets = IndexSet(integer: idx)
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
-                .onDelete(perform: deletePlans)
+                .onDelete { offsets in
+                    pendingDeleteOffsets = offsets
+                }
                 .onMove(perform: movePlans)
             } header: {
                 Text("Techniques")
@@ -56,6 +77,29 @@ struct TechniquePlanEditor: View {
                 setCount: prescription.sets ?? 3,
                 usesDuration: prescription.usesDuration,
                 onPick: { t in addPlan(type: t) }
+            )
+        }
+        .alert(
+            "Delete Technique?",
+            isPresented: Binding(
+                get: { pendingDeleteOffsets != nil },
+                set: { if !$0 { pendingDeleteOffsets = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingDeleteOffsets = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let offsets = pendingDeleteOffsets {
+                    withAnimation {
+                        deletePlans(at: offsets)
+                    }
+                }
+                pendingDeleteOffsets = nil
+            }
+        } message: {
+            Text(
+                "This technique will be removed from this slot. Its configuration will be lost."
             )
         }
     }

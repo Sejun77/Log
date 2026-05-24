@@ -99,6 +99,16 @@ struct SupersetDetailNoRest: View {
 
     @State private var showAddExerciseSheet = false
     @State private var showMinExerciseAlert = false
+    /// Non-nil drives the "Remove Exercise from Superset?" confirmation
+    /// alert. Set by both the per-row `.swipeActions` Delete button and
+    /// the edit-mode `.onDelete` handler (both routed through
+    /// `removeExercise(at:)`, which keeps the existing routine-lock +
+    /// min-2 guards so the confirm prompt only appears for deletions
+    /// that would actually proceed). The real deletion (formerly the
+    /// body of `removeExercise`) now lives in
+    /// `performRemoveExercise(at:)` and runs inside `withAnimation`
+    /// from the alert's destructive button.
+    @State private var pendingDeleteOffsets: IndexSet? = nil
 
     private func templates(for re: RoutineExercise) -> [SetTemplate] {
         re.resolvedTemplates(in: ctx)
@@ -175,6 +185,13 @@ struct SupersetDetailNoRest: View {
     /// on the tombstone, and (for supersets) cascades `ctx.delete(b)`,
     /// taking the entire block with it. Detaching here keeps the parent
     /// array consistent with the persistent store.
+    /// Slice B (deletion-confirmation, 2026-05-24): existing routine-lock
+    /// + min-2 guards run BEFORE the confirmation alert is shown so the
+    /// user never sees a confirm prompt that would then be rejected. On
+    /// guard pass the offsets are stashed in `pendingDeleteOffsets` and
+    /// the alert renders; the actual deletion happens in
+    /// `performRemoveExercise(at:)` (called inside `withAnimation`
+    /// from the alert's destructive button).
     private func removeExercise(at offsets: IndexSet) {
         guard !isRoutineLocked else { return }
         let sorted = block.exercises.sorted { $0.order < $1.order }
@@ -183,6 +200,14 @@ struct SupersetDetailNoRest: View {
             showMinExerciseAlert = true
             return
         }
+        pendingDeleteOffsets = offsets
+    }
+
+    /// Post-confirmation deletion (extracted from the pre-Slice-B
+    /// `removeExercise` body so the guards in `removeExercise(at:)`
+    /// stay the single gate before any state writes).
+    private func performRemoveExercise(at offsets: IndexSet) {
+        let sorted = block.exercises.sorted { $0.order < $1.order }
         let removed = offsets.map { sorted[$0] }
         var survivors = sorted
         survivors.remove(atOffsets: offsets)
@@ -192,6 +217,24 @@ struct SupersetDetailNoRest: View {
         for re in removed { ctx.delete(re) }
         for (i, re) in survivors.enumerated() { re.order = i }
         try? ctx.save()
+    }
+
+    /// Renders the deletion confirmation's message body for the current
+    /// `pendingDeleteOffsets`. Single-row swipe (the common case) shows
+    /// the exercise name; multi-row edit-mode batch delete falls back to
+    /// a count-based message.
+    private func deletionMessage(for offsets: IndexSet?) -> String {
+        guard let offsets, !offsets.isEmpty else { return "" }
+        let sorted = block.exercises.sorted { $0.order < $1.order }
+        let names = offsets.compactMap { idx -> String? in
+            guard idx < sorted.count else { return nil }
+            return sorted[idx].safeExercise(in: ctx)?.name
+        }
+        if offsets.count == 1, let n = names.first {
+            return "\u{201C}\(n)\u{201D} will be removed from this superset. The slot's prescription, warmup, and technique plans will be deleted."
+        }
+        let n = max(offsets.count, names.count)
+        return "\(n) exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted."
     }
 
     var body: some View {
@@ -253,6 +296,24 @@ struct SupersetDetailNoRest: View {
                             Text("\(re.prescription?.sets ?? 0) sets")
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
+                        }
+                        .swipeActions(allowsFullSwipe: false) {
+                            if !isRoutineLocked {
+                                Button(role: .destructive) {
+                                    let sorted = block.exercises.sorted {
+                                        $0.order < $1.order
+                                    }
+                                    if let idx = sorted.firstIndex(where: {
+                                        $0.id == re.id
+                                    }) {
+                                        removeExercise(
+                                            at: IndexSet(integer: idx)
+                                        )
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 }
@@ -341,6 +402,27 @@ struct SupersetDetailNoRest: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("A superset must keep at least 2 exercises. To remove this superset entirely, delete the block from the routine's Blocks list.")
+        }
+        .alert(
+            "Remove Exercise from Superset?",
+            isPresented: Binding(
+                get: { pendingDeleteOffsets != nil },
+                set: { if !$0 { pendingDeleteOffsets = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingDeleteOffsets = nil
+            }
+            Button("Remove", role: .destructive) {
+                if let offsets = pendingDeleteOffsets {
+                    withAnimation {
+                        performRemoveExercise(at: offsets)
+                    }
+                }
+                pendingDeleteOffsets = nil
+            }
+        } message: {
+            Text(deletionMessage(for: pendingDeleteOffsets))
         }
     }
 }
