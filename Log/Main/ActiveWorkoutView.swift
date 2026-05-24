@@ -1072,6 +1072,53 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    /// Read-only Equipment / Setup row sourced exclusively from the
+    /// session-start snapshot (`prescriptionSnapshot.equipment` /
+    /// `.setupNotes`). The entire section is omitted when both values are
+    /// nil or whitespace-only so the surface adds no visual noise for
+    /// exercises that never captured these fields.
+    /// Trim and treat empty/whitespace-only strings as nil so a blank
+    /// snapshot value does not render an empty row.
+    private func trimmedOrNil(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    @ViewBuilder
+    private func equipmentAndSetupSection(for exercise: PlanExercise) -> some View {
+        let equipment = trimmedOrNil(exercise.prescriptionSnapshot?.equipment)
+        let setup = trimmedOrNil(exercise.prescriptionSnapshot?.setupNotes)
+
+        if equipment != nil || setup != nil {
+            Section("Equipment & Setup") {
+                if let equipment {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("Equipment")
+                            .font(.dsCaption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 80, alignment: .leading)
+                        Text(equipment)
+                            .font(.dsBody)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if let setup {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Setup")
+                            .font(.dsCaption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(setup)
+                            .font(.dsBody)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Planned Target Resolution
 
     // MARK: - Planned target wrappers (delegate to SessionPlanResolver)
@@ -1292,6 +1339,15 @@ struct ActiveWorkoutView: View {
 
                     // --- Plan summary (compact) + edit via sheet ---
                     planSummarySection(for: exercise)
+
+                    // --- Equipment & Setup (snapshotted) ---
+                    // Source: prescriptionSnapshot.equipment / .setupNotes
+                    // captured at session start (Phase 10). Live
+                    // Exercise.equipmentType / setupDefaults are intentionally
+                    // NOT read here — later edits to the Exercise definition
+                    // must not retroactively change what the user sees
+                    // mid-workout.
+                    equipmentAndSetupSection(for: exercise)
 
                     // --- Warmup section ---
                     if !exercise.warmupStepsSnapshot.isEmpty {
