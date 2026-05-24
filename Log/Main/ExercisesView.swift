@@ -10,6 +10,17 @@ struct ExercisesView: View {
     @State private var restDraft = ""
     @FocusState private var restFieldFocused: Bool
 
+    /// Persisted via `@AppStorage`. Stored as the enum's raw `String` so
+    /// the cases can be reordered without invalidating saved preferences.
+    /// Default `.manual` preserves the pre-Phase-10-polish behavior for
+    /// users who never open the toolbar Sort menu.
+    @AppStorage("exercisesSortMode") private var sortModeRaw: String =
+        ExerciseSortMode.manual.rawValue
+
+    private var sortMode: ExerciseSortMode {
+        ExerciseSortMode(rawValue: sortModeRaw) ?? .manual
+    }
+
     @Environment(\.modelContext) private var ctx
     @Query(sort: [SortDescriptor(\Exercise.order), SortDescriptor(\Exercise.name)])
     private var exercises: [Exercise]
@@ -61,9 +72,17 @@ struct ExercisesView: View {
         }
     }
 
+    /// Display list = sort mode applied to the `@Query` result, then
+    /// name-filtered by the search term. Sort is applied before filter so
+    /// the search affordance never reorders rows on its own — typing into
+    /// the search field only narrows the visible set. Drag-to-reorder is
+    /// gated separately on `.manual` mode AND empty search via
+    /// `.moveDisabled(...)` so the offsets `moveExercises` receives still
+    /// refer to the full `exercises` array.
     private var filtered: [Exercise] {
-        guard !search.isEmpty else { return exercises }
-        return exercises.filter {
+        let sorted = ExerciseSorter.sort(exercises, mode: sortMode)
+        guard !search.isEmpty else { return sorted }
+        return sorted.filter {
             $0.name.localizedCaseInsensitiveContains(search)
         }
     }
@@ -93,6 +112,17 @@ struct ExercisesView: View {
         .background(DSColor.bg.ignoresSafeArea())
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Sort", selection: $sortModeRaw) {
+                        ForEach(ExerciseSortMode.allCases) { mode in
+                            Label(mode.label, systemImage: mode.systemImage)
+                                .tag(mode.rawValue)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .accessibilityLabel("Sort exercises")
+                }
                 EditButton()
             }
             ToolbarItemGroup(placement: .keyboard) {
@@ -287,7 +317,15 @@ struct ExercisesView: View {
             }
             .onMove(perform: moveExercises)
             .onDelete(perform: deleteExercisesFromEdit)
-            .moveDisabled(!search.isEmpty)
+            // Drag-to-reorder writes back to `Exercise.order`, which only
+            // the `.manual` sort mode reads. Under any other sort mode the
+            // visual order is computed (alphabetical / by bodyPart / by
+            // equipment) and a drag would silently change `order` without
+            // visibly moving the row — gate the affordance off entirely.
+            // The search gate (already in place pre-polish) stays: even
+            // under `.manual`, filtered offsets do not match the full
+            // `exercises` array that `moveExercises` rewrites.
+            .moveDisabled(sortMode != .manual || !search.isEmpty)
         } header: {
             DSSectionHeader(title: "All Exercises", systemImage: "list.bullet")
         }
@@ -401,7 +439,7 @@ struct ExercisesView: View {
     /// `.moveDisabled(!search.isEmpty)` on the ForEach — so the offsets always
     /// refer to indices in the full `exercises` array.
     private func moveExercises(from offsets: IndexSet, to newOffset: Int) {
-        guard search.isEmpty else { return }
+        guard sortMode == .manual, search.isEmpty else { return }
         var sorted = exercises
         sorted.move(fromOffsets: offsets, toOffset: newOffset)
         for (i, ex) in sorted.enumerated() {
