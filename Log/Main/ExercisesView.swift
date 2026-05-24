@@ -572,16 +572,33 @@ struct ExerciseDetailView: View {
                 }
                 .disabled(isLocked)
 
+                // `axis: .vertical` makes Return insert a newline on the
+                // soft keyboard; `lineLimit(3...8)` gives the cell room to
+                // grow for typical 4–5-line setup cues before the content
+                // starts scrolling within the cell. The inline binding
+                // collapses nil / empty / whitespace-only input to nil on
+                // save (vs the shared `replacingNilWith` helper which only
+                // catches `isEmpty`) — the 10-polish-A/B display readers
+                // already trim before deciding to render, so any stored
+                // whitespace-only value would silently show nothing and
+                // never round-trip back to "set" once cleared.
                 TextField(
-                    "Setup defaults",
+                    "Setup defaults — e.g. seat height 4, cable at shoulder",
                     text: Binding(
-                        $exercise.setupDefaults,
-                        replacingNilWith: ""
+                        get: { exercise.setupDefaults ?? "" },
+                        set: { newValue in
+                            let trimmed = newValue.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+                            exercise.setupDefaults =
+                                trimmed.isEmpty ? nil : newValue
+                        }
                     ),
                     axis: .vertical
                 )
-                .font(.dsBodySecondary)
-                .lineLimit(2...5)
+                .font(.dsBody)
+                .lineLimit(3...8)
+                .lineSpacing(2)
                 .textInputAutocapitalization(.sentences)
                 .focused($focusedField, equals: "setupDefaults")
                 .disabled(isLocked)
