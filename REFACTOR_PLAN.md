@@ -1252,13 +1252,16 @@ Move equipment/setup to Exercise-level and fill the Exercise-detail UI gaps left
 - [x] Build green (`xcodebuild ... -destination 'generic/platform=iOS Simulator' build` → `** BUILD SUCCEEDED **`). Two warnings present are pre-existing (`WarmupSchemeEditor.swift:90` unused `scheme`, `RoutineEditor.swift:314` unused `ex`) — no new warnings introduced
 - [x] Full XCTest suite **272/272 pass in ~2.09s** (was 268; +4 from `ExerciseModelTests`). No existing tests rewritten; no fixtures modified
 
-**10-C — Equipment + Setup editor rows in ExerciseDetailView:**
+**Completed (10-C — Equipment + Setup editor rows in ExerciseDetailView, 2026-05-24):**
 
-- [ ] Add "Equipment" and "Setup defaults" `TextField` rows to `ExerciseDetailView.DetailForm` bound to the two new optional fields via `Binding(_:replacingNilWith:)`. Place them in the existing Info section after Notes / Time-based
-- [ ] `.disabled(isLocked)` mirror on each
-- [ ] **Risk: very low.** UI only; depends on 10-B's schema. Build-only gate
-- [ ] Manual regression: edit both fields → relaunch → values persist; locked-routine path disables editors
-- [ ] Proposed commit scope: `feat(exercise): edit equipment and setup defaults in detail view`
+- [x] Added "Equipment" row to `ExerciseDetailView.DetailForm` (`Log/Main/ExercisesView.swift`) as a push-style `NavigationLink` mirroring the 10-A `BodyPartPicker` pattern. Destination is a new `EquipmentPicker` view with two sections: (1) selection rows — `Not set` → optional legacy/custom row (when current value is non-empty and non-canonical) → 12 canonical options in this order: `Barbell, Dumbbell, Cable, Machine, Smith Machine, Kettlebell, Resistance Band, Bodyweight, EZ Bar, Trap Bar, Plate, Sled` — with a trailing tinted `checkmark` SF Symbol on the currently selected row; (2) a single `Other…` button that opens an iOS `.alert` with a `TextField` for free-text custom entry
+- [x] **Legacy/custom value preservation** — the picker never silently rewrites or hides non-canonical values. Unknown/custom equipment values surface as a row between `Not set` and the canonical options, and round-trip through `Other…` entries on subsequent opens. Matches the 10-A `BodyPartPicker` semantics
+- [x] Added "Setup Defaults" row to `ExerciseDetailView.DetailForm` bound to `Exercise.setupDefaults` via the standard nil-collapse binding. Multiline/free-form input intended for setup cues; empty/whitespace-only input collapses to `nil` on save
+- [x] `.disabled(isLocked)` mirror on both new rows. Locked-exercise behavior preserved (rows dim, picker push disabled, Form remains scrollable)
+- [x] **Behavior preserved end-to-end**: Name editing, Body Part picker (10-A), Notes, Time-based toggle, exercise create / delete flows, list row display, keyboard "Done" toolbar, locked/in-use exercise behavior, and routine/workout sanity all preserved. No model changes; no schema change; `SlotPrescription.equipment` / `setupNotes` unchanged (still 10-D/10-E scope). `PlannedPrescriptionSnapshot` source not changed yet (still 10-E)
+- [x] No tests added per CLAUDE.md's Build & Test Policy (pure UI slice on optional fields already covered by `ExerciseModelTests`)
+- [x] Build green; full XCTest suite **272/272 pass**
+- [x] Manual regression passed for: equipment canonical pick, equipment Not set, equipment custom value via `Other…`, setup defaults save/clear, existing fields, locked/in-use exercise, routine/workout sanity. **One partial manual-test gap**: multiline entry in Setup Defaults could not be fully verified because `Command+Enter` did not insert a newline in the simulator/input method — see pending UI follow-up below
 
 **10-D — Defensive one-time backfill (slot → Exercise):**
 
@@ -1288,16 +1291,23 @@ Move equipment/setup to Exercise-level and fill the Exercise-detail UI gaps left
 **Acceptance criteria:**
 
 - [x] Exercise detail screen shows `bodyPart` / muscle group (read + edit) (10-A — shipped 2026-05-23 as a picker with legacy/custom value preservation)
-- [ ] Exercise detail screen shows Equipment and Setup defaults (read + edit) (10-C)
+- [x] Exercise detail screen shows Equipment and Setup defaults (read + edit) (10-C — shipped 2026-05-24 as a push-style equipment picker + multiline setup-defaults editor, mirroring 10-A's `BodyPartPicker` legacy/custom-value preservation)
 - [ ] Equipment and Setup are edited on `Exercise` (not `SlotPrescription`) after migration (10-B, 10-C, 10-E)
 - [ ] `SlotPrescription.equipment` / `setupNotes` removed from the schema (10-E). Slot-level override is NOT shipped as part of Phase 10 unless 10-F is explicitly green-lit
 - [ ] Defensive migration backfill is idempotent and non-destructive (10-D)
 - [ ] `PlannedPrescriptionSnapshot.equipment` / `setupNotes` capture `Exercise.equipmentType` / `setupDefaults` **at session start** (10-E)
 - [ ] No silent mutations: editing `Exercise.equipmentType` / `setupDefaults` after a workout starts does **not** propagate to that workout's snapshot or to History rows for any prior workout (10-E test)
 
+**Phase 10 / Exercise UI polish — pending follow-ups (not blocking 10-D/10-E):**
+
+- [ ] **Setup Defaults multiline input ergonomics.** 10-C manual testing could not fully verify multiline entry in the new Setup Defaults editor because `Command+Enter` did not insert a newline in the simulator / current input method. Action: revisit the input affordance (e.g. confirm `TextField`'s `axis: .vertical` line-break key binding on iOS, or switch to `TextEditor` if needed) and re-verify multiline save/clear round-trip on device
+- [ ] **Audit/remove the Exercise-page "default rest" option.** A default-rest field exists on the Exercise page, but default rest was later added to Settings; the Exercise-page surface may now be redundant. Action: confirm whether anything reads the Exercise-level default rest, and either remove the Exercise-page row or document why it must coexist with the Settings-level default
+- [ ] **Exercise list sorting.** Users would benefit from sorting the Exercises list by body part, alphabetically, or other criteria (current order is the `@Query(sort: \Exercise.name)` default). Action: scope a small UI slice to add a sort picker (alpha / by body part / other) to `ExercisesView`
+- [ ] **Default exercise library / seed catalogue.** Users currently create every Exercise from scratch. Action: scope a future onboarding / seeding slice that ships a built-in default exercise catalogue (with canonical `bodyPart` + `equipmentType` values) so new installs are populated out of the box
+
 **Phase 7 dependency check:** none of the remaining Phase 7 optional / performance items (end-to-end cold-restart resume test, history-grouping-survives-rename test, history `body` perf audit, summary-field caching, `resolvedTemplates(in:)` fetch audit, `RestTimer.stableNotificationID` nil-slotID, host-less `LogTests` conversion) block Phase 10. They touch independent surfaces; Phase 10 may proceed without them.
 
-**Next recommended implementation slice: 10-C** (10-A and 10-B both shipped 2026-05-23). Rationale: 10-C is the UI consumer of the 10-B schema additions — a small, build-only-gated slice that closes one Phase 10 acceptance criterion ("Exercise detail screen shows Equipment and Setup defaults (read + edit)"). Single file (`Log/Main/ExercisesView.swift`); zero new tests required per CLAUDE.md's Build & Test Policy (pure UI on optional fields whose schema-canary coverage is already in `ExerciseModelTests`). After 10-C ships, the order is 10-D → 10-E, with 10-F left optional.
+**Next recommended implementation slice: 10-D** (10-A, 10-B, and 10-C all shipped — 10-A/10-B on 2026-05-23, 10-C on 2026-05-24). Rationale: 10-D is the defensive one-shot slot→Exercise backfill helper (`BackfillService.migrateEquipmentSetupToExercise`) that must run on at least one TestFlight release before 10-E can drop `SlotPrescription.equipment` / `setupNotes` from the schema. Per CLAUDE.md's Build & Test Policy this slice is persistence-touching → tests required (~4 cases on `SwiftDataTestHarness`: empty-store no-op, copy when Exercise field is nil, no-overwrite when Exercise field is non-nil, idempotency). After 10-D ships, the order is 10-E (schema drop + snapshot repoint + immutability test), with 10-F left optional and gated on a real use case.
 
 ### Phase 11 — View decomposition / file architecture
 
