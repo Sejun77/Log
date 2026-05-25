@@ -1632,6 +1632,8 @@ app and must never destabilize workout, routine, history, or model behavior.
 - No `ModelContext` writes; never creates `Workout` / `WorkoutItem` / `SetLog`
   rows. Sample data is in-memory and value-typed only — it can never reach or
   pollute persisted History.
+- Real-history mode is strictly read-only: it reads completed `Workout` rows
+  via `@Query` and never mutates, inserts, or deletes History or the Calendar.
 - Pure calculation layer is value-typed and SwiftData-free (testable without
   `SwiftDataTestHarness`).
 - Reachable from a low-risk entry point (Settings → Showcase), not a new root
@@ -1694,22 +1696,52 @@ app and must never destabilize workout, routine, history, or model behavior.
       does not touch real History; build + full suite + manual regression
       passed
 
-### Slice 4+ — Pending
+### Slice 4 — Real workout-history extraction ✅
 
-**Pending:**
+- [x] Added `Log/Services/WorkoutHistoryAnalytics.swift` (pure, read-only
+      extractor over `[Workout]`; reuses Slice-1 `e1RM` / `bestE1RM` /
+      `sessionVolume` so numbers match `HistoryView.ProgressChart`)
+- [x] Added Sample / Real History toggle to `AnalyticsView`; sample mode stays
+      available for the video showcase
+- [x] Real mode reads completed workouts only (`completedAt != nil`); skips
+      active/in-progress and legacy pre-completion rows; `Workout.date` is the
+      time axis
+- [x] e1RM from working sets (`weight > 0`, `reps > 0`, `reps ≤ 12`), max per
+      session; volume `Σ(weight × reps)` from working sets (no rep cap)
+- [x] Aggregates multiple `WorkoutItem`s for the same exercise within one
+      workout; identity by `Exercise.id`, with `exerciseNameSnapshot` fallback
+      for deleted exercises
+- [x] Real-history exercise picker; graceful empty states (no completed
+      history → suggest Sample Data; selected-but-no-data → clear message)
+- [x] Read-only: no fake persisted `Workout` rows, History not mutated
+- [x] Added `LogTests/WorkoutHistoryAnalyticsTests.swift` (8 harness tests:
+      completed-only, e1RM max + rep cap, volume aggregation, deleted-exercise
+      fallback, multi-item same exercise, invalid-sets filtered, identity +
+      sort); build + full suite + manual regression passed
 
-- [ ] `S′(t)` value display polish: the explainer calls `S′(t)` the estimated
-      instantaneous rate of change, but the actual sample `S′(t)` value should
-      be surfaced clearly in the card/explanation (tie the prose to the number).
-- [ ] Real workout-history extraction:
-  - [ ] Add a Real / Sample data toggle (sample remains available for the
-        video showcase)
-  - [ ] Use real `Workout` history when available
-  - [ ] Extract e1RM and volume from existing `Workout` / `WorkoutItem` /
-        `SetLog` (working sets only; reuse the e1RM / volume rules from
-        `HistoryView.ProgressChart` so numbers stay consistent app-wide)
-  - [ ] Read-only extraction; do not create fake persisted workouts
-- [ ] Optional later polish:
-  - [ ] Exercise picker for real data
-  - [ ] More extensive explanation text for the video showcase
-  - [ ] Export / screenshot-friendly layout
+### Slice 4.1 — S′(t) value display polish ✅
+
+- [x] `AnalyticsView` explanation now surfaces the actual current `S′(t)` value
+      and ties it to the plateau / slowing interpretation; mode-aware wording
+      ("this sample" vs "your history")
+- [x] "Recent S′(t)" stat-card caption clarified ("≈ instantaneous rate")
+- [x] Graceful "not enough data" fallback when `S′(t)` is undefined
+- [x] No formula changes; build + manual regression passed
+
+### Safety decisions (locked)
+
+- Sample data is in-memory and value-typed only — never persisted.
+- No fake persisted `Workout` / `WorkoutItem` / `SetLog` rows are ever created.
+- Real-history mode is strictly read-only (reads completed workouts via
+  `@Query`; no inserts / updates / deletes).
+- History and the Calendar are never mutated by this feature.
+
+### Pending / optional
+
+Only pursue if the showcase graduates into a regular user-facing analytics
+feature; not required for the AP Calculus AB video.
+
+- [ ] More video-friendly explanation polish if needed
+- [ ] Screenshot / export-friendly layout if needed
+- [ ] A History shortcut/entry point — only if this becomes a regular feature
+      (today it lives under Settings → Showcase to keep risk low)
