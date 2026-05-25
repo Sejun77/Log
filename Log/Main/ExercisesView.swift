@@ -624,17 +624,16 @@ private struct BodyPartPicker: View {
     /// confirmation alert. Stores the option's value (not its `IndexSet`)
     /// so the confirm path can route through `customStore.remove(_:)` —
     /// the value-based remover is case-insensitive and resilient to the
-    /// list shifting between swipe and confirm. **`.onDelete` is
-    /// deliberately not used here**: SwiftUI's swipe-revealed Delete
-    /// button (the `.onDelete` mechanism) assumes the data source will
-    /// mutate inside its closure and animates a row-collapse on tap; if
-    /// the closure only stashes state (as Slice A originally did), the
-    /// row briefly collapses then springs back when the data hasn't
-    /// changed and the Section's footer text overlaps mid-animation.
-    /// `.swipeActions` with an explicit `Button` has no such "assumed
-    /// mutation" animation — the row stays in place until the actual
-    /// `customStore.remove(...)` happens inside `withAnimation`, giving
-    /// one clean animation pass for the deletion.
+    /// list shifting between swipe and confirm. **Neither `.onDelete` nor
+    /// a `role: .destructive` swipe button is used here**: both make
+    /// SwiftUI assume the data source mutates and play the row-collapse
+    /// (assumed-delete) transition on tap. When the action only stashes
+    /// state for the confirmation alert, the row collapses then springs
+    /// back once the data is found unchanged, and the Section footer text
+    /// overlaps mid-animation. A **roleless** `.swipeActions` `Button`
+    /// (tinted red purely for the destructive look) has no such animation
+    /// — the row stays put until the confirmed `customStore.remove(...)`
+    /// runs inside `withAnimation`, giving one clean deletion pass.
     @State private var pendingSharedRemoval: String? = nil
     /// Set by the legacy-row "Remove custom value" button. Non-nil drives
     /// the "Clear Body Part?" confirmation alert. The current exercise's
@@ -692,11 +691,19 @@ private struct BodyPartPicker: View {
                             .contentShape(Rectangle())
                         }
                         .swipeActions(allowsFullSwipe: false) {
-                            Button(role: .destructive) {
+                            // Roleless Button + .tint(.red): a `.destructive`
+                            // *role* here makes SwiftUI play its assumed-delete
+                            // row-collapse transition on tap, even though the
+                            // action only stashes pending state for the
+                            // confirmation alert — producing the
+                            // collapse-then-spring-back + footer-overlap glitch.
+                            // Red tint keeps the destructive look without it.
+                            Button {
                                 pendingSharedRemoval = custom
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
+                            .tint(.red)
                         }
                     }
                 } header: {
@@ -872,10 +879,10 @@ private struct EquipmentPicker: View {
     /// Mirrors `BodyPartPicker.pendingSharedRemoval` — non-nil drives the
     /// "Remove Custom Equipment?" confirmation alert. Stores the option's
     /// value so the confirm path can route through the case-insensitive
-    /// value-based `customStore.remove(_:)`. **`.onDelete` is deliberately
-    /// not used here** — see the matching comment on
-    /// `BodyPartPicker.pendingSharedRemoval` for the row-collapse /
-    /// footer-overlap rationale.
+    /// value-based `customStore.remove(_:)`. **Neither `.onDelete` nor a
+    /// `role: .destructive` swipe button is used here** — see the matching
+    /// comment on `BodyPartPicker.pendingSharedRemoval` for the
+    /// row-collapse / footer-overlap rationale.
     @State private var pendingSharedRemoval: String? = nil
     /// Mirrors `BodyPartPicker.pendingLegacyClear` — non-nil drives the
     /// "Clear Equipment?" confirmation alert for the legacy-row clear
@@ -928,11 +935,19 @@ private struct EquipmentPicker: View {
                             .contentShape(Rectangle())
                         }
                         .swipeActions(allowsFullSwipe: false) {
-                            Button(role: .destructive) {
+                            // Roleless Button + .tint(.red): a `.destructive`
+                            // *role* here makes SwiftUI play its assumed-delete
+                            // row-collapse transition on tap, even though the
+                            // action only stashes pending state for the
+                            // confirmation alert — producing the
+                            // collapse-then-spring-back + footer-overlap glitch.
+                            // Red tint keeps the destructive look without it.
+                            Button {
                                 pendingSharedRemoval = custom
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
+                            .tint(.red)
                         }
                     }
                 } header: {

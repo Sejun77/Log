@@ -12,13 +12,15 @@ struct TechniquePlanEditor: View {
     @Bindable var prescription: SlotPrescription
     @State private var showAdd = false
     @State private var addType: TechniqueType = .dropset
-    /// Non-nil drives the "Delete Technique?" confirmation alert. Both
-    /// per-row swipe (`.swipeActions`) and edit-mode batch delete
-    /// (`.onDelete`) route here without mutating; the actual
+    /// Non-nil drives the "Delete Technique?" confirmation alert. Set by
+    /// the per-row swipe Delete button (a roleless `.swipeActions`
+    /// `Button`, tinted red) without mutating; the actual
     /// `deletePlans(at:)` call lives inside the alert's destructive
-    /// button (wrapped in `withAnimation`). See the Slice A rationale
-    /// on `BodyPartPicker.pendingSharedRemoval` for why `.onDelete`
-    /// alone produces a row-collapse-then-spring-back glitch.
+    /// button (wrapped in `withAnimation`). See the rationale on
+    /// `BodyPartPicker.pendingSharedRemoval`: a `.onDelete` handler or a
+    /// `role: .destructive` swipe button produces a
+    /// collapse-then-spring-back glitch, so edit-mode delete is dropped
+    /// here — `EditButton` still drives reordering via `.onMove`.
     @State private var pendingDeleteOffsets: IndexSet? = nil
 
     private var sorted: [TechniquePlan] {
@@ -43,7 +45,7 @@ struct TechniquePlanEditor: View {
                         TechniquePlanRow(plan: plan)
                     }
                     .swipeActions(allowsFullSwipe: false) {
-                        Button(role: .destructive) {
+                        Button {
                             if let idx = sorted.firstIndex(where: {
                                 $0.id == plan.id
                             }) {
@@ -52,10 +54,8 @@ struct TechniquePlanEditor: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
-                }
-                .onDelete { offsets in
-                    pendingDeleteOffsets = offsets
                 }
                 .onMove(perform: movePlans)
             } header: {

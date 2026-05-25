@@ -8,14 +8,16 @@ struct WarmupSchemeEditor: View {
     @Environment(\.modelContext) private var ctx
     @Bindable var prescription: SlotPrescription
     @State private var showAddStep = false
-    /// Non-nil drives the "Delete Warmup Step?" confirmation alert.
-    /// Both the per-row swipe (`.swipeActions`) and edit-mode batch
-    /// delete (`.onDelete`) route here without mutating; the actual
+    /// Non-nil drives the "Delete Warmup Step?" confirmation alert. Set
+    /// by the per-row swipe Delete button (a roleless `.swipeActions`
+    /// `Button`, tinted red) without mutating; the actual
     /// `deleteSteps(at:)` call lives inside the alert's destructive
-    /// button (wrapped in `withAnimation`). See the Slice A glitch
-    /// rationale on `BodyPartPicker.pendingSharedRemoval` — `.onDelete`
-    /// alone would assume mutation and animate a row-collapse on tap
-    /// before springing back.
+    /// button (wrapped in `withAnimation`). See the glitch rationale on
+    /// `BodyPartPicker.pendingSharedRemoval`: a `.onDelete` handler or a
+    /// `role: .destructive` swipe button assumes mutation and animates a
+    /// row-collapse on tap before springing back, so edit-mode delete is
+    /// intentionally dropped — `EditButton` still drives reordering via
+    /// `.onMove`.
     @State private var pendingDeleteOffsets: IndexSet? = nil
 
     private var sortedSteps: [WarmupStep] {
@@ -81,7 +83,7 @@ struct WarmupSchemeEditor: View {
             ForEach(sortedSteps) { step in
                 WarmupStepRow(step: step)
                     .swipeActions(allowsFullSwipe: false) {
-                        Button(role: .destructive) {
+                        Button {
                             if let idx = sortedSteps.firstIndex(where: {
                                 $0.id == step.id
                             }) {
@@ -90,10 +92,8 @@ struct WarmupSchemeEditor: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
-            }
-            .onDelete { offsets in
-                pendingDeleteOffsets = offsets
             }
             .onMove(perform: moveSteps)
         }

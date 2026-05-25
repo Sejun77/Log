@@ -100,14 +100,16 @@ struct SupersetDetailNoRest: View {
     @State private var showAddExerciseSheet = false
     @State private var showMinExerciseAlert = false
     /// Non-nil drives the "Remove Exercise from Superset?" confirmation
-    /// alert. Set by both the per-row `.swipeActions` Delete button and
-    /// the edit-mode `.onDelete` handler (both routed through
+    /// alert. Set by the per-row swipe Delete button (a roleless
+    /// `.swipeActions` `Button`, tinted red) routed through
     /// `removeExercise(at:)`, which keeps the existing routine-lock +
     /// min-2 guards so the confirm prompt only appears for deletions
-    /// that would actually proceed). The real deletion (formerly the
+    /// that would actually proceed. The real deletion (formerly the
     /// body of `removeExercise`) now lives in
     /// `performRemoveExercise(at:)` and runs inside `withAnimation`
-    /// from the alert's destructive button.
+    /// from the alert's destructive button. Edit-mode `.onDelete` is
+    /// intentionally not wired (it would animate a row-collapse before
+    /// confirmation); `EditButton` still drives reordering via `.onMove`.
     @State private var pendingDeleteOffsets: IndexSet? = nil
 
     private func templates(for re: RoutineExercise) -> [SetTemplate] {
@@ -299,7 +301,7 @@ struct SupersetDetailNoRest: View {
                         }
                         .swipeActions(allowsFullSwipe: false) {
                             if !isRoutineLocked {
-                                Button(role: .destructive) {
+                                Button {
                                     let sorted = block.exercises.sorted {
                                         $0.order < $1.order
                                     }
@@ -313,14 +315,13 @@ struct SupersetDetailNoRest: View {
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
+                                .tint(.red)
                             }
                         }
                     }
                 }
                 .onMove(perform: moveExercises)
-                .onDelete(perform: removeExercise)
                 .moveDisabled(isRoutineLocked)
-                .deleteDisabled(isRoutineLocked)
             } header: {
                 Text("Exercises (drag to reorder)")
             } footer: {
