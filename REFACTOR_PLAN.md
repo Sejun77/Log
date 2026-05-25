@@ -1617,3 +1617,99 @@ Prefer:
 - Query-based fetch with sort descriptors
 - Precomputed summaries (last performed, session count, duration, etc.)
 - Cached groupings keyed by IDs
+
+---
+
+## 9) AP Calculus AB Analytics Showcase (Addendum)
+
+A self-contained, additive feature that applies calculus concepts to workout
+data for an AP Calculus AB project/video. It layers on top of the existing
+app and must never destabilize workout, routine, history, or model behavior.
+
+**Hard invariants for this feature (in addition to §1):**
+
+- No new `@Model`s, no schema changes, no migrations.
+- No `ModelContext` writes; never creates `Workout` / `WorkoutItem` / `SetLog`
+  rows. Sample data is in-memory and value-typed only — it can never reach or
+  pollute persisted History.
+- Pure calculation layer is value-typed and SwiftData-free (testable without
+  `SwiftDataTestHarness`).
+- Reachable from a low-risk entry point (Settings → Showcase), not a new root
+  tab.
+
+**Calculus mapping:**
+
+- `S(t)` = estimated strength over time, from per-session e1RM
+  (Epley: `w · (1 + r/30)`, valid domain reps ≤ 12).
+- Average rate of change = secant slope `ΔS/Δt`.
+- `S′(t)` ≈ finite-difference first derivative (central interior, one-sided
+  ends), reported per week.
+- Plateau ⇔ recent `S′(t) ≈ 0` within a threshold.
+- `S″(t)` sign ⇒ gains accelerating / slowing / roughly constant.
+- Accumulated training volume = Riemann-sum-style running total over discrete
+  sessions.
+
+### Slice 1 — Pure `StrengthAnalytics` service ✅
+
+- [x] Added `Log/Services/StrengthAnalytics.swift` (pure `enum` namespace,
+      value types only — no `ModelContext`, `@Query`, `@Model`, or UI)
+- [x] e1RM via Epley `w(1 + r/30)`, with documented valid domain
+      (`weight > 0`, `0 < reps ≤ 12`)
+- [x] Average rate of change (per-day + per-week secant slope; guards Δt ≤ 0)
+- [x] Finite-difference first derivative `S′(t)` (forward / central / backward)
+- [x] Finite-difference second derivative `S″(t)` + concavity classification
+- [x] Plateau detection from recent `S′(t) ≈ 0` (configurable threshold)
+- [x] Accumulated volume as a Riemann-sum-style running total
+- [x] Edge cases handled: empty / single / two points, duplicate & unsorted
+      dates, all-equal values, non-positive weights/reps
+- [x] Added `LogTests/StrengthAnalyticsTests.swift` (20 pure tests); full suite
+      passed
+
+### Slice 2 — In-memory sample workout data ✅
+
+- [x] Added `Log/Services/SampleWorkoutData.swift` (value-typed Bench Press
+      dataset; 10 weekly sessions × 3 sets)
+- [x] Trend shape: early improvement → mid-block dip → plateau at top weight;
+      volume rises then tapers
+- [x] Adapters convert sample sessions into `StrengthAnalytics` series; pure
+      and SwiftData-free
+- [x] No fake `Workout` rows; no History pollution
+- [x] Added `LogTests/SampleWorkoutDataTests.swift` (9 tests verifying
+      non-empty, sorted dates, analyzable series, positive accumulated volume,
+      overall increase, slowing/plateau near the end); full suite passed
+
+### Slice 3 — Calculus Analytics showcase UI ✅
+
+- [x] Added `Log/Main/AnalyticsView.swift` (read-only; series + summary
+      computed once in `init`, no heavy work in `body`)
+- [x] Added Settings → Showcase → "Calculus Analytics" navigation entry
+      (additive `Section`; no tab-bar change, no behavior change)
+- [x] Strength chart `S(t)` (e1RM, Line + Point); per-session volume bars;
+      accumulated-volume Riemann chart (Area + Line)
+- [x] Metric cards: latest e1RM, total change, average rate of change,
+      recent `S′(t)`, plateau status, concavity / `S″(t)`, total accumulated
+      volume
+- [x] AP Calculus explanation section mapping each concept
+- [x] Uses in-memory sample data only; no model changes, no SwiftData writes,
+      does not touch real History; build + full suite + manual regression
+      passed
+
+### Slice 4+ — Pending
+
+**Pending:**
+
+- [ ] `S′(t)` value display polish: the explainer calls `S′(t)` the estimated
+      instantaneous rate of change, but the actual sample `S′(t)` value should
+      be surfaced clearly in the card/explanation (tie the prose to the number).
+- [ ] Real workout-history extraction:
+  - [ ] Add a Real / Sample data toggle (sample remains available for the
+        video showcase)
+  - [ ] Use real `Workout` history when available
+  - [ ] Extract e1RM and volume from existing `Workout` / `WorkoutItem` /
+        `SetLog` (working sets only; reuse the e1RM / volume rules from
+        `HistoryView.ProgressChart` so numbers stay consistent app-wide)
+  - [ ] Read-only extraction; do not create fake persisted workouts
+- [ ] Optional later polish:
+  - [ ] Exercise picker for real data
+  - [ ] More extensive explanation text for the video showcase
+  - [ ] Export / screenshot-friendly layout
