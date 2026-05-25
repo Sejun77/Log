@@ -1,54 +1,72 @@
 import Charts
+import SwiftData
 import SwiftUI
 
 // MARK: - AnalyticsView
 
-/// AP Calculus AB showcase screen. Renders the in-memory `SampleWorkoutData`
-/// Bench Press dataset through the pure `StrengthAnalytics` layer — strength
-/// and volume charts, calculus stat cards, and a short concept explainer.
+/// AP Calculus AB showcase screen. Renders a strength/volume analysis through
+/// the pure `StrengthAnalytics` layer, from either the in-memory
+/// `SampleWorkoutData` Bench Press dataset (default, for the video) or the
+/// user's real completed workout history.
 ///
-/// Read-only and self-contained: it reads no `@Query`, writes no
-/// `ModelContext`, and constructs no `Workout`/`WorkoutItem`/`SetLog`. All
-/// series and the summary are computed once in `init` (10 sample points), so
+/// Read-only end to end: it reads `Workout` rows via `@Query` but writes no
+/// `ModelContext`, mutates no history, and constructs no
+/// `Workout`/`WorkoutItem`/`SetLog`. Real-history extraction is delegated to
+/// the pure `WorkoutHistoryAnalytics`. Derived series live in `@State` and are
+/// refreshed by `recompute()` on appear / mode / selection / data changes, so
 /// the SwiftUI `body` does no heavy work. Pushed from Settings, so it adds no
 /// `NavigationStack` of its own.
 struct AnalyticsView: View {
 
-    private let exercise: SampleWorkoutData.SampleExercise
-    private let strengthPoints: [StrengthAnalytics.SeriesPoint]
-    private let volumePoints: [StrengthAnalytics.VolumePoint]
-    private let summary: StrengthAnalytics.AnalysisSummary
+    // MARK: - Data source
 
-    /// `start` anchors the (otherwise deterministic) sample timeline; the
-    /// default ends the 10-week block near today so the charts read as recent
-    /// history on camera.
+    enum DataSource: String, CaseIterable, Identifiable {
+        case sample, real
+        var id: String { rawValue }
+        var label: String { self == .sample ? "Sample" : "Real History" }
+    }
+
+    @Query(sort: \Workout.date) private var workouts: [Workout]
+
+    /// Anchors the (deterministic) sample timeline; the default ends the
+    /// 10-week block near today so the charts read as recent history.
+    private let sampleStart: Date
+
     init(
         start: Date = Calendar.current.date(byAdding: .day, value: -63, to: .now)
             ?? SampleWorkoutData.defaultStartDate
     ) {
-        let ex = SampleWorkoutData.benchPress(startingFrom: start)
-        self.exercise = ex
-        self.strengthPoints = SampleWorkoutData.strengthSeries(ex.sessions)
-        self.volumePoints = StrengthAnalytics.accumulatedVolume(
-            SampleWorkoutData.volumeSeries(ex.sessions)
-        )
-        self.summary = SampleWorkoutData.analysisSummary(for: ex)
+        self.sampleStart = start
     }
 
+    // MARK: - State
+
+    @State private var dataSource: DataSource = .sample
+    @State private var realSelection: WorkoutHistoryAnalytics.ExerciseRef?
+    @State private var availableRefs: [WorkoutHistoryAnalytics.ExerciseRef] = []
+
+    @State private var exerciseTitle: String = ""
+    @State private var strengthPoints: [StrengthAnalytics.SeriesPoint] = []
+    @State private var volumePoints: [StrengthAnalytics.VolumePoint] = []
+    @State private var summary = StrengthAnalytics.analyze(strength: [], volume: [])
+
     private var unit: String { Units.weightIsKg ? "kg" : "lb" }
+
+    // MARK: - Body
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DSSpacing.lg) {
                 header
+                sourcePicker
 
-                if strengthPoints.isEmpty {
-                    emptyState
+                if dataSource == .real && availableRefs.isEmpty {
+                    realEmptyState
                 } else {
-                    strengthChartCard
-                    volumeChartCard
-                    accumulatedChartCard
-                    statsGrid
+                    if dataSource == .real {
+                        exercisePicker
+                    }
+                    analysisContent
                 }
 
                 explanationCard
@@ -58,9 +76,59 @@ struct AnalyticsView: View {
         .background(DSColor.bg.ignoresSafeArea())
         .navigationTitle("Calculus Analytics")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { recompute() }
+        .onChange(of: dataSource) { recompute() }
+        .onChange(of: realSelection) { recompute() }
+        .onChange(of: workouts) { recompute() }
     }
 
-    // MARK: - Header
+    // MARK: - Recompute
+
+    /// Rebuild the derived series + summary for the current mode/selection.
+    /// Pure data plumbing; no persistence, no mutation of model objects.
+    private func recompute() {
+        switch dataSource {
+        case .sample:
+            let ex = SampleWorkoutData.benchPress(startingFrom: sampleStart)
+            let strength = SampleWorkoutData.strengthSeries(ex.sessions)
+            let volume = SampleWorkoutData.volumeSeries(ex.sessions)
+            apply(strength: strength, volume: volume, title: ex.name)
+            availableRefs = []
+
+        case .real:
+            let refs = WorkoutHistoryAnalytics.availableExercises(in: workouts)
+            availableRefs = refs
+
+            // Keep the current selection if it still exists; else first; else none.
+            let resolved = realSelection
+                .flatMap { sel in refs.first { $0.key == sel.key } }
+                ?? refs.first
+            if realSelection?.key != resolved?.key {
+                realSelection = resolved
+            }
+
+            guard let ref = resolved else {
+                apply(strength: [], volume: [], title: "")
+                return
+            }
+            let strength = WorkoutHistoryAnalytics.strengthSeries(for: ref, in: workouts)
+            let volume = WorkoutHistoryAnalytics.volumeSeries(for: ref, in: workouts)
+            apply(strength: strength, volume: volume, title: ref.displayName)
+        }
+    }
+
+    private func apply(
+        strength: [StrengthAnalytics.SeriesPoint],
+        volume: [StrengthAnalytics.VolumePoint],
+        title: String
+    ) {
+        strengthPoints = strength
+        volumePoints = StrengthAnalytics.accumulatedVolume(volume)
+        summary = StrengthAnalytics.analyze(strength: strength, volume: volume)
+        exerciseTitle = title
+    }
+
+    // MARK: - Header / controls
 
     private var header: some View {
         VStack(alignment: .leading, spacing: DSSpacing.xs) {
@@ -68,13 +136,64 @@ struct AnalyticsView: View {
                 .font(.dsTitle)
                 .foregroundStyle(DSColor.textPrimary)
             HStack(spacing: DSSpacing.sm) {
-                Text(exercise.name)
-                    .font(.dsBodySecondary)
-                    .foregroundStyle(.secondary)
-                DSTag(text: "Sample data", style: .accent)
+                if !exerciseTitle.isEmpty {
+                    Text(exerciseTitle)
+                        .font(.dsBodySecondary)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                DSTag(
+                    text: dataSource == .sample ? "Sample data" : "Real history",
+                    style: .accent
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sourcePicker: some View {
+        Picker("Data source", selection: $dataSource) {
+            ForEach(DataSource.allCases) { source in
+                Text(source.label).tag(source)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var exercisePicker: some View {
+        DSCard {
+            HStack {
+                Text("Exercise")
+                    .font(.dsBody.weight(.semibold))
+                    .foregroundStyle(DSColor.textPrimary)
+                Spacer()
+                Picker("Exercise", selection: $realSelection) {
+                    ForEach(availableRefs) { ref in
+                        Text(ref.displayName).tag(Optional(ref))
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(DSColor.brand)
+            }
+        }
+    }
+
+    // MARK: - Analysis content
+
+    @ViewBuilder
+    private var analysisContent: some View {
+        if strengthPoints.isEmpty && volumePoints.isEmpty {
+            analysisEmptyState
+        } else {
+            if !strengthPoints.isEmpty {
+                strengthChartCard
+            }
+            if !volumePoints.isEmpty {
+                volumeChartCard
+                accumulatedChartCard
+            }
+            statsGrid
+        }
     }
 
     // MARK: - Charts
@@ -149,7 +268,7 @@ struct AnalyticsView: View {
         }
     }
 
-    // MARK: - Stats Grid
+    // MARK: - Stats grid
 
     private var statsGrid: some View {
         LazyVGrid(
@@ -216,11 +335,29 @@ struct AnalyticsView: View {
         }
     }
 
-    // MARK: - Empty state
+    // MARK: - Empty states
 
-    private var emptyState: some View {
+    /// Real mode with no completed history yet — points the user at sample mode
+    /// so the showcase still works on a fresh device.
+    private var realEmptyState: some View {
         DSCard {
-            Text("No sample data to analyze.")
+            Text("No completed workout history yet")
+                .font(.dsSection)
+                .foregroundStyle(DSColor.textPrimary)
+            Text("Finish a workout with logged working sets to analyze your real progress, or switch to Sample Data to see the showcase.")
+                .font(.dsBodySecondary)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            DSSecondaryButton(title: "Use Sample Data", systemImage: "sparkles") {
+                dataSource = .sample
+            }
+        }
+    }
+
+    /// Selected exercise resolved but produced no analyzable working sets.
+    private var analysisEmptyState: some View {
+        DSCard {
+            Text("No analyzable working sets for this exercise.")
                 .font(.dsBody)
                 .foregroundStyle(.secondary)
         }
@@ -259,13 +396,14 @@ struct AnalyticsView: View {
     }
 
     /// S′(t) explainer that ties the finite-difference method to the actual
-    /// sample value the cards show, with a graceful "not enough data" fallback.
+    /// value the cards show, with a graceful "not enough data" fallback.
     private var derivativeExplanation: String {
         let method = "Instantaneous rate of progress, estimated with finite differences "
             + "(central for interior points, one-sided at the ends). "
         guard let recent = summary.recentDerivativePerWeek else {
-            return method + "Not enough data to estimate S′(t) for this sample."
+            return method + "Not enough data to estimate S′(t) yet."
         }
+        let lead = dataSource == .sample ? "For this sample" : "For your history"
         let trend: String
         if summary.isPlateau {
             trend = "so progress is plateauing"
@@ -277,7 +415,7 @@ struct AnalyticsView: View {
             trend = "so it's essentially flat"
         }
         return method
-            + "For this sample, S′(t) ≈ \(signed(recent)) \(unit)/week near the end, \(trend)."
+            + "\(lead), S′(t) ≈ \(signed(recent)) \(unit)/week near the end, \(trend)."
     }
 
     // MARK: - Formatting (view-local; no shared pure helper to test)
