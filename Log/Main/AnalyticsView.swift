@@ -176,7 +176,7 @@ struct AnalyticsView: View {
             StatCard(
                 title: "Recent S′(t)",
                 value: "\(signed(summary.recentDerivativePerWeek)) \(unit)/wk",
-                caption: "latest slope",
+                caption: "≈ instantaneous rate",
                 valueTint: changeTint(summary.recentDerivativePerWeek)
             )
             StatCard(
@@ -209,7 +209,7 @@ struct AnalyticsView: View {
 
             conceptRow("S(t)", "Strength over time. Each session's estimated 1-rep max e1RM = w·(1 + r/30) is one data point.")
             conceptRow("ΔS/Δt", "Average rate of change — the secant slope between the first and latest session.")
-            conceptRow("S′(t)", "Instantaneous rate of progress, estimated with finite differences (central for interior points, one-sided at the ends).")
+            conceptRow("S′(t)", derivativeExplanation)
             conceptRow("S′≈0", "A plateau: the slope flattens, so strength barely changes week to week.")
             conceptRow("S″(t)", "The second derivative's sign says whether gains are accelerating (+) or slowing (−).")
             conceptRow("ΣV·Δt", "Training volume accumulates as a Riemann-sum running total because workouts happen at discrete times.")
@@ -256,6 +256,28 @@ struct AnalyticsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// S′(t) explainer that ties the finite-difference method to the actual
+    /// sample value the cards show, with a graceful "not enough data" fallback.
+    private var derivativeExplanation: String {
+        let method = "Instantaneous rate of progress, estimated with finite differences "
+            + "(central for interior points, one-sided at the ends). "
+        guard let recent = summary.recentDerivativePerWeek else {
+            return method + "Not enough data to estimate S′(t) for this sample."
+        }
+        let trend: String
+        if summary.isPlateau {
+            trend = "so progress is plateauing"
+        } else if recent > 0 {
+            trend = "so strength is still rising"
+        } else if recent < 0 {
+            trend = "so strength is dipping"
+        } else {
+            trend = "so it's essentially flat"
+        }
+        return method
+            + "For this sample, S′(t) ≈ \(signed(recent)) \(unit)/week near the end, \(trend)."
     }
 
     // MARK: - Formatting (view-local; no shared pure helper to test)
