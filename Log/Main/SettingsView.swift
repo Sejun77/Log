@@ -43,6 +43,7 @@ struct SettingsView: View {
                 unitsSection
                 autoregSection
                 defaultsSection
+                showcaseSection
             }
             .navigationTitle("Settings")
         }
@@ -119,6 +120,21 @@ struct SettingsView: View {
                     : "Rest after exercise: \(defaultRestAfterExercise)s",
                 value: $defaultRestAfterExercise, in: 0...300, step: 15
             )
+        }
+    }
+
+    private var showcaseSection: some View {
+        Section {
+            NavigationLink {
+                AnalyticsView()
+            } label: {
+                Label("Calculus Analytics", systemImage: "function")
+            }
+        } header: {
+            Text("Showcase")
+        } footer: {
+            Text("AP Calculus AB demo using in-memory sample workout data. Does not touch your history.")
+                .font(.caption)
         }
     }
 
