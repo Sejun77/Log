@@ -1426,10 +1426,34 @@ struct ActiveWorkoutView: View {
                             )
                             .font(.dsBody)
 
-                            // Technique overview — dropsets shown inline in grouped rows; show only non-dropset here.
-                            let nonDropsetTechs = exercise.techniquePlansSnapshot.filter { $0.type != .dropset }
-                            if !nonDropsetTechs.isEmpty {
-                                TechniqueIndicatorRow(labels: nonDropsetTechs.map(\.summaryLabel))
+                            // Phase 3.8c — the top technique summary row is now a
+                            // *fallback only*. Every non-dropset technique normally
+                            // surfaces as a tappable set-attached chip
+                            // (`buildTechniqueChips`) on each set it targets, and
+                            // dropsets render via the unified dropset card — so an
+                            // always-on summary just duplicated that and cluttered
+                            // the block. One safety net is kept: a technique whose
+                            // targeting resolves to NO existing set (e.g.
+                            // `.setNumber(n)` or explicit `appliesToSetIndices`
+                            // pointing past the current set count after the count
+                            // shrank) would otherwise have no chip anywhere. Surface
+                            // only those "orphan" techniques here, via the same
+                            // `techniquesApplying` source of truth that produces the
+                            // chips; hide the row entirely when every technique is
+                            // already covered at the set level.
+                            let coveredOrders = Set(
+                                (0..<setCount).flatMap { i in
+                                    techniquesApplying(to: i, in: exercise)
+                                        .filter { $0.type != .dropset }
+                                        .map(\.order)
+                                }
+                            )
+                            let orphanTechs = exercise.techniquePlansSnapshot.filter {
+                                $0.type != .dropset
+                                    && !coveredOrders.contains($0.order)
+                            }
+                            if !orphanTechs.isEmpty {
+                                TechniqueIndicatorRow(labels: orphanTechs.map(\.summaryLabel))
                                     .opacity(0.6)
                             }
                         }
