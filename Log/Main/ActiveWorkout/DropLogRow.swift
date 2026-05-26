@@ -44,7 +44,11 @@ struct DropLogRow: View {
                 Text("×").foregroundStyle(.secondary).fixedSize()
 
                 VStack(alignment: .leading, spacing: 2) {
-                    TextField("Wt", text: $weight)
+                    // "0.0" placeholder signals decimal entry (the .decimalPad's
+                    // "." key is easy to miss). Stable cue for dropset weight —
+                    // the Sets-section footer caption was dropped because it
+                    // jumped with the keyboard on first focus.
+                    TextField("0.0", text: $weight)
                         .font(.dsBody.monospacedDigit())
                         .keyboardType(.decimalPad)
                         .textFieldStyle(.roundedBorder)

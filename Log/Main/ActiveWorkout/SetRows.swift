@@ -62,7 +62,11 @@ struct SetEntryRow: View {
 
                 Text("×").foregroundStyle(.secondary).fixedSize()
 
-                TextField("Wt", text: $weight)
+                // "0.0" placeholder signals decimal entry (the .decimalPad's
+                // "." key is easy to miss). It's the stable discoverability cue
+                // for working-set weight — a section footer caption was tried
+                // but jumped with the keyboard on first focus, so it was dropped.
+                TextField("0.0", text: $weight)
                     .font(.dsBody.monospacedDigit())
                     // Weight supports fractional plates (e.g. 2.5 kg) — decimal
                     // pad. Reps above stays `.numberPad` (integer-only).

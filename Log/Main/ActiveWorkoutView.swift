@@ -1433,6 +1433,13 @@ struct ActiveWorkoutView: View {
                                     .opacity(0.6)
                             }
                         }
+                        // No Sets-section footer caption here: a section footer
+                        // sits at the section's bottom edge and SwiftUI briefly
+                        // animates/reflows it upward with the keyboard on first
+                        // focus (a visible jump). Decimal-weight discoverability
+                        // instead rides on the stable "0.0" field placeholder in
+                        // SetEntryRow / DropLogRow, which never moves with the
+                        // keyboard.
                     }
                 }
                 .listStyle(.insetGrouped)

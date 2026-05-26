@@ -212,9 +212,17 @@ private struct WarmupStepEditSheet: View {
                 }
 
                 if kind == .fixedReps {
-                    Section("Weight (\(Units.weightIsKg ? "kg" : "lb"), optional)") {
-                        TextField("e.g. 60", text: $weightText)
+                    Section {
+                        // Decimal example in the placeholder + footer caption
+                        // signal decimal entry (the .decimalPad's "." key is
+                        // easy to miss). Consistent with the active-workout
+                        // weight fields.
+                        TextField("e.g. 60.5", text: $weightText)
                             .keyboardType(.decimalPad)
+                    } header: {
+                        Text("Weight (\(Units.weightIsKg ? "kg" : "lb"), optional)")
+                    } footer: {
+                        Text("Weight accepts decimals (e.g. 2.5).")
                     }
                 }
 
