@@ -513,6 +513,24 @@ Follow-up corrective slice (shipped 2026-05-26) cleaning up keyboard dismissal b
 
 - [ ] **`PlanSetTemplate.targetWeight` remains `Int?`.** Routine prescribed-default target weights stay integer-based when no log exists (the session-plan snapshot type is `Int?`). User-entered decimals are unaffected — logging reads/writes `SetLog.weight: Double?` and rehydration reads the `Double` log directly — so no decimal is lost in entry or History. Widening the snapshot's `targetWeight` to `Double?` is a structural snapshot/model design change and was deliberately excluded from this corrective slice; revisit only if decimal *prescribed* defaults become a requirement.
 
+### Phase 3.9b — Decimal-weight input discoverability polish ✅
+
+Follow-up polish (shipped 2026-05-26) to Phase 3.9a. Decimal weight entry worked, but the iOS `.decimalPad`'s "." key is rendered by the system keyboard **without** the white key-cap background of the number keys, so it was visually easy to miss — users assumed only whole weights were allowed. No model/schema changes; build green; full suite **347/347**; manual regression passed.
+
+**Confirmed limitation:**
+
+- [x] **Individual decimal-pad key styling is not possible with standard SwiftUI/UIKit keyboard APIs.** The system keyboard's key backgrounds (including the "." key) are owned by the OS keyboard process and are not exposed to the app. Restyling the decimal key would require a fully custom `inputView` keyboard — intentionally **not** implemented (higher-risk and unnecessary for a discoverability fix). Discoverability is instead signaled around the field.
+
+**Completed — chosen low-risk solution (placeholders + stable caption):**
+
+- [x] Active-workout **working-set** weight placeholder changed `"Wt"` → `"0.0"` (`SetEntryRow`) — the "." in the placeholder signals decimal entry; the placeholder is part of the text field so it never moves with the keyboard. Decimal input unchanged.
+- [x] Active-workout **dropset** weight placeholder changed `"Wt"` → `"0.0"` (`DropLogRow`). Decimal input unchanged.
+- [x] **Warmup fixed-weight** editor placeholder changed `"e.g. 60"` → `"e.g. 60.5"` (`WarmupStepEditSheet`), and its section **footer caption "Weight accepts decimals (e.g. 2.5)." is kept** — it lives in the sheet's Form near the top, adjacent to its field, and manual testing confirmed it does **not** show the first-focus keyboard jump.
+- [x] **Active-workout Sets-section footer removed.** The first attempt put the "decimals allowed" caption in the Sets `Section` footer, but a section footer sits at the section's bottom edge and SwiftUI briefly reflowed it upward with the number pad on first focus (a visible jump). Active-workout discoverability is now limited to the stable `"0.0"` placeholder; no List footer caption there.
+- [x] **Reps / duration untouched** — integer-only (`.numberPad`), no decimal hint added (placeholders stay "Reps" / "Duration (s)").
+- [x] **No separate routine-prescription weight TextField** exists outside the warmup editor (prescription fields are `Stepper`s + slot notes), so no other prescription-side surface needed a cue.
+- [x] **Preserved:** decimal entry for working-set / dropset / warmup weight; `Units.formatWeight` History display (8.5 kg → "8.5 kg"); the Phase 3.9a keyboard-overlap fix (Back/Next/Finish panel still withdraws on focus — removing the footer did not reintroduce overlap); logging, warmups, dropsets, prescriptions, Save & Exit / Resume / Finish all unchanged.
+
 ### Phase 5.2 — Rest semantics cleanup + superset flow streamline
 
 Reduce confusion by making rest fields consistent across routine editor and in-workout editing.
