@@ -203,6 +203,7 @@ struct RoutinesView: View {
                             } label: {
                                 Label("In use", systemImage: "lock.fill")
                             }
+                            .tint(.gray)
                         } else {
                             Button {
                                 pendingDeleteRoutine = r

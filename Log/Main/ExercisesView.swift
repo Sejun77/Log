@@ -254,7 +254,13 @@ struct ExercisesView: View {
                         } label: {
                             Label("In use", systemImage: "lock.fill")
                         }
+                        .tint(.gray)
                     } else {
+                        // Roleless Button + .tint(.red): keeps the destructive
+                        // red appearance while avoiding the `.destructive`-role
+                        // row-collapse glitch. Matches every other Delete swipe
+                        // (Routines / History / Routine blocks / Warmup /
+                        // Technique / superset / custom-option pickers).
                         Button {
                             pendingDeleteExercise = ex
                             deleteImpactMessage = buildImpactMessage(for: ex)
@@ -262,6 +268,7 @@ struct ExercisesView: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
                 }
             }
