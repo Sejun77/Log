@@ -47,13 +47,9 @@ struct RoutinesView: View {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     EditButton()
                 }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        focusNewRoutine = false
-                        addRoutine()
-                    }
-                }
+                // No `.keyboard` Done button: the single-line name field commits
+                // and dismisses via its return key (.submitLabel(.done) +
+                // .onSubmit below), so an external accessory button is redundant.
             }
             .alert("Delete Routine", isPresented: $showDeleteRoutineAlert) {
                 Button("Cancel", role: .cancel) {
@@ -147,7 +143,10 @@ struct RoutinesView: View {
                     .font(.dsBody)
                     .focused($focusNewRoutine)
                     .submitLabel(.done)
-                    .onSubmit { addRoutine() }
+                    .onSubmit {
+                        addRoutine()
+                        focusNewRoutine = false
+                    }
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
 

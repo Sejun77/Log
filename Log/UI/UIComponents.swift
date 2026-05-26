@@ -1,6 +1,45 @@
 import SwiftUI
 
 // ======================================================
+// MARK: - Keyboard Dismiss Accessory
+// ======================================================
+
+/// A compact trailing checkmark for the `.keyboard` toolbar placement that
+/// resigns the first responder. Use it as the shared dismissal control for
+/// fields whose keyboard has no usable Return key:
+///   • numeric pads (`.numberPad` / `.decimalPad`) — no Return key at all, and
+///   • multiline fields (`axis: .vertical`) — Return inserts a newline.
+///
+/// Single-line text fields should NOT pair this with the accessory: they
+/// dismiss via their own Return key (`.submitLabel(.done)` + `.onSubmit`), so
+/// adding a checkmark there would be a redundant external Done control.
+///
+/// Usage:
+/// ```
+/// .toolbar {
+///     ToolbarItemGroup(placement: .keyboard) {
+///         Spacer()
+///         KeyboardDismissButton()
+///     }
+/// }
+/// ```
+struct KeyboardDismissButton: View {
+    var body: some View {
+        Button {
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil,
+                from: nil,
+                for: nil
+            )
+        } label: {
+            Image(systemName: "checkmark").fontWeight(.semibold)
+        }
+        .accessibilityLabel("Done")
+    }
+}
+
+// ======================================================
 // MARK: - Primary Button
 // ======================================================
 

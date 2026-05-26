@@ -84,7 +84,6 @@ struct SetTechniqueChipsRow: View {
 /// Read-only detail sheet for a TechniquePlanSnapshot. No template mutation.
 struct TechniqueDetailSheet: View {
     let snap: TechniquePlanSnapshot
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -145,11 +144,9 @@ struct TechniqueDetailSheet: View {
             }
             .navigationTitle(snap.type.displayName)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
+            // Read-only sheet: no explicit Done/close button — dismiss via the
+            // drag gesture (and the system accessibility dismiss action).
+            // Nothing to commit here, so an explicit close is redundant.
         }
         .presentationDetents([.medium, .large])
     }

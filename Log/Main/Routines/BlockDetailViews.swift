@@ -46,7 +46,7 @@ struct RoutineBlockDetailView: View {
                                     if let w = t.targetWeight, w > 0 {
                                         let unit =
                                             Units.weightIsKg ? "kg" : "lb"
-                                        Text("· \(Int(w.rounded())) \(unit)")
+                                        Text("· \(Units.formatWeight(w)) \(unit)")
                                             .monospacedDigit()
                                             .foregroundStyle(.secondary)
                                     }
@@ -357,7 +357,7 @@ struct SupersetDetailNoRest: View {
                                             let unit =
                                                 Units.weightIsKg ? "kg" : "lb"
                                             Text(
-                                                "· \(Int(w.rounded())) \(unit)"
+                                                "· \(Units.formatWeight(w)) \(unit)"
                                             )
                                             .monospacedDigit()
                                             .foregroundStyle(.secondary)

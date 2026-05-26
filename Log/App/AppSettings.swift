@@ -99,4 +99,23 @@ enum Units {
         get { AppSettings.weightIsKg }
         set { AppSettings.weightIsKg = newValue }
     }
+
+    /// Canonical weight formatter for both display and text-field rehydration.
+    /// Whole numbers show no decimals (8 → "8"); fractional values keep up to
+    /// two meaningful decimals with trailing zeros trimmed (8.5 → "8.5",
+    /// 8.25 → "8.25", 8.333 → "8.33"). Always uses "." as the separator —
+    /// `%g`/NumberFormatter localisation is avoided so the result round-trips
+    /// through `Double(_:)` when reused as a `.decimalPad` field's value.
+    ///
+    /// Replaces scattered `Int(w.rounded())` formatting, which rounded e.g.
+    /// 8.5 kg to "9 kg" in History and lost decimals on log→undo rehydration.
+    static func formatWeight(_ value: Double) -> String {
+        if value.truncatingRemainder(dividingBy: 1) == 0 {
+            return String(Int(value))
+        }
+        var s = String(format: "%.2f", value)  // C-locale "." separator
+        while s.hasSuffix("0") { s.removeLast() }
+        if s.hasSuffix(".") { s.removeLast() }
+        return s
+    }
 }

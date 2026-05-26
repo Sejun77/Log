@@ -168,9 +168,7 @@ private struct WarmupStepRow: View {
             } else if step.kind == .fixedReps {
                 let unit = Units.weightIsKg ? "kg" : "lb"
                 let weightStr: String? = step.weight.map {
-                    $0.truncatingRemainder(dividingBy: 1) == 0
-                        ? "\(Int($0)) \(unit)"
-                        : String(format: "%.1f \(unit)", $0)
+                    "\(Units.formatWeight($0)) \(unit)"
                 }
                 let repsStr: String? = step.reps.map { "\($0) reps" }
                 let parts = [weightStr, repsStr].compactMap { $0 }
@@ -254,6 +252,14 @@ private struct WarmupStepEditSheet: View {
             }
             .navigationTitle("Add Warmup Step")
             .toolbar {
+                // Weight (.decimalPad) has no Return key and the optional Note
+                // (axis: .vertical) inserts a newline on Return, so both need a
+                // keyboard-integrated dismiss. The top-bar Cancel/Add below stay:
+                // they commit / discard the modal, a separate concern.
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    KeyboardDismissButton()
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }

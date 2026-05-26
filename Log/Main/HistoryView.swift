@@ -567,11 +567,21 @@ private struct WorkoutDetailView: View {
     /// per-row visual identical to flat rendering.
     @ViewBuilder
     private func setLogList(for item: WorkoutItem) -> some View {
-        let logs = item.setLogs.sorted {
-            if $0.indexInExercise != $1.indexInExercise {
-                return $0.indexInExercise < $1.indexInExercise
-            }
-            return ($0.subIndex ?? -1) < ($1.subIndex ?? -1)
+        // Warmup SetLogs carry a negative `indexInExercise` (`-(order+1)`) to
+        // avoid colliding with 0-based working-set indices. Sorting raw by that
+        // index put warmups last-to-first with negative/zero labels (e.g. the
+        // 4th warmup showed as "-3"). Sort key: warmups first (group 0) by
+        // warmup number ascending (= -index), then working/dropset (group 1) by
+        // index then subIndex. Keys are computed inline in the comparator —
+        // a nested func isn't allowed in this @ViewBuilder body.
+        let logs = item.setLogs.sorted { a, b in
+            let ka = a.kind == .warmup
+                ? (0, -a.indexInExercise, 0)
+                : (1, a.indexInExercise, a.subIndex ?? -1)
+            let kb = b.kind == .warmup
+                ? (0, -b.indexInExercise, 0)
+                : (1, b.indexInExercise, b.subIndex ?? -1)
+            return ka < kb
         }
         if logs.isEmpty {
             Text("No sets logged")
@@ -581,7 +591,9 @@ private struct WorkoutDetailView: View {
             ForEach(logs, id: \.id) { log in
                 HStack {
                     Text(
-                        "\(log.indexInExercise + 1). \(log.kindRaw.capitalized)"
+                        log.kind == .warmup
+                            ? "Warmup \(-log.indexInExercise)"
+                            : "\(log.indexInExercise + 1). \(log.kindRaw.capitalized)"
                     )
                     .font(.dsBody)
                     Spacer()
@@ -595,7 +607,7 @@ private struct WorkoutDetailView: View {
                             let unit =
                                 Units.weightIsKg ? "kg" : "lb"
                             Text(
-                                "\(Int(w.rounded())) \(unit)"
+                                "\(Units.formatWeight(w)) \(unit)"
                             )
                             .font(
                                 .dsBodySecondary.monospacedDigit()

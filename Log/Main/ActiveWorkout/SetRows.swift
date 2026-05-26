@@ -12,7 +12,7 @@ struct SetEntryRow: View {
     let canLog: Bool
     @Binding var reps: String
     @Binding var weight: String
-    var onLog: (Int, Int?) -> Void
+    var onLog: (Int, Double?) -> Void
     var onUndo: () -> Void
 
     init(
@@ -22,7 +22,7 @@ struct SetEntryRow: View {
         canLog: Bool,
         reps: Binding<String>,
         weight: Binding<String>,
-        onLog: @escaping (Int, Int?) -> Void,
+        onLog: @escaping (Int, Double?) -> Void,
         onUndo: @escaping () -> Void
     ) {
         self.index = index
@@ -64,7 +64,9 @@ struct SetEntryRow: View {
 
                 TextField("Wt", text: $weight)
                     .font(.dsBody.monospacedDigit())
-                    .keyboardType(.numberPad)
+                    // Weight supports fractional plates (e.g. 2.5 kg) — decimal
+                    // pad. Reps above stays `.numberPad` (integer-only).
+                    .keyboardType(.decimalPad)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 70)
                     .disabled(isLogged)
@@ -82,7 +84,7 @@ struct SetEntryRow: View {
                 } else {
                     Button("Log") {
                         let r = Int(reps) ?? template.targetReps
-                        let w = Int(weight)
+                        let w = Double(weight)
                         onLog(r, w)
                     }
                     .buttonStyle(.borderedProminent)

@@ -118,10 +118,9 @@ struct ExercisesView: View {
                 }
                 EditButton()
             }
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focusNewExercise = false }
-            }
+            // No `.keyboard` Done button: the single-line "new exercise" field
+            // commits and dismisses via its return key (.submitLabel(.done) +
+            // .onSubmit below), so an external accessory button is redundant.
         }
         .onAppear { backfillExerciseOrderIfNeeded() }
         .alert("Delete Exercise", isPresented: $showDeleteExerciseAlert) {
@@ -192,7 +191,10 @@ struct ExercisesView: View {
                     .font(.dsBody)
                     .focused($focusNewExercise)
                     .submitLabel(.done)
-                    .onSubmit { addExercise() }
+                    .onSubmit {
+                        addExercise()
+                        focusNewExercise = false
+                    }
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
 
@@ -397,8 +399,19 @@ struct ExerciseDetailView: View {
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { focusedField = nil }
+                    // Only the multiline `setupDefaults` field (`axis: .vertical`)
+                    // needs an accessory: its Return key inserts a newline and
+                    // can't dismiss the keyboard. Name and Notes are single-line
+                    // and dismiss via their own Return key (.submitLabel(.done) +
+                    // .onSubmit), so showing a checkmark for them would be a
+                    // redundant external Done control — hence the focus gate.
+                    if focusedField == "setupDefaults" {
+                        Spacer()
+                        Button { focusedField = nil } label: {
+                            Image(systemName: "checkmark").fontWeight(.semibold)
+                        }
+                        .accessibilityLabel("Done")
+                    }
                 }
             }
     }
@@ -512,6 +525,7 @@ struct ExerciseDetailView: View {
                 )
                 .font(.dsBodySecondary)
                 .submitLabel(.done)
+                .onSubmit { focusedField = nil }
                 .lineLimit(3)
                 .textInputAutocapitalization(.sentences)
                 .focused($focusedField, equals: "notes")

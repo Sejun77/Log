@@ -55,6 +55,11 @@ struct ActiveWorkoutView: View {
     @State private var sessionPlans: [UUID: SessionPlan] = [:]
     @State private var showEditPlanSheet = false
     @State private var showExerciseNotesSheet = false
+    /// Tracks soft-keyboard visibility (driven by keyboardWillShow/Hide). While
+    /// the keyboard is up the bottom Back/Next/Finish panel is withdrawn so it
+    /// can never overlap the keyboard accessory — deterministic on first focus,
+    /// unlike safe-area repositioning which lagged a frame on initial show.
+    @State private var keyboardVisible = false
     /// Per-set planned targets captured before opening the edit sheet.
     @State private var preEditRepStrs: [UUID: [Int: String]] = [:]
     @State private var preEditDurStrs: [UUID: [Int: String]] = [:]
@@ -206,7 +211,7 @@ struct ActiveWorkoutView: View {
                     if let log = parentLog {
                         let reps = String(max(0, log.reps))
                         let weight =
-                            log.weight.map { String(Int($0.rounded())) } ?? ""
+                            log.weight.map { Units.formatWeight($0) } ?? ""
                         let duration =
                             log.durationSeconds.map(String.init) ?? ""
                         perSet[i] = (reps, weight, duration)
@@ -319,7 +324,10 @@ struct ActiveWorkoutView: View {
             },
             set: { newVal in
                 ensureEntry()
-                let filtered = newVal.filter(\.isNumber)
+                // Weight allows one decimal separator (fractional plates) — the
+                // old `filter(\.isNumber)` stripped the "." so decimals could
+                // never be typed. reps/duration stay integer-only above/below.
+                let filtered = Self.sanitizeDecimalInput(newVal)
                 inputsByExerciseID[slotID]?[setIndex]?.weight = filtered
                 syncToGuardCaches()
                 parentDraftStore?.persist(
@@ -329,6 +337,25 @@ struct ActiveWorkoutView: View {
         )
 
         return (repsB, weightB)
+    }
+
+    /// Keeps digits and a single decimal separator for weight entry. Accepts a
+    /// comma as a synonym for "." (some locale keypads emit it) and normalizes
+    /// to "." so the stored string round-trips through `Double(_:)`. Any extra
+    /// separators or stray characters are dropped. reps/duration intentionally
+    /// do NOT use this — they stay integer-only via `filter(\.isNumber)`.
+    static func sanitizeDecimalInput(_ raw: String) -> String {
+        var out = ""
+        var hasSeparator = false
+        for ch in raw {
+            if ch.isNumber {
+                out.append(ch)
+            } else if (ch == "." || ch == ",") && !hasSeparator {
+                out.append(".")
+                hasSeparator = true
+            }
+        }
+        return out
     }
 
     private func durationBinding(
@@ -676,7 +703,10 @@ struct ActiveWorkoutView: View {
                         slotID: slotID,
                         setIndex: logIndex,
                         reps: step.reps ?? 0,
-                        weight: step.weight.map { Int($0.rounded()) },
+                        // Preserve fractional warmup weights (e.g. 2.5 kg) — the
+                        // snapshot weight is already Double; the prior
+                        // Int($0.rounded()) truncated decimals.
+                        weight: step.weight,
                         kind: .warmup
                     )
                     var s = loggedByExercise[slotID, default: []]
@@ -709,9 +739,7 @@ struct ActiveWorkoutView: View {
             var parts: [String] = []
             if let w = step.weight {
                 let unit = Units.weightIsKg ? "kg" : "lb"
-                parts.append(w.truncatingRemainder(dividingBy: 1) == 0
-                    ? "\(Int(w)) \(unit)"
-                    : String(format: "%.1f \(unit)", w))
+                parts.append("\(Units.formatWeight(w)) \(unit)")
             }
             if let r = step.reps { parts.append("\(r) reps") }
             return parts.isEmpty ? "Reps" : parts.joined(separator: " × ")
@@ -1283,12 +1311,18 @@ struct ActiveWorkoutView: View {
                 List {
                     // --- Session-level workout notes (written to Workout.notes) ---
                     Section("Session Notes") {
+                        // Multiline: Return inserts a newline (no .submitLabel
+                        // (.done)), so the keyboard shows a normal return key —
+                        // not a second done/check key competing with the shared
+                        // keyboard checkmark accessory, which is the sole
+                        // dismissal control.
                         TextField(
                             "Notes for this session…",
-                            text: workoutNotesBinding
+                            text: workoutNotesBinding,
+                            axis: .vertical
                         )
+                        .lineLimit(1...6)
                         .textInputAutocapitalization(.sentences)
-                        .submitLabel(.done)
                     }
 
                     // --- Exercise-level notes (read-only display of Exercise.notes) ---
@@ -1402,45 +1436,65 @@ struct ActiveWorkoutView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                // Back / Next-Finish navigation, hosted as the List's bottom
+                // safe-area inset (reserves space, `.background(.bar)` keeps
+                // list rows from showing through while scrolling). It is
+                // withdrawn entirely while the keyboard is up: a fixed bottom
+                // panel + the `.keyboard` accessory raced on the *first*
+                // keyboard presentation (the accessory height wasn't counted in
+                // the initial safe-area pass), so the panel overlapped the
+                // checkmark until a second layout pass. Removing it on
+                // keyboardWillShow is deterministic on first focus — there is no
+                // panel to overlap — and it returns on keyboardWillHide. The
+                // user can't navigate mid-edit anyway (they dismiss first).
+                .safeAreaInset(edge: .bottom) {
+                    if !keyboardVisible {
+                        HStack {
+                            Button {
+                                prev()
+                            } label: {
+                                Label("Back", systemImage: "chevron.left")
+                            }
+                            .disabled(
+                                currentBlockIndex == 0 && currentExerciseIndex == 0
+                            )
+
+                            Spacer()
+
+                            Button {
+                                next()
+                            } label: {
+                                if isAtLast(block: block) {
+                                    Label("Finish", systemImage: "checkmark")
+                                } else {
+                                    Label("Next", systemImage: "chevron.right")
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .background(.bar)
+                    }
+                }
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
+                        // Shared dismiss accessory for every active-workout
+                        // field. Required for reps / weight / duration (SetRows)
+                        // and drop-set fields (DropLogRow) on .numberPad /
+                        // .decimalPad, which have no Return key, and for the
+                        // multiline Session Notes whose Return inserts a newline.
                         Spacer()
-                        Button("Done") {
-                            UIApplication.shared.sendAction(
-                                #selector(UIResponder.resignFirstResponder),
-                                to: nil,
-                                from: nil,
-                                for: nil
-                            )
-                        }
+                        KeyboardDismissButton()
                     }
                 }
-
-                // Controls
-                HStack {
-                    Button {
-                        prev()
-                    } label: {
-                        Label("Back", systemImage: "chevron.left")
-                    }
-                    .disabled(
-                        currentBlockIndex == 0 && currentExerciseIndex == 0
-                    )
-
-                    Spacer()
-
-                    Button {
-                        next()
-                    } label: {
-                        if isAtLast(block: block) {
-                            Label("Finish", systemImage: "checkmark")
-                        } else {
-                            Label("Next", systemImage: "chevron.right")
-                        }
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.bottom)
+                .onReceive(
+                    NotificationCenter.default.publisher(
+                        for: UIResponder.keyboardWillShowNotification)
+                ) { _ in keyboardVisible = true }
+                .onReceive(
+                    NotificationCenter.default.publisher(
+                        for: UIResponder.keyboardWillHideNotification)
+                ) { _ in keyboardVisible = false }
             }
             .fullScreenCover(isPresented: $showRestOverlay) {
                 RestOverlayScreen(
@@ -2283,7 +2337,7 @@ struct ActiveWorkoutView: View {
         slotID: UUID,
         setIndex: Int,
         reps: Int,
-        weight: Int?,
+        weight: Double?,
         kind: SetKind
     ) {
         guard let workout else { return }
@@ -2310,7 +2364,7 @@ struct ActiveWorkoutView: View {
             $0.indexInExercise == setIndex && $0.subIndex == nil
         }) {
             wi.setLogs[j].reps = reps
-            wi.setLogs[j].weight = weight.map(Double.init)
+            wi.setLogs[j].weight = weight
             wi.setLogs[j].kindRaw = kind.rawValue
             wi.setLogs[j].timestamp = .now
         } else {
@@ -2319,7 +2373,7 @@ struct ActiveWorkoutView: View {
                     indexInExercise: setIndex,
                     kind: kind,
                     reps: reps,
-                    weight: weight.map(Double.init)
+                    weight: weight
                 )
             )
         }
@@ -2392,7 +2446,7 @@ struct ActiveWorkoutView: View {
             $0.indexInExercise == setIndex && $0.subIndex == nil
         }) {
             let repsStr = String(max(0, log.reps))
-            let weightStr = log.weight.map { String(Int($0.rounded())) } ?? ""
+            let weightStr = log.weight.map { Units.formatWeight($0) } ?? ""
             // Phase 5.2-B — write under the new routineSlotID-based key.
             parentDraftStore?.persist(
                 slotID: slotID, setIndex: setIndex, field: .reps, value: repsStr
