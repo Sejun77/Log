@@ -2525,6 +2525,26 @@ struct ActiveWorkoutView: View {
 
     // MARK: - Technique Targeting Helpers
 
+    // Rest-timer semantics for techniques (Phase 3.8 — clarified; no behavior change):
+    //
+    //   • Rest-AFFECTING: Dropset ONLY. A dropset suppresses the parent set's
+    //     normal rest and instead drives inter-drop pacing (its own `restSeconds`
+    //     between drops), with the real next-set / after-exercise rest fired only
+    //     after the FINAL drop. This is the single technique consulted by the rest
+    //     decision (`restSecondsAfterCurrentLog` → `dropsetTechniqueApplying`) and
+    //     by `RestPlanner`'s dropset branches.
+    //
+    //   • DISPLAY-ONLY / instructional (never touch the rest timer): Partial Reps,
+    //     To Failure, AMRAP, Tempo Override, Rest-Pause, Cluster. Rest-Pause and
+    //     Cluster carry a `restSeconds` config value, but it is surfaced only as
+    //     guidance in `TechniqueDetailSheet` — deliberately NOT wired into the
+    //     app's rest timer. After logging such a set, rest still comes from the
+    //     prescription (`restSecondsBetweenSets` / `restSecondsAfterExercise`).
+    //
+    // Auto-running a Rest-Pause / Cluster intra-set rest would be a NEW feature the
+    // current model does not support — do not add it without an explicit
+    // rest-semantics design pass.
+
     /// Returns all TechniquePlanSnapshots that apply to `setIndex` in the exercise.
     /// Checks explicit appliesToSetIndices first, then falls back to the old appliesTo enum.
     private func techniquesApplying(
@@ -2553,13 +2573,23 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    /// Renders compact technique chips for a working set. Tapping a chip opens the detail sheet.
+    /// Renders compact, tappable technique chips for a working set, embedded
+    /// inside that set's card. Tapping a chip opens the read-only detail sheet.
+    ///
+    /// Dropset techniques are intentionally excluded: a dropset is shown by the
+    /// unified dropset card (inline summary label + drop sub-rows in
+    /// `buildWorkingSetGroup` / `buildDropSection`), so rendering it as a chip too
+    /// would duplicate it. In the non-dropset (`else`) branch of
+    /// `buildWorkingSetGroup` the filter is a no-op (if a dropset applied we'd be
+    /// in the dropset branch); in the dropset branch the filter lets the set's
+    /// OTHER techniques (e.g. To Failure, Tempo) still show inside the card.
     @ViewBuilder
     private func buildTechniqueChips(
         exercise: PlanExercise,
         setIndex: Int
     ) -> some View {
         let snaps = techniquesApplying(to: setIndex, in: exercise)
+            .filter { $0.type != .dropset }
         if !snaps.isEmpty {
             SetTechniqueChipsRow(techniques: snaps) { snap in
                 techniqueDetailSnap = snap
@@ -2907,9 +2937,15 @@ struct ActiveWorkoutView: View {
         template: PlanSetTemplate
     ) -> some View {
         if let snap = dropsetTechniqueApplying(to: idx, in: exercise) {
-            // Unified card: parent working set + dropset summary + drop sub-rows in one list row.
+            // Unified card: parent working set + this set's other (non-dropset)
+            // technique chips + dropset summary + drop sub-rows — all in ONE list
+            // row so the dropset reads as a single cohesive block.
             VStack(alignment: .leading, spacing: 12) {
                 buildSetRow(block: block, exercise: exercise, idx: idx, template: template)
+                // Non-dropset techniques that also target this set (e.g. To Failure)
+                // stay visible inside the dropset card. `buildTechniqueChips` filters
+                // out the dropset itself, so the summary below is not duplicated.
+                buildTechniqueChips(exercise: exercise, setIndex: idx)
                 // Compact dropset config summary — aligned with the indented drop rows below.
                 Text(snap.setAttachedLabel)
                     .font(.dsCaption)
@@ -2918,9 +2954,13 @@ struct ActiveWorkoutView: View {
                 buildDropSection(block: block, exercise: exercise, parentSetIndex: idx)
             }
         } else {
-            // Standard layout: set row and per-set technique chips as separate list rows.
-            buildSetRow(block: block, exercise: exercise, idx: idx, template: template)
-            buildTechniqueChips(exercise: exercise, setIndex: idx)
+            // Set row + this set's technique chips wrapped in ONE list row (card)
+            // so the chips are visually attached to the set rather than rendered as
+            // a separate card floating in the gap between set rows.
+            VStack(alignment: .leading, spacing: 8) {
+                buildSetRow(block: block, exercise: exercise, idx: idx, template: template)
+                buildTechniqueChips(exercise: exercise, setIndex: idx)
+            }
         }
     }
 

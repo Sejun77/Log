@@ -27,7 +27,12 @@ struct TechniqueIndicatorRow: View {
 
 // MARK: - Phase 3.8: Per-set technique chips + detail sheet
 
-/// Horizontal row of tappable technique chips rendered directly on the applicable set row.
+/// Horizontal strip of tappable technique chips. Embedded **inside** the
+/// applicable set's card (directly below the set row) so the chips read as
+/// attached to that set rather than as a separate row floating in the gap
+/// between set cards. Dropset techniques are excluded by the caller
+/// (`buildTechniqueChips`) — those render via the unified dropset card
+/// (inline summary label + drop sub-rows), never as a chip.
 struct SetTechniqueChipsRow: View {
     let techniques: [TechniquePlanSnapshot]
     let onTap: (TechniquePlanSnapshot) -> Void
@@ -57,9 +62,8 @@ struct SetTechniqueChipsRow: View {
             }
             .padding(.vertical, 2)
         }
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        // No `.listRow*` modifiers: this strip is embedded inside a set card
+        // (a VStack), not rendered as a standalone List row.
     }
 
     private func iconName(for type: TechniqueType) -> String {
