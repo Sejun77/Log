@@ -457,12 +457,14 @@ Current technique infrastructure is functional but still clunky in production us
 - [x] Dropset manual/draft weight persistence: manually edited unlogged drop weights survive cold resume via per-workout UserDefaults draft store (key `dropWeightDrafts_<workoutID>`, slot key `<slotID>_<parentSetIndex>_<subIndex>`); logged drops continue to resume from `SetLog` (`subIndex != nil`); drafts never stored as `SetLog`; drafts cleared on log, "↩ suggest" reset, parent undo cascade, or workout finish/dismiss
 - [x] Parent working-set input persistence: logged parent reps/weight restore from `SetLog` (`subIndex == nil`); unlogged parent draft reps/weight survive cold resume via per-workout UserDefaults draft store (key `parentDrafts_<workoutID>`, slot key `<slotID>_<setIndex>_<field>` where field ∈ {reps, weight, duration}); see "Active workout input persistence" in §1 for the full source-priority model
 - [x] Parent undo / dropset cascade consistency: undoing the parent working set removes child drop `SetLog`s for that parent, clears child drop completion state, clears both logged and un-logged child drop drafts under that parent, and relocks the next working set; parent reps/weight are preserved as editable draft values by snapshotting the just-removed `SetLog` into the parent draft before removal, so log → undo → force-quit → resume retains the value
+- [x] **Phase 3.8a — set-attached technique chip cohesion (shipped 2026-05-26).** Non-dropset technique chips now render **inside** the relevant working set's card instead of as a separate floating list row in the gap between set cards. `buildWorkingSetGroup`'s non-dropset branch wraps the set row + its applicable chips in one `VStack` (a single list row); the dropset branch additionally renders the set's **non-dropset** chips inside the unified dropset card. `buildTechniqueChips` filters out `.dropset` so the dropset is never duplicated (it stays represented by its inline summary label + drop sub-rows). `SetTechniqueChipsRow` lost its standalone `.listRow*` modifiers so it embeds cleanly in a card. Root cause of the prior "floating chip strip splits the block" was that the set row and the chip row were two sibling views per `ForEach` iteration → two inset-grouped cards. **The top technique summary row is intentionally kept** (3.8c not yet done). No model / schema changes; set logging, dropset logging, rest timer, superset, warmup, Save & Exit / Resume, and History all preserved; build green; full suite **347/347**; manual regression passed. Files: `Log/Main/ActiveWorkoutView.swift`, `Log/Main/ActiveWorkout/TechniqueChipsViews.swift`
 
 **Pending:**
 
-- [ ] Non-dropset technique chip cohesion: integrate set-attached technique info directly into the affected set row rather than appending a separate chip row below it
-- [ ] Extend sub-set logging pattern to rest-pause / cluster if retained as supported techniques
-- [ ] Hide or collapse the top technique summary row when all techniques are already represented as set-attached chips (redundancy now that chips are primary)
+- [ ] **Phase 3.8c — hide / collapse / de-emphasize the top technique summary row.** Intentionally still present after 3.8a. Only hide once set-attached chips are confirmed sufficient and readable across all targeting modes — note that `.lastWorkingSet` / `.setNumber` techniques surface a chip on just one (possibly offscreen) set card, so the always-visible header still carries at-a-glance value; prefer a conditional collapse over an unconditional removal
+- [ ] **Phase 3.8b (optional) — extend sub-set logging to Rest-Pause / Cluster.** Only if these are explicitly retained and designed as multi-sub-set techniques (like dropset's drop sub-rows). Not started; not required
+- [ ] **Rest-Pause / Cluster rest-timer design (follow-up).** Today Dropset is the ONLY technique that affects rest timing. Rest-Pause and Cluster store a `restSeconds` guidance value, but it is display-only (shown in `TechniqueDetailSheet`) — there is no automatic intra-set rest timer for them. Partial Reps / To Failure / AMRAP / Tempo Override are display / instructional only. Auto-running a Rest-Pause / Cluster intra-set rest is a NEW feature requiring an explicit rest-semantics design pass — deliberately out of scope until then. (Semantics documented inline above `ActiveWorkoutView`'s technique-targeting helpers.)
+- [ ] **Dropset + technique ordering / targeting ambiguity (follow-up).** A set can now show both a dropset card and another technique's chip, but the app does not clarify whether e.g. Partial Reps applies before the dropset, after it, or to the parent set only. The data model targets parent working sets, not individual drop sub-sets, so dropset-specific (per-drop) technique targeting is **out of scope** unless the model is extended later
 
 ### Phase 3.9 — Warmup editor redesign + numeric input polish
 
@@ -483,6 +485,33 @@ Warmup step definitions need clearer per-type field presentation. Numeric inputs
 - [x] Plan preview (`SessionPlan.secondarySummary(autoregMode:)`) shows only the active autoregulation mode field — never both RIR and RPE simultaneously; `autoregMode` surfaced in `ActiveWorkoutView` via `@AppStorage` for this purpose
 - [x] Settings default RIR/RPE sync: editing `defaultRIR` updates `defaultRPE` and vice versa via `.onChange`; default RIR range corrected to 0–5 (was incorrectly 0–10)
 - [x] Tempo field replaced with structured 4-part `Stepper` editor: eccentric – stretch pause – concentric – squeeze pause (each 0–10 s); serializes to `"e-s-c-sq"` string (e.g. `"3-1-1-0"`); nil when all zero; 3-part legacy values parse safely (squeeze pause defaults to 0); `TempoEditorView` is a module-internal `View` shared by both prescription editors
+
+### Phase 3.9a — Keyboard/input ergonomics + workout display formatting (corrective) ✅
+
+Follow-up corrective slice (shipped 2026-05-26) cleaning up keyboard dismissal behavior, redundant Done controls, decimal weight entry, and decimal/warmup display formatting across active workout, exercise detail, routine prescription, warmup editing, and History. No model changes; no schema changes; build green; full suite **347/347**; manual regression passed.
+
+**Completed — keyboard / input ergonomics:**
+
+- [x] Shared `KeyboardDismissButton` (`Log/UI/UIComponents.swift`): a compact checkmark for `.keyboard` toolbar placement that resigns the first responder. Used as the single dismissal control for fields whose keyboard lacks a usable Return key — numeric pads (`.numberPad` / `.decimalPad`) and multiline fields (`axis: .vertical`, where Return inserts a newline). Single-line fields instead dismiss via `.submitLabel(.done)` + `.onSubmit`, so no redundant external accessory is shown for them.
+- [x] **Active Workout first-focus overlap fixed.** The bottom Back / Next / Finish panel previously overlapped the `.keyboard` accessory/checkmark on the *first* focus (the accessory height wasn't counted in the initial safe-area pass; it only corrected after switching fields). The panel is now hosted as the List's bottom `safeAreaInset` and is **withdrawn entirely while the keyboard is visible** (driven by a `keyboardVisible` flag on `keyboardWillShow` / `keyboardWillHide`), returning after dismiss. Deterministic on first focus — there is no panel to overlap. Files: `Log/Main/ActiveWorkoutView.swift`
+- [x] **Session Notes** now multiline (`axis: .vertical`, `.lineLimit(1...6)`) with `.submitLabel(.done)` removed, so Return inserts a newline and the shared keyboard checkmark is the only dismissal control — no duplicate native done/check key competing with the custom accessory.
+- [x] **Active Workout Exercise Notes** edit flow (`ExerciseNotesEditSheet`) kept its modal Cancel/Done — Done commits the draft (`ctx.save()`), Cancel reverts — preserving the no-silent-mutation invariant; the multiline field already inserts newlines on Return with no competing keyboard check.
+- [x] **Exercise Detail audited** (`ExercisesView.swift`): Name and Notes are single-line and dismiss via Return (`.submitLabel(.done)` + `.onSubmit { focusedField = nil }`) with no external Done; Setup Defaults stays multiline (`axis: .vertical`) and shows the keyboard checkmark gated to that field only (so single-line siblings show no redundant accessory).
+- [x] **Add Warmup Step panel** (`WarmupSchemeEditor.WarmupStepEditSheet`): weight (`.decimalPad`) and optional note (multiline) gained the keyboard checkmark for dismissal; modal Add/Cancel retained as the commit/cancel controls.
+- [x] **Routine prescription notes** (`SlotPrescriptionSection`): multiline slot-notes field gained a focus-gated keyboard checkmark, consistent with the in-session `EditSessionPlanSheet` notes field.
+- [x] Read-only `TechniqueDetailSheet` drops its explicit Done in favor of drag-to-dismiss (nothing to commit).
+- [x] Backlog "remove extra Done buttons" item (§6) delivered by this slice — see that section.
+
+**Completed — decimal weight input & display:**
+
+- [x] **Decimal weight entry** works wherever weights are entered: working-set weight and dropset weight (`.decimalPad`, parsed as `Double`), warmup weight (`.decimalPad`). The working-set path now threads `Double?` end-to-end (`SetEntryRow.onLog`, `appendSetLog`) instead of truncating to `Int`, and the weight binding's sanitizer keeps one decimal separator. **Reps and duration remain integer-only** (`.numberPad`, `filter(\.isNumber)`).
+- [x] **`Units.formatWeight(_:)` helper** (`Log/App/AppSettings.swift`): whole numbers show no decimals (8 → "8"), fractional values keep up to two trimmed decimals with a locale-independent "." separator (8.5 → "8.5", 8.25 → "8.25", 8.333 → "8.33") so the result also round-trips through `Double(_:)` when reused as a field value. Replaces scattered `Int(w.rounded())` formatting.
+- [x] **History decimal weight rounding fixed**: set-log rows used `Int(w.rounded())` (8.5 kg displayed as "9 kg") → now `Units.formatWeight`. Also applied to fixed-weight warmup display, the active-workout warmup description, working-set weight rehydration (log→undo / resume now repopulate "8.5" not "9"), and routine block / superset target-weight displays.
+- [x] **History warmup labels fixed**: warmup `SetLog`s carry a negative `indexInExercise` (`-(order+1)`), so `index+1` rendered "0", "-1", "-3". They now display as **"Warmup N"** (`N = -indexInExercise`) and sort **before** working sets in ascending warmup-number order (tuple sort key: warmups group 0 by `-index`, then working/dropset group 1 by index then subIndex). Working-set and dropset labels unchanged.
+
+**Deferred (structural — intentionally NOT in this UI/input slice):**
+
+- [ ] **`PlanSetTemplate.targetWeight` remains `Int?`.** Routine prescribed-default target weights stay integer-based when no log exists (the session-plan snapshot type is `Int?`). User-entered decimals are unaffected — logging reads/writes `SetLog.weight: Double?` and rehydration reads the `Double` log directly — so no decimal is lost in entry or History. Widening the snapshot's `targetWeight` to `Double?` is a structural snapshot/model design change and was deliberately excluded from this corrective slice; revisit only if decimal *prescribed* defaults become a requirement.
 
 ### Phase 5.2 — Rest semantics cleanup + superset flow streamline
 
@@ -1536,11 +1565,11 @@ These are product tweaks and must not block completion:
   - [ ] Confirm-add action: selected exercises added in selection order
   - [ ] Search & filter: name search and optional bodyPart/muscle group filter
   - [ ] Edge case: duplicate exercise in same block shows warning or is silently allowed
-- **remove extra "Done" buttons**
-  - [ ] Audit: identify all views with standalone "Done" buttons
-  - [ ] Replace with toolbar `.confirmationAction` placement or automatic dismiss
-  - [ ] Keyboard UX: consistent "Done" toolbar on `.keyboard` placement
-  - [ ] Sheet dismiss: prefer drag-to-dismiss over explicit close buttons
+- **remove extra "Done" buttons** — delivered by Phase 3.9a (2026-05-26)
+  - [x] Audit: identified all views with standalone "Done" buttons (active workout, exercise detail, routine prescription, warmup editor, technique detail)
+  - [x] Replace with toolbar `.confirmationAction` placement, Return-key dismiss, or automatic dismiss; modal commit/cancel Done controls intentionally kept where they commit a draft or finish a selection flow
+  - [x] Keyboard UX: consistent compact checkmark on `.keyboard` placement via shared `KeyboardDismissButton`, shown only for fields that lack a usable Return key
+  - [x] Sheet dismiss: read-only `TechniqueDetailSheet` now prefers drag-to-dismiss over an explicit close button
 - preset note options
 - pause/resume workout (may integrate with WorkoutState later)
 - machine-specific weight/rep handling
