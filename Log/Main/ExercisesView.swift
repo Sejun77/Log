@@ -23,6 +23,12 @@ struct ExercisesView: View {
     @State private var dupAlert = false
     @State private var dupName = ""
     @FocusState private var focusNewExercise: Bool
+    /// Drives `.searchable` presentation explicitly so navigation can dismiss
+    /// search mode (not just the keyboard) before pushing a detail.
+    @State private var isSearchPresented = false
+    /// Value-based navigation target. A row taps sets this *after* clearing
+    /// focus/search, so cleanup commits before the push — see `exerciseRow`.
+    @State private var selectedExerciseID: UUID? = nil
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
     @State private var showLockedAlert = false
@@ -99,7 +105,7 @@ struct ExercisesView: View {
         .environment(\.defaultMinListRowHeight, 56)
         .listRowSpacing(8)
         .listStyle(.insetGrouped)
-        .searchable(text: $search)
+        .searchable(text: $search, isPresented: $isSearchPresented)
         .scrollDismissesKeyboard(.interactively)
         .scrollContentBackground(.hidden)
         .background(DSColor.bg.ignoresSafeArea())
@@ -123,6 +129,24 @@ struct ExercisesView: View {
             // .onSubmit below), so an external accessory button is redundant.
         }
         .onAppear { backfillExerciseOrderIfNeeded() }
+        // Push the detail via value-based navigation so the row's Button can
+        // clear focus + search *before* the push commits (see `exerciseRow`).
+        // `.onDisappear` proved insufficient: it doesn't reliably fire on a
+        // NavigationStack push, so the `@FocusState` / `.searchable` state was
+        // never cleared and SwiftUI restored it on pop — keyboard up, search
+        // mode still active (hiding the Edit/reorder controls).
+        .navigationDestination(item: $selectedExerciseID) { id in
+            ExerciseDetailHost(exerciseID: id)
+        }
+        // Belt-and-suspenders for the tab-switch path (which *does* fire
+        // onDisappear): drop focus + search mode so a focused add field or
+        // active search doesn't linger when the tab is revisited. The typed
+        // `newName` draft is intentionally preserved.
+        .onDisappear {
+            focusNewExercise = false
+            isSearchPresented = false
+            search = ""
+        }
         .alert("Delete Exercise", isPresented: $showDeleteExerciseAlert) {
             Button("Cancel", role: .cancel) {
                 pendingDeleteExercise = nil
@@ -220,8 +244,16 @@ struct ExercisesView: View {
     private var allExercisesSection: some View {
         Section {
             ForEach(filtered) { ex in
-                NavigationLink {
-                    ExerciseDetailHost(exerciseID: ex.id)
+                // A `Button` (not a `NavigationLink`) so the tap handler can
+                // clear add-field focus and dismiss search *before* setting the
+                // navigation target — the push then commits in normal list mode
+                // with no keyboard and no active search. The chevron is added
+                // manually to keep the NavigationLink disclosure look.
+                Button {
+                    focusNewExercise = false
+                    isSearchPresented = false
+                    search = ""
+                    selectedExerciseID = ex.id
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -245,9 +277,14 @@ struct ExercisesView: View {
                         if activeGuard.isLocked(ex.id) {
                             LockBadge()
                         }
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
                     }
                     .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .swipeActions(allowsFullSwipe: false) {
                     if activeGuard.isLocked(ex.id) {
                         Button {

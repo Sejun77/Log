@@ -14,6 +14,9 @@ struct RoutinesView: View {
     @State private var dupAlert = false
     @State private var dup = ""
     @FocusState private var focusNewRoutine: Bool
+    /// Value-based navigation target. A row tap sets this *after* clearing the
+    /// add-field focus, so cleanup commits before the push — see the row Button.
+    @State private var selectedRoutineID: UUID? = nil
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
     @State private var showLockedRoutineAlert = false
@@ -91,6 +94,20 @@ struct RoutinesView: View {
                 }
             }
             .onAppear { backfillRoutineOrderIfNeeded() }
+            // Push the editor via value-based navigation so the row Button can
+            // resign the add-field focus *before* the push commits. `.onDisappear`
+            // proved insufficient — it doesn't reliably fire on a NavigationStack
+            // push, so the keyboard was restored on pop. Looking the routine up
+            // by id keeps navigation tolerant of a row deleted out from under it.
+            .navigationDestination(item: $selectedRoutineID) { id in
+                if let routine = routines.first(where: { $0.id == id }) {
+                    RoutineEditor(routine: routine)
+                }
+            }
+            // Belt-and-suspenders for the tab-switch path (which does fire
+            // onDisappear): drop add-field focus so a focused field doesn't
+            // linger on revisit. The typed `newName` draft is preserved.
+            .onDisappear { focusNewRoutine = false }
         }
     }
 
@@ -182,9 +199,14 @@ struct RoutinesView: View {
                     .listRowSeparator(.hidden)
             } else {
                 ForEach(routines) { r in
-                    NavigationLink(
-                        destination: RoutineEditor(routine: r)
-                    ) {
+                    // A `Button` (not a `NavigationLink`) so the tap handler can
+                    // resign the add-field focus *before* setting the navigation
+                    // target — the editor then pushes with no lingering keyboard.
+                    // Chevron added manually to keep the disclosure look.
+                    Button {
+                        focusNewRoutine = false
+                        selectedRoutineID = r.id
+                    } label: {
                         HStack {
                             Text(r.name)
                                 .font(.dsBody)
@@ -192,8 +214,13 @@ struct RoutinesView: View {
                             if activeGuard.isRoutineLocked(r.id) {
                                 LockBadge()
                             }
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .swipeActions(allowsFullSwipe: false) {
                         if activeGuard.isRoutineLocked(r.id) {
                             Button {
