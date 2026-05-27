@@ -14,9 +14,10 @@ Performance/Testing to Archive; the archive set is confirmed complete).
 Updated 2026-05-27: **routine name editing shipped** (§2.1) and its two
 rename-verification items are now closed (§4); **multi-select exercise add is
 complete** (§2.2) across normal-block add, existing-superset add, and new-superset
-creation (`SupersetPicker` removed). No "implement now" product/UX item remains —
-the lightest optional next item is the "Used in N routines" summary (§2.3).
-Routine *variant* rename UI remains deferred (§2.1a).
+creation (`SupersetPicker` removed); the **"Used in Routines" Exercise-detail
+summary shipped** (§2.3) — read-only, lists routine names with per-routine slot
+context. **No "implement now" product/UX item remains** — every remaining item is
+optional / future / deferred. Routine *variant* rename UI remains deferred (§2.1a).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -102,16 +103,41 @@ Useful, realistic, user-facing items worth implementing soon.
   `RoutineBlockBuilder.swift`, `ExerciseMultiSelectionTests.swift`,
   `RoutineBlockBuilderTests.swift`.)
 
-### 2.3 "Used in N routines" summary on Exercise detail
-- **Source:** Phase 9-D pending bullet (deferred to Phase 10, never shipped).
-- **Current status:** Floated as a replacement for the removed Sets editor on the
-  Exercise detail screen; deferred and not built.
-- **Why it matters:** Small read-only context cue; the Exercise detail screen lost
-  density when the Sets editor was removed in 9-D.
-- **Recommendation:** **keep optional** — the smallest remaining user-facing item;
-  build only if a quick UX win is wanted (otherwise everything left is
-  optional/future/deferred).
-- **Risk:** **low** (read-only query/count).
+### 2.3 "Used in Routines" summary on Exercise detail — ✅ SHIPPED (2026-05-27)
+- **Source:** Phase 9-D pending bullet (deferred to Phase 10).
+- **Status:** **Done.** Exercise detail now has a read-only **"Used in Routines"**
+  section. The final shipped version **lists routine names**, not just a count:
+  - Unused → `"Used in 0 routines"` plus helper text telling the user that adding
+    the exercise to a routine will surface it here.
+  - Used → `"Used in 1 routine"` / `"Used in N routines"` followed by the routine
+    names beneath the count.
+  - The summary counts **unique routines, not slots** — an exercise appearing more
+    than once in one routine counts that routine **once**, with slot context shown
+    as a suffix (e.g. `Routine Name · 2 slots`).
+  - Rows are sorted to match the Routines tab (`Routine.order`, then `Routine.name`)
+    and capped for readability with a `+N more` row when the list is long.
+- **Read-only:** the section is purely informational — **no navigation to the
+  Routine Editor was added** in this slice (deferred; see follow-up below).
+- **Implementation:** new pure helper `Log/Services/ExerciseRoutineUsage.swift`
+  returns plain value entries; it scans `routine.blocks` only, skips nil/deleted
+  `Exercise` references safely, and matches by comparing `RoutineExercise.exercise?.id`
+  to the target `Exercise.id`. UI lives in `Log/Main/ExercisesView.swift`; covered by
+  `LogTests/ExerciseRoutineUsageTests.swift` (unused / one / multiple routines,
+  duplicate slots in one routine, unrelated ignored, nil refs skipped, superset-block
+  usage, ordering). Build succeeded; full suite **389/389**; manual regression passed.
+- **Freeze bug found & fixed (2026-05-27):** the first cut placed the routines
+  `@Query` **inside `ExerciseDetailView`**, which owns the Body Part / Equipment
+  `NavigationLink`s. Tapping a picker hard-froze the app: the `NavigationLink` push
+  and the `@Query` invalidation / `body` re-render collided mid-transition (the link's
+  source re-rendered while pushing). Fix: routine querying + usage computation moved
+  into **`ExerciseDetailHost`**; `ExerciseDetailView` now receives a plain value
+  snapshot (`ExerciseRoutineUsage`) and no longer owns the `@Query` or scans SwiftData
+  relationship graphs in `body`. Body Part / Equipment pickers open normally and
+  relaunch no longer returns to a frozen detail screen. **No model/schema changes.**
+- **Follow-up (optional / future):** **"Tap a listed routine to navigate to the
+  Routine Editor."** Deferred because it needs a cross-tab navigation design decision
+  (Exercises tab → Routines tab editor, deep-link/back-stack semantics). Risk:
+  **medium** (navigation architecture); keep optional until that design is settled.
 
 ---
 
@@ -428,12 +454,16 @@ Highest-value next items, in order:
    two rename-verification items (§4.1 + §4.2).
 2. ✅ **Multi-select exercise add** (§2.2) — **SHIPPED 2026-05-27** across all three
    add surfaces (normal-block add, existing-superset add, new-superset creation).
+3. ✅ **"Used in Routines" Exercise-detail summary** (§2.3) — **SHIPPED 2026-05-27**
+   (read-only; lists routine names with per-routine slot context; freeze bug fixed
+   by moving the `@Query` into `ExerciseDetailHost`).
 
-**No remaining "implement now" product/UX item.** The two top recommendations have
-both shipped. The lightest remaining user-facing option is the optional
-**"Used in N routines" summary** (§2.3) — build it only if a small UX win is
-wanted. Otherwise everything left is optional / future / deferred:
+**No remaining "implement now" product/UX item.** All three top recommendations have
+shipped. Everything left is optional / future / deferred:
 
+- **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
+  user-facing option, and it stays **optional/future** pending a cross-tab navigation
+  design decision.
 - Routine *variant* rename UI (§2.1a) stays **deferred** until a variant-management
   feature is actually planned (no variant UI exists today).
 - Technique design follow-ups (§3.1) and prescription enrichment (§3.4) need design
