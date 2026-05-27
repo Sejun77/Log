@@ -16,6 +16,7 @@ struct RoutineEditor: View {
 
     @Environment(\.modelContext) private var ctx
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
+    @Query private var allRoutines: [Routine]
     @Bindable var routine: Routine
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
@@ -42,6 +43,14 @@ struct RoutineEditor: View {
     @State private var showOverrideActiveAlert = false
     @State private var startLinkActive = false
 
+    // Routine rename (Slice A). `nameDraft` is the editable buffer; the model's
+    // `routine.name` is only written on a validated commit, so empty/duplicate
+    // input can revert the field without ever touching persisted state.
+    @State private var nameDraft = ""
+    @FocusState private var nameFocused: Bool
+    @State private var showDupAlert = false
+    @State private var dupName = ""
+
     // MARK: - Computed
 
     private var sortedBlocks: [RoutineBlock] {
@@ -52,6 +61,7 @@ struct RoutineEditor: View {
 
     var body: some View {
         Form {
+            routineDetailsSection()
             addSection()
             blocksContent()
         }
@@ -126,14 +136,8 @@ struct RoutineEditor: View {
             )
         }
         .sheet(isPresented: $showAddExercise) {
-            ExercisePickerSingle(exercises: allExercises) { ex in
-                if let ex {
-                    appendBlock(
-                        isSuperset: false,
-                        exercises: [ex],
-                        restAfter: nil
-                    )
-                }
+            ExerciseMultiPicker(exercises: allExercises) { picked in
+                addExercisesAsBlocks(picked)
             }
         }
         .sheet(isPresented: $showAddSuperset) {
@@ -148,9 +152,70 @@ struct RoutineEditor: View {
             }
         }
         .onAppear(perform: normalizeRoutineModel)
+        .onAppear { nameDraft = routine.name }
+        .alert("Routine already exists", isPresented: $showDupAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("“\(dupName)” already exists.")
+        }
     }
 
     // MARK: - Sections
+
+    @ViewBuilder
+    private func routineDetailsSection() -> some View {
+        let isLocked = activeGuard.isRoutineLocked(routine.id)
+        Section {
+            TextField("Routine name", text: $nameDraft)
+                .font(.dsBody)
+                .focused($nameFocused)
+                .submitLabel(.done)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .disabled(isLocked)
+                .onSubmit { commitRename() }
+                .onChange(of: nameFocused) { _, focused in
+                    if !focused { commitRename() }
+                }
+        } header: {
+            Text("Routine")
+        } footer: {
+            if isLocked {
+                Text("Renaming is disabled while this routine is in use.")
+            }
+        }
+    }
+
+    /// Commit the rename buffer. Trims, reverts on empty/whitespace, rejects a
+    /// case-insensitive duplicate of another routine (self excluded by id), and
+    /// writes only `Routine.name` on success. Never touches `Workout`
+    /// snapshots / IDs or `RoutineVariant`.
+    private func commitRename() {
+        guard !activeGuard.isRoutineLocked(routine.id) else {
+            nameDraft = routine.name
+            return
+        }
+        let otherNames =
+            allRoutines
+            .filter { $0.id != routine.id }
+            .map(\.name)
+        switch RoutineNameValidator.validateRename(
+            raw: nameDraft,
+            previous: routine.name,
+            otherNames: otherNames
+        ) {
+        case .ok(let newName):
+            routine.name = newName
+            nameDraft = newName
+            try? ctx.save()
+        case .duplicate(let attempted):
+            dupName = attempted
+            showDupAlert = true
+            nameDraft = routine.name
+        case .empty, .unchanged:
+            nameDraft = routine.name
+        }
+    }
 
     @ViewBuilder
     private func addSection() -> some View {
@@ -502,6 +567,19 @@ struct RoutineEditor: View {
 
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
+    }
+
+    /// Multi-select "Add Exercise" (Slice A): add one single-exercise,
+    /// non-superset block per picked exercise, in tap order, after the current
+    /// max block order. Delegates to `RoutineBlockBuilder` (tested) so existing
+    /// blocks are untouched, each new slot gets a unique slotID, and duplicate
+    /// picks become distinct slots. Lock is already enforced at the "Add
+    /// Exercise" button (the picker can't open while locked); the guard here is
+    /// defense-in-depth.
+    private func addExercisesAsBlocks(_ exercises: [Exercise]) {
+        guard !activeGuard.isRoutineLocked(routine.id) else { return }
+        RoutineBlockBuilder.addSingleExerciseBlocks(
+            exercises, to: routine, in: ctx)
     }
 
     private func appendBlock(

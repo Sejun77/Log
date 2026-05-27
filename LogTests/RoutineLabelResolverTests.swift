@@ -157,4 +157,70 @@ final class RoutineLabelResolverTests: SwiftDataTestHarness {
         routine.name = "Renamed"
         XCTAssertEqual(resolver.label(for: workout), "Renamed")
     }
+
+    // MARK: - Rename through persistence (Phase 6.B Slice C verification)
+
+    /// Persist a routine + Default variant + a linked workout, save, then rename
+    /// the routine and refetch. The resolver built from the refetched routines
+    /// must surface the new name, and the workout's frozen snapshot + grouping
+    /// IDs must be unchanged. Closes the "History label rename verification" and
+    /// "RoutineVariant survives name changes" items.
+    func testRenameUpdatesResolverLabelAfterSaveAndRefetch() throws {
+        let def = RoutineVariant(name: "Default", order: 0)
+        let routine = makeRoutine(name: "Push Day", variants: [def])
+        let workout = makeWorkout(
+            routineName: "Push Day",
+            routineID: routine.id,
+            routineVariantID: def.id
+        )
+        try context.save()
+
+        // Default variant collapses to the routine name (current resolver rule).
+        var routines = try context.fetch(FetchDescriptor<Routine>())
+        XCTAssertEqual(
+            RoutineLabelResolver(routines: routines).label(for: workout),
+            "Push Day"
+        )
+
+        routine.name = "Pull Day"
+        try context.save()
+
+        routines = try context.fetch(FetchDescriptor<Routine>())
+        XCTAssertEqual(
+            RoutineLabelResolver(routines: routines).label(for: workout),
+            "Pull Day"
+        )
+
+        // The rename must not have touched the workout snapshot or grouping IDs.
+        XCTAssertEqual(workout.routineName, "Push Day")
+        XCTAssertEqual(workout.routineID, routine.id)
+        XCTAssertEqual(workout.routineVariantID, def.id)
+    }
+
+    /// After a rename, deleting the routine (cascading its variant) must drop the
+    /// resolver back to the frozen `Workout.routineName` snapshot — which kept
+    /// its ORIGINAL value, not the post-rename one.
+    func testRenamedThenDeletedRoutineFallsBackToSnapshot() throws {
+        let def = RoutineVariant(name: "Default", order: 0)
+        let routine = makeRoutine(name: "Legs", variants: [def])
+        let workout = makeWorkout(
+            routineName: "Legs",
+            routineID: routine.id,
+            routineVariantID: def.id
+        )
+        try context.save()
+
+        routine.name = "Leg Day"
+        try context.save()
+
+        context.delete(routine)
+        try context.save()
+
+        let routines = try context.fetch(FetchDescriptor<Routine>())
+        XCTAssertTrue(routines.isEmpty)
+        XCTAssertEqual(
+            RoutineLabelResolver(routines: routines).label(for: workout),
+            "Legs"
+        )
+    }
 }
