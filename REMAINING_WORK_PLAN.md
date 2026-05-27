@@ -11,6 +11,9 @@ authoritative blueprint and full history. This is a derived summary of the
 *remaining* work only, generated 2026-05-27 and reconciled against the
 remaining-work audit on 2026-05-27 (host-less `LogTests` conversion moved from
 Performance/Testing to Archive; the archive set is confirmed complete).
+Updated 2026-05-27: **routine name editing shipped** (§2.1) and its two
+rename-verification items are now closed (§4); routine *variant* rename UI
+remains deferred (§2.1a); multi-select exercise add is the next recommended item.
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -44,18 +47,32 @@ backlog product features, and a handful of gated/blocked items.
 
 Useful, realistic, user-facing items worth implementing soon.
 
-### 2.1 Routine (and variant) name editing
-- **Source:** §6 Backlog ("routine name editable"); also implied by Phase 6.B Slice C.
-- **Current status:** Not implemented. The Routines tab exposes no rename action.
-- **Why it matters:** Highest-leverage next item. It is genuinely user-facing
-  (you currently cannot rename a routine after creation), AND it **unblocks** the
-  Phase 6.B Slice C live-label verification (see §4) — `RoutineLabelResolver`
-  already resolves History/WorkoutDetail labels through live relationship data, so
-  a rename will update labels with no persisted-field rewrite, but there is no UI
-  to trigger a rename today.
-- **Recommendation:** **implement now.**
-- **Risk:** **low** (additive UI over an existing `name` field; no schema change;
-  label resolution already reads live data).
+### 2.1 Routine name editing — ✅ SHIPPED (2026-05-27)
+- **Source:** §6 Backlog ("routine name editable"); also Phase 6.B Slice C.
+- **Status:** **Done.** `RoutineEditor` now has a `Section("Routine")` with a
+  routine-name `TextField` that commits on submit / focus loss. Validation: trims
+  leading/trailing whitespace + newlines; empty/whitespace reverts to the previous
+  valid name; a case-insensitive duplicate of another routine is rejected (self
+  excluded by `id`); changing only the casing of the same routine is allowed. A
+  valid rename mutates **only** `Routine.name` and saves — `Workout.routineName` /
+  `routineID` / `routineVariantID` and `RoutineVariant.name` are never touched.
+  Rename is disabled while the routine is locked / in use. Pure logic lives in
+  `RoutineNameValidator`. No model/schema change. Build green; full suite
+  **357/357**; manual regression passed. (Files: `RoutineEditor.swift`,
+  `RoutineNameValidator.swift`, `RoutineNameValidatorTests.swift`,
+  `RoutineLabelResolverTests.swift`.)
+- **Unblocked:** the two §4 rename-verification items — now closed (see §4).
+
+### 2.1a Routine *variant* rename UI — DEFERRED
+- **Source:** Planning audit (Slice B).
+- **Current status:** **Deferred.** There is still no variant-management UI, and
+  every routine has only a hidden "Default" variant (created by the launch
+  backfill), so variant rename has no surface and near-zero user value today.
+  `RoutineLabelResolver` already supports the "Routine — Variant" display, so this
+  becomes cheap once a variant list/feature exists.
+- **Recommendation:** **defer** until a variant-management feature is actually
+  planned.
+- **Risk:** **low** (additive when it happens).
 
 ### 2.2 Multi-select exercise add
 - **Source:** §6 Backlog ("multi-select exercise add") — 4 unchecked sub-items.
@@ -67,7 +84,8 @@ Useful, realistic, user-facing items worth implementing soon.
         by design elsewhere — match that)
 - **Why it matters:** Adding several exercises to a block one-at-a-time is a
   real friction point. Clear UX win.
-- **Recommendation:** **implement now** (after 2.1).
+- **Recommendation:** **implement now** — this is the **next recommended
+  product/UX item** now that routine name editing (§2.1) has shipped.
 - **Risk:** **low–medium** (picker UI work; must respect the existing
   duplicate-`Exercise`/`routineSlotID` slot-identity model when adding several
   at once).
@@ -162,29 +180,32 @@ All **keep optional / defer**, low refactor relevance:
 
 ## 4. Blocked Items
 
-Blocked by missing UI or another feature.
+_No currently blocked items._ Both items that were blocked on routine rename UI
+are now resolved — routine name editing shipped 2026-05-27 (§2.1). They are kept
+here, marked done, for traceability.
 
-### 4.1 Live rename → History/WorkoutDetail label verification
+### 4.1 Live rename → History/WorkoutDetail label verification — ✅ DONE (2026-05-27)
 - **Source:** Phase 6.B Slice C ("Pending — verification gated on rename UI").
-- **Current status:** **Blocked** — the Routines tab exposes no rename action.
-- **Why it matters:** `RoutineLabelResolver` (Slice C.1, shipped) resolves labels
-  through live relationships, so a rename *should* update History/WorkoutDetail
-  labels with no persisted-field rewrite. That behavior is unverified because
-  there's no way to trigger a rename. Verification cases: (a) rename routine →
-  labels update without relaunch; (b) rename non-Default variant → "Routine —
-  Variant" updates; (c) rename variant to "Default" → collapses to routine name;
-  (d) rename away from "Default" → expands back.
-- **Recommendation:** **blocked** → unblocks immediately once **§2.1 routine/variant
-  rename UI** lands.
-- **Risk:** **low** (verification only; resolver logic already shipped).
+- **Status:** **Verified.** With rename shipped, `RoutineLabelResolver` resolves
+  the live routine name whenever the routine still exists, and History's `@Query`
+  re-renders on rename with no persisted-field rewrite. Pinned by
+  `RoutineLabelResolverTests.testRenameUpdatesResolverLabelAfterSaveAndRefetch`
+  (rename → save → refetch → new label; `Workout.routineName` / `routineID` /
+  `routineVariantID` asserted unchanged). Default-variant collapse to the routine
+  name confirmed. Manual: rename → History label updates without relaunch.
+- **Risk:** n/a (closed).
+- **Note:** the non-Default *variant* rename cases (rename to/from "Default") are
+  not exercisable in the UI yet because variant rename UI is deferred (§2.1a); the
+  resolver already supports them and they are covered at the model/unit level.
 
-### 4.2 Test: history grouping by RoutineVariant survives name changes
+### 4.2 History labels / grouping by RoutineVariant survive name changes — ✅ DONE (2026-05-27)
 - **Source:** Phase 7 (optional coverage gap).
-- **Current status:** **Blocked** on the same rename UI (or a manual SwiftData
-  edit harness).
-- **Why it matters:** Pins the live-label invariant as an automated regression net.
-- **Recommendation:** **blocked** → write alongside 4.1 once rename UI exists.
-- **Risk:** **low**.
+- **Status:** **Done.** Covered by
+  `RoutineLabelResolverTests.testRenamedThenDeletedRoutineFallsBackToSnapshot`
+  (renamed-then-deleted routine falls back to the frozen `Workout.routineName`
+  snapshot) plus the rename-after-save/refetch test above; grouping IDs
+  (`routineID` / `routineVariantID`) asserted stable across rename.
+- **Risk:** n/a (closed).
 
 ---
 
@@ -390,19 +411,21 @@ implement these as specified.
 
 Highest-value next items, in order:
 
-1. **Routine (+ variant) name editing UI** (§2.1) — low risk, clearly user-facing,
-   and unblocks the §4 rename-verification work. Do this first.
-2. **Rename-verification: History/WorkoutDetail live labels + the
-   `RoutineVariant`-survives-rename test** (§4.1 + §4.2) — trivial to verify/pin
-   once #1 exists; closes a long-standing blocked gap with near-zero added risk.
-3. **Multi-select exercise add** (§2.2) — the next clear UX win; independent of
-   #1/#2, so it can also run in parallel.
+1. ✅ **Routine name editing UI** (§2.1) — **SHIPPED 2026-05-27.** Also closed the
+   two rename-verification items (§4.1 + §4.2).
+2. **Multi-select exercise add** (§2.2) — **next recommended item.** The clearest
+   remaining UX win; respect the existing duplicate-`Exercise` / `routineSlotID`
+   slot-identity model when adding several at once.
+3. _(optional)_ **"Used in N routines" summary** on Exercise detail (§2.3) — small,
+   nice-to-have; build only if the detail screen feels empty.
 
-Everything below the top 3 is optional/deferred: the technique design follow-ups
-(§3.1) and prescription enrichment (§3.4) need design passes first; the Phase 12
-viewmodel hoist (§6.6) is the big structural item but is high-risk and not urgent;
-Phase 8 deprecations (§6.1–6.3) should stay deferred absent a concrete safety
-reason. Do the TestFlight upgrade (§1) before public App Store promotion.
+Routine *variant* rename UI (§2.1a) stays **deferred** until a variant-management
+feature is actually planned (no variant UI exists today). Everything else is
+optional/deferred: the technique design follow-ups (§3.1) and prescription
+enrichment (§3.4) need design passes first; the Phase 12 viewmodel hoist (§6.6) is
+the big structural item but is high-risk and not urgent; Phase 8 deprecations
+(§6.1–6.3) should stay deferred absent a concrete safety reason. Do the TestFlight
+upgrade (§1) before public App Store promotion.
 
 ---
 
