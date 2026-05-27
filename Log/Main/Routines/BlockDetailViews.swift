@@ -143,30 +143,21 @@ struct SupersetDetailNoRest: View {
         try? ctx.save()
     }
 
-    /// Phase 5.2 — append a new `RoutineExercise` slot to this superset.
-    /// The new slot inherits the superset's shared "Sets per exercise"
-    /// value so adding doesn't disturb the block-wide invariant. Duplicate
-    /// `Exercise` references are intentionally allowed: per-slot identity
-    /// is `RoutineExercise.slotID` (unique per slot), so two slots of the
-    /// same Exercise log and persist independently.
-    private func addExercise(_ ex: Exercise) {
-        let nextOrder = (block.exercises.map(\.order).max() ?? -1) + 1
-        let re = RoutineExercise(
-            exercise: ex, order: nextOrder, setTemplates: [])
-        ctx.insert(re)
-        let p = makeDefaultPrescription(isTimeBased: ex.isTimeBased, in: ctx)
-        // Coerce the new slot's sets to the block's shared value so the
-        // shared Stepper invariant holds without an extra user touch.
-        // `currentSetsValue == 0` means no child prescription has a `sets`
-        // value yet (legacy or freshly-created block) — fall back to the
-        // app default so the new slot still gets a sane value.
-        let sharedSets = currentSetsValue > 0
-            ? currentSetsValue
-            : AppSettings.defaultSets
-        p.sets = sharedSets
-        re.prescription = p
-        block.exercises.append(re)
-        try? ctx.save()
+    /// Phase 5.2 / Multi-select Slice B — append one or more `RoutineExercise`
+    /// slots to this superset, in tap-selection order. Each new slot inherits
+    /// the superset's shared "Sets per exercise" value (the builder falls back
+    /// to `AppSettings.defaultSets` when `currentSetsValue` is 0 — i.e. no
+    /// child prescription has a `sets` value yet) so adding doesn't disturb the
+    /// block-wide invariant. Duplicate `Exercise` references are intentionally
+    /// allowed: per-slot identity is `RoutineExercise.slotID` (unique per slot),
+    /// so two slots of the same Exercise log and persist independently. Existing
+    /// slots are not mutated. Delegates to the tested `RoutineBlockBuilder`. The
+    /// lock guard is defense-in-depth — the "Add Exercise" button is already
+    /// `.disabled(isRoutineLocked)`.
+    private func addExercises(_ exercises: [Exercise]) {
+        guard !isRoutineLocked else { return }
+        RoutineBlockBuilder.addExercisesToSuperset(
+            exercises, to: block, sharedSets: currentSetsValue, in: ctx)
     }
 
     /// Phase 5.2 — remove `RoutineExercise` slot(s) from this superset.
@@ -392,8 +383,8 @@ struct SupersetDetailNoRest: View {
             }
         }
         .sheet(isPresented: $showAddExerciseSheet) {
-            ExercisePickerSingle(exercises: allExercises) { picked in
-                if let ex = picked { addExercise(ex) }
+            ExerciseMultiPicker(exercises: allExercises) { picked in
+                addExercises(picked)
             }
         }
         .alert(

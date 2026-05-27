@@ -112,4 +112,129 @@ final class RoutineBlockBuilderTests: SwiftDataTestHarness {
         XCTAssertNotNil(re?.prescription)
         XCTAssertEqual(re?.prescription?.sets, AppSettings.defaultSets)
     }
+
+    // MARK: - Existing-superset multi-add (Slice B)
+
+    /// Build a superset block (attached to `routine`) with one slot per name,
+    /// each slot's `prescription.sets` seeded to `sets`.
+    private func makeSupersetBlock(
+        on routine: Routine, sets: Int, _ names: String...
+    ) -> RoutineBlock {
+        var slots: [RoutineExercise] = []
+        for (i, n) in names.enumerated() {
+            let ex = makeExercise(n)
+            let re = RoutineExercise(exercise: ex, order: i, setTemplates: [])
+            context.insert(re)
+            let p = makeDefaultPrescription(isTimeBased: false, in: context)
+            p.sets = sets
+            re.prescription = p
+            slots.append(re)
+        }
+        let block = RoutineBlock(
+            isSuperset: true, order: 0, restAfterSeconds: nil, exercises: slots)
+        context.insert(block)
+        routine.blocks.append(block)
+        try? context.save()
+        return block
+    }
+
+    func testSupersetAddAppendsSlotsInTapOrder() {
+        let r = makeRoutine()
+        let block = makeSupersetBlock(on: r, sets: 4, "A", "B")
+
+        RoutineBlockBuilder.addExercisesToSuperset(
+            [makeExercise("C"), makeExercise("D")],
+            to: block, sharedSets: 4, in: context)
+
+        XCTAssertEqual(block.exercises.count, 4)
+        let sorted = block.exercises.sorted { $0.order < $1.order }
+        XCTAssertEqual(sorted.map(\.order), [0, 1, 2, 3])
+        XCTAssertEqual(
+            sorted.compactMap { $0.exercise?.name }, ["A", "B", "C", "D"])
+    }
+
+    func testSupersetAddSlotsHaveUniqueSlotIDs() {
+        let r = makeRoutine()
+        let block = makeSupersetBlock(on: r, sets: 3, "A", "B")
+
+        RoutineBlockBuilder.addExercisesToSuperset(
+            [makeExercise("C"), makeExercise("D")],
+            to: block, sharedSets: 3, in: context)
+
+        let ids = block.exercises.map(\.slotID)
+        XCTAssertEqual(ids.count, 4)
+        XCTAssertEqual(Set(ids).count, 4)
+    }
+
+    func testSupersetAddDuplicatesProduceDistinctSlots() {
+        let r = makeRoutine()
+        let block = makeSupersetBlock(on: r, sets: 3, "A", "B")
+        let dup = makeExercise("Dup")
+
+        RoutineBlockBuilder.addExercisesToSuperset(
+            [dup, dup], to: block, sharedSets: 3, in: context)
+
+        XCTAssertEqual(block.exercises.count, 4)
+        let dupSlots = block.exercises.filter { $0.exercise?.id == dup.id }
+        XCTAssertEqual(dupSlots.count, 2)
+        XCTAssertNotEqual(dupSlots[0].slotID, dupSlots[1].slotID)
+    }
+
+    func testSupersetAddContiguousOrderAndExistingUnchanged() {
+        let r = makeRoutine()
+        let block = makeSupersetBlock(on: r, sets: 3, "A", "B")
+        let existing = block.exercises.sorted { $0.order < $1.order }
+        let existingSlotIDs = existing.map(\.slotID)
+        let existingOrders = existing.map(\.order)
+        let existingSets = existing.compactMap { $0.prescription?.sets }
+
+        RoutineBlockBuilder.addExercisesToSuperset(
+            [makeExercise("C")], to: block, sharedSets: 3, in: context)
+
+        let afterExisting =
+            block.exercises
+            .filter { existingSlotIDs.contains($0.slotID) }
+            .sorted { $0.order < $1.order }
+        XCTAssertEqual(afterExisting.map(\.slotID), existingSlotIDs)
+        XCTAssertEqual(afterExisting.map(\.order), existingOrders)
+        XCTAssertEqual(
+            afterExisting.compactMap { $0.prescription?.sets }, existingSets)
+
+        let newSlot = block.exercises.first { $0.exercise?.name == "C" }
+        XCTAssertEqual(newSlot?.order, 2)
+    }
+
+    func testSupersetAddInheritsSharedSets() {
+        let r = makeRoutine()
+        let block = makeSupersetBlock(on: r, sets: 5, "A", "B")
+
+        RoutineBlockBuilder.addExercisesToSuperset(
+            [makeExercise("C")], to: block, sharedSets: 5, in: context)
+
+        let newSlot = block.exercises.first { $0.exercise?.name == "C" }
+        XCTAssertEqual(newSlot?.prescription?.sets, 5)
+    }
+
+    func testSupersetAddSharedSetsZeroFallsBackToDefault() {
+        let r = makeRoutine()
+        let block = makeSupersetBlock(on: r, sets: 3, "A", "B")
+
+        RoutineBlockBuilder.addExercisesToSuperset(
+            [makeExercise("C")], to: block, sharedSets: 0, in: context)
+
+        let newSlot = block.exercises.first { $0.exercise?.name == "C" }
+        XCTAssertEqual(newSlot?.prescription?.sets, AppSettings.defaultSets)
+    }
+
+    func testSupersetAddEmptyInputCausesNoMutation() {
+        let r = makeRoutine()
+        let block = makeSupersetBlock(on: r, sets: 3, "A", "B")
+        let before = block.exercises.count
+
+        let created = RoutineBlockBuilder.addExercisesToSuperset(
+            [], to: block, sharedSets: 3, in: context)
+
+        XCTAssertTrue(created.isEmpty)
+        XCTAssertEqual(block.exercises.count, before)
+    }
 }

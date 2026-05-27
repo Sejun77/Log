@@ -141,7 +141,7 @@ struct RoutineEditor: View {
             }
         }
         .sheet(isPresented: $showAddSuperset) {
-            SupersetPicker(exercises: allExercises) { picked in
+            ExerciseMultiPicker(exercises: allExercises) { picked in
                 if !picked.isEmpty {
                     appendBlock(
                         isSuperset: true,
