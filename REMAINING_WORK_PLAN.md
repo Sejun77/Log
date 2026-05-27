@@ -16,8 +16,12 @@ rename-verification items are now closed (§4); **multi-select exercise add is
 complete** (§2.2) across normal-block add, existing-superset add, and new-superset
 creation (`SupersetPicker` removed); the **"Used in Routines" Exercise-detail
 summary shipped** (§2.3) — read-only, lists routine names with per-routine slot
-context. **No "implement now" product/UX item remains** — every remaining item is
-optional / future / deferred. Routine *variant* rename UI remains deferred (§2.1a).
+context; an **input/navigation focus-bug fix shipped** (§2.4) — navigating into
+Exercise Detail / Routine Editor now clears the add-field focus, and navigating
+out of Exercises search dismisses search mode, so the keyboard no longer reappears
+on return and Edit/Reorder controls come back. **No "implement now" product/UX item
+remains** — every remaining item is optional / future / deferred. Routine *variant*
+rename UI remains deferred (§2.1a).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -138,6 +142,38 @@ Useful, realistic, user-facing items worth implementing soon.
   Routine Editor."** Deferred because it needs a cross-tab navigation design decision
   (Exercises tab → Routines tab editor, deep-link/back-stack semantics). Risk:
   **medium** (navigation architecture); keep optional until that design is settled.
+
+### 2.4 Add-field keyboard / search-focus polish — ✅ SHIPPED (2026-05-27)
+- **Source:** Bug surfaced during manual testing of the Exercises / Routines list
+  screens (input/navigation polish).
+- **Bug:** Lingering focus leaked across navigation:
+  - **Exercises** — with the new-exercise add field focused, opening an Exercise
+    Detail and returning could **re-show the keyboard**.
+  - **Routines** — with the new-routine add field focused, opening a Routine Editor
+    and returning could **re-show the keyboard**.
+  - **Exercises search** — searching for an exercise, opening it, and returning
+    dismissed the keyboard but left **search mode still active/focused**, which hid
+    the Edit / Reorder controls.
+- **Status:** **Done.** Final behavior:
+  - Navigating into Exercise Detail clears the add-field focus; navigating into the
+    Routine Editor clears the add-field focus.
+  - Returning to Exercises / Routines no longer auto-shows the keyboard, and any
+    typed add-field draft is **preserved**.
+  - Navigating from Exercises search results dismisses search mode and clears the
+    search presentation; returning shows the normal Exercises list with Edit /
+    Reorder controls visible again.
+  - Tapping an Exercise / Routine row still opens detail / editor on the **first
+    tap** (no double-tap). Add via Return / Add, duplicate-name alerts, exercise
+    sort/search/reorder, routine reorder, and routine rename / multi-select add all
+    remain unaffected.
+- **Rejected approach:** the first attempt used row-level `.simultaneousGesture` on
+  the `NavigationLink`, but that **competed with NavigationLink activation** and
+  caused navigation failures when text was typed. The shipped fix avoids gesture
+  competition entirely and clears focus / search through safer navigation and
+  list-state handling instead.
+- **No model/schema change.** Build succeeded; full suite **389/389**; manual
+  regression passed. (Files: `Log/Main/ExercisesView.swift`,
+  `Log/Main/RoutinesView.swift`.)
 
 ---
 
@@ -457,6 +493,12 @@ Highest-value next items, in order:
 3. ✅ **"Used in Routines" Exercise-detail summary** (§2.3) — **SHIPPED 2026-05-27**
    (read-only; lists routine names with per-routine slot context; freeze bug fixed
    by moving the `@Query` into `ExerciseDetailHost`).
+
+✅ **Add-field keyboard / search-focus polish** (§2.4) — **SHIPPED 2026-05-27** as a
+reactive fix found in manual testing (not a planned ordered item): clears add-field
+focus and Exercises search mode on navigation so the keyboard no longer reappears and
+Edit/Reorder controls return; the rejected `.simultaneousGesture` approach is recorded
+in §2.4.
 
 **No remaining "implement now" product/UX item.** All three top recommendations have
 shipped. Everything left is optional / future / deferred:
