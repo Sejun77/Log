@@ -12,10 +12,11 @@ authoritative blueprint and full history. This is a derived summary of the
 remaining-work audit on 2026-05-27 (host-less `LogTests` conversion moved from
 Performance/Testing to Archive; the archive set is confirmed complete).
 Updated 2026-05-27: **routine name editing shipped** (§2.1) and its two
-rename-verification items are now closed (§4); **multi-select exercise add Slice A
-(normal blocks) shipped** (§2.2). Next: multi-select Slice B (existing-superset
-add + optional `SupersetPicker` replacement, §2.2b). Routine *variant* rename UI
-remains deferred (§2.1a).
+rename-verification items are now closed (§4); **multi-select exercise add is
+complete** (§2.2) across normal-block add, existing-superset add, and new-superset
+creation (`SupersetPicker` removed). No "implement now" product/UX item remains —
+the lightest optional next item is the "Used in N routines" summary (§2.3).
+Routine *variant* rename UI remains deferred (§2.1a).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -76,39 +77,30 @@ Useful, realistic, user-facing items worth implementing soon.
   planned.
 - **Risk:** **low** (additive when it happens).
 
-### 2.2 Multi-select exercise add — Slice A ✅ SHIPPED (2026-05-27)
+### 2.2 Multi-select exercise add — ✅ COMPLETE (Slice A + Slice B, 2026-05-27)
 - **Source:** §6 Backlog ("multi-select exercise add").
-- **Status:** **Slice A done (normal blocks).** `RoutineEditor` "Add Exercise"
-  now opens `ExerciseMultiPicker` — an ordered, duplicate-capable multi-select
-  (tap appends; a second tap adds a second entry; "Selected (N)" summary with
-  swipe-to-remove; `×N` count badges; search that never clears/reorders the
-  selection; **Add (N)** disabled when empty; Cancel = no mutation). Confirm adds
-  **N separate single-exercise normal blocks in tap-selection order** via the
-  tested `RoutineBlockBuilder`: existing blocks untouched, contiguous block order
-  after the current max, each `RoutineExercise` gets its own `slotID`, duplicate
-  picks become distinct slots, default prescription per slot. Pure selection logic
-  lives in `ExerciseMultiSelection`. **Add Superset** and **existing-superset Add
-  Exercise** are unchanged; locked-routine gating preserved. No model/schema
-  change. Build green; full suite **373/373**; manual regression passed. (Files:
-  `ExercisePickers.swift`, `RoutineEditor.swift`, `ExerciseMultiSelection.swift`,
+- **Status:** **Done across all three add surfaces.** All routine-editor add
+  flows now use the shared `ExerciseMultiPicker` — an ordered, duplicate-capable
+  multi-select (tap appends; a second tap adds a second entry; "Selected (N)"
+  summary with swipe-to-remove; `×N` count badges; search that never
+  clears/reorders the selection; **Add (N)** disabled when empty; Cancel = no
+  mutation):
+  - **Normal-block "Add Exercise"** (Slice A) — confirm adds **N separate
+    single-exercise blocks in tap-selection order** via `RoutineBlockBuilder`.
+  - **Existing-superset "Add Exercise"** (Slice B) — confirm appends **N slots to
+    the superset in tap order** via `RoutineBlockBuilder.addExercisesToSuperset`;
+    new slots inherit the superset's shared set count.
+  - **New-superset creation** (Slice B) — "Add Superset" now uses
+    `ExerciseMultiPicker` too (the old `Set<UUID>`-based `SupersetPicker` was
+    removed); creation supports tap order and duplicate selections.
+- **Invariants preserved everywhere:** existing blocks/slots untouched, contiguous
+  order after the current max, each `RoutineExercise` gets its own `slotID`,
+  duplicate picks become distinct slots, default/shared prescription per slot,
+  locked-routine gating intact. No model/schema change. Build green; full suite
+  **380/380**; manual regression passed. (Files: `ExercisePickers.swift`,
+  `RoutineEditor.swift`, `BlockDetailViews.swift`, `ExerciseMultiSelection.swift`,
   `RoutineBlockBuilder.swift`, `ExerciseMultiSelectionTests.swift`,
   `RoutineBlockBuilderTests.swift`.)
-
-### 2.2b Multi-select exercise add — Slice B (PENDING)
-- **Source:** Planning audit (multi-select split).
-- **Current status:** **Pending.** Slice A covered normal-block add only. Slice B
-  covers the two remaining picker surfaces:
-  - **Existing-superset "Add Exercise"** (`BlockDetailViews`) — still uses the
-    single-select `ExercisePickerSingle`; adopt `ExerciseMultiPicker` to append N
-    slots at once.
-  - **(Optional) Replace `SupersetPicker`** for new-superset creation — it
-    currently keys selection on a `Set<UUID>`, so it can't represent tap order or
-    intentional duplicates; swapping in the ordered, duplicate-capable picker
-    would make all three add surfaces consistent.
-- **Recommendation:** **next recommended item** if continuing the multi-select
-  thread; otherwise optional.
-- **Risk:** **low–medium** (reuses the shipped `ExerciseMultiPicker`; the
-  `SupersetPicker` swap must preserve the min-2 / shared-sets superset rules).
 
 ### 2.3 "Used in N routines" summary on Exercise detail
 - **Source:** Phase 9-D pending bullet (deferred to Phase 10, never shipped).
@@ -116,8 +108,9 @@ Useful, realistic, user-facing items worth implementing soon.
   Exercise detail screen; deferred and not built.
 - **Why it matters:** Small read-only context cue; the Exercise detail screen lost
   density when the Sets editor was removed in 9-D.
-- **Recommendation:** **keep optional** (nice-to-have; smaller UX item than Slice
-  B; build only if the Exercise detail screen feels empty).
+- **Recommendation:** **keep optional** — the smallest remaining user-facing item;
+  build only if a quick UX win is wanted (otherwise everything left is
+  optional/future/deferred).
 - **Risk:** **low** (read-only query/count).
 
 ---
@@ -433,22 +426,23 @@ Highest-value next items, in order:
 
 1. ✅ **Routine name editing UI** (§2.1) — **SHIPPED 2026-05-27.** Also closed the
    two rename-verification items (§4.1 + §4.2).
-2. ✅ **Multi-select exercise add — Slice A** (§2.2) — **SHIPPED 2026-05-27**
-   (normal blocks).
-3. **Multi-select exercise add — Slice B** (§2.2b) — **next recommended item** if
-   continuing the multi-select thread: adopt the shipped `ExerciseMultiPicker` for
-   existing-superset "Add Exercise", and optionally replace `SupersetPicker` so
-   tap-order + duplicate selection are consistent across all three add surfaces.
-4. _(optional, smaller)_ **"Used in N routines" summary** on Exercise detail (§2.3)
-   — a lighter alternative if a smaller UX item is preferred over Slice B.
+2. ✅ **Multi-select exercise add** (§2.2) — **SHIPPED 2026-05-27** across all three
+   add surfaces (normal-block add, existing-superset add, new-superset creation).
 
-Routine *variant* rename UI (§2.1a) stays **deferred** until a variant-management
-feature is actually planned (no variant UI exists today). Everything else is
-optional/deferred: the technique design follow-ups (§3.1) and prescription
-enrichment (§3.4) need design passes first; the Phase 12 viewmodel hoist (§6.6) is
-the big structural item but is high-risk and not urgent; Phase 8 deprecations
-(§6.1–6.3) should stay deferred absent a concrete safety reason. Do the TestFlight
-upgrade (§1) before public App Store promotion.
+**No remaining "implement now" product/UX item.** The two top recommendations have
+both shipped. The lightest remaining user-facing option is the optional
+**"Used in N routines" summary** (§2.3) — build it only if a small UX win is
+wanted. Otherwise everything left is optional / future / deferred:
+
+- Routine *variant* rename UI (§2.1a) stays **deferred** until a variant-management
+  feature is actually planned (no variant UI exists today).
+- Technique design follow-ups (§3.1) and prescription enrichment (§3.4) need design
+  passes first.
+- The Phase 12 viewmodel hoist (§6.6) is the big structural item but is high-risk
+  and not urgent.
+- Phase 8 deprecations (§6.1–6.3) should stay deferred absent a concrete safety
+  reason.
+- Do the TestFlight upgrade (§1) before public App Store promotion.
 
 ---
 
