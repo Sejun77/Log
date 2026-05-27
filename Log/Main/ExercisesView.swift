@@ -367,7 +367,22 @@ struct ExerciseDetailView: View {
     @Environment(\.modelContext) private var ctx
     let isLocked: Bool
 
+    /// Read-only routine-usage snapshot, computed by the owning
+    /// `ExerciseDetailHost` from its `@Query` and passed in as a plain value
+    /// type — deliberately NOT recomputed here. Keeping the routines `@Query`
+    /// (and its live relationship scan) off this view fixes a navigation
+    /// freeze: when a `@Query` lived here, pushing the Body Part / Equipment
+    /// `NavigationLink` refreshed this view — the link's source — mid-push,
+    /// re-faulting `Routine.blocks` during the transition and deadlocking the
+    /// main thread. This view now renders only value types in its `body`.
+    let usage: ExerciseRoutineUsage
+
     @FocusState private var focusedField: String?
+
+    /// Max routine rows shown before collapsing the remainder into a
+    /// "+N more" row. Realistic routine counts are tiny; this only guards
+    /// against an unbounded list in the Form section.
+    private static let maxRoutineRows = 5
 
     // Phase 10-polish-G (2026-05-24): "Legs" removed from the canonical list.
     // The seed catalogue uses the specific lower-body buckets (Quads /
@@ -542,6 +557,56 @@ struct ExerciseDetailView: View {
                 Toggle("Time-based", isOn: $exercise.isTimeBased)
                     .disabled(isLocked)
             }
+
+            usedInRoutinesSection
+        }
+    }
+
+    // MARK: - Used in Routines (read-only)
+
+    /// Read-only summary of which routines reference this exercise. Shown
+    /// regardless of `isLocked` (it never mutates anything). Counts unique
+    /// routines; a routine that uses the exercise in more than one slot gets
+    /// a "· N slots" suffix. Caps the visible rows at `maxRoutineRows` with a
+    /// trailing "+N more" row.
+    @ViewBuilder
+    private var usedInRoutinesSection: some View {
+        Section {
+            Text(usage.summary)
+                .font(.dsBody)
+
+            if usage.routineCount > 0 {
+                ForEach(
+                    Array(usage.entries.prefix(Self.maxRoutineRows)),
+                    id: \.routineID
+                ) { entry in
+                    HStack(spacing: 8) {
+                        Text(entry.routineName)
+                            .font(.dsBodySecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if let suffix = entry.slotSuffix {
+                            Spacer(minLength: 8)
+                            Text(suffix)
+                                .font(.dsBodySecondary)
+                                .foregroundStyle(.secondary)
+                                .layoutPriority(1)
+                        }
+                    }
+                }
+
+                if usage.routineCount > Self.maxRoutineRows {
+                    Text("+\(usage.routineCount - Self.maxRoutineRows) more")
+                        .font(.dsBodySecondary)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Used in Routines")
+        } footer: {
+            if usage.routineCount == 0 {
+                Text("Add this exercise to a routine to see it here.")
+            }
         }
     }
 }
@@ -563,6 +628,12 @@ private struct ExerciseDetailHost: View {
     let exerciseID: UUID
 
     @Query private var result: [Exercise]
+    /// Gathered here — not on `ExerciseDetailView` — so the routine-usage scan
+    /// and its `@Query` observation stay off the detail view that owns the
+    /// Body Part / Equipment `NavigationLink`s (see `ExerciseDetailView.usage`
+    /// for the freeze rationale). Sorted to match the Routines tab order.
+    @Query(sort: [SortDescriptor(\Routine.order), SortDescriptor(\Routine.name)])
+    private var routines: [Routine]
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
 
     init(exerciseID: UUID) {
@@ -577,7 +648,10 @@ private struct ExerciseDetailHost: View {
         if let ex = result.first {
             ExerciseDetailView(
                 exercise: ex,
-                isLocked: activeGuard.isLocked(ex.id)
+                isLocked: activeGuard.isLocked(ex.id),
+                usage: ExerciseRoutineUsage(
+                    routines: routines, exerciseID: ex.id
+                )
             )
         } else {
             VStack(spacing: 12) {
