@@ -8,7 +8,9 @@ re-reading the full (1,800-line) refactor ledger.
 
 **This document does NOT replace `REFACTOR_PLAN.md`.** That file remains the
 authoritative blueprint and full history. This is a derived summary of the
-*remaining* work only, generated 2026-05-27.
+*remaining* work only, generated 2026-05-27 and reconciled against the
+remaining-work audit on 2026-05-27 (host-less `LogTests` conversion moved from
+Performance/Testing to Archive; the archive set is confirmed complete).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -216,16 +218,9 @@ Optional tests / audits. None block any product work.
 - **Recommendation:** **defer** (only if a real nil-slot consumer appears).
 - **Risk:** **low**.
 
-### 5.4 Host-less `LogTests` conversion
-- **Source:** Phase 7.5. Status: **attempted and reverted** — clearing
-  `TEST_HOST`/`BUNDLE_LOADER` caused ~30 undefined-symbol link errors (iOS app
-  targets aren't frameworks). Path forward would require extracting testable code
-  into a separate framework / SwiftPM module.
-- **Why it matters:** The only loss from staying app-hosted is cosmetic CoreData
-  log noise (already documented as expected in CLAUDE.md).
-- **Recommendation:** **keep optional / NOT recommended** — out of scope; high
-  effort, cosmetic payoff.
-- **Risk:** **medium** (structural project restructuring).
+> Host-less `LogTests` conversion was previously listed here. It has been moved to
+> §7 (Archive) — see §7.4 — because it was attempted and reverted and should not be
+> treated as active testing work.
 
 ---
 
@@ -366,7 +361,19 @@ implement these as specified.
   slots ever appear — which would be a new investigation, not this item).
 - **Risk:** n/a.
 
-### 7.4 §5 "equipment/setup is future Phase 10" note
+### 7.4 Host-less `LogTests` conversion
+- **Source:** Phase 7.5.
+- **Current status:** **Attempted and reverted** — clearing `TEST_HOST` /
+  `BUNDLE_LOADER` caused ~30 undefined-symbol link errors (iOS app targets aren't
+  frameworks). A path forward exists only via extracting the testable code into a
+  separate framework / SwiftPM module.
+- **Why archived:** The only loss from staying app-hosted is cosmetic CoreData log
+  noise (documented as expected in CLAUDE.md). Not worth the structural cost.
+- **Recommendation:** **archive** — do not pursue unless a major framework / module
+  split happens for other reasons.
+- **Risk:** medium (structural project restructuring) — but archived, so not active.
+
+### 7.5 §5 "equipment/setup is future Phase 10" note
 - **Source:** §5 Prescription Elements ("`equipmentType` + `setupDefaults` —
   **future** (Phase 10; currently on SlotPrescription, migrating out)").
 - **Why archived:** Stale wording. Phase 10 **shipped** — equipment/setup now live
