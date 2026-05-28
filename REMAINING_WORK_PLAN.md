@@ -19,9 +19,12 @@ summary shipped** (§2.3) — read-only, lists routine names with per-routine sl
 context; an **input/navigation focus-bug fix shipped** (§2.4) — navigating into
 Exercise Detail / Routine Editor now clears the add-field focus, and navigating
 out of Exercises search dismisses search mode, so the keyboard no longer reappears
-on return and Edit/Reorder controls come back. **No "implement now" product/UX item
-remains** — every remaining item is optional / future / deferred. Routine *variant*
-rename UI remains deferred (§2.1a).
+on return and Edit/Reorder controls come back. Updated 2026-05-28: the first
+intentional UI-polish slice shipped — **routine row summary subtitles** (§2.5), a
+read-only slot/superset glance line on Saved Routines rows (pure `RoutineSummary`
+helper, full suite 399/399). **No "implement now" product/UX item remains** — every
+remaining item is optional / future / deferred. Routine *variant* rename UI remains
+deferred (§2.1a).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -199,6 +202,34 @@ Useful, realistic, user-facing items worth implementing soon.
   list-state handling instead.
 - **No model/schema change.** Build succeeded; full suite **389/389**; manual
   regression passed. (Files: `Log/Main/ExercisesView.swift`,
+  `Log/Main/RoutinesView.swift`.)
+
+### 2.5 Routine row summary subtitle — ✅ SHIPPED (2026-05-28)
+- **Source:** Product/UI polish audit (2026-05-28) — top-ranked next improvement
+  for moving from refactor cleanup into intentional UI polish.
+- **Nature:** a small **UX / glanceability** improvement, **not** a new data-model
+  feature. Read-only display; no new persisted state.
+- **Status:** **Done.** Saved Routines rows now show a read-only subtitle under the
+  routine name so routines are distinguishable without opening them:
+  - `"Empty routine"` (no slots)
+  - `"1 exercise"` / `"5 exercises"` (slots, no supersets)
+  - `"5 exercises · 1 superset"` / `"8 exercises · 2 supersets"` (slots + supersets)
+- **Counting rules:** exercises = total `RoutineExercise` slots across
+  `Routine.blocks` (slots, not unique exercises — duplicates count separately;
+  superset members included); supersets = blocks with `isSuperset == true`.
+  `RoutineVariant.blocks` are **not** counted (the editor operates on
+  `Routine.blocks`, matching `ExerciseRoutineUsage`). A **nil/deleted** exercise
+  reference still counts structurally as a slot and never crashes — the scan reads
+  `block.exercises.count` and never dereferences `re.exercise`.
+- **Implementation:** new pure value helper `Log/Services/RoutineSummary.swift`
+  (`init(routine:)`, value-in `init(exerciseCount:supersetCount:)`, `subtitle`, and
+  `map(for:)` to precompute one summary per routine keyed by `id`). `RoutinesView`
+  builds the map **once per render** and each row reads its subtitle from it —
+  same once-per-render discipline as History's `RoutineLabelResolver`, keeping the
+  block scan out of each row `body` on a `@Query`-owning push source.
+- **No model/schema change.** Build succeeded; full suite **399/399** (10 new
+  `RoutineSummaryTests`); manual regression passed. (Files:
+  `Log/Services/RoutineSummary.swift`, `LogTests/RoutineSummaryTests.swift`,
   `Log/Main/RoutinesView.swift`.)
 
 ---
@@ -526,8 +557,14 @@ focus and Exercises search mode on navigation so the keyboard no longer reappear
 Edit/Reorder controls return; the rejected `.simultaneousGesture` approach is recorded
 in §2.4.
 
-**No remaining "implement now" product/UX item.** All three top recommendations have
-shipped. Everything left is optional / future / deferred:
+✅ **Routine row summary subtitle** (§2.5) — **SHIPPED 2026-05-28** as the first
+intentional UI-polish slice: read-only slot/superset subtitle on Saved Routines rows
+(glanceability, not a data-model feature). Computed via a pure `RoutineSummary` helper
+built once per render; full suite **399/399**.
+
+**No remaining "implement now" product/UX item.** The three top refactor-era
+recommendations plus the first polish slice (§2.5) have shipped. Everything left is
+optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
