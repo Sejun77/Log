@@ -187,7 +187,12 @@ struct RoutinesView: View {
     }
 
     private var savedRoutinesSection: some View {
-        Section {
+        // Build the slot/superset summaries once per render (keyed by id) so
+        // each row reads its subtitle from the map instead of re-scanning
+        // `routine.blocks` in its own `body` — same once-per-render discipline
+        // as History's `RoutineLabelResolver`.
+        let summaries = RoutineSummary.map(for: routines)
+        return Section {
             if routines.isEmpty {
                 Text("No routines yet. Create one above.")
                     .font(.dsBodySecondary)
@@ -208,8 +213,18 @@ struct RoutinesView: View {
                         selectedRoutineID = r.id
                     } label: {
                         HStack {
-                            Text(r.name)
-                                .font(.dsBody)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.name)
+                                    .font(.dsBody)
+                                Text(
+                                    (summaries[r.id]
+                                        ?? RoutineSummary(routine: r)).subtitle
+                                )
+                                .font(.dsBodySecondary)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            }
                             Spacer(minLength: 12)
                             if activeGuard.isRoutineLocked(r.id) {
                                 LockBadge()
