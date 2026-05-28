@@ -139,9 +139,35 @@ Useful, realistic, user-facing items worth implementing soon.
   relationship graphs in `body`. Body Part / Equipment pickers open normally and
   relaunch no longer returns to a frozen detail screen. **No model/schema changes.**
 - **Follow-up (optional / future):** **"Tap a listed routine to navigate to the
-  Routine Editor."** Deferred because it needs a cross-tab navigation design decision
-  (Exercises tab → Routines tab editor, deep-link/back-stack semantics). Risk:
-  **medium** (navigation architecture); keep optional until that design is settled.
+  Routine Editor."** Stays **optional / future**.
+- **Audit decision (2026-05-27) — DEFER. No code changes made (planning only).**
+  A planning audit confirmed `ExerciseRoutineUsage.Entry` already carries enough
+  identity for navigation (it stores `routineID` and `routineName`), and that
+  `RoutineEditor` *could* technically be pushed from the Exercises tab stack. It is
+  nonetheless **not worth implementing now**; the current read-only list is a valid
+  end state.
+  - **Recommendation:** defer.
+  - **Current behavior:** keep the section **read-only** (no navigation).
+  - **Preferred future direction:** **switch to the Routines tab + deep-link** into
+    `RoutinesView` at `RootTabView` level — **not** pushing `RoutineEditor` directly
+    inside the Exercises tab stack.
+  - **Why defer (reasons):**
+    1. `RootTabView` uses **separate `NavigationStack`s per tab**.
+    2. `RoutineEditor` normally belongs to the **Routines tab** stack.
+    3. Pushing it from the Exercises tab would create a **duplicate editor path**.
+    4. `RoutineEditor` contains a **Start Workout path**, so a workout could be
+       started from inside the Exercises tab.
+    5. Resume / session logic assumes the **Routines tab is the canonical
+       workout-start / resume path**.
+    6. The §2.3 usage-list slice already hit a **freeze bug** caused by putting the
+       routine `@Query` / computation too close to `ExerciseDetailView` navigation
+       (fixed by moving it into `ExerciseDetailHost`).
+    7. Reintroducing routine navigation from Exercise Detail risks **similar
+       navigation / query complexity**.
+    8. A safer implementation (tab switch + deep-link) needs a **cross-tab
+       navigation design** that is not yet settled.
+  - Risk: **medium** (navigation architecture); keep optional until that design is
+    settled.
 
 ### 2.4 Add-field keyboard / search-focus polish — ✅ SHIPPED (2026-05-27)
 - **Source:** Bug surfaced during manual testing of the Exercises / Routines list
@@ -504,8 +530,10 @@ in §2.4.
 shipped. Everything left is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
-  user-facing option, and it stays **optional/future** pending a cross-tab navigation
-  design decision.
+  user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
+  recommended **defer**: keep the section read-only; the preferred future direction is
+  a `RootTabView`-level **tab switch + deep-link** into `RoutinesView`, not pushing
+  `RoutineEditor` inside the Exercises tab. **No code changes made.**
 - Routine *variant* rename UI (§2.1a) stays **deferred** until a variant-management
   feature is actually planned (no variant UI exists today).
 - Technique design follow-ups (§3.1) and prescription enrichment (§3.4) need design
