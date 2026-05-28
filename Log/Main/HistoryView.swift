@@ -632,20 +632,51 @@ private struct ExercisePicker: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
     @Binding var selectedID: UUID?
+    @State private var search = ""
+
+    private var trimmedSearch: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Name-filtered library. An empty search returns the full `@Query` order
+    /// (alphabetical by name); a search term narrows it without reordering —
+    /// mirrors `ExercisePickerSingle` / `ExerciseMultiPicker`.
+    private var filtered: [Exercise] {
+        guard !trimmedSearch.isEmpty else { return exercises }
+        return exercises.filter {
+            $0.name.localizedCaseInsensitiveContains(trimmedSearch)
+        }
+    }
 
     var body: some View {
-        List(exercises) { ex in
-            Button {
-                selectedID = ex.id
-                dismiss()
-            } label: {
-                HStack {
-                    Text(ex.name)
-                        .font(.dsBody)
-                    Spacer()
-                    if selectedID == ex.id {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(.tint)
+        List {
+            if filtered.isEmpty {
+                Text(
+                    trimmedSearch.isEmpty
+                        ? "No exercises yet."
+                        : "No exercises match “\(trimmedSearch)”."
+                )
+                .font(.dsBodySecondary)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 8)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            } else {
+                ForEach(filtered) { ex in
+                    Button {
+                        selectedID = ex.id
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text(ex.name)
+                                .font(.dsBody)
+                            Spacer()
+                            if selectedID == ex.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
                     }
                 }
             }
@@ -654,6 +685,27 @@ private struct ExercisePicker: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(DSColor.bg.ignoresSafeArea())
+        // `.always` pins the search bar visible the moment the picker opens, so
+        // it's discoverable without a manual upward scroll (default `.automatic`
+        // placement hides it until the list is pulled down).
+        .searchable(
+            text: $search,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search"
+        )
+        // Dismissal paths for the search keyboard: scrolling the list dismisses
+        // it, pressing Search resigns focus for a non-empty query, and the
+        // `.keyboard` Done button below covers the empty submit (`.onSubmit(of:
+        // .search)` doesn't fire when the field is empty after type-delete).
+        // Search is the only text input here, so the accessory only shows for it.
+        .scrollDismissesKeyboard(.immediately)
+        .onSubmit(of: .search) { dismissKeyboard() }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                KeyboardDismissButton()
+            }
+        }
     }
 }
 

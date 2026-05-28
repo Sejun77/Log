@@ -105,7 +105,26 @@ struct ExercisesView: View {
         .environment(\.defaultMinListRowHeight, 56)
         .listRowSpacing(8)
         .listStyle(.insetGrouped)
-        .searchable(text: $search, isPresented: $isSearchPresented)
+        // `.always` pins the search bar visible below the nav title so it can
+        // never be "scrolled off." This removes the post-navigation state where
+        // a return from Exercise Detail left the auto-hiding bar buried and made
+        // the screen feel stuck in search even after `isSearchPresented` was
+        // cleared. Edit/Reorder controls still toggle correctly off of
+        // `isSearchPresented` (see §2.4 — clearing it on row tap restores them
+        // on return).
+        .searchable(
+            text: $search,
+            isPresented: $isSearchPresented,
+            placement: .navigationBarDrawer(displayMode: .always)
+        )
+        // Pressing Search with non-empty text resigns focus. `.onSubmit(of:
+        // .search)` does NOT fire on an empty submit — after type-then-delete
+        // back to empty the system Search key may still look blue/enabled, but
+        // it's inert and can't be greyed via standard APIs (see
+        // `dismissKeyboard()`), so the gated `.keyboard` Done button below is
+        // the reliable dismissal for that case. Matches every `.searchable`
+        // surface in the app.
+        .onSubmit(of: .search) { dismissKeyboard() }
         .scrollDismissesKeyboard(.interactively)
         .scrollContentBackground(.hidden)
         .background(DSColor.bg.ignoresSafeArea())
@@ -124,9 +143,20 @@ struct ExercisesView: View {
                 }
                 EditButton()
             }
-            // No `.keyboard` Done button: the single-line "new exercise" field
-            // commits and dismisses via its return key (.submitLabel(.done) +
-            // .onSubmit below), so an external accessory button is redundant.
+            // `.keyboard` Done button for the SEARCH field only, gated on
+            // `isSearchPresented`. Unlike every other `.searchable` surface this
+            // screen also hosts the single-line "new exercise" add field, which
+            // dismisses via its own return key (.submitLabel(.done) + .onSubmit)
+            // and intentionally has no external Done button — so the accessory
+            // must not show for it. The gate scopes the button to search, where
+            // it's the reliable dismissal for an empty submit (`.onSubmit(of:
+            // .search)` doesn't fire when the field is empty after type-delete).
+            if isSearchPresented {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    KeyboardDismissButton()
+                }
+            }
         }
         .onAppear { backfillExerciseOrderIfNeeded() }
         // Push the detail via value-based navigation so the row's Button can

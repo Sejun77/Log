@@ -7,10 +7,13 @@ import SwiftUI
 /// A compact trailing checkmark for the `.keyboard` toolbar placement that
 /// resigns the first responder. Use it as the shared dismissal control for
 /// fields whose keyboard has no usable Return key:
-///   • numeric pads (`.numberPad` / `.decimalPad`) — no Return key at all, and
-///   • multiline fields (`axis: .vertical`) — Return inserts a newline.
+///   • numeric pads (`.numberPad` / `.decimalPad`) — no Return key at all,
+///   • multiline fields (`axis: .vertical`) — Return inserts a newline, and
+///   • `.searchable` fields — the system Search key does NOT deliver
+///     `.onSubmit(of: .search)` when the query is empty (e.g. after typing
+///     then deleting back to empty), so the Return key alone can't dismiss.
 ///
-/// Single-line text fields should NOT pair this with the accessory: they
+/// Plain single-line text fields should NOT pair this with the accessory: they
 /// dismiss via their own Return key (`.submitLabel(.done)` + `.onSubmit`), so
 /// adding a checkmark there would be a redundant external Done control.
 ///
@@ -26,17 +29,45 @@ import SwiftUI
 struct KeyboardDismissButton: View {
     var body: some View {
         Button {
-            UIApplication.shared.sendAction(
-                #selector(UIResponder.resignFirstResponder),
-                to: nil,
-                from: nil,
-                for: nil
-            )
+            dismissKeyboard()
         } label: {
             Image(systemName: "checkmark").fontWeight(.semibold)
         }
         .accessibilityLabel("Done")
     }
+}
+
+/// Resign the current first responder — dismisses the keyboard regardless of
+/// which field is focused. Use it as the shared submit-dismiss action for
+/// fields whose Return-key contract isn't enough on its own:
+///
+/// ```
+/// .onSubmit(of: .search) { dismissKeyboard() }
+/// ```
+///
+/// `.searchable`'s system Search key (the keyboard's "Search" return key) can
+/// stay blue/enabled after you type-then-delete back to empty, yet pressing it
+/// while empty does NOT fire `.onSubmit(of: .search)`. Investigated and
+/// confirmed unfixable with standard APIs (do not re-litigate): SwiftUI exposes
+/// no modifier for the search field's return-key state; the field already
+/// behaves as `enablesReturnKeyAutomatically == true` (grey when first empty),
+/// so there is no missing flag to set; the stuck-blue case is a UIKit refresh
+/// defect on the private text field inside the search bar. Rejected routes —
+/// `UITextField.appearance().enablesReturnKeyAutomatically` (not a
+/// `UI_APPEARANCE_SELECTOR` property so unsupported, applies globally to every
+/// field, and still wouldn't fix the refresh defect), introspection into the
+/// `UISearchTextField`, and a custom `inputView`/`UIViewRepresentable` — are all
+/// fragile/private/out-of-scope. So the dismissal contract is split:
+///   • non-empty submit → `.onSubmit(of: .search) { dismissKeyboard() }`, and
+///   • empty-after-delete → the compact `.keyboard` `KeyboardDismissButton`,
+/// which calls this and resigns focus regardless of the dead Search key.
+func dismissKeyboard() {
+    UIApplication.shared.sendAction(
+        #selector(UIResponder.resignFirstResponder),
+        to: nil,
+        from: nil,
+        for: nil
+    )
 }
 
 // ======================================================
