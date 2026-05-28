@@ -15,6 +15,18 @@ struct RoutineEditor: View {
     // MARK: - Environment & Data
 
     @Environment(\.modelContext) private var ctx
+    // RoutineEditor owns these `@Query` values *and* is a navigation push source
+    // (the "Details" block links + the `$startLinkActive` Start destination).
+    // That is the same shape that froze `ExerciseDetailView` (see its `usage`
+    // comment): a `@Query` invalidation re-rendering the link's source mid-push,
+    // re-faulting a relationship graph during the transition, deadlocked the main
+    // thread. It is safe here today only because `body` does no heavy work on
+    // these queries — `allExercises` is a light name-sort and `allRoutines` is
+    // read off-`body` in `commitRename`. Do NOT add heavy relationship traversal
+    // or save-on-read work over these queries directly in `body`. If query-heavy
+    // UI is ever needed, move it into a pure helper / value snapshot (cf.
+    // `ExerciseRoutineUsage`) or a host wrapper that owns the `@Query` (cf.
+    // `ExerciseDetailHost`), keeping the scan off this push-source view.
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     @Query private var allRoutines: [Routine]
     @Bindable var routine: Routine
