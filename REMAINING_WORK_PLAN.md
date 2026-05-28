@@ -22,7 +22,11 @@ out of Exercises search dismisses search mode, so the keyboard no longer reappea
 on return and Edit/Reorder controls come back. Updated 2026-05-28: the first
 intentional UI-polish slice shipped — **routine row summary subtitles** (§2.5), a
 read-only slot/superset glance line on Saved Routines rows (pure `RoutineSummary`
-helper, full suite 399/399). **No "implement now" product/UX item remains** — every
+helper, full suite 399/399). Also updated 2026-05-28: a **search UX consistency
+item** (§2.6) was opened as 🚧 in-progress — picker search, search-submit
+dismissal, and search-return state need a single uniform policy across `.searchable`
+surfaces; first-pass code exists in the working tree but is **not yet shipped**.
+Aside from §2.6 there is no other "implement now" product/UX item — every other
 remaining item is optional / future / deferred. Routine *variant* rename UI remains
 deferred (§2.1a).
 
@@ -232,7 +236,72 @@ Useful, realistic, user-facing items worth implementing soon.
   `Log/Services/RoutineSummary.swift`, `LogTests/RoutineSummaryTests.swift`,
   `Log/Main/RoutinesView.swift`.)
 
----
+### 2.6 Search UX consistency: picker search, search-submit dismissal, and search-return state — 🚧 IN PROGRESS (2026-05-28)
+- **Source:** Discovered while adding `.searchable` to the History progression
+  exercise picker; manual testing surfaced related inconsistencies across the
+  other `.searchable` surfaces in the app.
+- **Status:** **Pending / in-progress.** A first-pass code change exists in the
+  working tree (not committed) — full suite still green — but the slice is
+  **held open until manual confirmation** of the three sub-items below. Do **not**
+  treat this as shipped.
+- **Why one umbrella item:** the sub-items share root cause (default `.searchable`
+  placement is auto-hiding; the search-submit key has no general dismissal
+  contract; entering/leaving "search presentation" is implicit) and a consistent
+  policy across them avoids whack-a-mole fixes.
+
+#### A. History progression picker search polish
+- Search **filtering works**; search bar **visibility improved** (pinned via
+  `.navigationBarDrawer(displayMode: .always)`); keyboard dismissal **mostly
+  works** (`scrollDismissesKeyboard(.immediately)` + `onSubmit(of: .search)`
+  resigns first responder).
+- Outstanding: confirm by manual test that opening the picker shows the bar
+  immediately every time, that Return on empty AND non-empty both reliably
+  dismiss the keyboard, and that scroll-to-dismiss feels right (not too eager
+  while picking).
+- No model/schema change.
+
+#### B. ExercisesView search-return state fix
+- After searching, opening an Exercise Detail, and returning, the keyboard is
+  dismissed and the search term is cleared (§2.4), but the **search-bar /
+  scroll state can still feel wrong** — the auto-hiding bar can remain hidden,
+  the list can come back partially scrolled, and Edit/Reorder controls can feel
+  intermittently re-revealed.
+- First-pass change (uncommitted): on return-from-search-initiated push, scroll
+  the list back to the top so the cleared search bar is revealed; non-search
+  navigation preserves the user's scroll position.
+- Outstanding: confirm by manual test that Edit/Reorder controls **reliably**
+  return, that the search bar is visible (not just the list at top), and that
+  non-search navigation does not get yanked to the top.
+
+#### C. App-wide searchable submit / dismiss policy
+- **Bug:** across `.searchable` surfaces the keyboard's Search key is grey/
+  disabled when the field is initially empty, but after typing then deleting all
+  characters it can become **blue/enabled while the field is empty**, sending an
+  empty-string submit. This is inconsistent and confusing.
+- **Decision needed:** pick **one** policy and apply it everywhere:
+  - **(preferred, low-risk)** Allow Search on an empty field, and on submit
+    **dismiss keyboard / search focus** (resign first responder; if the
+    `.searchable` uses an `isPresented` binding, also collapse it). SwiftUI
+    `.searchable` does not expose full return-key enabled-state control, so
+    this is the cleaner contract than trying to keep the key disabled.
+  - **(alternative)** Keep Search disabled while empty (requires per-view
+    workaround; not worth it unless the empty-submit dismiss feels wrong).
+- **Search-mode dismissal — related sub-decision:** scrolling can dismiss the
+  *keyboard* but leave the view in search **presentation** mode (title and
+  Edit/Reorder still hidden until x/Cancel). Need a consistent rule for when
+  search *presentation* itself should exit (e.g. on row tap → push, on Submit
+  with empty field, on explicit Cancel only) so the title/toolbar state never
+  feels stuck.
+- Outstanding: apply the chosen policy across:
+  - History progression `ExercisePicker`
+  - `ExercisesView` main search
+  - `ExercisePickerSingle` / `ExerciseMultiPicker` (routine-editor add surfaces)
+- No model/schema change.
+
+**Recommendation:** finish A by manual confirmation; design + ship B and C
+together as a single search-policy pass so the contract is uniform. Hold the
+working-tree changes until that pass is decided — do **not** ship A's first-pass
+code alone if it would leave B/C inconsistent.
 
 ## 3. Optional / Future Features
 
@@ -562,9 +631,17 @@ intentional UI-polish slice: read-only slot/superset subtitle on Saved Routines 
 (glanceability, not a data-model feature). Computed via a pure `RoutineSummary` helper
 built once per render; full suite **399/399**.
 
-**No remaining "implement now" product/UX item.** The three top refactor-era
-recommendations plus the first polish slice (§2.5) have shipped. Everything left is
-optional / future / deferred:
+🚧 **Search UX consistency** (§2.6) — **IN PROGRESS 2026-05-28.** Picker search,
+search-submit dismissal, and search-return state need one uniform policy across the
+`.searchable` surfaces (History progression picker, ExercisesView, routine-editor
+exercise pickers). A first-pass code change exists in the working tree (still green
+on the full suite) but is **held until manual confirmation** of sub-items A/B and a
+decision on the C policy. Treat this as the next active product/UX slice; do not
+ship A's first-pass code alone if it would leave B/C inconsistent.
+
+**Aside from §2.6, no other "implement now" product/UX item remains.** The three top
+refactor-era recommendations plus the first polish slice (§2.5) have shipped.
+Everything else is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
