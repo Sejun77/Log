@@ -22,16 +22,18 @@ out of Exercises search dismisses search mode, so the keyboard no longer reappea
 on return and Edit/Reorder controls come back. Updated 2026-05-28: the first
 intentional UI-polish slice shipped — **routine row summary subtitles** (§2.5), a
 read-only slot/superset glance line on Saved Routines rows (pure `RoutineSummary`
-helper, full suite 399/399). Also updated 2026-05-28: a **search UX consistency
-item** (§2.6) was opened as 🚧 in-progress and re-scoped to *visible search bars,
-keyboard dismissal, and search-return state* — pinned-bar (`.always`) placement
-and a uniform `.onSubmit(of:.search) { dismissKeyboard() }` policy are wired in
-the working tree, but a **type-then-delete-empty submit dead-end** remains and a
-**placement audit** of the routine-editor pickers is still pending; not yet
-shipped. A separate future-optional "send Exercise to top/bottom" idea is
-tracked under §2.6 sub-item E for traceability. Aside from §2.6 there is no
-other "implement now" product/UX item — every other remaining item is optional /
-future / deferred. Routine *variant* rename UI remains deferred (§2.1a).
+helper, full suite 399/399). Also updated 2026-05-28: the **search UX consistency
+slice** (§2.6 A–D) **shipped** (`0422c2d`) — *visible search bars, keyboard
+dismissal, and search-return state*: pinned-bar (`.always`) placement across all
+four `.searchable` surfaces, a uniform `.onSubmit(of:.search) { dismissKeyboard() }`
+plus a compact keyboard Done/checkmark fallback, and stabilized ExercisesView
+search-return (full suite 399/399, manual regression passed). The
+**empty-after-delete Search key** is closed as an **accepted SwiftUI/UIKit
+limitation** (the inert blue key cannot be greyed safely; Done/checkmark + scroll
+are the reliable dismissals — see §2.6 C). A separate future-optional "send
+Exercise to top/bottom" idea is tracked under §2.6 sub-item E for traceability.
+There is now no "implement now" product/UX item — every remaining item is
+optional / future / deferred. Routine *variant* rename UI remains deferred (§2.1a).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -239,87 +241,88 @@ Useful, realistic, user-facing items worth implementing soon.
   `Log/Services/RoutineSummary.swift`, `LogTests/RoutineSummaryTests.swift`,
   `Log/Main/RoutinesView.swift`.)
 
-### 2.6 Search UX consistency: visible search bars, keyboard dismissal, and search-return state — 🚧 IN PROGRESS (2026-05-28)
+### 2.6 Search UX consistency: visible search bars, keyboard dismissal, and search-return state — ✅ SHIPPED A–D (2026-05-28)
 - **Source:** Discovered while adding `.searchable` to the History progression
   exercise picker; manual testing surfaced related inconsistencies across every
   other `.searchable` surface in the app.
-- **Status:** **Pending / in-progress.** Two passes of Swift changes are in the
-  working tree (not committed); the full suite is green on each pass, but the
-  slice is **held open until manual confirmation** of the sub-items below — in
-  particular the "type-then-delete-back-to-empty" submit dead-end (C). Do **not**
-  treat this as shipped.
+- **Status:** **Shipped (A–D)** in commit `0422c2d` *fix(search): standardize
+  search visibility and dismissal behavior*. Build succeeded, full suite
+  **399/399**, manual regression passed. The empty-after-delete Search-key
+  dead-end (C) is closed as an **accepted system limitation** with a reliable
+  fallback (keyboard Done/checkmark + scroll) — see C. Sub-item **E remains
+  future-optional** and was not bundled.
 - **Why one umbrella item:** the sub-items share root cause (default `.searchable`
   placement is auto-hiding; the system Search-key enabled state is not directly
   controllable from SwiftUI; entering/leaving "search presentation" is implicit
   and toggles whether title / Edit / Reorder are visible) and a consistent policy
   across them avoids whack-a-mole fixes.
 
-#### A. History progression picker search polish
+#### A. History progression picker search polish — ✅ DONE
 - Search **filtering works**.
 - Search bar **visibility fixed** by `.navigationBarDrawer(displayMode: .always)`
   on the picker's `.searchable`.
-- Keyboard dismissal **mostly works** via `.scrollDismissesKeyboard(.immediately)`
-  + `.onSubmit(of: .search) { dismissKeyboard() }` (shared helper).
-- **Outstanding:** empty-search submit (the type-then-delete-to-empty case) is
-  still inconsistent — see C — and the picker inherits whatever app-wide policy
-  C settles on. Slice stays in-progress until C lands and manual confirmation
-  passes.
+- Keyboard dismissal via `.scrollDismissesKeyboard(.immediately)`
+  + `.onSubmit(of: .search) { dismissKeyboard() }` (shared helper) for non-empty
+  submit, plus the compact `.keyboard` `KeyboardDismissButton` for the
+  empty-after-delete case (see C).
 
-#### B. ExercisesView search-return state
+#### B. ExercisesView search-return state — ✅ DONE
 - After searching, opening an Exercise Detail, and returning, the keyboard is
   dismissed and the search term is cleared (§2.4) but the screen could still
   feel "stuck in search" because the auto-hiding bar remained scrolled off.
-- Current pass (uncommitted): pin the Exercises search bar with
+- Shipped: the Exercises search bar is pinned with
   `.navigationBarDrawer(displayMode: .always)` — same direction as the History
   picker. Removes the entire "auto-hidden bar after return" failure mode and
   makes Edit/Reorder toggle purely off `isSearchPresented`, not scroll position.
-  Replaces an earlier ScrollViewReader/scrollTo first-pass that has been
-  reverted.
-- **Outstanding:** manual confirmation that the return-from-detail state is
-  predictable (search bar visible, Edit/Reorder back, list at preserved
-  non-search scroll spot, no awkward partial-search state). If always-visible
-  feels right, it should be the default direction app-wide (see D).
+  Replaces an earlier ScrollViewReader/scrollTo first-pass that was reverted.
+- Confirmed: on return from an Exercise Detail the search is cleared, the
+  keyboard stays hidden, and the Edit/Sort controls come back. Always-visible
+  is the app-wide default (see D).
 
-#### C. App-wide searchable keyboard-dismiss policy
-- **Bug:** the system Search key's enabled state is not SwiftUI-controllable.
-  Observed behavior:
-  - Field initially empty → Search **grey/disabled** (submit doesn't fire).
+#### C. App-wide searchable keyboard-dismiss policy — ✅ DONE (with accepted limitation)
+- **Shipped policy:** every `.searchable` surface uses
+  `.onSubmit(of: .search) { dismissKeyboard() }` (non-empty submit resigns
+  focus) **plus** a compact `.keyboard`-placement `KeyboardDismissButton` as the
+  deterministic fallback. Wired at History progression `ExercisePicker`,
+  `ExercisesView` (gated on `isSearchPresented` so it scopes to the search field,
+  not the Add-Exercise field), `ExercisePickerSingle`, and `ExerciseMultiPicker`.
+  Shared helper `dismissKeyboard()` lives in `Log/UI/UIComponents.swift`.
+- **Accepted limitation — empty-after-delete Search key (do not re-litigate):**
+  - Field initially empty → Search **grey/disabled**.
   - Field non-empty → Search **blue** → tap dismisses keyboard. ✅
-  - Field typed-then-deleted-back-to-empty → Search **stays blue/enabled** even
-    though the field is empty, but tapping it **does not fire any submit**, so
-    `.onSubmit(of: .search)` never runs → **keyboard does not dismiss** from
-    this state. This is the failure case still on the table.
-- **Decided policy (when submit does fire):** every `.searchable` surface uses
-  `.onSubmit(of: .search) { dismissKeyboard() }` so any submit (empty or not)
-  resigns focus. Wired in the current pass at History progression `ExercisePicker`,
-  `ExercisesView`, `ExercisePickerSingle`, and `ExerciseMultiPicker`. Shared
-  helper `dismissKeyboard()` lives in `Log/UI/UIComponents.swift`.
-- **Still needed for the type-delete-empty dead-end:** add a fallback
-  dismissal path that does **not** depend on the system submit event firing —
-  preferred direction is a compact explicit keyboard-dismiss accessory (e.g.
-  a `.keyboard`-placement `KeyboardDismissButton` gated on search focus) so
-  the user always has a deterministic way to put the keyboard down. Do **not**
-  try to keep the system Search key disabled — SwiftUI doesn't expose it.
-- **Search-presentation sub-rule** (also in scope): scrolling dismisses the
-  *keyboard* but does **not** exit search presentation by itself. Presentation
-  toggling (which controls whether title / Edit / Reorder are visible) stays
-  driven by `isPresented`:
+  - Field typed-then-deleted-back-to-empty → Search **stays blue/enabled** but
+    tapping it **does not fire any submit**, so `.onSubmit(of: .search)` never
+    runs and the key is **inert**.
+  - Standard SwiftUI/UIKit exposes **no safe way** to force the `.searchable`
+    Search key grey/disabled in this state: there is no SwiftUI modifier for the
+    search field's return-key trait; the field already behaves as
+    `enablesReturnKeyAutomatically == true`; the stuck-blue case is a UIKit
+    refresh defect on the private search text field. Rejected as fragile /
+    private / out-of-scope: introspection, `UITextField.appearance()`
+    (`enablesReturnKeyAutomatically` is not a `UI_APPEARANCE_SELECTOR` property,
+    is global, and wouldn't fix the refresh defect), and a custom
+    `inputView`/keyboard. The app uses **none** of these.
+  - **Accepted resolution:** leave the key as-is; the **keyboard Done/checkmark**
+    and **scroll-to-dismiss** are the reliable dismissal paths. The rationale and
+    rejected routes are documented at `dismissKeyboard()` in `UIComponents.swift`.
+- **Search-presentation sub-rule** (shipped): scrolling dismisses the *keyboard*
+  but does **not** exit search presentation by itself. Presentation toggling
+  (which controls whether title / Edit / Reorder are visible) stays driven by
+  `isPresented`:
   - Navigating away from a search row → clear `isPresented` + `search` (§2.4).
   - Manual scroll → keyboard down only; search text remains so the user keeps
     their filter while browsing.
   - Explicit iOS Cancel / x → exits presentation (system-provided).
 
-#### D. Apply always-visible search placement consistently
+#### D. Apply always-visible search placement consistently — ✅ DONE
 - The pinned bar (`.navigationBarDrawer(displayMode: .always)`) shipped in A and
-  B as the right default. **Audit the remaining `.searchable` surfaces and apply
-  the same placement where discoverability matters**, so search bars never get
-  auto-hidden across the app:
-  - `ExercisePickerSingle` (routine editor) — currently default `.automatic`.
-  - `ExerciseMultiPicker` (routine editor) — currently `.navigationBarDrawer`
-    without explicit `displayMode`, so still effectively auto-hide. Pin to
-    `.always`.
-- Treat exceptions explicitly if any surface genuinely benefits from the
-  collapsing-on-scroll behavior — none identified today.
+  B as the right default and was applied to the remaining `.searchable` surfaces:
+  - `ExercisePickerSingle` (routine editor) — was default `.automatic`, now
+    pinned to `.always`.
+  - `ExerciseMultiPicker` (routine editor) — was `.navigationBarDrawer` without
+    explicit `displayMode` (effectively auto-hide), now pinned to `.always`.
+- All four `.searchable` surfaces now use `.always`. No exceptions identified —
+  no surface benefits from collapsing-on-scroll behavior.
 
 #### E. Future optional: Exercise list send-to-top / send-to-bottom action
 - **Scope-separation note:** unrelated to search UX, **future / optional**.
@@ -337,10 +340,11 @@ Useful, realistic, user-facing items worth implementing soon.
 
 ---
 
-**Recommendation:** finish C's type-delete-empty fallback (likely an explicit
-compact keyboard-dismiss accessory) and D's placement audit; manually confirm A
-and B; then ship A + B + C + D as a single search-policy commit so the contract
-is uniform. E is a separate, future, optional slice — do not bundle.
+**Recommendation:** A + B + C + D shipped as a single search-policy commit
+(`0422c2d`) so the contract is uniform; the empty-after-delete Search key is
+closed as an accepted system limitation (C). E (Exercise list
+send-to-top/bottom) remains a separate, future, optional slice — implement only
+on user demand; do not bundle.
 
 ## 3. Optional / Future Features
 
@@ -670,20 +674,23 @@ intentional UI-polish slice: read-only slot/superset subtitle on Saved Routines 
 (glanceability, not a data-model feature). Computed via a pure `RoutineSummary` helper
 built once per render; full suite **399/399**.
 
-🚧 **Search UX consistency** (§2.6) — **IN PROGRESS 2026-05-28.** Visible search
-bars, keyboard dismissal, and search-return state need one uniform policy across
-every `.searchable` surface (History progression picker, ExercisesView, routine-
-editor exercise pickers). Working-tree code pins the History and Exercises bars
-(`.navigationBarDrawer(displayMode: .always)`) and routes every `.onSubmit(of:
-.search)` through a shared `dismissKeyboard()` helper; full suite still green.
-**Held until** the type-then-delete-empty submit dead-end has a fallback
-dismissal path (sub-item C) and a placement audit of the routine-editor pickers
-lands (D). E (Exercise list send-to-top/bottom) is a future-optional scope-
-separated note under §2.6; do not bundle.
+✅ **Search UX consistency** (§2.6 A–D) — **SHIPPED 2026-05-28** (`0422c2d`). One
+uniform policy across every `.searchable` surface (History progression picker,
+ExercisesView, routine-editor exercise pickers): bars pinned with
+`.navigationBarDrawer(displayMode: .always)`, every `.onSubmit(of: .search)`
+routed through a shared `dismissKeyboard()` helper, a compact keyboard
+Done/checkmark fallback for the empty-after-delete case, and stabilized
+ExercisesView search-return (keyboard stays hidden, Edit/Sort return). Full
+suite **399/399**, manual regression passed. **Accepted limitation:** the
+empty-after-delete system Search key stays blue but inert and cannot be greyed
+via standard SwiftUI/UIKit APIs — Done/checkmark + scroll are the reliable
+dismissals (no introspection/appearance/custom-keyboard hacks; see §2.6 C). E
+(Exercise list send-to-top/bottom) is a future-optional scope-separated note
+under §2.6; do not bundle.
 
-**Aside from §2.6, no other "implement now" product/UX item remains.** The three top
-refactor-era recommendations plus the first polish slice (§2.5) have shipped.
-Everything else is optional / future / deferred:
+**No "implement now" product/UX item remains.** The three top refactor-era
+recommendations plus the polish slices (§2.5, §2.6) have shipped. Everything else
+is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
