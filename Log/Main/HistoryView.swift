@@ -323,6 +323,11 @@ struct HistoryView: View {
         // are O(1). Routines/variants accessed during init make this section
         // re-render when a rename happens — exactly what live labels need.
         let resolver = RoutineLabelResolver(routines: routines)
+        // Precompute the slot/set summaries once per render (keyed by id) so each
+        // row reads its subtitle from the map instead of re-scanning
+        // `workout.items` / `item.setLogs` in its own `body` — same once-per-render
+        // discipline as the `resolver` above and the Routines list `RoutineSummary`.
+        let summaries = WorkoutSummary.map(for: workouts)
         return Section {
             if workouts.isEmpty {
                 Text("You don't have any workouts yet.")
@@ -366,20 +371,48 @@ struct HistoryView: View {
                                     .font(.dsBodySecondary)
                                     .foregroundStyle(.secondary)
                             }
+
+                            // Read-only slot/set glance line. Shown for every
+                            // workout including in-progress ones (it reflects
+                            // what's logged so far; the "In Progress" pill above
+                            // still conveys status). Falls back to a fresh
+                            // summary if the once-per-render map ever misses.
+                            Text(
+                                (summaries[w.id]
+                                    ?? WorkoutSummary(workout: w)).subtitle
+                            )
+                            .font(.dsCaption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         }
                     }
                     .swipeActions(allowsFullSwipe: false) {
-                        Button {
-                            if isActive {
+                        if isActive {
+                            // Deletion is blocked while this workout is the
+                            // active session. Gray + lock icon matches the
+                            // app-wide "blocked / in use" swipe convention
+                            // (locked Exercise / Routine rows); red is reserved
+                            // for an available destructive action. Wording uses
+                            // this screen's existing "In Progress" terminology
+                            // (row pill + the blocked-delete alert). Tapping
+                            // still surfaces the existing "Can't delete active
+                            // workout" alert — behavior unchanged.
+                            Button {
                                 showActiveDeleteWarning = true
-                            } else {
+                            } label: {
+                                Label("In Progress", systemImage: "lock.fill")
+                            }
+                            .tint(.gray)
+                        } else {
+                            Button {
                                 toDelete = w
                                 showConfirmDelete = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                            .tint(.red)
                         }
-                        .tint(.red)
                     }
                 }
             }
