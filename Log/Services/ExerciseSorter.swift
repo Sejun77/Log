@@ -36,6 +36,20 @@ enum ExerciseSortMode: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - ExerciseSection
+
+/// One contiguous group of exercises sharing the same `bodyPart` /
+/// `equipmentType` value, produced by `ExerciseSorter.sections(_:mode:)`.
+/// `title` is the display/header string — either the (trimmed) field value
+/// or the shared `ExerciseSorter.unspecifiedSectionTitle` for the trailing
+/// nil/blank bucket. `id == title`; titles are unique within a result
+/// because the producer merges adjacent runs of an identical title.
+struct ExerciseSection: Identifiable {
+    let title: String
+    let items: [Exercise]
+    var id: String { title }
+}
+
 // MARK: - ExerciseSorter
 
 /// Pure namespace that sorts an `[Exercise]` array by the user-selected
@@ -56,6 +70,11 @@ enum ExerciseSortMode: String, CaseIterable, Identifiable {
 /// are ordered by name. Within the trailing nil bucket, rows are ordered
 /// by name as a stable tiebreaker.
 enum ExerciseSorter {
+    /// Header title for the trailing group of rows whose grouping field is
+    /// nil / empty / whitespace-only (see `trimmedOrNil`). Shared constant so
+    /// the helper and any UI / tests agree on the exact string.
+    static let unspecifiedSectionTitle = "Unspecified"
+
     static func sort(_ items: [Exercise], mode: ExerciseSortMode) -> [Exercise] {
         switch mode {
         case .manual:
@@ -72,6 +91,62 @@ enum ExerciseSorter {
         case .equipment:
             return sortedByOptionalString(items, key: \.equipmentType)
         }
+    }
+
+    /// Groups `items` into ordered sections for the grouped sort modes.
+    ///
+    /// Returns `nil` for `.manual` and `.alphabetical` — those modes have no
+    /// headers and the UI should render the flat `sort(_:mode:)` result. For
+    /// `.bodyPart` / `.equipment` it returns sections in the **same order**
+    /// the rows appear in `sort(_:mode:)` (so named sections follow the
+    /// `localizedStandardCompare` ascending order and the nil/blank bucket —
+    /// titled `unspecifiedSectionTitle` — always lands last). Rows inside each
+    /// section keep their sorted order (name tiebreaker).
+    ///
+    /// Pure: reads `bodyPart` / `equipmentType` only, never mutates any
+    /// exercise, `order`, or store. Pass an already name-filtered array to get
+    /// search-compatible sections — empty groups simply never appear because
+    /// the grouping walks only the rows it is given. Sections are built by
+    /// partitioning contiguous runs of an identical title (not
+    /// `Dictionary(grouping:)`), so ordering never depends on dictionary
+    /// iteration order.
+    static func sections(
+        _ items: [Exercise],
+        mode: ExerciseSortMode
+    ) -> [ExerciseSection]? {
+        let key: KeyPath<Exercise, String?>
+        switch mode {
+        case .manual, .alphabetical:
+            return nil
+        case .bodyPart:
+            key = \.bodyPart
+        case .equipment:
+            key = \.equipmentType
+        }
+
+        let sorted = sort(items, mode: mode)
+        var sections: [ExerciseSection] = []
+        var currentTitle: String?
+        var bucket: [Exercise] = []
+
+        for ex in sorted {
+            let title = trimmedOrNil(ex[keyPath: key]) ?? unspecifiedSectionTitle
+            if title == currentTitle {
+                bucket.append(ex)
+            } else {
+                if let currentTitle {
+                    sections.append(
+                        ExerciseSection(title: currentTitle, items: bucket)
+                    )
+                }
+                currentTitle = title
+                bucket = [ex]
+            }
+        }
+        if let currentTitle {
+            sections.append(ExerciseSection(title: currentTitle, items: bucket))
+        }
+        return sections
     }
 
     private static func sortedByOptionalString(

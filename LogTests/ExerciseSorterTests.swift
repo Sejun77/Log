@@ -36,6 +36,10 @@ final class ExerciseSorterTests: SwiftDataTestHarness {
         items.map(\.name)
     }
 
+    private func titles(_ sections: [ExerciseSection]) -> [String] {
+        sections.map(\.title)
+    }
+
     // MARK: - .manual
 
     func testManualSortsByOrderThenName() {
@@ -139,6 +143,139 @@ final class ExerciseSorterTests: SwiftDataTestHarness {
             let sorted = ExerciseSorter.sort([ex], mode: mode)
             XCTAssertEqual(names(sorted), ["Solo"], "mode=\(mode)")
         }
+    }
+
+    // MARK: - sections(_:mode:) — grouped output
+
+    func testSectionsBodyPartOrderAndContents() {
+        let a = makeExercise(name: "Bench Press", bodyPart: "Chest")
+        let b = makeExercise(name: "Squat", bodyPart: "Quads")
+        let c = makeExercise(name: "Deadlift", bodyPart: "Back")
+        let d = makeExercise(name: "Row", bodyPart: "Back")
+
+        let sections = ExerciseSorter.sections([a, b, c, d], mode: .bodyPart)
+        let unwrapped = try! XCTUnwrap(sections)
+        // Sections in localized order: Back, Chest, Quads
+        XCTAssertEqual(titles(unwrapped), ["Back", "Chest", "Quads"])
+        // Rows inside each section keep the name-tiebreaker order
+        XCTAssertEqual(names(unwrapped[0].items), ["Deadlift", "Row"])
+        XCTAssertEqual(names(unwrapped[1].items), ["Bench Press"])
+        XCTAssertEqual(names(unwrapped[2].items), ["Squat"])
+    }
+
+    func testSectionsEquipmentOrderAndContents() {
+        let a = makeExercise(name: "Bench Press", equipmentType: "Barbell")
+        let b = makeExercise(name: "Curl", equipmentType: "Dumbbell")
+        let c = makeExercise(name: "Press", equipmentType: "Barbell")
+
+        let sections = ExerciseSorter.sections([a, b, c], mode: .equipment)
+        let unwrapped = try! XCTUnwrap(sections)
+        XCTAssertEqual(titles(unwrapped), ["Barbell", "Dumbbell"])
+        XCTAssertEqual(names(unwrapped[0].items), ["Bench Press", "Press"])
+        XCTAssertEqual(names(unwrapped[1].items), ["Curl"])
+    }
+
+    func testSectionsNilEmptyWhitespaceCollapseIntoTrailingUnspecified() {
+        let chest = makeExercise(name: "Bench Press", bodyPart: "Chest")
+        let blank = makeExercise(name: "Blank A", bodyPart: "   ")
+        let nilOne = makeExercise(name: "Blank B", bodyPart: nil)
+        let emptyStr = makeExercise(name: "Blank C", bodyPart: "")
+
+        let sections = ExerciseSorter.sections(
+            [chest, blank, nilOne, emptyStr], mode: .bodyPart
+        )
+        let unwrapped = try! XCTUnwrap(sections)
+        // One named section, then a single trailing "Unspecified" bucket
+        XCTAssertEqual(
+            titles(unwrapped),
+            ["Chest", ExerciseSorter.unspecifiedSectionTitle]
+        )
+        XCTAssertEqual(unwrapped.last?.title, "Unspecified")
+        XCTAssertEqual(
+            names(unwrapped[1].items), ["Blank A", "Blank B", "Blank C"]
+        )
+    }
+
+    func testSectionsLegacyCustomValueGetsOwnOrderedSection() {
+        // "Legs" is no longer canonical but remains a valid stored value; it
+        // should form its own section ordered with everything else.
+        let chest = makeExercise(name: "Bench Press", bodyPart: "Chest")
+        let legs = makeExercise(name: "Squat", bodyPart: "Legs")
+        let arms = makeExercise(name: "Curl", bodyPart: "Arms")
+
+        let sections = ExerciseSorter.sections(
+            [chest, legs, arms], mode: .bodyPart
+        )
+        let unwrapped = try! XCTUnwrap(sections)
+        XCTAssertEqual(titles(unwrapped), ["Arms", "Chest", "Legs"])
+        XCTAssertEqual(names(unwrapped[2].items), ["Squat"])
+    }
+
+    func testSectionsEmptyInputReturnsNoSections() {
+        // Grouped modes return a non-nil but empty section list for empty
+        // input (distinct from the `nil` "render flat" signal of manual /
+        // alphabetical).
+        XCTAssertEqual(try! XCTUnwrap(ExerciseSorter.sections([], mode: .bodyPart)).count, 0)
+        XCTAssertEqual(try! XCTUnwrap(ExerciseSorter.sections([], mode: .equipment)).count, 0)
+    }
+
+    func testSectionsSingleItemProducesOneSection() {
+        let core = makeExercise(name: "Plank", bodyPart: "Core")
+        let sections = ExerciseSorter.sections([core], mode: .bodyPart)
+        let unwrapped = try! XCTUnwrap(sections)
+        XCTAssertEqual(titles(unwrapped), ["Core"])
+        XCTAssertEqual(names(unwrapped[0].items), ["Plank"])
+
+        // A single unspecified item still produces one (Unspecified) section.
+        let blank = makeExercise(name: "Mystery", bodyPart: nil)
+        let blankSections = ExerciseSorter.sections([blank], mode: .bodyPart)
+        XCTAssertEqual(
+            titles(try! XCTUnwrap(blankSections)),
+            [ExerciseSorter.unspecifiedSectionTitle]
+        )
+    }
+
+    func testSectionsOnFilteredInputDropEmptyGroups() {
+        // Simulate the search path: the view filters by name *before* calling
+        // the grouping helper, so a section with no surviving rows must not
+        // appear at all.
+        let chest = makeExercise(name: "Bench Press", bodyPart: "Chest")
+        let back = makeExercise(name: "Deadlift", bodyPart: "Back")
+        let backRow = makeExercise(name: "Row", bodyPart: "Back")
+
+        // Pretend the user searched "Bench" — only the Chest row survives.
+        let filtered = [chest, back, backRow].filter {
+            $0.name.localizedCaseInsensitiveContains("Bench")
+        }
+        let sections = ExerciseSorter.sections(filtered, mode: .bodyPart)
+        let unwrapped = try! XCTUnwrap(sections)
+        XCTAssertEqual(titles(unwrapped), ["Chest"])
+        XCTAssertEqual(names(unwrapped[0].items), ["Bench Press"])
+    }
+
+    func testSectionsReturnNilForManualAndAlphabetical() {
+        let a = makeExercise(name: "Bench Press", bodyPart: "Chest", equipmentType: "Barbell")
+        let b = makeExercise(name: "Squat", bodyPart: "Quads", equipmentType: "Barbell")
+        XCTAssertNil(ExerciseSorter.sections([a, b], mode: .manual))
+        XCTAssertNil(ExerciseSorter.sections([a, b], mode: .alphabetical))
+    }
+
+    func testSectionsOrderIsStableRegardlessOfInputOrder() {
+        // Same set, two different input orderings → identical section order.
+        let chest = makeExercise(name: "Bench Press", bodyPart: "Chest")
+        let back = makeExercise(name: "Deadlift", bodyPart: "Back")
+        let quads = makeExercise(name: "Squat", bodyPart: "Quads")
+        let blank = makeExercise(name: "Mystery", bodyPart: nil)
+
+        let order1 = ExerciseSorter.sections(
+            [chest, back, quads, blank], mode: .bodyPart
+        )
+        let order2 = ExerciseSorter.sections(
+            [blank, quads, chest, back], mode: .bodyPart
+        )
+        let expected = ["Back", "Chest", "Quads", ExerciseSorter.unspecifiedSectionTitle]
+        XCTAssertEqual(titles(try! XCTUnwrap(order1)), expected)
+        XCTAssertEqual(titles(try! XCTUnwrap(order2)), expected)
     }
 
     // MARK: - SortMode enum
