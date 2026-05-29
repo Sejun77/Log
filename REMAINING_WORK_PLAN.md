@@ -51,9 +51,16 @@ subtitle from structured `SlotPrescription` fields (normal: "3 × 8–12 · 90s
 rest" / "Not set"; superset: "Superset · 3 exercises · 3 sets" with max-child
 sets), via a pure `BlockPrescriptionSummary` helper that never dereferences
 `RoutineExercise.exercise`; no model/schema change; full suite **441/441**.
-There is now no "implement now" product/UX item — every remaining item is
-optional / future / deferred. Routine *variant* rename UI remains deferred
-(§2.1a).
+Also updated 2026-05-29: **Routine duplication shipped** (§2.10) — Saved
+Routines rows can now be duplicated (swipe "Duplicate" + a long-press context
+menu that also works in edit mode) via a pure copied-name helper + a tested
+deep-copy `RoutineDuplicator` service (fresh `Routine`/variant/block/slot IDs,
+shared `Exercise` refs, deep-copied prescriptions / setTemplates /
+techniquePlans / warmup schemes; source never mutated). Duplicate is allowed
+for in-use routines (read-only on source) while Delete stays blocked; no
+model/schema change; full suite **460/460**. There is now no "implement now"
+product/UX item — every remaining item is optional / future / deferred. Routine
+*variant* rename UI remains deferred (§2.1a).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -509,6 +516,53 @@ on user demand; do not bundle.
   summary, and richer **per-slot** superset summaries (vs the current block-level
   line). See §3.7.
 
+### 2.10 Routine duplication — ✅ SHIPPED (2026-05-29)
+- **Source:** The high-value "Routine duplication" candidate flagged in the next-slice
+  audits. Planned as a dedicated feature (not a casual polish slice) because it is a
+  delicate deep-clone of the routine relationship graph.
+- **Nature:** a new **user-facing feature** (clone a routine to base a new one on it).
+  Additive behavior only — no new persisted state beyond the copied graph.
+- **Status:** **Done**, shipped in four slices:
+  - **Slice A — pure copied-name helper.** `RoutineDuplicator.copiedName(for:existingNames:)`
+    + tests: base `"<trimmed> copy"`; case-insensitive collisions append `" 2"`, `" 3"`,
+    …; trims original + existing names; empty original → `"Routine copy"`.
+  - **Slice B — deep-copy service.** `@MainActor RoutineDuplicator.duplicate(_:among:in:)`
+    + tests. Deep-copies the full graph and `ctx.save()`s once at the end.
+  - **Slice C — swipe action.** A non-destructive blue **"Duplicate"** swipe action on
+    Saved Routines rows (alongside red Delete / gray In-use).
+  - **Slice C.2 — edit-mode context menu.** A long-press **"Duplicate"** context-menu
+    item, added **specifically because swipe actions are unreachable while the list is
+    in edit mode**; it works in both normal and edit mode and reuses the Slice-C handler.
+- **Deep-copy data-safety invariants (tested):**
+  - Fresh identities: new `Routine.id`, a new empty `Default` `RoutineVariant` (fresh
+    id; source variants not copied), fresh `RoutineBlock.slotID` per block, fresh
+    `RoutineExercise.slotID` per slot.
+  - Deep-copied (independent instances): `SetTemplate`, `SlotPrescription`,
+    `TechniquePlan` (raw/encoded fields copied directly), `WarmupScheme` + `WarmupStep`
+    (must be copied, not shared — `WarmupSchemeEditor` mutates schemes in place).
+  - **Shared intentionally:** the definition-level `Exercise` references only (never
+    cloned); a deleted/unlinked source slot copies as a still-nil reference.
+  - **Source routine is never mutated**; History / `Workout` / `WorkoutItem` untouched;
+    no model/schema change. Mutation-isolation asserted for prescriptions, setTemplates,
+    and warmup steps.
+- **Behavior:** the duplicate gets a unique `"… copy"` / `"… copy 2"` name and a
+  **trailing `order`** (appears at the end of Saved Routines once the `@Query`
+  refreshes); a success haptic fires; **no auto-navigation** into the new routine
+  (deliberate v1 choice).
+- **Lock semantics:** **Duplicate is allowed for locked/in-use routines** (read-only on
+  the source) via both swipe and context menu; **Delete stays blocked** for in-use
+  routines (gray "In use" + locked alert).
+- **No model/schema change.** Build succeeded; full suite **460/460** (8 copied-name
+  `RoutineDuplicatorTests` + 11 deep-copy `RoutineDuplicatorServiceTests`: name
+  collisions, trailing order, fresh identities, structural equality, shared `Exercise`,
+  deep-copy isolation for prescriptions/setTemplates/techniquePlans/warmups, superset
+  copy, nil-exercise / nil-prescription edge cases, source-unchanged, save/refetch);
+  manual regression passed. (Files: `Log/Services/RoutineDuplicator.swift`,
+  `LogTests/RoutineDuplicatorTests.swift`, `Log/Main/RoutinesView.swift`.)
+- **Future-optional enhancements (pending):** a Duplicate action inside the
+  `RoutineEditor` toolbar, and optionally auto-opening the duplicate in the editor after
+  creation. See §3.8.
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -594,6 +648,18 @@ All **keep optional / defer**, low refactor relevance:
   insufficient in practice. `BlockPrescriptionSummary` is pure/value-typed, so any
   addition is an additive helper change + tests, not a model change.
 - **Risk:** **low** (read-only display; no model/schema impact).
+
+### 3.8 Routine duplication follow-ups (§2.10 follow-ups)
+- **Source:** §2.10 shipped routine duplication; these are the deferred niceties.
+- **Items:** a **"Duplicate" action in the `RoutineEditor` toolbar** (duplicate the
+  routine you're currently viewing), and optionally **auto-opening the duplicate** in
+  the editor right after creation (v1 deliberately stays on the list and does not
+  navigate).
+- **Recommendation:** **keep optional** — implement on demand. Both reuse the existing
+  tested `RoutineDuplicator.duplicate(_:among:in:)`; the toolbar entry needs the
+  routine list in scope (or a small `@Query`) and the auto-open needs the same
+  value-based navigation the list already uses.
+- **Risk:** **low** (additive UI over an already-tested service; no model/schema impact).
 
 ---
 
@@ -895,9 +961,21 @@ subtitle refreshes after a sets/reps/rest edit. No model/schema change; full sui
 **441/441**, manual regression passed. Weight / RIR/RPE / tempo / per-slot superset
 detail are future-optional (§3.7).
 
+✅ **Routine duplication** (§2.10) — **SHIPPED 2026-05-29** in four slices. Slice A:
+pure `copiedName(for:existingNames:)` helper + tests. Slice B: tested deep-copy
+`RoutineDuplicator.duplicate(_:among:in:)` (fresh `Routine`/Default-variant/block/slot
+IDs, shared `Exercise` refs, deep-copied setTemplates / prescriptions / techniquePlans /
+warmup schemes; source never mutated). Slice C: blue non-destructive "Duplicate" swipe
+action. Slice C.2: long-press context-menu Duplicate that also works in **edit mode**
+(where swipe actions are unavailable). Duplicate allowed for in-use routines (read-only
+on source); Delete stays blocked. Duplicate gets a unique "… copy" name + trailing
+order, no auto-navigation. No model/schema change; full suite **460/460**, manual
+regression passed. Editor-toolbar Duplicate + auto-open are future-optional (§3.8).
+
 **No "implement now" product/UX item remains.** The three top refactor-era
-recommendations plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9) have shipped.
-Everything else is optional / future / deferred:
+recommendations plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9) and the routine
+duplication feature (§2.10) have shipped. Everything else is optional / future /
+deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
