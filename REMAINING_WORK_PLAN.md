@@ -32,6 +32,12 @@ search-return (full suite 399/399, manual regression passed). The
 limitation** (the inert blue key cannot be greyed safely; Done/checkmark + scroll
 are the reliable dismissals — see §2.6 C). A separate future-optional "send
 Exercise to top/bottom" idea is tracked under §2.6 sub-item E for traceability.
+Updated 2026-05-29: **Exercise list section headers shipped** (§2.7) — the
+Body Part and Equipment sort modes now render one `Section` per group (pure
+`ExerciseSorter.sections(_:mode:)` helper + `ExerciseSection` type, trailing
+"Unspecified" bucket); Manual and Alphabetical intentionally stay flat;
+grouped modes are read-only views over the sorted data (no `Exercise.order`
+mutation outside the existing manual-reorder path); full suite **408/408**.
 There is now no "implement now" product/UX item — every remaining item is
 optional / future / deferred. Routine *variant* rename UI remains deferred (§2.1a).
 
@@ -345,6 +351,59 @@ Useful, realistic, user-facing items worth implementing soon.
 closed as an accepted system limitation (C). E (Exercise list
 send-to-top/bottom) remains a separate, future, optional slice — implement only
 on user demand; do not bundle.
+
+### 2.7 Exercise list section headers (Body Part / Equipment sort) — ✅ SHIPPED (2026-05-29)
+- **Source:** Product/UI polish audit — the next readability improvement after the
+  §2.5 / §2.6 polish slices. The Exercises list already supported four sort modes
+  (Manual / Alphabetical / Body Part / Equipment) but the grouped modes rendered a
+  visually flat list, so the user couldn't tell where one body-part / equipment
+  group ended and the next began.
+- **Nature:** a read-only **glanceability / readability** improvement. No new
+  persisted state, no model/schema change.
+- **Status:** **Done**, shipped in two slices:
+  - **Slice A — pure grouping helper.** Added `ExerciseSection` (`title` + `items`,
+    `Identifiable` by title) and `ExerciseSorter.sections(_:mode:)`, plus the shared
+    `ExerciseSorter.unspecifiedSectionTitle = "Unspecified"` constant. The helper
+    reuses the existing `sort(_:mode:)` output and partitions **contiguous runs** of
+    an identical group title (not `Dictionary(grouping:)`, so ordering never depends
+    on dictionary iteration). Pure: reads `bodyPart` / `equipmentType` only and never
+    mutates `Exercise.order`, `bodyPart`, `equipmentType`, or `CustomOptionStore`.
+  - **Slice B — view wiring.** `ExercisesView` now branches on
+    `ExerciseSorter.sections(filtered, mode: sortMode)`: a `nil` result renders the
+    existing flat "All Exercises" section; a non-nil result renders one `Section` per
+    group with the group title as a `DSSectionHeader`. The row body was extracted
+    into a shared `exerciseRow(_:)` so flat and grouped rows are byte-identical
+    (navigation, focus/search clearing, lock badge, swipe behavior).
+- **Sectioning applies only to Body Part and Equipment sort modes:**
+  - **Body Part sort** → one section per `bodyPart`.
+  - **Equipment sort** → one section per `equipmentType`.
+  - Custom / legacy values (e.g. "Legs") get their own correctly-ordered section.
+- **Manual and Alphabetical modes intentionally remain flat** (the helper returns
+  `nil` for them — an explicit "render flat" signal). Manual stays drag-reorderable
+  when search is empty.
+- **"Unspecified" bucket:** nil / empty / whitespace-only `bodyPart` /
+  `equipmentType` collapse into a single trailing "Unspecified" section.
+- **Data-safety rules (held):**
+  - No `Exercise.order` mutation except the existing manual-reorder path
+    (`moveExercises`, gated on `.manual` + empty search).
+  - Grouped modes are **read-only views over the sorted data** — no `.onMove` path
+    exists for them, so a drag can never silently rewrite `order`.
+- **Search behavior:** search filters `filtered` by name **before** grouping, so
+  empty groups never appear; results stay sectioned in grouped modes; an active
+  search with zero matches shows a single "No exercises match …" row instead of an
+  empty list. The pinned-bar / keyboard-dismissal behavior from §2.6 is preserved.
+- **Delete behavior (section-safe):** flat edit-delete resolves offsets against the
+  flat `filtered` array; grouped edit-delete resolves offsets against the **section's
+  own `items`** (never the global array); swipe-delete and the impact alert target
+  the resolved `Exercise` instance in all paths.
+- **No model/schema change.** Build succeeded; full suite **408/408** (Slice A added
+  9 `ExerciseSorterTests` — grouped bodyPart / equipment output, nil/empty/whitespace
+  Unspecified bucket, custom/legacy section, empty input, single item, search-filtered
+  input drops empty groups, flat modes return `nil`, ordering stable regardless of
+  input order); manual regression passed. (Files: `Log/Services/ExerciseSorter.swift`,
+  `LogTests/ExerciseSorterTests.swift`, `Log/Main/ExercisesView.swift`.)
+- **Related future-optional:** the §2.6 E "send Exercise to top / bottom" manual-order
+  action is still **pending / optional** and complements this work in Manual sort.
 
 ## 3. Optional / Future Features
 
@@ -688,9 +747,19 @@ dismissals (no introspection/appearance/custom-keyboard hacks; see §2.6 C). E
 (Exercise list send-to-top/bottom) is a future-optional scope-separated note
 under §2.6; do not bundle.
 
+✅ **Exercise list section headers** (§2.7) — **SHIPPED 2026-05-29** in two slices.
+Slice A added the pure `ExerciseSorter.sections(_:mode:)` helper + `ExerciseSection`
+type + `unspecifiedSectionTitle` constant (contiguous-run partition over the existing
+sort, no `Dictionary(grouping:)`, no mutation). Slice B wired it into `ExercisesView`:
+Body Part and Equipment sort now render one `Section` per group (trailing
+"Unspecified"), Manual and Alphabetical stay flat, grouped modes are read-only
+(no `.onMove`), search filters before grouping with empty groups dropped and a
+"No exercises match …" row, and edit-delete resolves offsets section-safely. Full
+suite **408/408**, manual regression passed.
+
 **No "implement now" product/UX item remains.** The three top refactor-era
-recommendations plus the polish slices (§2.5, §2.6) have shipped. Everything else
-is optional / future / deferred:
+recommendations plus the polish slices (§2.5, §2.6, §2.7) have shipped. Everything
+else is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
