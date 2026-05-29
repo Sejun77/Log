@@ -55,6 +55,16 @@ struct RoutineEditor: View {
     @State private var showOverrideActiveAlert = false
     @State private var startLinkActive = false
 
+    /// Bumped whenever a block's pushed Details view disappears (i.e. the user
+    /// returns to the editor). Mutating this `@State` invalidates the editor
+    /// body so each `blockRowView` recomputes `BlockPrescriptionSummary` and
+    /// the subtitle reflects any sets/reps/rest edit made in the detail. This
+    /// is a deliberate view-lifecycle trigger — NOT a nested-`@Model`
+    /// observation hack — because edits to a grandchild `SlotPrescription`
+    /// property are not reliably observed by `@Bindable var routine` (the same
+    /// limitation documented on `SupersetDetailNoRest.displayedSets`).
+    @State private var blockSummaryRefresh = 0
+
     // Routine rename (Slice A). `nameDraft` is the editable buffer; the model's
     // `routine.name` is only written on a validated commit, so empty/duplicate
     // input can revert the field without ever touching persisted state.
@@ -305,6 +315,7 @@ struct RoutineEditor: View {
 
         return BlockRow(
             title: blockTitle(block),
+            subtitle: BlockPrescriptionSummary(block: block).subtitle,
             details: {
                 if block.isSuperset {
                     return AnyView(
@@ -313,6 +324,9 @@ struct RoutineEditor: View {
                             isRoutineLocked: routineLocked,
                             allExercises: allExercises
                         )
+                        // Refresh the row subtitle on return — see
+                        // `blockSummaryRefresh`.
+                        .onDisappear { blockSummaryRefresh &+= 1 }
                     )
                 } else {
                     return AnyView(
@@ -320,6 +334,7 @@ struct RoutineEditor: View {
                             block: block,
                             isRoutineLocked: routineLocked
                         )
+                        .onDisappear { blockSummaryRefresh &+= 1 }
                     )
                 }
             },

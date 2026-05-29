@@ -379,6 +379,10 @@ struct RoutinesView: View {
 
 struct BlockRow: View {
     let title: String
+    /// Optional read-only prescription glance line shown under the title
+    /// (e.g. "3 × 8–12 · 90s rest" / "Superset · 3 exercises · 3 sets").
+    /// Additive with a `nil` default so existing call sites are unaffected.
+    var subtitle: String? = nil
     let details: () -> AnyView
     var locked: Bool = false
 
@@ -391,6 +395,14 @@ struct BlockRow: View {
                     .font(.headline)
                 Spacer(minLength: 8)
                 if locked { LockBadge() }
+            }
+
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             HStack {
