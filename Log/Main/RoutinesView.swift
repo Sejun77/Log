@@ -267,6 +267,20 @@ struct RoutinesView: View {
                         }
                         .tint(.blue)
                     }
+                    // Swipe actions are unreachable while the list is in edit
+                    // mode (you can't swipe a row that's showing the delete /
+                    // reorder controls), so the same non-destructive Duplicate
+                    // is also offered via a long-press context menu — available
+                    // in both normal and edit mode, for locked routines too,
+                    // and without competing with `.onMove` / `.onDelete` or the
+                    // row's navigation tap.
+                    .contextMenu {
+                        Button {
+                            duplicateRoutine(r)
+                        } label: {
+                            Label("Duplicate", systemImage: "plus.square.on.square")
+                        }
+                    }
                 }
                 .onMove(perform: moveRoutines)
                 .onDelete(perform: deleteRoutinesFromEdit)
