@@ -255,6 +255,17 @@ struct RoutinesView: View {
                             }
                             .tint(.red)
                         }
+                        // Non-destructive duplicate — always available, even
+                        // while the routine is in use by an active workout
+                        // (`RoutineDuplicator.duplicate` only reads the source).
+                        // Blue tint keeps gray reserved for blocked/in-use and
+                        // red for destructive.
+                        Button {
+                            duplicateRoutine(r)
+                        } label: {
+                            Label("Duplicate", systemImage: "plus.square.on.square")
+                        }
+                        .tint(.blue)
                     }
                 }
                 .onMove(perform: moveRoutines)
@@ -284,6 +295,18 @@ struct RoutinesView: View {
         pendingDeleteRoutine = r
         routineDeleteMessage = routineImpactMessage(r)
         showDeleteRoutineAlert = true
+    }
+
+    /// Non-destructive duplicate. Deep-copies the routine graph via the tested
+    /// `RoutineDuplicator` service; the new routine gets a unique "… copy" name
+    /// and a trailing `order`, so it appears at the end of the list once the
+    /// `@Query` refreshes. Allowed regardless of lock state (read-only on the
+    /// source). Does not auto-navigate into the new routine.
+    private func duplicateRoutine(_ r: Routine) {
+        withAnimation {
+            RoutineDuplicator.duplicate(r, among: routines, in: ctx)
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     private func routineImpactMessage(_ r: Routine) -> String {
