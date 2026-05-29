@@ -45,9 +45,15 @@ Recent Workouts rows now show a compact read-only `WorkoutSummary` subtitle
 `RoutineSummary`. Bundled with a small History blocked-delete styling fix
 (in-progress delete swipe is now gray, not red, matching the app-wide
 red=available / gray=blocked convention). No model/schema change; full suite
-**421/421**. There is now no "implement now" product/UX item — every remaining
-item is optional / future / deferred. Routine *variant* rename UI remains
-deferred (§2.1a).
+**421/421**. Also updated 2026-05-29: **RoutineEditor block prescription
+summaries shipped** (§2.9) — each block row now shows a compact read-only
+subtitle from structured `SlotPrescription` fields (normal: "3 × 8–12 · 90s
+rest" / "Not set"; superset: "Superset · 3 exercises · 3 sets" with max-child
+sets), via a pure `BlockPrescriptionSummary` helper that never dereferences
+`RoutineExercise.exercise`; no model/schema change; full suite **441/441**.
+There is now no "implement now" product/UX item — every remaining item is
+optional / future / deferred. Routine *variant* rename UI remains deferred
+(§2.1a).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -457,6 +463,52 @@ on user demand; do not bundle.
   input); manual regression passed. (Files: `Log/Services/WorkoutSummary.swift`,
   `LogTests/WorkoutSummaryTests.swift`, `Log/Main/HistoryView.swift`.)
 
+### 2.9 RoutineEditor block prescription summaries — ✅ SHIPPED (2026-05-29)
+- **Source:** Next-slice planning audit after §2.8 — the §4-ranked "block prescription
+  summary" candidate, chosen as another `RoutineSummary`-style pure-helper slice. Block
+  rows previously showed only the joined exercise names + a "Details" link, so the
+  prescription (sets/reps/rest) was invisible without tapping in.
+- **Nature:** a read-only **glanceability** improvement. No new persisted state, no
+  model/schema change.
+- **Status:** **Done**, shipped in two slices:
+  - **Slice A — pure helper.** Added `Log/Services/BlockPrescriptionSummary.swift`
+    (`Equatable` value type: normal + superset value-in inits, `init(block:)`,
+    `subtitle`, `map(for:)` keyed by `block.slotID`). Pure — no `ModelContext`, no
+    fetches, no mutation; reads `RoutineBlock` / `RoutineExercise` / `SlotPrescription`
+    fields only and **never dereferences `RoutineExercise.exercise`**.
+  - **Slice B — view wiring.** `BlockRow` gained an additive `subtitle: String? = nil`
+    rendered as a compact `.caption` / `.secondary`, single-line-truncated line below
+    the title; `RoutineEditor.blockRowView(for:)` passes
+    `BlockPrescriptionSummary(block:).subtitle`.
+- **Summary semantics (structured `SlotPrescription` fields = authoring intent, NOT
+  `resolvedTemplates()` / per-set overrides):**
+  - **Normal block** (lowest-`order` slot): `"3 × 8–12"`, equal/one-sided range →
+    `"3 × 8"`, sets-only → `"3 sets"`, time-based → `"3 × 45s"`, trailing rest →
+    `"3 × 8–12 · 90s rest"`, no usable sets / nil prescription → `"Not set"`.
+  - **Superset block** (block-level): `"Superset · N exercises · M sets"` where
+    `N = block.exercises.count` (structural — nil/deleted slots still count) and `M` =
+    the **max** child `prescription.sets` (matching
+    `SupersetDetailNoRest.currentSetsValue`); `M` omitted when no child has positive
+    sets → `"Superset · N exercises"`.
+  - Weight, RIR/RPE, tempo, and other autoregulation are **out of scope for v1**
+    (tracked as future enhancements in §3.7).
+- **Refresh-after-edit:** a `blockSummaryRefresh` `@State` token bumped from each block
+  detail's `.onDisappear` invalidates the editor body so the subtitle recomputes on
+  return. This is a deliberate **view-lifecycle** trigger, not a nested-`@Model`
+  observation hack — chosen because edits to a grandchild `SlotPrescription` property
+  aren't reliably observed by `@Bindable var routine` (same limitation documented on
+  `SupersetDetailNoRest.displayedSets`).
+- **No model/schema change.** Build succeeded; full suite **441/441** (Slice A added
+  20 `BlockPrescriptionSummaryTests` — normal wording incl. range/rest/equal-bounds/
+  single-bound/sets-only/time-based/no-usable-sets/rest-omission, superset uniform/
+  mixed-uses-max/all-nil/nil-exercise/singular-plural, `map(for:)` keyed by `slotID`,
+  empty input); manual regression passed (incl. refresh-after-edit). (Files:
+  `Log/Services/BlockPrescriptionSummary.swift`, `LogTests/BlockPrescriptionSummaryTests.swift`,
+  `Log/Main/RoutinesView.swift`, `Log/Main/Routines/RoutineEditor.swift`.)
+- **Future-optional enhancements (pending):** weight, RIR/RPE, and tempo in the
+  summary, and richer **per-slot** superset summaries (vs the current block-level
+  line). See §3.7.
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -530,6 +582,18 @@ All **keep optional / defer**, low refactor relevance:
   AB video."
 - **Risk:** **low** (read-only, value-typed, no persistence per locked safety
   decisions).
+
+### 3.7 Block prescription summary enrichment (§2.9 follow-ups)
+- **Source:** §2.9 shipped block prescription summaries; these are the deferred
+  v2 enhancements.
+- **Items:** add **weight**, **RIR/RPE**, and **tempo** to the block subtitle (v1
+  excludes them — weight pulls in `Units`, autoreg/tempo overcrowd one line); and a
+  richer **per-slot** superset summary (v1 is block-level: "Superset · N exercises ·
+  M sets" using max child sets, with no per-exercise rep ranges).
+- **Recommendation:** **keep optional** — implement only if the compact v1 line proves
+  insufficient in practice. `BlockPrescriptionSummary` is pure/value-typed, so any
+  addition is an additive helper change + tests, not a model change.
+- **Risk:** **low** (read-only display; no model/schema impact).
 
 ---
 
@@ -820,8 +884,19 @@ workout's swipe-delete is now gray (`lock.fill` + "In Progress") instead of red,
 matching the app-wide red=available / gray=blocked convention; completed workouts
 stay red. No model/schema change; full suite **421/421**, manual regression passed.
 
+✅ **RoutineEditor block prescription summaries** (§2.9) — **SHIPPED 2026-05-29** in
+two slices. Slice A added the pure `BlockPrescriptionSummary` helper + 20 tests
+(normal blocks from structured `SlotPrescription` fields = authoring intent, not
+`resolvedTemplates()`; supersets block-level with max-child sets; never dereferences
+`RoutineExercise.exercise`; `map(for:)` keyed by `block.slotID`). Slice B wired it
+into `BlockRow` (additive `subtitle`) via `RoutineEditor.blockRowView`, with a
+`blockSummaryRefresh` view-lifecycle token (bumped on detail `onDisappear`) so the
+subtitle refreshes after a sets/reps/rest edit. No model/schema change; full suite
+**441/441**, manual regression passed. Weight / RIR/RPE / tempo / per-slot superset
+detail are future-optional (§3.7).
+
 **No "implement now" product/UX item remains.** The three top refactor-era
-recommendations plus the polish slices (§2.5, §2.6, §2.7, §2.8) have shipped.
+recommendations plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9) have shipped.
 Everything else is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
