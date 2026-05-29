@@ -38,8 +38,16 @@ Body Part and Equipment sort modes now render one `Section` per group (pure
 "Unspecified" bucket); Manual and Alphabetical intentionally stay flat;
 grouped modes are read-only views over the sorted data (no `Exercise.order`
 mutation outside the existing manual-reorder path); full suite **408/408**.
-There is now no "implement now" product/UX item — every remaining item is
-optional / future / deferred. Routine *variant* rename UI remains deferred (§2.1a).
+Also updated 2026-05-29: **History row summary subtitles shipped** (§2.8) —
+Recent Workouts rows now show a compact read-only `WorkoutSummary` subtitle
+("6 exercises · 24 sets"; exercises = `items.count`, sets = non-warmup
+`SetLog` count); same pure-helper + once-per-render-map pattern as
+`RoutineSummary`. Bundled with a small History blocked-delete styling fix
+(in-progress delete swipe is now gray, not red, matching the app-wide
+red=available / gray=blocked convention). No model/schema change; full suite
+**421/421**. There is now no "implement now" product/UX item — every remaining
+item is optional / future / deferred. Routine *variant* rename UI remains
+deferred (§2.1a).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -405,6 +413,50 @@ on user demand; do not bundle.
 - **Related future-optional:** the §2.6 E "send Exercise to top / bottom" manual-order
   action is still **pending / optional** and complements this work in Manual sort.
 
+### 2.8 History row summary subtitles (+ blocked-delete styling fix) — ✅ SHIPPED (2026-05-29)
+- **Source:** Next-slice planning audit after §2.7 — chosen as the cleanest mirror of
+  the §2.5 routine-row-summary pattern (pure helper → once-per-render map → tests) on
+  a high-traffic screen. Recent Workouts rows previously showed only date / duration /
+  routine label, so workouts weren't distinguishable at a glance.
+- **Nature:** a read-only **glanceability** improvement. No new persisted state, no
+  model/schema change.
+- **Status:** **Done**, shipped in two slices plus a bundled styling fix:
+  - **Slice A — pure helper.** Added `Log/Services/WorkoutSummary.swift`
+    (`Equatable` value type: `exerciseCount`, `setCount`, value-in init,
+    `init(workout:)`, `subtitle`, `map(for:)` keyed by `Workout.id`). Pure — no
+    `ModelContext`, no fetches, no mutation; reads `workout.items` / `item.setLogs`
+    only and **never dereferences `item.exercise`**.
+  - **Slice B — view wiring.** `HistoryView.recentWorkoutsSection` builds
+    `WorkoutSummary.map(for: workouts)` **once per render** (next to the existing
+    `RoutineLabelResolver`) and each row renders the subtitle as a compact
+    `.dsCaption` / `.secondary`, single-line-truncated line **below the routine
+    label**.
+- **Counting semantics:**
+  - **`exerciseCount = workout.items.count`** — structural, not unique. A nil/deleted
+    `exercise` reference still counts (the item is a real, snapshot-backed history row).
+  - **`setCount` = non-warmup `SetLog` rows** (`kind != .warmup`): `.working` and
+    `.dropset` count; `.warmup` is excluded so the headline number reflects work
+    performed, not prep (no visible inconsistency — `WorkoutDetailView` has no total
+    and labels warmups separately).
+  - Volume / PRs intentionally **out of scope for v1**.
+- **Subtitle wording:** `"Empty workout"` (0 items) · `"N exercise(s)"` (items, 0
+  counted sets — set clause omitted) · `"N exercise(s) · M set(s)"`; correct
+  singular/plural, `" · "` separator (matches `RoutineSummary`).
+- **In-progress workouts** show the same structural summary (reflecting what's logged
+  so far) while keeping the existing "In Progress" pill.
+- **Bundled History blocked-delete styling fix:** the in-progress (active) workout's
+  swipe-delete was still red even though deletion is blocked. It now uses the
+  app-wide **gray + `lock.fill` + "In Progress"** blocked/in-use styling; completed
+  workouts keep the **red + trash + "Delete"** action. The existing "Can't delete
+  active workout" alert/behavior is unchanged. Aligns History with the convention
+  used by locked Exercise / Routine rows (red = available, gray = blocked).
+- **No model/schema change.** Build succeeded; full suite **421/421** (Slice A added
+  13 `WorkoutSummaryTests` — empty / one-item / multiple, singular-plural wording,
+  warmup-exclusion, working+dropset counting, all-warmup omits set clause, nil-exercise
+  safety, in-progress structural summary, `map(for:)` keyed by `Workout.id`, empty-map
+  input); manual regression passed. (Files: `Log/Services/WorkoutSummary.swift`,
+  `LogTests/WorkoutSummaryTests.swift`, `Log/Main/HistoryView.swift`.)
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -757,9 +809,20 @@ Body Part and Equipment sort now render one `Section` per group (trailing
 "No exercises match …" row, and edit-delete resolves offsets section-safely. Full
 suite **408/408**, manual regression passed.
 
+✅ **History row summary subtitles** (§2.8) — **SHIPPED 2026-05-29** in two slices.
+Slice A added the pure `WorkoutSummary` helper + 13 tests (exercises = `items.count`,
+sets = non-warmup `SetLog` count, structural / nil-exercise-safe, `map(for:)` keyed
+by `Workout.id`). Slice B wired it into `HistoryView.recentWorkoutsSection` as a
+compact read-only subtitle below the routine label, built once per render next to
+`RoutineLabelResolver`; in-progress workouts show the same line alongside the "In
+Progress" pill. Bundled a small blocked-delete styling fix: the in-progress
+workout's swipe-delete is now gray (`lock.fill` + "In Progress") instead of red,
+matching the app-wide red=available / gray=blocked convention; completed workouts
+stay red. No model/schema change; full suite **421/421**, manual regression passed.
+
 **No "implement now" product/UX item remains.** The three top refactor-era
-recommendations plus the polish slices (§2.5, §2.6, §2.7) have shipped. Everything
-else is optional / future / deferred:
+recommendations plus the polish slices (§2.5, §2.6, §2.7, §2.8) have shipped.
+Everything else is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
