@@ -99,7 +99,7 @@ struct ExercisesView: View {
     private var ListContent: some View {
         List {
             addExerciseSection
-            allExercisesSection
+            exerciseListSections
         }
         .navigationTitle("Exercises")
         .environment(\.defaultMinListRowHeight, 56)
@@ -271,98 +271,158 @@ struct ExercisesView: View {
         }
     }
 
-    private var allExercisesSection: some View {
-        Section {
-            ForEach(filtered) { ex in
-                // A `Button` (not a `NavigationLink`) so the tap handler can
-                // clear add-field focus and dismiss search *before* setting the
-                // navigation target — the push then commits in normal list mode
-                // with no keyboard and no active search. The chevron is added
-                // manually to keep the NavigationLink disclosure look.
-                Button {
-                    focusNewExercise = false
-                    isSearchPresented = false
-                    search = ""
-                    selectedExerciseID = ex.id
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(ex.name)
-                                .font(.dsBody)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .minimumScaleFactor(0.85)
-
-                            if let bp = ex.bodyPart, !bp.isEmpty {
-                                Text(bp)
-                                    .font(.dsBodySecondary)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                        }
-
-                        Spacer(minLength: 12)
-
-                        if activeGuard.isLocked(ex.id) {
-                            LockBadge()
-                        }
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
+    /// Top-level exercise listing. Branches on `ExerciseSorter.sections`:
+    /// a `nil` result (`.manual` / `.alphabetical`) renders the flat,
+    /// optionally-reorderable "All Exercises" section; a non-nil result
+    /// (`.bodyPart` / `.equipment`) renders one `Section` per group with the
+    /// group title as the header and no drag-reorder. Search filters `filtered`
+    /// by name *before* grouping, so empty groups never appear; an active
+    /// search with zero matches shows a single "no matches" row instead of an
+    /// empty list.
+    @ViewBuilder
+    private var exerciseListSections: some View {
+        if !search.isEmpty && filtered.isEmpty {
+            noMatchesSection
+        } else if let sections = ExerciseSorter.sections(
+            filtered, mode: sortMode
+        ) {
+            ForEach(sections) { section in
+                Section {
+                    ForEach(section.items) { ex in
+                        exerciseRow(ex)
                     }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .swipeActions(allowsFullSwipe: false) {
-                    if activeGuard.isLocked(ex.id) {
-                        Button {
-                            lockedName = ex.name
-                            showLockedAlert = true
-                        } label: {
-                            Label("In use", systemImage: "lock.fill")
-                        }
-                        .tint(.gray)
-                    } else {
-                        // Roleless Button + .tint(.red): keeps the destructive
-                        // red appearance while avoiding the `.destructive`-role
-                        // row-collapse glitch. Matches every other Delete swipe
-                        // (Routines / History / Routine blocks / Warmup /
-                        // Technique / superset / custom-option pickers).
-                        Button {
-                            pendingDeleteExercise = ex
-                            deleteImpactMessage = buildImpactMessage(for: ex)
-                            showDeleteExerciseAlert = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .tint(.red)
+                    // Section-relative offsets — resolve against this
+                    // section's own `items`, never the global `filtered`
+                    // array. No `.onMove`: grouped modes are not reorderable
+                    // (the order is computed from bodyPart / equipment, so a
+                    // drag would silently rewrite `Exercise.order` with no
+                    // visible effect).
+                    .onDelete { offsets in
+                        deleteFromEdit(in: section.items, at: offsets)
                     }
+                } header: {
+                    DSSectionHeader(title: section.title)
                 }
             }
+        } else {
+            flatExercisesSection
+        }
+    }
+
+    private var flatExercisesSection: some View {
+        Section {
+            ForEach(filtered) { ex in
+                exerciseRow(ex)
+            }
             .onMove(perform: moveExercises)
-            .onDelete(perform: deleteExercisesFromEdit)
+            .onDelete { offsets in deleteFromEdit(in: filtered, at: offsets) }
             // Drag-to-reorder writes back to `Exercise.order`, which only
-            // the `.manual` sort mode reads. Under any other sort mode the
-            // visual order is computed (alphabetical / by bodyPart / by
-            // equipment) and a drag would silently change `order` without
-            // visibly moving the row — gate the affordance off entirely.
-            // The search gate (already in place pre-polish) stays: even
-            // under `.manual`, filtered offsets do not match the full
-            // `exercises` array that `moveExercises` rewrites.
+            // the `.manual` sort mode reads. Under `.alphabetical` (the only
+            // other flat mode) the visual order is computed and a drag would
+            // silently change `order` without visibly moving the row — gate
+            // the affordance off entirely. The search gate (already in place
+            // pre-polish) stays: even under `.manual`, filtered offsets do
+            // not match the full `exercises` array that `moveExercises`
+            // rewrites.
             .moveDisabled(sortMode != .manual || !search.isEmpty)
         } header: {
             DSSectionHeader(title: "All Exercises", systemImage: "list.bullet")
         }
     }
 
-    /// Edit-mode delete path for the Exercises list. Routes through the same
-    /// safety as swipe-to-delete: locked exercises surface the "in use" alert,
+    private var noMatchesSection: some View {
+        Section {
+            Text("No exercises match “\(search)”")
+                .font(.dsBodySecondary)
+                .foregroundStyle(.secondary)
+        } header: {
+            DSSectionHeader(title: "All Exercises", systemImage: "list.bullet")
+        }
+    }
+
+    /// Shared row used by both the flat and grouped paths so navigation,
+    /// focus/search clearing, lock badge, and swipe behavior stay identical.
+    @ViewBuilder
+    private func exerciseRow(_ ex: Exercise) -> some View {
+        // A `Button` (not a `NavigationLink`) so the tap handler can
+        // clear add-field focus and dismiss search *before* setting the
+        // navigation target — the push then commits in normal list mode
+        // with no keyboard and no active search. The chevron is added
+        // manually to keep the NavigationLink disclosure look.
+        Button {
+            focusNewExercise = false
+            isSearchPresented = false
+            search = ""
+            selectedExerciseID = ex.id
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ex.name)
+                        .font(.dsBody)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .minimumScaleFactor(0.85)
+
+                    if let bp = ex.bodyPart, !bp.isEmpty {
+                        Text(bp)
+                            .font(.dsBodySecondary)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                if activeGuard.isLocked(ex.id) {
+                    LockBadge()
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .swipeActions(allowsFullSwipe: false) {
+            if activeGuard.isLocked(ex.id) {
+                Button {
+                    lockedName = ex.name
+                    showLockedAlert = true
+                } label: {
+                    Label("In use", systemImage: "lock.fill")
+                }
+                .tint(.gray)
+            } else {
+                // Roleless Button + .tint(.red): keeps the destructive
+                // red appearance while avoiding the `.destructive`-role
+                // row-collapse glitch. Matches every other Delete swipe
+                // (Routines / History / Routine blocks / Warmup /
+                // Technique / superset / custom-option pickers).
+                Button {
+                    requestDeleteExercise(ex)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .tint(.red)
+            }
+        }
+    }
+
+    /// Edit-mode delete path. Resolves the tapped offset against the supplied
+    /// row collection (`filtered` for the flat list, a `section.items` slice
+    /// for a grouped section) so section-relative offsets never index the
+    /// wrong exercise. Routes the resolved exercise through the same safety as
+    /// swipe-to-delete.
+    private func deleteFromEdit(in rows: [Exercise], at offsets: IndexSet) {
+        guard let first = offsets.first, first < rows.count else { return }
+        requestDeleteExercise(rows[first])
+    }
+
+    /// Shared delete request: locked exercises surface the "in use" alert,
     /// non-locked exercises queue the existing impact-summary confirmation.
-    private func deleteExercisesFromEdit(at offsets: IndexSet) {
-        guard let first = offsets.first, first < filtered.count else { return }
-        let ex = filtered[first]
+    private func requestDeleteExercise(_ ex: Exercise) {
         if activeGuard.isLocked(ex.id) {
             lockedName = ex.name
             showLockedAlert = true
