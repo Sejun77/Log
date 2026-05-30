@@ -661,6 +661,63 @@ All **keep optional / defer**, low refactor relevance:
   value-based navigation the list already uses.
 - **Risk:** **low** (additive UI over an already-tested service; no model/schema impact).
 
+### 3.9 Future Analytics / History Insights — BACKLOG (future / optional)
+
+> **These are backlog ideas only — not implement-now, not shipped.** None has been
+> built; none is scheduled. They should be implemented **only after a focused
+> design/audit pass**, because several require non-trivial aggregation rules, date
+> grouping (week/month boundaries), body-part mapping, and unit/volume semantics that
+> must be settled before any code is written. Listed here so the analytics direction is
+> captured without committing to it.
+
+- **Source:** Product brainstorm (2026-05-30) — extends the read-only History /
+  routine glanceability slices (§2.5, §2.8, §2.9) toward richer workout insights.
+- **Nature:** future analytics / reporting features over existing snapshot data
+  (`Workout` / `WorkoutItem` / `SetLog`, `Routine` / `RoutineBlock`, `Exercise.bodyPart`).
+  Most are read-only aggregations; a few (notes/tags, CSV export) add small surfaces.
+- **Recommendation:** **keep optional / defer** — pick up only on demand and only after
+  the design/audit note above. Do **not** build speculatively.
+- **Risk:** **low–medium** (mostly read-only aggregation; the risk is in getting the
+  aggregation / grouping / unit semantics right, not in model changes).
+
+**User-requested backlog items:**
+- **Total volume per set in History** — show per-set volume (e.g. weight × reps) on
+  History set rows. Needs a unit/volume definition (bodyweight, time-based, and
+  warmup-set handling).
+- **Total sets per routine** — a per-routine total-set count (prescribed). Relates to
+  the existing `RoutineSummary` slot/superset counting (§2.5); needs a "prescribed
+  sets" rollup rule.
+- **Sets per body part per week** — weekly set count grouped by body part. Needs week
+  boundaries + body-part mapping from `Exercise.bodyPart`.
+
+**Brainstormed related ideas (all future / optional):**
+- **Weekly volume per body part** — volume aggregated by body part over a week window.
+- **Weekly set count per exercise** — per-exercise set totals per week.
+- **Recent PR summary per exercise** — surface recent personal records per exercise.
+- **Estimated 1RM trend per exercise in History** — e1RM over time (needs an e1RM
+  formula choice + how to treat non-straight/technique sets).
+- **Best set highlight inside Workout Detail** — flag the top set per exercise in
+  `WorkoutDetailView` (needs a "best" definition: by load, by volume, or by e1RM).
+- **Workout density: volume per minute** — total volume ÷ workout duration.
+- **Average rest time per workout** — mean logged/observed rest across sets.
+- **Routine frequency: times completed per week/month** — completion counts per
+  routine over a window (needs the routine-linkage already used by
+  `RoutineLabelResolver`).
+- **Muscle / body-part balance summary** — distribution of work across body parts to
+  spot imbalances.
+- **Consistency streak / completed-workout streak** — current/longest streak of
+  completed workouts (needs a streak/day-boundary rule).
+- **Exercise-specific history from Exercise Detail** — a per-exercise history view
+  reachable from Exercise Detail (relates to the §3.5 "separate exercise progression
+  history UI" backlog item).
+- **Filter History by routine, exercise, or body part** — History filtering surface
+  (complements the deferred History sectioned grouping in §3.2).
+- **Export workout history as CSV** — overlaps the §3.5 / §6 CSV import/export backlog;
+  cross-referenced rather than duplicated.
+- **Workout notes / tags for fatigue, soreness, or performance** — optional per-workout
+  notes/tags. This is the only group member that adds **persisted state**, so it needs
+  an explicit additive-model design pass before any work.
+
 ---
 
 ## 4. Blocked Items
