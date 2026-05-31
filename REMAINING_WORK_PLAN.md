@@ -625,7 +625,8 @@ All **keep optional / defer**, low refactor relevance:
 - machine-specific weight/rep handling — Risk: medium
 - separate exercise progression history UI + charts — Risk: medium
 - full existing-history cleanup UI — Risk: medium
-- CSV import/export — Risk: medium
+- CSV import/export — Risk: medium — **now specified as a staged feature in §3.10**
+  (the bare line here is kept for traceability; see §3.10 for the audited plan).
 
 ### 3.6 AP Calculus showcase polish (§9 Pending / optional)
 - **Source:** §9 addendum.
@@ -717,6 +718,101 @@ All **keep optional / defer**, low refactor relevance:
 - **Workout notes / tags for fatigue, soreness, or performance** — optional per-workout
   notes/tags. This is the only group member that adds **persisted state**, so it needs
   an explicit additive-model design pass before any work.
+
+### 3.10 CSV Import / Export — planned staged feature (future / optional)
+
+> **Future / not shipped, not scheduled.** Nothing below is built. This subsection
+> replaces the bare "CSV import/export — Risk: medium" backlog line (§3.5) with the
+> audited, staged plan from the 2026-05-31 planning audit. Implement only on demand,
+> slice by slice, each behind the standard build/test gate.
+
+- **Source:** Planning audit (2026-05-31) over the full model graph in
+  `Log/Models/Entities.swift`, `ExerciseSeedService`, `RoutineDuplicator`,
+  `RoutineBlockBuilder`, `CustomOptionStore`, and the existing §3.5 / §3.9 backlog
+  notes. No file-I/O infrastructure exists yet (`ShareLink` / `fileImporter` /
+  `fileExporter` / `FileDocument` are all greenfield).
+- **Core finding:** CSV is the right vehicle for **flat** data (the `Exercise`
+  library; `Workout` history *export*) and the **wrong** vehicle for the **nested**
+  routine graph (`Routine → blocks → exercises → prescription → techniques /
+  warmups / per-set overrides`), which CSV can only represent losslessly across
+  several linked files. The plan is therefore "CSV for the flat data, JSON or
+  in-app tools for the nested data" — not "CSV everywhere."
+
+**Per-scope decisions:**
+- **Exercise library export** — good candidate. Read-only, **low risk**, flat
+  `[Exercise]` → rows. Also the round-trip source for exercise import.
+- **Exercise library import** — **high value**, manageable risk. Should reuse the
+  `ExerciseSeedService`-style behavior almost verbatim: match by trimmed+lowercased
+  `name`, **skip** collisions (never overwrite), append after `max(order)`, force
+  `isCustom = true`, single atomic `ctx.save()`.
+- **Workout history export** — good candidate. Read-only, **useful for backup and
+  spreadsheet analysis**; first-ever backup path. One denormalized row per `SetLog`,
+  using `exerciseNameSnapshot` so deleted exercises still read. Complements the §3.9
+  analytics backlog (the §3.9 "Export workout history as CSV" line maps here).
+- **Workout history import** — **skip for now.** No real use case (training history
+  is not hand-authored) and it directly threatens the CLAUDE.md "history
+  append-only / snapshotted at start" integrity rules; forged/duplicated rows would
+  corrupt every analytics aggregate. A future whole-container *restore* is a
+  different feature, not CSV import.
+- **Routine CSV export/import** — **defer.** The nested routine graph is better
+  served by **JSON** (a single `Codable` document round-trips losslessly) or by
+  **in-app tools** (the already-shipped `RoutineDuplicator` deep-copy, plus a future
+  "copy block / copy slot" or "save block as template"). CSV would be lossy
+  (techniques, warmups, and explicit per-set `SetTemplate` overrides each need their
+  own child file). Revisit only if the in-app/JSON route proves insufficient.
+
+**Recommended first slice (Slice 1):**
+- A **pure CSV codec + `ExerciseCSVRow` parser/validator + tests**.
+- **No SwiftData, no UI, no file I/O.** Pure value-in / value-out, mirroring how
+  `RoutineDuplicator.copiedName` and `RoutineNameValidator` were built pure-first.
+- RFC-4180 encode/decode (quote/escape commas, quotes, embedded newlines), header
+  validation, and a validator returning `(valid, skipped, rejected-with-reasons)`.
+- Zero data-safety risk and a dependency of every later scope, so never wasted.
+
+**Staged implementation plan (each slice independently shippable, build stays green):**
+1. **Pure CSV codec + `ExerciseCSVRow` parser/validator + tests** — no SwiftData, no
+   UI, no file I/O (the recommended first slice above).
+2. **Exercise export** — `[Exercise]` → CSV via Slice 1; thin share/export hook.
+   Read-only.
+3. **Workout history export** — `Workout` graph → denormalized one-row-per-set CSV
+   via Slice 1; uses snapshot names. Read-only.
+4. **Exercise import** — wrap Slice 1 output in an importer modeled on
+   `ExerciseSeedService` (dedupe / append / atomic save). Run tests (touches
+   persistence).
+5. **Import preview + file-picker UI** — `fileImporter`, preview sheet
+   (add / skip / reject counts), explicit confirm/cancel.
+6. **Routine import/export** — only if revisited later, and **likely JSON instead of
+   CSV** (see the routine decision above).
+
+**Data-safety rules (apply to every import slice):**
+- **Preview before commit** — parse + validate in memory, show "N add / M skipped /
+  K rejected", commit only on explicit confirm.
+- **Never overwrite existing rows silently** — create-new or skip; no in-place merges
+  in v1.
+- **No deletion during import, ever** — import is **additive-only**.
+- **One explicit confirm before saving** — a single atomic `ctx.save()` per batch; on
+  any pre-save validation failure, insert nothing.
+- **Imported exercises are user/custom data** — `isCustom = true`, `order` appended
+  after `max(existing.order)` (don't reshuffle the user's manual sort).
+- **Invalid rows are rejected with reasons** — per-row validation; valid rows can
+  still commit while rejected rows are reported, or the whole batch is cancelled from
+  preview.
+- **Duplicate exercise names are skipped, not overwritten** — match by
+  trimmed+lowercased `name` (same key as `ExerciseSeedService`).
+- **Body part / equipment values are soft-validated** — non-canonical values are
+  accepted and persist as custom (consistent with `CustomOptionStore`), not rejected.
+- **No history mutation** outside an explicit history import (which is skipped in v1);
+  exercise/routine import must not touch `Workout` / `WorkoutItem` / `SetLog`.
+- **Fresh identities on any future routine import** — generate new `Routine.id` and
+  rely on fresh `RoutineBlock.slotID` / `RoutineExercise.slotID` from new instances
+  (the `RoutineDuplicator` mechanism); never carry IDs from a file. References resolve
+  **by name**, never by ID.
+
+- **Recommendation:** **keep optional / staged** — start with Slice 1 on demand; ship
+  exercise export/import + history export before considering routine support.
+- **Risk:** **low** for Slices 1–3 (pure / read-only), **low–medium** for Slice 4
+  (additive inserts, reuses the tested seed-service pattern), **medium** for Slice 5
+  (greenfield file I/O), **deferred** for Slice 6.
 
 ---
 
