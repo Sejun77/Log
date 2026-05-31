@@ -349,7 +349,7 @@ struct ExercisesView: View {
         // navigation target — the push then commits in normal list mode
         // with no keyboard and no active search. The chevron is added
         // manually to keep the NavigationLink disclosure look.
-        Button {
+        let row = Button {
             focusNewExercise = false
             isSearchPresented = false
             search = ""
@@ -407,6 +407,36 @@ struct ExercisesView: View {
                 }
                 .tint(.red)
             }
+        }
+
+        // Manual-order quick actions (long-press). Attached ONLY under manual
+        // sort + empty search — the same gate as `moveExercises` /
+        // `.moveDisabled` — so they never appear or write `Exercise.order`
+        // under alphabetical / bodyPart / equipment modes or while searching.
+        // The modifier is applied conditionally (not an always-on empty menu)
+        // so it never adds a long-press gesture that could interfere with row
+        // navigation in the other modes, and each item is omitted when it would
+        // be a no-op (already first / already last). Allowed for locked/in-use
+        // rows: this only rewrites `order`, never deletes or mutates the workout.
+        if canShowSendToTop(for: ex) || canShowSendToBottom(for: ex) {
+            row.contextMenu {
+                if canShowSendToTop(for: ex) {
+                    Button {
+                        sendExerciseToTop(ex)
+                    } label: {
+                        Label("Send to Top", systemImage: "arrow.up.to.line")
+                    }
+                }
+                if canShowSendToBottom(for: ex) {
+                    Button {
+                        sendExerciseToBottom(ex)
+                    } label: {
+                        Label("Send to Bottom", systemImage: "arrow.down.to.line")
+                    }
+                }
+            }
+        } else {
+            row
         }
     }
 
@@ -467,6 +497,62 @@ struct ExercisesView: View {
         sorted.move(fromOffsets: offsets, toOffset: newOffset)
         for (i, ex) in sorted.enumerated() {
             ex.order = i
+        }
+        try? ctx.save()
+    }
+
+    // MARK: - Send to top/bottom gating
+
+    /// First row in the full manual order (`@Query` is `[order, name]`-sorted).
+    private func isFirstManualExercise(_ ex: Exercise) -> Bool {
+        exercises.first?.id == ex.id
+    }
+
+    /// Last row in the full manual order.
+    private func isLastManualExercise(_ ex: Exercise) -> Bool {
+        exercises.last?.id == ex.id
+    }
+
+    /// "Send to Top" is offered only in manual sort with empty search, when
+    /// there is more than one exercise, and the row is not already first
+    /// (where the move would be a no-op).
+    private func canShowSendToTop(for ex: Exercise) -> Bool {
+        sortMode == .manual && search.isEmpty
+            && exercises.count > 1 && !isFirstManualExercise(ex)
+    }
+
+    /// "Send to Bottom" — same gate, hidden when the row is already last.
+    private func canShowSendToBottom(for ex: Exercise) -> Bool {
+        sortMode == .manual && search.isEmpty
+            && exercises.count > 1 && !isLastManualExercise(ex)
+    }
+
+    /// Context-menu action: move `ex` to the top of the manual order via the
+    /// pure `ExerciseReorder` helper, then persist with the same
+    /// renumber-and-save step as `moveExercises`. Gated to manual + empty
+    /// search at the call site (`exerciseRow`).
+    private func sendExerciseToTop(_ ex: Exercise) {
+        applyManualOrder(
+            ExerciseReorder.sendToTop(exercises.map(\.id), moving: ex.id)
+        )
+    }
+
+    /// Context-menu action: move `ex` to the bottom of the manual order.
+    private func sendExerciseToBottom(_ ex: Exercise) {
+        applyManualOrder(
+            ExerciseReorder.sendToBottom(exercises.map(\.id), moving: ex.id)
+        )
+    }
+
+    /// Persist a reordered id sequence by rewriting `Exercise.order` to
+    /// contiguous `0..<n` (via `ExerciseReorder.orderMap`) and saving once.
+    /// Mutates only `order`; mirrors `moveExercises`'s write step. `exercises`
+    /// is the full manual-ordered `@Query` array, so the result is a complete
+    /// reordering, not a filtered slice.
+    private func applyManualOrder(_ orderedIDs: [UUID]) {
+        let orderByID = ExerciseReorder.orderMap(for: orderedIDs)
+        for ex in exercises {
+            if let newOrder = orderByID[ex.id] { ex.order = newOrder }
         }
         try? ctx.save()
     }
