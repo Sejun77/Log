@@ -71,6 +71,15 @@ carry no IDs. **Routine** import/export and **workout-history import** are
 explicitly **out of v1** and stay deferred (see §3.10). No model/schema change;
 full suite **543/543**.
 
+Also updated 2026-05-31: **Exercise "Send to Top" / "Send to Bottom" shipped**
+(§2.12) — in Exercises manual sort with empty search, long-press a row to move
+it to the first/last manual position via a context menu, built on a pure
+identity-based `ExerciseReorder` helper. First row hides "Send to Top," last row
+hides "Send to Bottom," single-exercise lists show nothing; hidden under
+alphabetical / body-part / equipment sorts and while searching. Allowed for
+locked/in-use rows (only `Exercise.order` is rewritten). This closes the §2.6-E
+backlog note. No model/schema change; full suite **558/558**.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -360,27 +369,25 @@ Useful, realistic, user-facing items worth implementing soon.
 - All four `.searchable` surfaces now use `.always`. No exceptions identified —
   no surface benefits from collapsing-on-scroll behavior.
 
-#### E. Future optional: Exercise list send-to-top / send-to-bottom action
-- **Scope-separation note:** unrelated to search UX, **future / optional**.
-  Tracked here only because it surfaced during the same manual testing pass;
-  must **not** block A–D shipping.
-- **Idea:** in `ExercisesView`, add per-row "Send to top" / "Send to bottom"
-  actions (swipe action or context menu) so the user can manually reorder a
-  long library without dragging across many screens. Only meaningful in
-  `.manual` sort mode (the other sort modes are derived); already gated by the
-  existing `.moveDisabled(sortMode != .manual || !search.isEmpty)` rule.
-- **Risk:** **low** — additive `Exercise.order` rewrites (same idempotent
-  renumber the existing drag-reorder uses); no model change.
-- **Recommendation:** **keep optional** — implement only on user demand after the
-  search-UX slice is closed.
+#### E. Exercise list send-to-top / send-to-bottom action — ✅ SHIPPED (2026-05-31, see §2.12)
+- **Scope-separation note:** unrelated to search UX; was tracked here only because it
+  surfaced during the same manual testing pass and explicitly did **not** block A–D.
+- **Shipped as §2.12** (2026-05-31): per-row **Send to Top** / **Send to Bottom** via a
+  long-press context menu on `ExercisesView`, built on a pure `ExerciseReorder` helper.
+  Only in `.manual` sort + empty search (the existing `.moveDisabled` gate); first/last rows
+  hide the redundant item; allowed for locked/in-use rows (rewrites `Exercise.order` only).
+  See §2.12 for the full record.
+- **Original idea / risk (kept for traceability):** add per-row "Send to top" / "Send to
+  bottom" so the user can reorder a long library without dragging across many screens —
+  low risk, additive `Exercise.order` rewrites, no model change.
 
 ---
 
 **Recommendation:** A + B + C + D shipped as a single search-policy commit
 (`0422c2d`) so the contract is uniform; the empty-after-delete Search key is
 closed as an accepted system limitation (C). E (Exercise list
-send-to-top/bottom) remains a separate, future, optional slice — implement only
-on user demand; do not bundle.
+send-to-top/bottom) was shipped later as its own feature — **✅ SHIPPED 2026-05-31,
+see §2.12** — kept separate from the search-policy commit as planned.
 
 ### 2.7 Exercise list section headers (Body Part / Equipment sort) — ✅ SHIPPED (2026-05-29)
 - **Source:** Product/UI polish audit — the next readability improvement after the
@@ -622,6 +629,45 @@ on user demand; do not bundle.
   `Log/Services/WorkoutHistoryCSV.swift`, `Log/Services/ExerciseCSVImporter.swift`,
   `Log/Main/ExerciseCSVImportView.swift`, `Log/Main/CSVExportView.swift`,
   `Log/Main/SettingsView.swift` + matching `LogTests`.)
+
+### 2.12 Exercise "Send to Top" / "Send to Bottom" — ✅ SHIPPED (2026-05-31)
+- **Source:** The §2.6-E "future / optional" backlog note — make manual ordering of a
+  long Exercises library easier than dragging a row across many screens. Closes that note.
+- **Nature:** additive **user-facing** quick-reorder action; the only persisted effect is
+  rewriting `Exercise.order` (the same idempotent renumber the existing drag-reorder uses).
+- **Status:** **Done**, shipped in two slices:
+  - **Slice A — pure reorder helper + tests.** `enum ExerciseReorder` with
+    `sendToTop(_ ids: [UUID], moving:)`, `sendToBottom(_ ids: [UUID], moving:)`, and
+    `orderMap(for:)`. Identity-based (operates on `Exercise.id`), value-in/value-out — no
+    `ModelContext`, no UI, no name sorting; preserves relative order of all other ids;
+    stable no-op for already-at-edge / missing / empty / single-item inputs. 15 harness-free
+    `ExerciseReorderTests`.
+  - **Slice B — `ExercisesView` context-menu wiring.** A long-press `.contextMenu` on the
+    shared `exerciseRow` offers **Send to Top** / **Send to Bottom**; handlers compute the
+    reordered ids from the **full** manual `@Query` list (`exercises.map(\.id)`), then rewrite
+    every `Exercise.order` to contiguous `0..<n` via `ExerciseReorder.orderMap` and save once
+    (same renumber-and-save shape as `moveExercises`).
+- **Availability rule:** the menu is attached **only** under `sortMode == .manual` **and**
+  empty search **and** `exercises.count > 1` — hidden under alphabetical / body-part /
+  equipment sorts and while searching (same gate as `.moveDisabled` / `moveExercises`). The
+  modifier is applied conditionally (never an always-on empty menu), so it adds no long-press
+  gesture that could interfere with row navigation in the other modes.
+- **First/last hiding:** computed from the full manual order (`exercises.first?.id` /
+  `.last?.id`) — the **first** row omits "Send to Top," the **last** row omits "Send to
+  Bottom," and a single-exercise list shows no menu at all (both would be no-ops).
+- **Locked/in-use:** **allowed** — send-to-edge only rewrites `Exercise.order`, never deletes
+  or mutates the active workout / history. (Contrast: **Delete stays blocked** for in-use
+  exercises, unchanged.)
+- **Behavior preserved:** row navigation, swipe Delete / "In use," edit-mode drag reorder
+  (`.onMove` + `.moveDisabled`), search, sectioned body-part/equipment rendering, and
+  alphabetical rendering — all unchanged. The Routines **Duplicate** feature (§2.10) is a
+  separate tab and untouched.
+- **Data-safety:** **no model/schema change**; routines / workouts / history not touched;
+  `bodyPart` / `equipment` / `notes` / `setupDefaults` / `isTimeBased` unchanged; no
+  `CustomOptionStore` mutation; read/write limited to `Exercise.order` in the UI slice.
+- Build succeeded; full suite **558/558**; manual regression passed. (Files:
+  `Log/Services/ExerciseReorder.swift`, `LogTests/ExerciseReorderTests.swift`,
+  `Log/Main/ExercisesView.swift`.)
 
 ## 3. Optional / Future Features
 
