@@ -77,6 +77,34 @@ enum ExerciseCSV {
         return CSVCodec.encode(grid)
     }
 
+    /// Pure projection of `Exercise` definition rows onto the flat CSV schema,
+    /// preserving the given order (the caller — e.g. the Exercises tab — decides
+    /// ordering; this never sorts or mutates). Only the definition-level fields
+    /// are carried; `id`, `order`, `isCustom`, and the `routineUsages` /
+    /// `workoutItems` relationships are intentionally omitted (see the §3.10
+    /// data-safety rules — identifiers are never round-tripped). Empty /
+    /// whitespace-only optional fields are normalized to the canonical `nil`
+    /// form so exported data round-trips cleanly back through `parse`.
+    static func rows(from exercises: [Exercise]) -> [ExerciseCSVRow] {
+        exercises.map { ex in
+            ExerciseCSVRow(
+                name: ex.name,
+                bodyPart: trimmedToNil(ex.bodyPart),
+                equipmentType: trimmedToNil(ex.equipmentType),
+                setupDefaults: trimmedToNil(ex.setupDefaults),
+                isTimeBased: ex.isTimeBased,
+                notes: trimmedToNil(ex.notes)
+            )
+        }
+    }
+
+    /// Convenience: map `Exercise` definitions to rows and serialize in one
+    /// step. Read-only — touches no `ModelContext`. Distinct argument label
+    /// avoids overload ambiguity with `export(_ rows:)` for empty literals.
+    static func export(exercises: [Exercise]) -> String {
+        export(rows(from: exercises))
+    }
+
     // MARK: - Parse / validate
 
     /// Why an otherwise well-formed data row was skipped (not an error).
@@ -241,6 +269,13 @@ enum ExerciseCSV {
     private static func trimmedToNil(_ raw: String) -> String? {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t
+    }
+
+    /// Optional-accepting overload for mapping `Exercise` fields (which are
+    /// `String?`); `nil` in stays `nil` out.
+    private static func trimmedToNil(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        return trimmedToNil(raw)
     }
 
     /// Lenient boolean cell parse. Empty/whitespace defaults to `false`;
