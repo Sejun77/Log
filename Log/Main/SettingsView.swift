@@ -43,6 +43,7 @@ struct SettingsView: View {
                 unitsSection
                 autoregSection
                 defaultsSection
+                dataSection
                 showcaseSection
             }
             .navigationTitle("Settings")
@@ -120,6 +121,19 @@ struct SettingsView: View {
                     : "Rest after exercise: \(defaultRestAfterExercise)s",
                 value: $defaultRestAfterExercise, in: 0...300, step: 15
             )
+        }
+    }
+
+    private var dataSection: some View {
+        Section {
+            ExerciseCSVImportButton()
+        } header: {
+            Text("Data")
+        } footer: {
+            Text("Import a CSV of exercises (name,bodyPart,equipmentType,setupDefaults,"
+                + "isTimeBased,notes). New names are added as custom exercises; existing "
+                + "names are skipped. Nothing is overwritten or deleted.")
+                .font(.caption)
         }
     }
 
