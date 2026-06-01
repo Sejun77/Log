@@ -96,6 +96,19 @@ gating unchanged. Cross-routine copy, reusable block templates, and JSON routine
 transfer stay future/deferred (§3.11). No model/schema change; full suite **568/568**,
 manual regression passed.
 
+Also updated 2026-06-01: **Routine Transfer v2 planned** (§2.14) — a planning audit chose
+**JSON** (not CSV) for routine export/import, picking up the routine transfer that CSV v1
+(§2.11 / §3.10) deferred because CSV is too flat for the nested routine graph. 🚧 PLANNED
+(not shipped). v1 scope: **one file = one routine**, **templates only** (no history
+import), **additive-only** import (no overwrite, no delete), a `schemaVersion` envelope.
+Export carries content (routine/blocks/slots/prescriptions/setTemplates/techniques/warmups,
+`*Raw` enum fields verbatim) but **no SwiftData IDs / order / slotID / history**. Import
+creates a new routine with fresh identities + a fresh Default variant, resolves exercises
+by trimmed/case-insensitive name and **auto-creates missing ones as custom rows**, behind a
+**preview → confirm** gate with **one save**. Five slices (A DTOs+round-trip tests, B export
+service, C import service, D import preview UI, E export UI); first slice is **A**.
+Export-all / editor-toolbar export / batch import stay deferred. No model/schema change.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -745,6 +758,90 @@ see §2.12** — kept separate from the search-policy commit as planned.
   `Log/Services/RoutineBlockBuilder.swift`, `Log/Main/Routines/RoutineEditor.swift`,
   `LogTests/RoutineDuplicatorTests.swift`, `LogTests/RoutineBlockBuilderTests.swift`.)
 
+### 2.14 Routine Transfer v2 — JSON routine export/import — 🚧 PLANNED (audit 2026-06-01)
+- **Source:** Planning audit (2026-06-01). Picks up the **routine** import/export that CSV
+  v1 (§2.11) explicitly deferred — see §3.10, which already recommended routine transfer be
+  **JSON / in-app, not CSV**. This entry is the concrete v2 design for that deferral.
+- **Why JSON, not CSV (decision):** a routine is a deeply nested graph — `Routine` → blocks
+  → slots → `SlotPrescription` → `SetTemplate`s / `TechniquePlan`s / `WarmupScheme` →
+  `WarmupStep`s. CSV is too flat: it would force lossy multi-file reconstruction or
+  synthetic foreign-key IDs in the wire format. JSON preserves the whole nested structure in
+  one self-contained, human-readable, shareable file and maps 1:1 to `Codable` value types
+  (same pure-codec discipline as `CSVCodec` / `ExerciseCSV`).
+- **Nature:** a new **user-facing** capability (share / back up / move routine *templates*).
+  Additive on import — no new persisted state beyond the imported routine graph + any
+  auto-created exercises; **no model/schema change**.
+- **Status:** **PLANNED / not shipped.** No Swift files changed yet.
+- **Confirmed v2 direction / v1 scope:**
+  - **JSON-based** routine export/import; **one file = one routine** for v1.
+  - **Templates only** — no workout history import; no routine overwrite; no deletion;
+    **additive-only** import.
+  - A top-level **`schemaVersion`** envelope; an **unsupported (newer) version is rejected**
+    with a friendly error.
+- **Export scope (content only, never identity):**
+  - Routine `name`, `notes`.
+  - Blocks: `order`, `isSuperset`, `restAfterSeconds`, `supersetRoundRestSeconds`.
+  - Slots: `order`, `exerciseName`, exercise resolution hints (`bodyPart`, `equipmentType`,
+    `isTimeBased`), `templateNotes`, `setTemplates`, `SlotPrescription`.
+  - `SlotPrescription`: `sets`, `repMin`/`repMax`, `restSecondsBetweenSets`,
+    `restSecondsAfterExercise`, `rir`/`rpe`, `tempo`, `durationMinSeconds`/
+    `durationMaxSeconds`, `usesDuration`, `techniquePlans`, `warmupScheme`.
+  - `TechniquePlan` **raw** fields preserved directly (encode `typeRaw` / `appliesToRaw` /
+    `dropsetEffortRaw` verbatim — same lossless-raw rule `RoutineDuplicator` uses).
+  - `WarmupScheme` + `WarmupStep`s **embedded per slot** (inline copy, matching the
+    duplicator's per-prescription deep copy; no cross-slot sharing in the wire format).
+  - **Never exported:** SwiftData `id` / `PersistentIdentifier`, `Routine.order`, `slotID`,
+    `Workout` / `WorkoutItem` / history, `RoutineVariant` (fresh Default attached on import).
+- **Import behavior (v1):**
+  - **Create a new routine only** — never overwrite an existing routine.
+  - **Unique routine name** generated on collision (generalize
+    `RoutineDuplicator.copiedName` or a sibling); **trailing `Routine.order`**.
+  - **Fresh identities:** new `Routine.id`, fresh `RoutineBlock.slotID` + fresh
+    `RoutineExercise.slotID` (automatic from new instances); one fresh empty **Default**
+    `RoutineVariant`.
+  - **Exercise references resolve by trimmed/case-insensitive name** (same normalize key as
+    `ExerciseCSVImporter` / `ExerciseSeedService`). **Missing exercises are auto-created as
+    custom `Exercise` rows** from the exported hints (additive, deduped within batch) — the
+    safest rule (a skipped nil-exercise slot would be swept by
+    `RoutineEditor.normalizeRoutineModel`; rejecting the whole routine is too brittle).
+  - **Preview before import:** routine name, block count, slot count, matched exercises, and
+    **new exercises to create** → one explicit **Confirm** → **one `ctx.save()`** after the
+    graph is built. No history / workout mutation; imported routine starts with zero history.
+  - Structurally the **DTO→model inverse of `RoutineDuplicator`** (a `materialize(dto:in:)`
+    builder mirroring `copyBlock` / `copySlot` / `copyPrescription` / `copyTechnique` /
+    `copyWarmupScheme` / `copyStep`).
+- **Data-safety rules:**
+  - **Invalid JSON rejected before any save**; **unsupported future `schemaVersion`
+    rejected** with a friendly error — nothing written on a bad file.
+  - **No overwrite, no delete, additive-only**; **fresh identities** throughout.
+  - Existing `Exercise`s may be **linked but never mutated**; missing ones created as custom
+    user data; no `Routine` / `Workout` / `WorkoutItem` / `SetLog` mutation.
+  - **Imported routine starts with zero history**; source JSON carries **no SwiftData IDs**.
+- **Implementation split (each slice builds + full-suite-green before the next):**
+  - **Slice A — DTOs + Codable round-trip tests only.** Pure `Codable` value types
+    (`RoutineTransferDocument` envelope + `RoutineDTO` / `RoutineBlockDTO` /
+    `RoutineExerciseDTO` / `SlotPrescriptionDTO` / `SetTemplateDTO` / `TechniquePlanDTO` /
+    `WarmupSchemeDTO` / `WarmupStepDTO`) with the `schemaVersion` envelope and lossless
+    `*Raw` encoding. No SwiftData, no UI, no save.
+  - **Slice B — Routine export service + tests.** `export(_ routine:) -> RoutineTransferDocument`
+    (model→DTO); pure mapping, source read-only.
+  - **Slice C — Routine import service + tests.** `@MainActor import(_ doc:into:)` (DTO→model):
+    name-resolve, stub-create missing exercises, fresh identities, Default variant, single
+    save; returns an `ImportReport` (created routine name, matched/created exercise names)
+    like `ExerciseCSVImporter.ImportReport`.
+  - **Slice D — Import preview UI** in **Settings → Data** (reuse the `ExerciseCSVImportView`
+    `fileImporter` → parse → preview → confirm shape).
+  - **Slice E — Export UI** from the **Saved Routines row context menu** ("Export…"),
+    reusing `fileExporter` + a `JSONDocument: FileDocument` (sibling of `CSVDocument`).
+- **Deferred future ideas (out of v2 v1):** export **all** routines in one file, an
+  **export action in the `RoutineEditor` toolbar**, and **JSON routine batch import**.
+- **Recommended first slice:** **Slice A** — pure, dependency-free, fully testable with
+  literal fixtures, and it pins the wire format (envelope + lossless raw encoding) every
+  later slice depends on, at zero data-safety risk.
+- **Risk:** **medium** — import is the higher-risk surface (name-resolve + stub-create +
+  fresh-identity graph build), mitigated by the Slice-C SwiftData tests and the
+  preview/confirm gate; export + DTOs are low (pure / read-only).
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -990,9 +1087,9 @@ as-built slice breakdown):**
   **by name**, never by ID.
 
 - **Recommendation:** v1 (exercise import/export + history export) is **shipped**
-  (§2.11). The remaining routine import/export is **v2 / future** and should be
-  designed as **JSON or in-app tools**, not CSV; workout-history import stays
-  **skipped**. Pick up only on a concrete need.
+  (§2.11). The remaining routine import/export is **v2** and has a concrete JSON design —
+  see **§2.14 (Routine Transfer v2, 🚧 PLANNED)** — confirming the **JSON / in-app, not
+  CSV** direction recommended here; workout-history import stays **skipped**.
 - **Risk (as built):** Slices 1–3 landed low (pure / read-only), Slice 4 low–medium
   (additive inserts on the tested seed-service pattern), Slices 5–6 medium (greenfield
   file I/O). Deferred routine support is the higher-design-cost remainder.
@@ -1337,10 +1434,21 @@ unchanged. Cross-routine copy, reusable block templates, and JSON routine transf
 **future/deferred** (§3.11). No model/schema change; full suite **568/568**, manual
 regression passed.
 
-**No "implement now" product/UX item remains.** The three top refactor-era recommendations
-plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9), the routine duplication feature
-(§2.10), and the Duplicate Block tools (§2.13) have shipped. Everything else is optional /
-future / deferred:
+🚧 **Routine Transfer v2 — JSON routine export/import** (§2.14) — **PLANNED 2026-06-01, not
+shipped.** The current active implementation target. JSON (not CSV — the routine graph is
+too nested) routine export/import; v1 is **one file = one routine**, **templates only**,
+**additive-only** (no overwrite/delete), behind a **preview → confirm** gate with **fresh
+identities** and a `schemaVersion` envelope. Exercises resolve by trimmed/case-insensitive
+name; missing ones auto-create as custom rows. Five slices (A DTOs+round-trip tests, B
+export service, C import service, D import preview UI in Settings → Data, E export UI from
+the Saved Routines row context menu); **start with Slice A**. Picks up the routine transfer
+deferred from CSV v1 (§2.11 / §3.10). Export-all / editor-toolbar export / batch import stay
+deferred. No model/schema change.
+
+**Aside from §2.14, no other "implement now" product/UX item remains.** The three top
+refactor-era recommendations plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9), the
+routine duplication feature (§2.10), and the Duplicate Block tools (§2.13) have shipped.
+Everything else is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
