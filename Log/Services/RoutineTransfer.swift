@@ -31,6 +31,30 @@ enum RoutineTransfer {
         )
     }
 
+    // MARK: - Shared JSON coders
+
+    /// Encoder for routine transfer JSON. `exportedAt` is written as an
+    /// **ISO-8601 string** (e.g. `"2026-06-01T00:00:00Z"`), not a numeric
+    /// timestamp, so files are human-readable and interoperable. Use this for
+    /// every routine-transfer encode (export UI, tests).
+    nonisolated static func makeJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return encoder
+    }
+
+    /// Decoder paired with `makeJSONEncoder` — parses ISO-8601 `exportedAt`
+    /// strings (a plain `JSONDecoder` defaults to numeric timestamps and would
+    /// reject the string form). `exportedAt` stays optional, so `null` / a
+    /// missing key still decode. Use this for every routine-transfer decode
+    /// (import UI, tests).
+    nonisolated static func makeJSONDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
     // MARK: - Private mapping (each level sorts children by `order`)
 
     private static func routineDTO(

@@ -127,13 +127,16 @@ struct SettingsView: View {
     private var dataSection: some View {
         Section {
             ExerciseCSVImportButton()
+            RoutineJSONImportButton()
             DataExportButtons()
         } header: {
             Text("Data")
         } footer: {
             Text("Import a CSV of exercises (name,bodyPart,equipmentType,setupDefaults,"
                 + "isTimeBased,notes). New names are added as custom exercises; existing "
-                + "names are skipped. Nothing is overwritten or deleted. Export saves your "
+                + "names are skipped. Import a routine JSON to add it as a new routine "
+                + "(existing routines are never overwritten; missing exercises are created "
+                + "as custom). Nothing is overwritten or deleted. Export saves your "
                 + "exercise library or workout history as CSV.")
                 .font(.caption)
         }

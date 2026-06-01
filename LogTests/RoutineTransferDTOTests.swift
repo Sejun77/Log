@@ -244,4 +244,84 @@ final class RoutineTransferDTOTests: XCTestCase {
     func testCurrentSchemaVersionConstantIsOne() {
         XCTAssertEqual(RoutineTransferDocument.currentSchemaVersion, 1)
     }
+
+    // MARK: - 9. Shared ISO-8601 JSON coders
+
+    private func emptyRoutineJSON(exportedAt: String) -> Data {
+        Data(
+            """
+            {"schemaVersion":1,"exportedAt":\(exportedAt),
+             "routine":{"name":"R","blocks":[]}}
+            """.utf8)
+    }
+
+    func testDecoderAcceptsISO8601ExportedAtString() throws {
+        // A plain JSONDecoder would reject this string-form date.
+        let data = emptyRoutineJSON(exportedAt: "\"2026-06-01T00:00:00Z\"")
+        let doc = try RoutineTransfer.makeJSONDecoder()
+            .decode(RoutineTransferDocument.self, from: data)
+        XCTAssertEqual(doc.schemaVersion, 1)
+        XCTAssertEqual(
+            doc.exportedAt, Date(timeIntervalSince1970: 1_780_272_000))
+        XCTAssertEqual(doc.routine.name, "R")
+    }
+
+    func testDecoderAcceptsNullExportedAt() throws {
+        let data = emptyRoutineJSON(exportedAt: "null")
+        let doc = try RoutineTransfer.makeJSONDecoder()
+            .decode(RoutineTransferDocument.self, from: data)
+        XCTAssertNil(doc.exportedAt)
+    }
+
+    func testEncoderWritesISO8601StringNotNumericTimestamp() throws {
+        let doc = RoutineTransferDocument(
+            exportedAt: Date(timeIntervalSince1970: 1_780_272_000),
+            routine: RoutineTransferRoutineDTO(name: "R", notes: nil, blocks: []))
+        let data = try RoutineTransfer.makeJSONEncoder().encode(doc)
+
+        // The JSON value must be the ISO-8601 *string*, not a bare number.
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let exportedAt = obj?["exportedAt"]
+        XCTAssertTrue(
+            exportedAt is String, "exportedAt should encode as an ISO-8601 string")
+        XCTAssertEqual(exportedAt as? String, "2026-06-01T00:00:00Z")
+    }
+
+    func testConfiguredCodersRoundTripWithDate() throws {
+        let doc = RoutineTransferDocument(
+            exportedAt: Date(timeIntervalSince1970: 1_780_272_000),
+            appVersion: "2.0",
+            routine: RoutineTransferRoutineDTO(name: "R", notes: "n", blocks: []))
+        let data = try RoutineTransfer.makeJSONEncoder().encode(doc)
+        let decoded = try RoutineTransfer.makeJSONDecoder()
+            .decode(RoutineTransferDocument.self, from: data)
+        XCTAssertEqual(decoded, doc)
+    }
+
+    func testUnsupportedSchemaVersionStillThrowsAfterISODecode() throws {
+        let data = Data(
+            """
+            {"schemaVersion":999,"exportedAt":"2026-06-01T00:00:00Z",
+             "routine":{"name":"R","blocks":[]}}
+            """.utf8)
+        let doc = try RoutineTransfer.makeJSONDecoder()
+            .decode(RoutineTransferDocument.self, from: data)
+        XCTAssertThrowsError(try doc.validateSupportedSchemaVersion()) { err in
+            XCTAssertEqual(
+                err as? RoutineTransferError,
+                .unsupportedSchemaVersion(
+                    found: 999,
+                    supported: RoutineTransferDocument.currentSchemaVersion))
+        }
+    }
+
+    func testConfiguredDecoderStillRejectsInvalidJSON() {
+        let data = Data("{}".utf8)  // missing required keys
+        XCTAssertThrowsError(
+            try RoutineTransfer.makeJSONDecoder()
+                .decode(RoutineTransferDocument.self, from: data)
+        ) { err in
+            XCTAssertTrue(err is DecodingError)
+        }
+    }
 }
