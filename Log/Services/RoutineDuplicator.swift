@@ -95,23 +95,47 @@ enum RoutineDuplicator {
         copy.variants.append(variant)
 
         for srcBlock in source.blocks.sorted(by: { $0.order < $1.order }) {
-            let newBlock = RoutineBlock(
-                isSuperset: srcBlock.isSuperset,
-                order: srcBlock.order,
-                restAfterSeconds: srcBlock.restAfterSeconds,
-                exercises: []
-            )
-            newBlock.supersetRoundRestSeconds = srcBlock.supersetRoundRestSeconds
-            ctx.insert(newBlock)
-
-            for srcRE in srcBlock.exercises.sorted(by: { $0.order < $1.order }) {
-                newBlock.exercises.append(copySlot(srcRE, in: ctx))
-            }
-            copy.blocks.append(newBlock)
+            copy.blocks.append(copyBlock(srcBlock, in: ctx))
         }
 
         try? ctx.save()
         return copy
+    }
+
+    // MARK: - Block deep copy
+
+    /// Deep-copies a single `RoutineBlock` into a brand-new, inserted
+    /// `RoutineBlock` (no parent attached — the caller appends it to whichever
+    /// `Routine.blocks` it belongs in). Carries `isSuperset`, `order`,
+    /// `restAfterSeconds`, and `supersetRoundRestSeconds`; deep-copies every
+    /// `RoutineExercise` slot (and its `SetTemplate`s / `SlotPrescription` /
+    /// `TechniquePlan`s / `WarmupScheme` + `WarmupStep`s) via `copySlot`, sharing
+    /// only the definition-level `Exercise` references. The new block and every
+    /// copied slot get a **fresh** `slotID` automatically by being new instances;
+    /// the source block and its children are **never mutated**.
+    ///
+    /// `order` is copied verbatim from the source — callers that insert the copy
+    /// into an *existing* routine (rather than a fresh duplicate) are responsible
+    /// for assigning the destination `order` and renumbering siblings. This is
+    /// the per-block primitive shared by whole-routine `duplicate(_:among:in:)`
+    /// and the upcoming same-routine block-duplicate path.
+    @MainActor
+    static func copyBlock(
+        _ src: RoutineBlock, in ctx: ModelContext
+    ) -> RoutineBlock {
+        let newBlock = RoutineBlock(
+            isSuperset: src.isSuperset,
+            order: src.order,
+            restAfterSeconds: src.restAfterSeconds,
+            exercises: []
+        )
+        newBlock.supersetRoundRestSeconds = src.supersetRoundRestSeconds
+        ctx.insert(newBlock)
+
+        for srcRE in src.exercises.sorted(by: { $0.order < $1.order }) {
+            newBlock.exercises.append(copySlot(srcRE, in: ctx))
+        }
+        return newBlock
     }
 
     // MARK: - Private deep-copy primitives

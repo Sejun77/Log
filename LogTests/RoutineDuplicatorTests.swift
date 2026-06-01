@@ -422,4 +422,52 @@ final class RoutineDuplicatorServiceTests: SwiftDataTestHarness {
         let all = try context.fetch(FetchDescriptor<Routine>())
         XCTAssertEqual(all.count, 2)
     }
+
+    // MARK: - 11. copyBlock primitive (Slice 1 — direct pin)
+
+    /// Pins the extracted `copyBlock` primitive directly: a fresh block + slot
+    /// `slotID`, carried block fields (incl. superset round rest), shared
+    /// `Exercise`, deep-copied + isolated prescription, and an unmutated source.
+    func testCopyBlockPrimitive() {
+        let src = makeRoutine("Push", order: 0)
+        let bench = makeExercise("Bench")
+        let slot = addSlot(
+            to: src, exercise: bench, order: 0, isSuperset: true
+        )
+        let srcBlock = src.blocks[0]
+        srcBlock.restAfterSeconds = 45
+        srcBlock.supersetRoundRestSeconds = 120
+        slot.prescription?.sets = 4
+
+        let copy = RoutineDuplicator.copyBlock(srcBlock, in: context)
+
+        // Fresh identities.
+        XCTAssertNotEqual(copy.slotID, srcBlock.slotID)
+        XCTAssertEqual(copy.exercises.count, 1)
+        let copiedSlot = copy.exercises[0]
+        XCTAssertNotEqual(copiedSlot.slotID, slot.slotID)
+
+        // Carried block fields.
+        XCTAssertEqual(copy.isSuperset, true)
+        XCTAssertEqual(copy.order, srcBlock.order)
+        XCTAssertEqual(copy.restAfterSeconds, 45)
+        XCTAssertEqual(copy.supersetRoundRestSeconds, 120)
+
+        // Shared definition-level Exercise; deep-copied prescription.
+        XCTAssertEqual(copiedSlot.exercise?.id, bench.id)
+        XCTAssertNotNil(copiedSlot.prescription)
+        XCTAssertNotEqual(
+            copiedSlot.prescription?.persistentModelID,
+            slot.prescription?.persistentModelID
+        )
+        XCTAssertEqual(copiedSlot.prescription?.sets, 4)
+
+        // Mutating the copy's prescription does not touch the source.
+        copiedSlot.prescription?.sets = 9
+        XCTAssertEqual(slot.prescription?.sets, 4)
+
+        // Source block is not appended anywhere by copyBlock and is unmutated.
+        XCTAssertEqual(src.blocks.count, 1)
+        XCTAssertTrue(src.blocks[0] === srcBlock)
+    }
 }
