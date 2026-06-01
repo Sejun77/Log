@@ -237,4 +237,234 @@ final class RoutineBlockBuilderTests: SwiftDataTestHarness {
         XCTAssertTrue(created.isEmpty)
         XCTAssertEqual(block.exercises.count, before)
     }
+
+    // MARK: - Duplicate block (Slice 2)
+
+    /// Append a single-slot block to `routine`. The slot links `exercise`
+    /// (pass `nil` for a deleted/unlinked slot) and, by default, gets a
+    /// prescription. Returns the created block.
+    @discardableResult
+    private func addBlock(
+        to routine: Routine,
+        exercise: Exercise?,
+        order: Int,
+        isSuperset: Bool = false,
+        restAfterSeconds: Int? = nil,
+        supersetRoundRestSeconds: Int? = nil,
+        withPrescription: Bool = true
+    ) -> RoutineBlock {
+        let re: RoutineExercise
+        if let exercise {
+            re = RoutineExercise(exercise: exercise, order: 0, setTemplates: [])
+        } else {
+            re = RoutineExercise(
+                exercise: Exercise(name: ""), order: 0, setTemplates: [])
+            re.exercise = nil
+        }
+        context.insert(re)
+        if withPrescription {
+            let p = SlotPrescription(
+                sets: 3, repMin: 8, repMax: 12, restSecondsBetweenSets: 90)
+            context.insert(p)
+            re.prescription = p
+        }
+        let block = RoutineBlock(
+            isSuperset: isSuperset, order: order,
+            restAfterSeconds: restAfterSeconds, exercises: [re])
+        block.supersetRoundRestSeconds = supersetRoundRestSeconds
+        context.insert(block)
+        routine.blocks.append(block)
+        try? context.save()
+        return block
+    }
+
+    private func sortedBlocks(_ r: Routine) -> [RoutineBlock] {
+        r.blocks.sorted { $0.order < $1.order }
+    }
+
+    // 1. Duplicate a normal single-exercise block, inserted after source.
+    func testDuplicateNormalBlockInsertedAfterSource() {
+        let r = makeRoutine()
+        let a = makeExercise("A")
+        let src = addBlock(to: r, exercise: a, order: 0)
+
+        let copy = RoutineBlockBuilder.duplicateBlock(src, in: r, ctx: context)
+
+        XCTAssertEqual(r.blocks.count, 2)
+        XCTAssertEqual(copy.order, 1)
+        XCTAssertFalse(copy.isSuperset)
+        XCTAssertEqual(copy.exercises.count, 1)
+        XCTAssertEqual(copy.exercises.first?.exercise?.id, a.id)
+        // Copy lands immediately after the source.
+        let sorted = sortedBlocks(r)
+        XCTAssertTrue(sorted[0] === src)
+        XCTAssertTrue(sorted[1] === copy)
+    }
+
+    // 2 + 14. Duplicate a superset block; superset fields preserved.
+    func testDuplicateSupersetBlockPreservesFields() {
+        let r = makeRoutine()
+        let a = makeExercise("A")
+        let src = addBlock(
+            to: r, exercise: a, order: 0, isSuperset: true,
+            restAfterSeconds: 45, supersetRoundRestSeconds: 120)
+
+        let copy = RoutineBlockBuilder.duplicateBlock(src, in: r, ctx: context)
+
+        XCTAssertTrue(copy.isSuperset)
+        XCTAssertEqual(copy.restAfterSeconds, 45)
+        XCTAssertEqual(copy.supersetRoundRestSeconds, 120)
+    }
+
+    // 3 + 4 + 5. Insert-after, later orders shift +1, contiguous result.
+    func testDuplicateShiftsLaterBlocksAndStaysContiguous() {
+        let r = makeRoutine()
+        let a = makeExercise("A")
+        let b = makeExercise("B")
+        let c = makeExercise("C")
+        let blockA = addBlock(to: r, exercise: a, order: 0)
+        let blockB = addBlock(to: r, exercise: b, order: 1)
+        let blockC = addBlock(to: r, exercise: c, order: 2)
+
+        let copy = RoutineBlockBuilder.duplicateBlock(blockA, in: r, ctx: context)
+
+        XCTAssertEqual(r.blocks.count, 4)
+        // Contiguous 0..<4.
+        XCTAssertEqual(sortedBlocks(r).map(\.order), [0, 1, 2, 3])
+        // A(0), copy(1), B(2), C(3): relative order preserved, later shifted +1.
+        let sorted = sortedBlocks(r)
+        XCTAssertTrue(sorted[0] === blockA)
+        XCTAssertTrue(sorted[1] === copy)
+        XCTAssertTrue(sorted[2] === blockB)
+        XCTAssertTrue(sorted[3] === blockC)
+        XCTAssertEqual(blockA.order, 0)
+        XCTAssertEqual(blockB.order, 2)
+        XCTAssertEqual(blockC.order, 3)
+    }
+
+    // 6 + 7 + 8 + 9. Source unchanged; fresh slotIDs; shared Exercise.
+    func testDuplicateFreshIdentitiesSharedExerciseSourceUnchanged() {
+        let r = makeRoutine()
+        let a = makeExercise("A")
+        let src = addBlock(to: r, exercise: a, order: 0)
+        let srcBlockSlotID = src.slotID
+        let srcSlot = src.exercises[0]
+        let srcSlotID = srcSlot.slotID
+        let srcOrder = src.order
+
+        let copy = RoutineBlockBuilder.duplicateBlock(src, in: r, ctx: context)
+
+        // Fresh block + slot slotIDs.
+        XCTAssertNotEqual(copy.slotID, srcBlockSlotID)
+        XCTAssertNotEqual(copy.exercises[0].slotID, srcSlotID)
+        // Shared definition-level Exercise (not cloned).
+        XCTAssertEqual(copy.exercises[0].exercise?.id, a.id)
+        XCTAssertTrue(copy.exercises[0].exercise === srcSlot.exercise)
+        // Source block unchanged (identity, order, slotIDs preserved).
+        XCTAssertEqual(src.slotID, srcBlockSlotID)
+        XCTAssertEqual(src.order, srcOrder)
+        XCTAssertEqual(src.exercises[0].slotID, srcSlotID)
+        XCTAssertEqual(src.exercises.count, 1)
+    }
+
+    // 10. Prescription deep-copied + mutation-isolated.
+    func testDuplicatePrescriptionDeepCopyIsolated() {
+        let r = makeRoutine()
+        let a = makeExercise("A")
+        let src = addBlock(to: r, exercise: a, order: 0)
+        src.exercises[0].prescription?.sets = 4
+
+        let copy = RoutineBlockBuilder.duplicateBlock(src, in: r, ctx: context)
+        let srcP = src.exercises[0].prescription
+        let copyP = copy.exercises[0].prescription
+
+        XCTAssertNotNil(copyP)
+        XCTAssertFalse(copyP === srcP)
+        XCTAssertEqual(copyP?.sets, 4)
+        copyP?.sets = 9
+        XCTAssertEqual(srcP?.sets, 4)
+    }
+
+    // 11. SetTemplates deep-copied + mutation-isolated.
+    func testDuplicateSetTemplatesDeepCopyIsolated() {
+        let r = makeRoutine()
+        let a = makeExercise("A")
+        let src = addBlock(
+            to: r, exercise: a, order: 0, withPrescription: false)
+        let tpl = SetTemplate(
+            kind: .working, targetReps: 8, targetWeight: 60, restSecondsAfter: 90)
+        tpl.order = 0
+        context.insert(tpl)
+        src.exercises[0].setTemplates = [tpl]
+        try? context.save()
+
+        let copy = RoutineBlockBuilder.duplicateBlock(src, in: r, ctx: context)
+        let copyTpls = copy.exercises[0].setTemplates
+
+        XCTAssertEqual(copyTpls.count, 1)
+        XCTAssertFalse(copyTpls.first === tpl)
+        XCTAssertEqual(copyTpls.first?.targetReps, 8)
+        copyTpls.first?.targetReps = 5
+        XCTAssertEqual(tpl.targetReps, 8)
+    }
+
+    // 12. TechniquePlans deep-copied.
+    func testDuplicateTechniquePlansDeepCopied() {
+        let r = makeRoutine()
+        let a = makeExercise("A")
+        let src = addBlock(to: r, exercise: a, order: 0)
+        let plan = TechniquePlan(
+            order: 0, type: .dropset, dropPercent: 20, dropCount: 2)
+        context.insert(plan)
+        src.exercises[0].prescription?.techniquePlans = [plan]
+        try? context.save()
+
+        let copy = RoutineBlockBuilder.duplicateBlock(src, in: r, ctx: context)
+        let copyPlans = copy.exercises[0].prescription?.techniquePlans
+
+        XCTAssertEqual(copyPlans?.count, 1)
+        XCTAssertFalse(copyPlans?.first === plan)
+        XCTAssertEqual(copyPlans?.first?.typeRaw, "dropset")
+        XCTAssertEqual(copyPlans?.first?.dropPercent, 20)
+        XCTAssertEqual(copyPlans?.first?.dropCount, 2)
+    }
+
+    // 13. WarmupScheme + steps deep-copied + mutation-isolated.
+    func testDuplicateWarmupSchemeDeepCopyIsolated() {
+        let r = makeRoutine()
+        let a = makeExercise("A")
+        let src = addBlock(to: r, exercise: a, order: 0)
+        let scheme = WarmupScheme(name: "Warmup")
+        context.insert(scheme)
+        let step = WarmupStep(order: 0, kind: .percentage, percentOfWorking: 0.5)
+        context.insert(step)
+        scheme.steps = [step]
+        src.exercises[0].prescription?.warmupScheme = scheme
+        try? context.save()
+
+        let copy = RoutineBlockBuilder.duplicateBlock(src, in: r, ctx: context)
+        let copyScheme = copy.exercises[0].prescription?.warmupScheme
+
+        XCTAssertEqual(copyScheme?.name, "Warmup")
+        XCTAssertEqual(copyScheme?.steps.count, 1)
+        XCTAssertFalse(copyScheme === scheme)
+        XCTAssertFalse(copyScheme?.steps.first === step)
+        copyScheme?.steps.first?.percentOfWorking = 0.9
+        XCTAssertEqual(step.percentOfWorking, 0.5)
+    }
+
+    // 15. Nil-exercise / nil-prescription slot does not crash.
+    func testDuplicateNilExerciseNilPrescriptionNoCrash() {
+        let r = makeRoutine()
+        let src = addBlock(
+            to: r, exercise: nil, order: 0, withPrescription: false)
+
+        let copy = RoutineBlockBuilder.duplicateBlock(src, in: r, ctx: context)
+
+        XCTAssertEqual(r.blocks.count, 2)
+        XCTAssertEqual(copy.order, 1)
+        XCTAssertEqual(copy.exercises.count, 1)
+        XCTAssertNil(copy.exercises[0].exercise)
+        XCTAssertNil(copy.exercises[0].prescription)
+    }
 }
