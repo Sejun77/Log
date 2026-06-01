@@ -28,6 +28,14 @@ struct RoutinesView: View {
 
     @State private var navigateToActiveWorkout = false
 
+    // Routine JSON export (Slice E). The `fileExporter` + its state live at the
+    // view level (one exporter, parameterized per tapped row) rather than
+    // per-row. The document/filename are generated on tap in `exportRoutine`.
+    @State private var exportDocument = JSONDocument(text: "")
+    @State private var exportFilename = "routine"
+    @State private var isExporterPresented = false
+    @State private var exportErrorMessage: String?
+
     init(resumeNavigationTrigger: Binding<Bool> = .constant(false)) {
         self._resumeNavigationTrigger = resumeNavigationTrigger
     }
@@ -81,6 +89,24 @@ struct RoutinesView: View {
                 Text(
                     "You can\u{2019}t delete \u{201C}\(lockedRoutineName)\u{201D} while a workout using it is active."
                 )
+            }
+            .fileExporter(
+                isPresented: $isExporterPresented,
+                document: exportDocument,
+                contentType: .json,
+                defaultFilename: exportFilename,
+                onCompletion: handleExport
+            )
+            .alert(
+                "Export Failed",
+                isPresented: Binding(
+                    get: { exportErrorMessage != nil },
+                    set: { if !$0 { exportErrorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(exportErrorMessage ?? "")
             }
             .navigationDestination(isPresented: $navigateToActiveWorkout) {
                 if let plan = activeGuard.activePlan {
@@ -280,6 +306,13 @@ struct RoutinesView: View {
                         } label: {
                             Label("Duplicate", systemImage: "plus.square.on.square")
                         }
+                        // Read-only export — available regardless of lock state
+                        // (never mutates the routine), like Duplicate.
+                        Button {
+                            exportRoutine(r)
+                        } label: {
+                            Label("Export as JSON", systemImage: "square.and.arrow.up")
+                        }
                     }
                 }
                 .onMove(perform: moveRoutines)
@@ -321,6 +354,36 @@ struct RoutinesView: View {
             RoutineDuplicator.duplicate(r, among: routines, in: ctx)
         }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    /// Read-only routine JSON export. Generates the transfer document on tap via
+    /// the tested `RoutineTransfer.export` service, encodes it with the shared
+    /// ISO-8601 `makeJSONEncoder`, and presents a Save dialog. Never mutates the
+    /// routine or any app data; on encode failure surfaces a friendly alert.
+    private func exportRoutine(_ r: Routine) {
+        do {
+            let document = RoutineTransfer.export(r)
+            let data = try RoutineTransfer.makeJSONEncoder().encode(document)
+            guard let text = String(data: data, encoding: .utf8) else {
+                exportErrorMessage = "Couldn\u{2019}t encode the routine for export."
+                return
+            }
+            exportDocument = JSONDocument(text: text)
+            exportFilename = RoutineTransfer.exportFilename(for: r.name)
+            isExporterPresented = true
+        } catch {
+            exportErrorMessage = "Couldn\u{2019}t prepare the routine for export."
+        }
+    }
+
+    /// `fileExporter` completion. A user cancel is reported as an error on some
+    /// OS versions; don't surface that as a failure (mirrors `DataExportButtons`).
+    private func handleExport(_ result: Result<URL, Error>) {
+        if case let .failure(error) = result {
+            let nsError = error as NSError
+            guard nsError.code != NSUserCancelledError else { return }
+            exportErrorMessage = error.localizedDescription
+        }
     }
 
     private func routineImpactMessage(_ r: Routine) -> String {

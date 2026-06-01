@@ -323,4 +323,22 @@ final class RoutineTransferExportTests: SwiftDataTestHarness {
         // The Default variant still exists on the source (just not exported).
         XCTAssertEqual(r.variants.count, 1)
     }
+
+    // MARK: - Export filename slug (Slice E, pure)
+
+    func testExportFilenameSlug() {
+        XCTAssertEqual(RoutineTransfer.exportFilename(for: "Upper A"), "routine-upper-a")
+        XCTAssertEqual(
+            RoutineTransfer.exportFilename(for: "Push A (imported)"),
+            "routine-push-a-imported")
+        // Collapses runs, trims edge separators.
+        XCTAssertEqual(
+            RoutineTransfer.exportFilename(for: "  Legs / Pull!! "),
+            "routine-legs-pull")
+        // Symbol-only / empty → bare fallback (no trailing dash).
+        XCTAssertEqual(RoutineTransfer.exportFilename(for: ""), "routine")
+        XCTAssertEqual(RoutineTransfer.exportFilename(for: "***"), "routine")
+        // Digits preserved.
+        XCTAssertEqual(RoutineTransfer.exportFilename(for: "Day 1"), "routine-day-1")
+    }
 }

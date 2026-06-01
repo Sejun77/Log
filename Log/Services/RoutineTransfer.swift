@@ -55,6 +55,29 @@ enum RoutineTransfer {
         return decoder
     }
 
+    /// Default export filename (without extension) for a routine, e.g.
+    /// `"Upper A"` → `"routine-upper-a"`, `"Push A (imported)"` →
+    /// `"routine-push-a-imported"`. Lowercases, replaces every non
+    /// alphanumeric run with a single `-`, trims edge dashes, and prefixes
+    /// `routine-`. An empty / symbol-only name falls back to `"routine"`. Pure
+    /// value-in / value-out — testable; the `fileExporter` appends `.json`.
+    nonisolated static func exportFilename(for routineName: String) -> String {
+        var slug = ""
+        var lastWasDash = false
+        for ch in routineName.lowercased() {
+            if ch.isLetter || ch.isNumber {
+                slug.append(ch)
+                lastWasDash = false
+            } else if !lastWasDash {
+                slug.append("-")
+                lastWasDash = true
+            }
+        }
+        while slug.hasPrefix("-") { slug.removeFirst() }
+        while slug.hasSuffix("-") { slug.removeLast() }
+        return slug.isEmpty ? "routine" : "routine-\(slug)"
+    }
+
     // MARK: - Private mapping (each level sorts children by `order`)
 
     private static func routineDTO(
