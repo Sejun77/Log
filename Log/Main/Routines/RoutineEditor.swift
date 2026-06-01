@@ -271,10 +271,7 @@ struct RoutineEditor: View {
     private func blocksSection() -> some View {
         Section("Blocks") {
             ForEach(sortedBlocks, id: \.id) { block in
-                blockRowView(for: block)
-                    .swipeActions(allowsFullSwipe: false) {
-                        blockSwipeActions(for: block)
-                    }
+                blockRowWithActions(for: block)
 
                 if blockIsInvalidSuperset(block) {
                     Text("⚠️ Tap Details to set Rest after round")
@@ -342,6 +339,33 @@ struct RoutineEditor: View {
         )
     }
 
+    /// Block row decorated with its swipe actions and (when the routine is not
+    /// locked) a long-press **Duplicate** context menu. The context menu is the
+    /// only Duplicate affordance available in Edit mode, where swipe actions are
+    /// unreachable — mirroring the Saved Routines list (§2.10). It is applied
+    /// conditionally (never an always-on empty menu) so it adds no long-press
+    /// gesture while the routine is in use, and the row's "Details"
+    /// `NavigationLink` tap is unaffected.
+    @ViewBuilder
+    private func blockRowWithActions(for block: RoutineBlock) -> some View {
+        let row = blockRowView(for: block)
+            .swipeActions(allowsFullSwipe: false) {
+                blockSwipeActions(for: block)
+            }
+
+        if activeGuard.isRoutineLocked(routine.id) {
+            row
+        } else {
+            row.contextMenu {
+                Button {
+                    duplicateBlock(block)
+                } label: {
+                    Label("Duplicate", systemImage: "plus.square.on.square")
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func blockSwipeActions(for block: RoutineBlock) -> some View {
         if blockContainsLockedExercise(block, guard: activeGuard) {
@@ -362,6 +386,19 @@ struct RoutineEditor: View {
                 Label("Delete", systemImage: "trash")
             }
             .tint(.red)
+        }
+
+        // Non-destructive blue Duplicate, alongside red Delete / gray In-use.
+        // Gated by the routine lock because — unlike routine-level duplicate
+        // (§2.10), which writes a brand-new routine — this writes a new block
+        // into the *current* routine, so it follows the same lock as Add/move.
+        if !activeGuard.isRoutineLocked(routine.id) {
+            Button {
+                duplicateBlock(block)
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+            .tint(.blue)
         }
     }
 
@@ -607,6 +644,20 @@ struct RoutineEditor: View {
         guard !activeGuard.isRoutineLocked(routine.id) else { return }
         RoutineBlockBuilder.addSingleExerciseBlocks(
             exercises, to: routine, in: ctx)
+    }
+
+    /// Non-destructive same-routine block duplicate (Slice 3). Deep-copies the
+    /// block via the tested `RoutineBlockBuilder.duplicateBlock` so the copy
+    /// lands immediately after the source and later blocks shift down. Gated by
+    /// the routine lock (the UI affordances are already hidden while locked; this
+    /// guard is defense-in-depth, matching `addExercisesAsBlocks`). A superset
+    /// copy keeps its rest-after-round and stays valid.
+    private func duplicateBlock(_ block: RoutineBlock) {
+        guard !activeGuard.isRoutineLocked(routine.id) else { return }
+        withAnimation {
+            RoutineBlockBuilder.duplicateBlock(block, in: routine, ctx: ctx)
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     private func appendBlock(
