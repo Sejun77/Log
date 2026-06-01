@@ -80,18 +80,21 @@ alphabetical / body-part / equipment sorts and while searching. Allowed for
 locked/in-use rows (only `Exercise.order` is rewritten). This closes the §2.6-E
 backlog note. No model/schema change; full suite **558/558**.
 
-Updated 2026-06-01: **Duplicate Block / Copy Block Tools planned** (§2.13) — a
-planning audit on `feature/block-copy-tools` defined a 🚧 PLANNED (not shipped)
-one-tap **Duplicate** for a single routine block. Confirmed v1 scope: **same-routine
-duplicate only**, the copy **lands immediately after the source block**, both
-single-exercise and superset blocks supported. Three-slice plan: (1) extract
-`RoutineDuplicator.copyBlock` and route routine duplication through it (zero
-behavior change), (2) `RoutineBlockBuilder.duplicateBlock` (insert-after-source +
-order shift + single save + tests), (3) `RoutineEditor` swipe + context-menu
-Duplicate. Unlike routine duplication (§2.10), block duplication **writes into the
-current routine**, so it **must be lock-gated** (shows the existing "In use" behavior
-when the routine is in use). Cross-routine copy, reusable block templates, and JSON
-routine transfer are future ideas, **out of v1** (§3.11). No model/schema change.
+Also updated 2026-06-01: **Duplicate Block / Copy Block Tools v1 shipped** (§2.13) — a
+one-tap **Duplicate** for a single routine block, built in three slices on
+`feature/block-copy-tools`. v1 scope: **same-routine duplicate only**, the copy **lands
+immediately after the source block** (later blocks shift down, list stays contiguous),
+both single-exercise and superset blocks supported. Slices: (1) extracted
+`RoutineDuplicator.copyBlock` and routed routine duplication through it (zero behavior
+change), (2) `RoutineBlockBuilder.duplicateBlock` (insert-after-source + order shift +
+single save, owning `Routine` passed explicitly since `RoutineBlock` has no inverse
+relationship), (3) `RoutineEditor` blue swipe + edit-mode context-menu Duplicate
+(shared `BlockRow` untouched). Unlike routine duplication (§2.10), block duplication
+**writes into the current routine**, so it is **lock-gated** by
+`activeGuard.isRoutineLocked` (affordances hidden while in use); Delete and Add/move
+gating unchanged. Cross-routine copy, reusable block templates, and JSON routine
+transfer stay future/deferred (§3.11). No model/schema change; full suite **568/568**,
+manual regression passed.
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -682,57 +685,65 @@ see §2.12** — kept separate from the search-policy commit as planned.
   `Log/Services/ExerciseReorder.swift`, `LogTests/ExerciseReorderTests.swift`,
   `Log/Main/ExercisesView.swift`.)
 
-### 2.13 Duplicate Block / Copy Block Tools — 🚧 PLANNED (audit 2026-06-01)
+### 2.13 Duplicate Block / Copy Block Tools — ✅ SHIPPED (2026-06-01)
 - **Source:** Planning audit (2026-06-01) on `feature/block-copy-tools` for faster
-  routine authoring. The deep-clone primitives already exist inside `RoutineDuplicator`
-  (used by routine duplication, §2.10); this feature lifts the per-block copy out and
+  routine authoring. The deep-clone primitives already existed inside `RoutineDuplicator`
+  (used by routine duplication, §2.10); this feature lifted the per-block copy out and
   exposes it as a one-tap **Duplicate** on a single block in the `RoutineEditor`.
 - **Nature:** a new **user-facing** authoring feature (clone one block to seed another).
   Additive behavior only — no new persisted state beyond the copied block graph, **no
   model/schema change**.
-- **Status:** **PLANNED / not shipped.** Three-slice plan below; no Swift files changed yet.
-- **Confirmed v1 scope:**
-  - **Same-routine duplicate only** — duplicate a block within the routine being edited.
-  - The duplicate **lands immediately after the source block** (not appended at the end —
-    deliberately different from routine duplication's trailing `order`, so the copy sits
-    next to its original for fast tweak-after-clone).
-  - Supports **both single-exercise blocks and superset blocks**.
-  - Cross-routine block copy, reusable block templates, and JSON routine transfer are
-    **future ideas, explicitly out of v1** (see §3.11).
-- **Planned implementation (three slices):**
-  - **Slice 1 — expose/reuse block deep-copy (zero behavior change).** Extract
+- **Status:** **Done**, shipped in three slices (each built + full-suite green before the
+  next):
+  - **Slice 1 — expose/reuse block deep-copy (zero behavior change).** Extracted
     `RoutineDuplicator.copyBlock(_ src: RoutineBlock, in ctx:) -> RoutineBlock` from the
-    existing per-block body of `duplicate(_:among:in:)`, and route whole-routine
-    duplication through the new helper. Pure refactor — existing
-    `RoutineDuplicator` tests must stay green to prove no regression.
-  - **Slice 2 — `RoutineBlockBuilder.duplicateBlock`.** Duplicate the source block into
-    the **same** routine via `copyBlock`, set the copy's `order = source.order + 1`,
-    **shift all later blocks' `order` up by one**, and `ctx.save()` **once** after the
-    graph + order shift. Add tests for: fresh identities, deep-copy isolation, superset
-    handling, insert-after-source ordering, and source-unchanged.
+    per-block body of `duplicate(_:among:in:)` and routed whole-routine duplication
+    through it. Pure refactor; existing `RoutineDuplicator` tests stayed green + one direct
+    `copyBlock` pin added (full suite **559/559**).
+  - **Slice 2 — `RoutineBlockBuilder.duplicateBlock`.** `@MainActor @discardableResult`
+    `duplicateBlock(_ source:in routine:ctx:)` — deep-copies via `copyBlock`, sets the
+    copy's `order = source.order + 1`, **shifts every later block's `order` up by one**
+    (minimal-mutation, same renumber shape as `moveBlocks`/`normalizeRoutineModel`), and
+    `ctx.save()`s **once**. The owning `routine` is passed **explicitly** because
+    `RoutineBlock` has **no inverse-to-`Routine` relationship**. 9 tests (fresh identities,
+    deep-copy isolation, superset handling, insert-after-source + contiguity, nil-exercise
+    / nil-prescription edge, source-unchanged); full suite **568/568**.
   - **Slice 3 — `RoutineEditor` UI.** A blue non-destructive **"Duplicate"** swipe action
-    plus a long-press **context-menu** Duplicate (context menu needed because swipe is
-    unreachable in edit mode — same reasoning as §2.10 Slice C.2). Success haptic.
-- **Lock-gating difference from routine duplication (critical):** routine duplication
-  (§2.10) is allowed even for in-use routines because it writes to a **brand-new**
-  routine and only reads the source. Block duplication **writes a new block into the
-  current, possibly-locked routine**, so it **must be gated by the routine lock** — it
-  follows the existing Add-button / `onMove` gate (`activeGuard.isRoutineLocked`). When
-  the routine is locked/in use, the action shows the **existing "In use" / locked
-  behavior** instead of allowing the duplicate.
-- **Data-safety invariants (to be tested):**
+    (`plus.square.on.square`) alongside red Delete / gray In-use, **plus** a long-press
+    **context-menu** Duplicate (the only affordance reachable in **edit mode**, where swipe
+    actions are unavailable — same reasoning as §2.10 Slice C.2), via a
+    `blockRowWithActions(for:)` decorator. Success haptic. UI-only; full suite **568/568**.
+    The shared `BlockRow` (also used by `RoutinesView`) was **not** modified.
+- **Confirmed v1 scope (shipped):**
+  - **Same-routine duplicate only** — duplicate a block within the routine being edited.
+  - The duplicate **lands immediately after the source block** (deliberately different from
+    routine duplication's trailing `order`, so the copy sits next to its original for fast
+    tweak-after-clone); later blocks shift down and the list stays contiguous.
+  - Supports **both single-exercise blocks and superset blocks**.
+  - **Out of v1 (deferred — see §3.11):** cross-routine block copy, reusable block
+    templates, and JSON routine transfer.
+- **Lock-gating difference from routine duplication:** routine duplication (§2.10) is
+  allowed even for in-use routines because it writes a **brand-new** routine and only reads
+  the source. Block duplication **writes a new block into the current routine**, so it is
+  **gated by the routine lock** — the same `activeGuard.isRoutineLocked(routine.id)` gate
+  as Add/`onMove`. While the routine is locked/in use, the blue swipe button is **omitted**
+  and the context menu is **not attached** (no empty-menu long-press gesture); the handler
+  re-guards as defense-in-depth. **Delete** (per-block "In use" path) and **Add/move** gating
+  are unchanged.
+- **Data-safety invariants (tested):**
   - **Source block is never mutated**; no `Workout` / history / schema mutation.
   - **Fresh `slotID`** on the new `RoutineBlock` and on **every** new `RoutineExercise`
     slot (automatic from new instances).
   - **`Exercise` references are shared intentionally** (definition-level, never cloned).
-  - **Deep-copied** (independent instances): `SetTemplate`, `SlotPrescription`,
-    `TechniquePlan`, and `WarmupScheme` + `WarmupStep`s.
+  - **Deep-copied + mutation-isolated** (independent instances): `SetTemplate`,
+    `SlotPrescription`, `TechniquePlan`, and `WarmupScheme` + `WarmupStep`s.
   - **Superset rest fields preserved** (`isSuperset`, `supersetRoundRestSeconds`,
     `restAfterSeconds`) so a duplicated superset stays valid.
   - **One `ctx.save()`** after graph creation + order shift.
-- **Risk:** **low–medium** — the deep-clone path is already tested (§2.10); the new risk
-  surface is the same-routine **insert-after + order shift** and the **lock gate**, both
-  covered by the Slice-2 tests and the Slice-3 gating.
+- **No model/schema change.** Build succeeded; full suite **568/568**; manual regression
+  passed. (Files: `Log/Services/RoutineDuplicator.swift`,
+  `Log/Services/RoutineBlockBuilder.swift`, `Log/Main/Routines/RoutineEditor.swift`,
+  `LogTests/RoutineDuplicatorTests.swift`, `LogTests/RoutineBlockBuilderTests.swift`.)
 
 ## 3. Optional / Future Features
 
@@ -1313,21 +1324,23 @@ on source); Delete stays blocked. Duplicate gets a unique "… copy" name + trai
 order, no auto-navigation. No model/schema change; full suite **460/460**, manual
 regression passed. Editor-toolbar Duplicate + auto-open are future-optional (§3.8).
 
-🚧 **Duplicate Block / Copy Block Tools** (§2.13) — **PLANNED 2026-06-01, not shipped.**
-The current active implementation target on `feature/block-copy-tools`. Three slices:
-(1) extract `RoutineDuplicator.copyBlock` + route routine duplication through it (zero
-behavior change), (2) `RoutineBlockBuilder.duplicateBlock` (same-routine, insert
-immediately after source, shift later block orders, single save, full tests), (3)
-`RoutineEditor` blue Duplicate swipe + edit-mode context menu. v1 is **same-routine
-duplicate only** (both single + superset blocks); it **must be lock-gated** because it
-writes into the current routine (unlike routine duplication §2.10). Cross-routine copy,
-reusable block templates, and JSON routine transfer stay **future/deferred** (§3.11).
-No model/schema change.
+✅ **Duplicate Block / Copy Block Tools** (§2.13) — **SHIPPED 2026-06-01** in three slices
+on `feature/block-copy-tools`. Slice 1: extracted `RoutineDuplicator.copyBlock` + routed
+routine duplication through it (zero behavior change). Slice 2: tested
+`RoutineBlockBuilder.duplicateBlock` (same-routine, insert immediately after source, shift
+later block orders, single save; owning `Routine` passed explicitly since `RoutineBlock`
+has no inverse relationship). Slice 3: `RoutineEditor` blue Duplicate swipe + edit-mode
+context menu (shared `BlockRow` untouched). v1 is **same-routine duplicate only** (both
+single + superset blocks, superset rest preserved); **lock-gated** because it writes into
+the current routine (unlike routine duplication §2.10), with Delete/Add/move gating
+unchanged. Cross-routine copy, reusable block templates, and JSON routine transfer stay
+**future/deferred** (§3.11). No model/schema change; full suite **568/568**, manual
+regression passed.
 
-**Aside from §2.13, no other "implement now" product/UX item remains.** The three top
-refactor-era recommendations plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9) and the
-routine duplication feature (§2.10) have shipped. Everything else is optional / future /
-deferred:
+**No "implement now" product/UX item remains.** The three top refactor-era recommendations
+plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9), the routine duplication feature
+(§2.10), and the Duplicate Block tools (§2.13) have shipped. Everything else is optional /
+future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
