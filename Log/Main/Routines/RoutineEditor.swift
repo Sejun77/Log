@@ -33,6 +33,19 @@ struct RoutineEditor: View {
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
 
+    // App-wide autoreg metric drives which effort target (RIR/RPE) the block
+    // row subtitle shows; `.none` maps to `nil` → no effort suffix (Slice C).
+    @AppStorage(AppSettings.Keys.autoregMode)
+    private var autoregModeRaw: String = AutoregMode.rir.rawValue
+
+    private var effortMetric: EffortMetric? {
+        switch AutoregMode(rawValue: autoregModeRaw) ?? .rir {
+        case .rir: return .rir
+        case .rpe: return .rpe
+        case .none: return nil
+        }
+    }
+
     // MARK: - State
 
     @State private var deletePrompt: DeletePrompt?
@@ -312,7 +325,9 @@ struct RoutineEditor: View {
 
         return BlockRow(
             title: blockTitle(block),
-            subtitle: BlockPrescriptionSummary(block: block).subtitle,
+            subtitle: BlockPrescriptionSummary(
+                block: block, effortMetric: effortMetric
+            ).subtitle,
             details: {
                 if block.isSuperset {
                     return AnyView(

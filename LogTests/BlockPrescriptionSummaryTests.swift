@@ -27,7 +27,14 @@ final class BlockPrescriptionSummaryTests: SwiftDataTestHarness {
         rest: Int? = nil,
         order: Int = 0,
         hasPrescription: Bool = true,
-        attachExercise: Bool = true
+        attachExercise: Bool = true,
+        rir: Double? = nil,
+        rpe: Double? = nil,
+        effortModeRaw: String? = nil,
+        rirStart: Double? = nil,
+        rirEnd: Double? = nil,
+        rpeStart: Double? = nil,
+        rpeEnd: Double? = nil
     ) -> RoutineExercise {
         let ex = Exercise(name: "Lift \(order)", isCustom: true)
         context.insert(ex)
@@ -39,6 +46,13 @@ final class BlockPrescriptionSummaryTests: SwiftDataTestHarness {
                 repMin: repMin,
                 repMax: repMax,
                 restSecondsBetweenSets: rest,
+                rir: rir,
+                rpe: rpe,
+                effortModeRaw: effortModeRaw,
+                rirStart: rirStart,
+                rirEnd: rirEnd,
+                rpeStart: rpeStart,
+                rpeEnd: rpeEnd,
                 durationMaxSeconds: durationMax,
                 usesDuration: usesDuration
             )
@@ -246,6 +260,120 @@ final class BlockPrescriptionSummaryTests: SwiftDataTestHarness {
         XCTAssertEqual(
             BlockPrescriptionSummary(block: block).subtitle,
             "Superset · 3 exercises · 3 sets"
+        )
+    }
+
+    // MARK: - Effort target summary (Slice C)
+
+    func testValueInEffortSuffixAppended() {
+        XCTAssertEqual(
+            BlockPrescriptionSummary(
+                sets: 3, repMin: 8, repMax: 12, restSeconds: 90,
+                effort: "RIR 2 → 0"
+            ).subtitle,
+            "3 × 8–12 · 90s rest · RIR 2 → 0"
+        )
+    }
+
+    func testValueInEffortWithoutRest() {
+        XCTAssertEqual(
+            BlockPrescriptionSummary(sets: 3, repMin: 8, effort: "RPE 8").subtitle,
+            "3 × 8 · RPE 8"
+        )
+    }
+
+    func testBlockSummarySingleRIR() {
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rest: 90,
+                     rir: 2, effortModeRaw: "single")
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            "3 × 8–12 · 90s rest · RIR 2"
+        )
+    }
+
+    func testBlockSummarySingleRPE() {
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 8, rpe: 8.5,
+                     effortModeRaw: "single")
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rpe).subtitle,
+            "3 × 8 · RPE 8.5"
+        )
+    }
+
+    func testBlockSummaryLegacyNilModeDerivesSingleRIR() {
+        // rir set, effortModeRaw nil → derives .single → "RIR 2".
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rir: 2)
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            "3 × 8–12 · RIR 2"
+        )
+    }
+
+    func testBlockSummaryProgressionRIR() {
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12,
+                     effortModeRaw: "progression", rirStart: 2, rirEnd: 0)
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            "3 × 8–12 · RIR 2 → 0"
+        )
+    }
+
+    func testBlockSummaryProgressionRPE() {
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12,
+                     effortModeRaw: "progression", rpeStart: 8, rpeEnd: 10)
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rpe).subtitle,
+            "3 × 8–12 · RPE 8 → 10"
+        )
+    }
+
+    func testBlockSummaryNoneOmitsEffort() {
+        // No effort values → mode derives .none → no suffix.
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rest: 90)
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            "3 × 8–12 · 90s rest"
+        )
+    }
+
+    func testBlockSummaryNilMetricOmitsEffortEvenWhenPresent() {
+        // Autoreg disabled (metric nil) → no suffix even with a value present;
+        // the default init (no metric arg) behaves identically — pinning that
+        // existing summary behavior is unchanged.
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rir: 2,
+                     effortModeRaw: "single")
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: nil).subtitle,
+            "3 × 8–12"
+        )
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block).subtitle,
+            "3 × 8–12"
+        )
+    }
+
+    func testSupersetIgnoresEffortMetric() {
+        let block = makeBlock(isSuperset: true, slots: [
+            makeSlot(sets: 3, order: 0, rir: 2, effortModeRaw: "single"),
+            makeSlot(sets: 3, order: 1, rir: 2, effortModeRaw: "single"),
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            "Superset · 2 exercises · 3 sets"
         )
     }
 

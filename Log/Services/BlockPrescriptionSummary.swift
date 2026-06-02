@@ -17,14 +17,22 @@ import Foundation
 ///    - sets, no reps → `"3 sets"`
 ///    - `usesDuration` + duration → `"3 × 45s"`; no duration → `"3 sets"`
 ///    - trailing rest when `restSecondsBetweenSets > 0` → `"… · 90s rest"`
+///    - trailing effort target when present (Slice C) → `"… · RIR 2"` (single)
+///      or `"… · RIR 2 → 0"` (progression, directional arrow — never a range).
+///      The metric (RIR/RPE) is supplied by the caller via `effortMetric`
+///      (the app-wide autoreg setting); `nil` (autoreg off) omits the suffix.
+///      The value is resolved through `EffortTargetResolver.summary`, so legacy
+///      single-value prescriptions (`rir`/`rpe` with nil `effortModeRaw`) render
+///      as single effort exactly as before they had a mode.
 ///    - no prescription / no usable sets → `"Not set"`
 ///  - **Superset block** — block-level:
 ///    - `"Superset · N exercises · M sets"` where `N = block.exercises.count`
 ///      (structural — nil/deleted slots still count) and `M` = the **max**
 ///      child `prescription.sets` (matching `SupersetDetailNoRest.currentSetsValue`).
 ///    - `M` omitted when no child carries a positive `sets` → `"Superset · N exercises"`.
-///  - Weight, RIR/RPE, tempo, and other autoregulation are intentionally **out
-///    of scope for v1**.
+///    - effort is **not** shown for supersets (per-slot targets would be
+///      ambiguous block-level); reserved for a future slice.
+///  - Weight and tempo remain intentionally **out of scope for v1**.
 struct BlockPrescriptionSummary: Equatable {
     private enum Content: Equatable {
         case normal(
@@ -33,7 +41,8 @@ struct BlockPrescriptionSummary: Equatable {
             repMax: Int?,
             durationSeconds: Int?,
             usesDuration: Bool,
-            restSeconds: Int?
+            restSeconds: Int?,
+            effort: String?
         )
         case superset(exerciseCount: Int, sets: Int?)
     }
@@ -48,7 +57,8 @@ struct BlockPrescriptionSummary: Equatable {
         repMax: Int? = nil,
         durationSeconds: Int? = nil,
         usesDuration: Bool = false,
-        restSeconds: Int? = nil
+        restSeconds: Int? = nil,
+        effort: String? = nil
     ) {
         content = .normal(
             sets: sets,
@@ -56,7 +66,8 @@ struct BlockPrescriptionSummary: Equatable {
             repMax: repMax,
             durationSeconds: durationSeconds,
             usesDuration: usesDuration,
-            restSeconds: restSeconds
+            restSeconds: restSeconds,
+            effort: effort
         )
     }
 
@@ -70,7 +81,10 @@ struct BlockPrescriptionSummary: Equatable {
     /// Build from a live `RoutineBlock`. Reads `block.isSuperset`,
     /// `block.exercises`, and each slot's `prescription` only; never touches
     /// `re.exercise`.
-    init(block: RoutineBlock) {
+    /// `effortMetric` is the app-wide autoreg metric (RIR/RPE) supplied by the
+    /// caller; `nil` (autoreg disabled) omits any effort suffix. Effort is only
+    /// summarized for **normal** blocks.
+    init(block: RoutineBlock, effortMetric: EffortMetric? = nil) {
         if block.isSuperset {
             let maxSets = block.exercises
                 .compactMap { $0.prescription?.sets }
@@ -91,9 +105,31 @@ struct BlockPrescriptionSummary: Equatable {
                     $0.durationMaxSeconds ?? $0.durationMinSeconds
                 },
                 usesDuration: p?.usesDuration ?? false,
-                restSeconds: p?.restSecondsBetweenSets
+                restSeconds: p?.restSecondsBetweenSets,
+                effort: Self.effortSummary(for: p, metric: effortMetric)
             )
         }
+    }
+
+    /// Resolve the one-line effort suffix for a slot's prescription, in the
+    /// caller's autoreg metric. Returns nil when there's no prescription, no
+    /// metric (autoreg off), or no usable effort value (mode `.none` / missing).
+    /// Delegates the wording (single vs directional progression) to
+    /// `EffortTargetResolver.summary`.
+    private static func effortSummary(
+        for p: SlotPrescription?, metric: EffortMetric?
+    ) -> String? {
+        guard let p, let metric else { return nil }
+        let single = metric == .rir ? p.rir : p.rpe
+        let start = metric == .rir ? p.rirStart : p.rpeStart
+        let end = metric == .rir ? p.rirEnd : p.rpeEnd
+        return EffortTargetResolver.summary(
+            metric: metric,
+            mode: p.effortMode,
+            single: single,
+            start: start,
+            end: end
+        )
     }
 
     /// Subtitle shown under the block row title.
@@ -105,7 +141,7 @@ struct BlockPrescriptionSummary: Equatable {
             guard let m = sets, m > 0 else { return "Superset · \(exercises)" }
             return "Superset · \(exercises) · \(m) set\(m == 1 ? "" : "s")"
 
-        case let .normal(sets, repMin, repMax, duration, usesDuration, rest):
+        case let .normal(sets, repMin, repMax, duration, usesDuration, rest, effort):
             guard let s = sets, s > 0 else { return "Not set" }
             let core: String
             if usesDuration {
@@ -119,8 +155,10 @@ struct BlockPrescriptionSummary: Equatable {
             } else {
                 core = "\(s) set\(s == 1 ? "" : "s")"
             }
-            guard let r = rest, r > 0 else { return core }
-            return "\(core) · \(r)s rest"
+            var parts = [core]
+            if let r = rest, r > 0 { parts.append("\(r)s rest") }
+            if let effort { parts.append(effort) }
+            return parts.joined(separator: " · ")
         }
     }
 
@@ -144,12 +182,15 @@ struct BlockPrescriptionSummary: Equatable {
     /// routine editor can build the map once per render and avoid re-scanning
     /// `block.exercises` / prescriptions inside each row's `body`.
     static func map(
-        for blocks: [RoutineBlock]
+        for blocks: [RoutineBlock],
+        effortMetric: EffortMetric? = nil
     ) -> [UUID: BlockPrescriptionSummary] {
         var result: [UUID: BlockPrescriptionSummary] = [:]
         result.reserveCapacity(blocks.count)
         for block in blocks {
-            result[block.slotID] = BlockPrescriptionSummary(block: block)
+            result[block.slotID] = BlockPrescriptionSummary(
+                block: block, effortMetric: effortMetric
+            )
         }
         return result
     }
