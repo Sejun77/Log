@@ -449,6 +449,15 @@ final class TechniquePlan {
     }
 }
 
+/// Effort target mode for a slot's autoregulation (RIR/RPE). Additive Slice A.
+/// `none` = no effort target; `single` = one value across all sets;
+/// `progression` = directional start → end target interpolated across sets.
+enum EffortMode: String, CaseIterable {
+    case none
+    case single
+    case progression
+}
+
 @Model
 final class SlotPrescription {
     // Core
@@ -462,6 +471,18 @@ final class SlotPrescription {
     var rir: Double?
     var rpe: Double?
     var tempo: String?
+
+    // Effort target modes (additive — Slice A). All optional / nil-default so
+    // SwiftData lightweight migration leaves existing rows unchanged. When
+    // `effortModeRaw` is nil the mode is derived from legacy `rir`/`rpe` (see
+    // `effortMode`), so pre-existing prescriptions behave exactly as before.
+    // `single` reuses `rir`/`rpe` as its value; `progression` reads the
+    // start/end pairs below.
+    var effortModeRaw: String?
+    var rirStart: Double?
+    var rirEnd: Double?
+    var rpeStart: Double?
+    var rpeEnd: Double?
 
     // Duration targets
     var durationMinSeconds: Int?
@@ -491,6 +512,11 @@ final class SlotPrescription {
         rir: Double? = nil,
         rpe: Double? = nil,
         tempo: String? = nil,
+        effortModeRaw: String? = nil,
+        rirStart: Double? = nil,
+        rirEnd: Double? = nil,
+        rpeStart: Double? = nil,
+        rpeEnd: Double? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false
@@ -503,6 +529,11 @@ final class SlotPrescription {
         self.rir = rir
         self.rpe = rpe
         self.tempo = tempo
+        self.effortModeRaw = effortModeRaw
+        self.rirStart = rirStart
+        self.rirEnd = rirEnd
+        self.rpeStart = rpeStart
+        self.rpeEnd = rpeEnd
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
@@ -513,6 +544,18 @@ final class SlotPrescription {
 // MARK: - Prescription Helpers
 
 extension SlotPrescription {
+    /// Derived effort target mode. An explicit, valid `effortModeRaw` wins;
+    /// when it is nil (legacy rows), the mode is derived so behavior is
+    /// unchanged: any single value present (`rir`/`rpe`) ⇒ `.single`,
+    /// otherwise `.none`. An unrecognized raw string falls through to the
+    /// same derivation rather than crashing.
+    var effortMode: EffortMode {
+        if let raw = effortModeRaw, let mode = EffortMode(rawValue: raw) {
+            return mode
+        }
+        return (rir != nil || rpe != nil) ? .single : .none
+    }
+
     /// True when the prescription carries enough info to generate working sets.
     var hasContent: Bool {
         if usesDuration {
