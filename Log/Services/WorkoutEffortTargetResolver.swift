@@ -55,30 +55,59 @@ enum WorkoutEffortTargetResolver {
         workingSetCount: Int
     ) -> [String] {
         guard let metric = metric(for: autoregMode) else { return [] }
+        let label = metric == .rir ? "RIR" : "RPE"
+        return perSetValues(
+            fields: fields,
+            autoregMode: autoregMode,
+            workingSetCount: workingSetCount
+        ).map { "\(label) \(EffortTargetResolver.format($0))" }
+    }
 
-        // Fall back to the opposite metric via `10 - x` when the active
-        // metric's field is nil — matching the editor / block-summary display.
-        let convert: (Double) -> Double = { 10 - $0 }
-        let single, start, end: Double?
-        switch metric {
-        case .rir:
-            single = fields.rir ?? fields.rpe.map(convert)
-            start = fields.rirStart ?? fields.rpeStart.map(convert)
-            end = fields.rirEnd ?? fields.rpeEnd.map(convert)
-        case .rpe:
-            single = fields.rpe ?? fields.rir.map(convert)
-            start = fields.rpeStart ?? fields.rirStart.map(convert)
-            end = fields.rpeEnd ?? fields.rirEnd.map(convert)
-        }
-
-        return EffortTargetResolver.perSetStrings(
-            metric: metric,
+    /// Per-working-set numeric targets (e.g. `[2, 1, 0]`) in the app's autoreg
+    /// metric — the unlabeled basis for `perSetLabels` and the routine editor's
+    /// "Set targets:" progression preview. Returns `[]` when autoreg is `.none`,
+    /// the mode is `.none`, there's no usable value, or `workingSetCount <= 0`.
+    /// Applies the same opposite-metric `10 - x` fallback as the labels.
+    static func perSetValues(
+        fields: Fields,
+        autoregMode: AutoregMode,
+        workingSetCount: Int
+    ) -> [Double] {
+        guard let metric = metric(for: autoregMode) else { return [] }
+        let t = resolvedTriple(fields, metric: metric)
+        return EffortTargetResolver.resolve(
             mode: derivedMode(fields),
-            single: single,
-            start: start,
-            end: end,
+            single: t.single,
+            start: t.start,
+            end: t.end,
             setCount: workingSetCount
         )
+    }
+
+    /// One-line effort summary in the app's autoreg metric:
+    /// `"RIR 2"` (single) / `"RIR 2 → 0"` (progression) / `nil`. Returns `nil`
+    /// when autoreg is `.none`, the mode is `.none`, or there's no usable value.
+    /// Applies the same opposite-metric `10 - x` fallback as the per-set values,
+    /// so a snapshot stored under one metric summarizes correctly in the other.
+    /// Used by the active-workout Plan card so its summary matches the per-set
+    /// rows and the block summary.
+    static func summary(fields: Fields, autoregMode: AutoregMode) -> String? {
+        guard let metric = metric(for: autoregMode) else { return nil }
+        let t = resolvedTriple(fields, metric: metric)
+        return EffortTargetResolver.summary(
+            metric: metric,
+            mode: derivedMode(fields),
+            single: t.single,
+            start: t.start,
+            end: t.end
+        )
+    }
+
+    /// The derived effort mode for these value fields (mirrors
+    /// `SlotPrescription.effortMode`). Lets UI decide single-vs-progression
+    /// behavior without reading a live model.
+    static func effortMode(for fields: Fields) -> EffortMode {
+        derivedMode(fields)
     }
 
     /// Convenience over a session snapshot payload.
@@ -157,6 +186,29 @@ enum WorkoutEffortTargetResolver {
         case .none: return nil
         }
     }
+
+    /// Active-metric (single, start, end) values, falling back to the opposite
+    /// metric via `10 - x` when the active field is nil — the single source of
+    /// the paired-fallback rule shared by `perSetValues` and `summary`.
+    private static func resolvedTriple(
+        _ f: Fields, metric: EffortMetric
+    ) -> (single: Double?, start: Double?, end: Double?) {
+        let convert: (Double) -> Double = { 10 - $0 }
+        switch metric {
+        case .rir:
+            return (
+                f.rir ?? f.rpe.map(convert),
+                f.rirStart ?? f.rpeStart.map(convert),
+                f.rirEnd ?? f.rpeEnd.map(convert)
+            )
+        case .rpe:
+            return (
+                f.rpe ?? f.rir.map(convert),
+                f.rpeStart ?? f.rirStart.map(convert),
+                f.rpeEnd ?? f.rirEnd.map(convert)
+            )
+        }
+    }
 }
 
 extension WorkoutEffortTargetResolver.Fields {
@@ -171,6 +223,21 @@ extension WorkoutEffortTargetResolver.Fields {
             rirEnd: payload.rirEnd,
             rpeStart: payload.rpeStart,
             rpeEnd: payload.rpeEnd
+        )
+    }
+
+    /// Extract the effort fields from a live `SlotPrescription`. Used by the
+    /// routine editor's progression preview so it shares the same paired-metric
+    /// fallback as the block summary and active-workout rows.
+    init(prescription: SlotPrescription) {
+        self.init(
+            effortModeRaw: prescription.effortModeRaw,
+            rir: prescription.rir,
+            rpe: prescription.rpe,
+            rirStart: prescription.rirStart,
+            rirEnd: prescription.rirEnd,
+            rpeStart: prescription.rpeStart,
+            rpeEnd: prescription.rpeEnd
         )
     }
 }

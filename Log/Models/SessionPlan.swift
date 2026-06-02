@@ -49,26 +49,16 @@ struct SessionPlan: Codable {
         return parts.joined(separator: " · ")
     }
 
-    /// Line 2: rest + intensity (mode-filtered) + tempo.
-    /// Shows only the active autoregulation field; falls back to a converted value
-    /// from the other field if the active one is nil.
-    func secondarySummary(autoregMode: AutoregMode) -> String {
+    /// Line 2: rest + effort + tempo. The effort segment is **injected** by the
+    /// caller (`effortSummary`) so it can be mode-aware (None / Single /
+    /// Progression) and snapshot-derived — this value type no longer assumes a
+    /// single rir/rpe. Pass `nil` (e.g. autoreg `.none`, or mode `.none`) to omit
+    /// the effort segment. Centralized formatting lives in
+    /// `WorkoutEffortTargetResolver` / `EffortTargetResolver`.
+    func secondarySummary(effortSummary: String?) -> String {
         var parts: [String] = []
         if let r = restSecondsBetweenSets, r > 0 { parts.append("\(r)s rest") }
-        let fmt: (Double) -> String = { v in
-            v.truncatingRemainder(dividingBy: 1) == 0
-                ? String(Int(v)) : String(format: "%.1f", v)
-        }
-        switch autoregMode {
-        case .rir:
-            let val = rir ?? rpe.map { 10 - $0 }
-            if let v = val { parts.append("RIR \(fmt(v))") }
-        case .rpe:
-            let val = rpe ?? rir.map { 10 - $0 }
-            if let v = val { parts.append("RPE \(fmt(v))") }
-        case .none:
-            break
-        }
+        if let effortSummary, !effortSummary.isEmpty { parts.append(effortSummary) }
         if let t = tempo, !t.isEmpty { parts.append("Tempo \(t)") }
         return parts.joined(separator: " · ")
     }

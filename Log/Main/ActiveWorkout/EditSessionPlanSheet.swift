@@ -4,6 +4,11 @@ import SwiftUI
 
 struct EditSessionPlanSheet: View {
     @Binding var plan: SessionPlan
+    /// Immutable session-snapshot effort fields for this slot (nil when the
+    /// slot had no prescription). Drives whether the Intensity section offers
+    /// an editable single override or a read-only progression/none summary —
+    /// never read from the live routine template.
+    var snapshotEffort: WorkoutEffortTargetResolver.Fields? = nil
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(AppSettings.Keys.autoregMode)
@@ -11,6 +16,12 @@ struct EditSessionPlanSheet: View {
 
     private var autoregMode: AutoregMode {
         AutoregMode(rawValue: autoregModeRaw) ?? .rir
+    }
+
+    /// Effort mode of the session snapshot (`.none` when there's no snapshot).
+    private var snapshotEffortMode: EffortMode {
+        snapshotEffort.map { WorkoutEffortTargetResolver.effortMode(for: $0) }
+            ?? .none
     }
 
     var body: some View {
@@ -35,16 +46,7 @@ struct EditSessionPlanSheet: View {
                 }
 
                 Section("Intensity") {
-                    switch autoregMode {
-                    case .rir:
-                        doubleStepperRow("RIR", active: $plan.rir, paired: $plan.rpe,
-                                         range: 0...5, step: 0.5) { 10 - $0 }
-                    case .rpe:
-                        doubleStepperRow("RPE", active: $plan.rpe, paired: $plan.rir,
-                                         range: 5...10, step: 0.5) { 10 - $0 }
-                    case .none:
-                        EmptyView()
-                    }
+                    effortContent
                     TempoEditorView(tempo: $plan.tempo)
                 }
 
@@ -71,6 +73,56 @@ struct EditSessionPlanSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
+        }
+    }
+
+    // MARK: - Effort (mode-aware)
+
+    /// Intensity controls gated on the app autoreg metric AND the snapshot's
+    /// effort mode:
+    ///  - autoreg `.none` → nothing.
+    ///  - Single → editable single RIR/RPE override (v1 in-session behavior).
+    ///  - Progression → read-only resolved summary (`"RPE 8 → 10"`) + note;
+    ///    no fake single stepper. In-session progression editing is deferred.
+    ///  - None → read-only "None" (no stale single stepper).
+    @ViewBuilder
+    private var effortContent: some View {
+        switch autoregMode {
+        case .none:
+            EmptyView()
+        case .rir, .rpe:
+            switch snapshotEffortMode {
+            case .single:
+                if autoregMode == .rir {
+                    doubleStepperRow("RIR", active: $plan.rir, paired: $plan.rpe,
+                                     range: 0...5, step: 0.5) { 10 - $0 }
+                } else {
+                    doubleStepperRow("RPE", active: $plan.rpe, paired: $plan.rir,
+                                     range: 5...10, step: 0.5) { 10 - $0 }
+                }
+            case .progression:
+                effortReadOnlyRow(snapshotSummary ?? "—")
+                Text("Progression editing during workout is not available yet.")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+            case .none:
+                effortReadOnlyRow("None")
+            }
+        }
+    }
+
+    /// Snapshot effort summary in the current autoreg metric (paired fallback).
+    private var snapshotSummary: String? {
+        snapshotEffort.flatMap {
+            WorkoutEffortTargetResolver.summary(fields: $0, autoregMode: autoregMode)
+        }
+    }
+
+    private func effortReadOnlyRow(_ value: String) -> some View {
+        HStack {
+            Text("Effort")
+            Spacer()
+            Text(value).foregroundStyle(.secondary)
         }
     }
 

@@ -1065,12 +1065,37 @@ struct ActiveWorkoutView: View {
         )
     }
 
+    /// Mode-aware effort summary for the Plan card (`"RIR 2"` / `"RIR 2 → 0"` /
+    /// nil). Derived from the immutable `prescriptionSnapshot` (never the live
+    /// routine) so it matches the per-set rows and the block summary, with
+    /// paired-metric fallback. For a **single** snapshot the editable session
+    /// override (`sp.rir/rpe`) is summarized so an in-sheet single edit still
+    /// shows; progression/none read the snapshot (the session sheet is
+    /// read-only for those).
+    private func planEffortSummary(
+        for exercise: PlanExercise, sp: SessionPlan
+    ) -> String? {
+        guard let snap = exercise.prescriptionSnapshot else { return nil }
+        let snapFields = WorkoutEffortTargetResolver.Fields(payload: snap)
+        switch WorkoutEffortTargetResolver.effortMode(for: snapFields) {
+        case .single:
+            return WorkoutEffortTargetResolver.summary(
+                fields: .init(rir: sp.rir, rpe: sp.rpe),
+                autoregMode: autoregMode)
+        case .progression:
+            return WorkoutEffortTargetResolver.summary(
+                fields: snapFields, autoregMode: autoregMode)
+        case .none:
+            return nil
+        }
+    }
+
     /// Compact plan summary row with "Edit Plan" sheet trigger.
     @ViewBuilder
     private func planSummarySection(for exercise: PlanExercise) -> some View {
         let sp = sessionPlans[exercise.routineSlotID] ?? SessionPlan()
         let line1 = sp.primarySummary
-        let line2 = sp.secondarySummary(autoregMode: autoregMode)
+        let line2 = sp.secondarySummary(effortSummary: planEffortSummary(for: exercise, sp: sp))
         let notes = sp.slotNotes
         let hasContent =
             !line1.isEmpty || !line2.isEmpty
@@ -1826,7 +1851,10 @@ struct ActiveWorkoutView: View {
                 if let exercise = currentExercise {
                     EditSessionPlanSheet(
                         plan: sessionPlanBinding(
-                            for: exercise.routineSlotID))
+                            for: exercise.routineSlotID),
+                        snapshotEffort: exercise.prescriptionSnapshot.map {
+                            WorkoutEffortTargetResolver.Fields(payload: $0)
+                        })
                 }
             }
             .sheet(
