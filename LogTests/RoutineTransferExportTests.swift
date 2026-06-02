@@ -272,6 +272,29 @@ final class RoutineTransferExportTests: SwiftDataTestHarness {
         XCTAssertEqual(t?.dropsetEffortRaw, "telepathic")
     }
 
+    // MARK: - 10b. Effort target mode fields exported (Slice B)
+
+    func testEffortModeFieldsExported() {
+        let r = makeRoutine("R")
+        let ex = makeExercise("X")
+        let b = addBlock(to: r, order: 0)
+        let slot = addSlot(to: b, exercise: ex, order: 0)
+        let presc = SlotPrescription(sets: 3)
+        presc.effortModeRaw = "progression"
+        presc.rirStart = 2; presc.rirEnd = 0
+        presc.rpeStart = 8; presc.rpeEnd = 10
+        context.insert(presc)
+        slot.prescription = presc
+
+        let dto = RoutineTransfer.export(r)
+            .routine.blocks.first?.slots.first?.prescription
+        XCTAssertEqual(dto?.effortModeRaw, "progression")
+        XCTAssertEqual(dto?.rirStart, 2)
+        XCTAssertEqual(dto?.rirEnd, 0)
+        XCTAssertEqual(dto?.rpeStart, 8)
+        XCTAssertEqual(dto?.rpeEnd, 10)
+    }
+
     // MARK: - 11. Exported document validates supported schema version
 
     func testExportedDocumentValidatesSchemaVersion() {

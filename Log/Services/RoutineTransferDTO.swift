@@ -121,6 +121,16 @@ struct RoutineTransferSlotPrescriptionDTO: Codable, Equatable {
     var rir: Double?
     var rpe: Double?
     var tempo: String?
+    // Effort target modes (Slice B). All optional with nil defaults → old
+    // documents that predate these keys decode them as nil (synthesized
+    // `decodeIfPresent`), a nil `effortModeRaw` derives the legacy
+    // `.single`/`.none` mode on import, and existing memberwise-init call
+    // sites that don't yet pass them keep compiling.
+    var effortModeRaw: String? = nil
+    var rirStart: Double? = nil
+    var rirEnd: Double? = nil
+    var rpeStart: Double? = nil
+    var rpeEnd: Double? = nil
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool

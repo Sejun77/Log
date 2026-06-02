@@ -150,6 +150,44 @@ final class RoutineTransferDTOTests: XCTestCase {
             dt?.prescription?.techniquePlans.first?.dropsetEffortRaw, "telepathic")
     }
 
+    // MARK: - 3b. Effort target mode fields round-trip (Slice B)
+
+    func testEffortModeFieldsRoundTrip() throws {
+        let presc = RoutineTransferSlotPrescriptionDTO(
+            sets: 3, repMin: 8, repMax: 8, restSecondsBetweenSets: 90,
+            restSecondsAfterExercise: nil, rir: nil, rpe: nil, tempo: nil,
+            effortModeRaw: "progression", rirStart: 2, rirEnd: 0,
+            rpeStart: 8, rpeEnd: 10,
+            durationMinSeconds: nil, durationMaxSeconds: nil, usesDuration: false,
+            techniquePlans: [], warmupScheme: nil)
+        let decoded = try roundTrip(presc)
+        XCTAssertEqual(decoded, presc)
+        XCTAssertEqual(decoded.effortModeRaw, "progression")
+        XCTAssertEqual(decoded.rirStart, 2)
+        XCTAssertEqual(decoded.rirEnd, 0)
+        XCTAssertEqual(decoded.rpeStart, 8)
+        XCTAssertEqual(decoded.rpeEnd, 10)
+    }
+
+    /// A v1 prescription object exported before Slice B carries no effort keys.
+    /// Optional-with-default fields must decode as nil (synthesized
+    /// `decodeIfPresent`) without throwing.
+    func testOldJSONWithoutEffortFieldsDecodesSafely() throws {
+        let json = """
+        {"sets":3,"repMin":8,"repMax":12,"rir":2,"usesDuration":false,\
+        "techniquePlans":[]}
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(
+            RoutineTransferSlotPrescriptionDTO.self, from: json)
+        XCTAssertEqual(decoded.sets, 3)
+        XCTAssertEqual(decoded.rir, 2)
+        XCTAssertNil(decoded.effortModeRaw)
+        XCTAssertNil(decoded.rirStart)
+        XCTAssertNil(decoded.rirEnd)
+        XCTAssertNil(decoded.rpeStart)
+        XCTAssertNil(decoded.rpeEnd)
+    }
+
     // MARK: - 4. Nil-heavy minimal routine
 
     func testNilHeavyMinimalRoutineRoundTrips() throws {

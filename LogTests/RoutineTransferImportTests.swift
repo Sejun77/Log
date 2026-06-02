@@ -175,6 +175,50 @@ final class RoutineTransferImportTests: SwiftDataTestHarness {
         XCTAssertEqual(steps?.last?.weight, 50)
     }
 
+    // MARK: - 2b. Effort target mode fields imported (Slice B)
+
+    func testImportRestoresEffortModeFields() throws {
+        let presc = RoutineTransferSlotPrescriptionDTO(
+            sets: 3, repMin: 8, repMax: 8, restSecondsBetweenSets: nil,
+            restSecondsAfterExercise: nil, rir: nil, rpe: nil, tempo: nil,
+            effortModeRaw: "progression", rirStart: 2, rirEnd: 0,
+            rpeStart: 8, rpeEnd: 10,
+            durationMinSeconds: nil, durationMaxSeconds: nil, usesDuration: false,
+            techniquePlans: [], warmupScheme: nil)
+        let d = doc("EffortR", blocks: [
+            block(order: 0, slots: [slot("Bench", order: 0, prescription: presc)])
+        ])
+        try runImport(d)
+        let p = allRoutines().first { $0.name == "EffortR" }?
+            .blocks.first?.exercises.first?.prescription
+        XCTAssertEqual(p?.effortModeRaw, "progression")
+        XCTAssertEqual(p?.effortMode, .progression)
+        XCTAssertEqual(p?.rirStart, 2)
+        XCTAssertEqual(p?.rirEnd, 0)
+        XCTAssertEqual(p?.rpeStart, 8)
+        XCTAssertEqual(p?.rpeEnd, 10)
+    }
+
+    /// A legacy DTO (effort fields default nil) with only `rir` set must import
+    /// unchanged and derive `.single` — backward compatibility for pre-Slice-B
+    /// documents.
+    func testImportLegacyPrescriptionDerivesSingle() throws {
+        let presc = RoutineTransferSlotPrescriptionDTO(
+            sets: 3, repMin: 8, repMax: 12, restSecondsBetweenSets: nil,
+            restSecondsAfterExercise: nil, rir: 2, rpe: nil, tempo: nil,
+            durationMinSeconds: nil, durationMaxSeconds: nil, usesDuration: false,
+            techniquePlans: [], warmupScheme: nil)
+        let d = doc("LegacyR", blocks: [
+            block(order: 0, slots: [slot("Squat", order: 0, prescription: presc)])
+        ])
+        try runImport(d)
+        let p = allRoutines().first { $0.name == "LegacyR" }?
+            .blocks.first?.exercises.first?.prescription
+        XCTAssertNil(p?.effortModeRaw)
+        XCTAssertEqual(p?.rir, 2)
+        XCTAssertEqual(p?.effortMode, .single)
+    }
+
     // MARK: - 3. Fresh identities
 
     func testCreatesFreshIdentities() throws {

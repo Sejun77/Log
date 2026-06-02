@@ -276,6 +276,11 @@ extension RoutineTransfer {
             rir: dto.rir,
             rpe: dto.rpe,
             tempo: dto.tempo,
+            effortModeRaw: dto.effortModeRaw,
+            rirStart: dto.rirStart,
+            rirEnd: dto.rirEnd,
+            rpeStart: dto.rpeStart,
+            rpeEnd: dto.rpeEnd,
             durationMinSeconds: dto.durationMinSeconds,
             durationMaxSeconds: dto.durationMaxSeconds,
             usesDuration: dto.usesDuration)

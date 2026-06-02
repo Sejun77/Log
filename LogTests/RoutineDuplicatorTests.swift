@@ -229,6 +229,49 @@ final class RoutineDuplicatorServiceTests: SwiftDataTestHarness {
         XCTAssertEqual(srcSlot.prescription?.sets, 4)
     }
 
+    // MARK: - 5b. Effort target mode fields deep-copied (Slice B)
+
+    func testEffortModeFieldsDeepCopied() {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Bench")
+        let srcSlot = addSlot(to: src, exercise: ex, order: 0)
+        srcSlot.prescription?.effortModeRaw = "progression"
+        srcSlot.prescription?.rirStart = 2
+        srcSlot.prescription?.rirEnd = 0
+        srcSlot.prescription?.rpeStart = 8
+        srcSlot.prescription?.rpeEnd = 10
+
+        let copy = RoutineDuplicator.duplicate(src, among: [src], in: context)
+        let copyP = copy.blocks.first!.exercises.first!.prescription
+
+        XCTAssertEqual(copyP?.effortModeRaw, "progression")
+        XCTAssertEqual(copyP?.effortMode, .progression)
+        XCTAssertEqual(copyP?.rirStart, 2)
+        XCTAssertEqual(copyP?.rirEnd, 0)
+        XCTAssertEqual(copyP?.rpeStart, 8)
+        XCTAssertEqual(copyP?.rpeEnd, 10)
+
+        // Isolation: mutating the copy does not touch the source.
+        copyP?.rirEnd = 1
+        XCTAssertEqual(srcSlot.prescription?.rirEnd, 0)
+    }
+
+    // MARK: - 5c. Legacy prescription (nil effortModeRaw) copies + derives .single
+
+    func testLegacyEffortFieldsCopyAndDeriveSingle() {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Bench")
+        let srcSlot = addSlot(to: src, exercise: ex, order: 0)
+        srcSlot.prescription?.rir = 2          // legacy single value, nil mode raw
+
+        let copy = RoutineDuplicator.duplicate(src, among: [src], in: context)
+        let copyP = copy.blocks.first!.exercises.first!.prescription
+
+        XCTAssertNil(copyP?.effortModeRaw)
+        XCTAssertEqual(copyP?.rir, 2)
+        XCTAssertEqual(copyP?.effortMode, .single)
+    }
+
     // MARK: - 6. Technique plan deep copy
 
     func testTechniquePlanDeepCopy() {

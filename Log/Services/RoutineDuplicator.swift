@@ -198,6 +198,11 @@ enum RoutineDuplicator {
             rir: src.rir,
             rpe: src.rpe,
             tempo: src.tempo,
+            effortModeRaw: src.effortModeRaw,
+            rirStart: src.rirStart,
+            rirEnd: src.rirEnd,
+            rpeStart: src.rpeStart,
+            rpeEnd: src.rpeEnd,
             durationMinSeconds: src.durationMinSeconds,
             durationMaxSeconds: src.durationMaxSeconds,
             usesDuration: src.usesDuration
