@@ -257,19 +257,21 @@ private struct PrescriptionFields: View {
                 "End \(label)", active: doubleBinding(paths.end),
                 paired: doubleBinding(paths.pairedEnd),
                 range: range, step: 0.5) { 10 - $0 }
-            effortPreview(paths: paths)
+            effortPreview
         }
     }
 
-    /// Live "Set targets: 2 · 1 · 0" preview from the resolver. Hidden when
-    /// there are no usable targets (no sets / missing endpoints).
+    /// Live "Set targets: 2 · 1 · 0" preview. Resolves through
+    /// `WorkoutEffortTargetResolver` so it uses the **same** derived effort mode
+    /// and paired-metric `10 - x` fallback as the Start/End steppers, the block
+    /// summary, and the active-workout rows — never the active metric's fields
+    /// alone. Hidden when there are no usable targets (no sets / missing values).
     @ViewBuilder
-    private func effortPreview(paths: EffortKeyPaths) -> some View {
-        let values = EffortTargetResolver.resolve(
-            mode: .progression, single: nil,
-            start: prescription[keyPath: paths.start],
-            end: prescription[keyPath: paths.end],
-            setCount: max(0, prescription.sets ?? 0))
+    private var effortPreview: some View {
+        let values = WorkoutEffortTargetResolver.perSetValues(
+            fields: WorkoutEffortTargetResolver.Fields(prescription: prescription),
+            autoregMode: autoregMode,
+            workingSetCount: max(0, prescription.sets ?? 0))
         if !values.isEmpty {
             Text(
                 "Set targets: "
