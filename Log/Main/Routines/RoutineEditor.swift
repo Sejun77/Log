@@ -101,6 +101,13 @@ struct RoutineEditor: View {
             blocksContent()
         }
         .scrollDismissesKeyboard(.interactively)
+        // First body pass can render block subtitles before the to-one
+        // `SlotPrescription` faults are fully realized (the same grandchild
+        // observation gap `blockSummaryRefresh` works around on return from a
+        // detail). Bump once on appear so a legacy prescription's effort
+        // (e.g. rir = 2, effortModeRaw == nil → "RIR 2") shows immediately
+        // without the user having to open/edit the slot first.
+        .onAppear { blockSummaryRefresh &+= 1 }
         .navigationTitle(routine.name)
         .navigationDestination(isPresented: $startLinkActive) {
             StartWorkoutFromRoutineView(routine: routine)
@@ -280,11 +287,21 @@ struct RoutineEditor: View {
         }
     }
 
-    @ViewBuilder
     private func blocksSection() -> some View {
-        Section("Blocks") {
+        // Scan blocks → prescriptions ONCE per body (not per row). Reading
+        // `blockSummaryRefresh` here ties the precompute to the recompute
+        // trigger so returning from a slot's detail (which bumps it) rebuilds
+        // the subtitles — the established workaround for SwiftData not
+        // propagating grandchild `SlotPrescription` edits to `@Bindable routine`.
+        _ = blockSummaryRefresh
+        let summaries = BlockPrescriptionSummary.map(
+            for: sortedBlocks, effortMetric: effortMetric
+        )
+        return Section("Blocks") {
             ForEach(sortedBlocks, id: \.id) { block in
-                blockRowWithActions(for: block)
+                blockRowWithActions(
+                    for: block, summary: summaries[block.slotID]
+                )
 
                 if blockIsInvalidSuperset(block) {
                     Text("⚠️ Tap Details to set Rest after round")
@@ -319,15 +336,16 @@ struct RoutineEditor: View {
 
     // MARK: - Block Rows & Actions
 
-    private func blockRowView(for block: RoutineBlock) -> some View {
+    private func blockRowView(
+        for block: RoutineBlock,
+        summary: BlockPrescriptionSummary?
+    ) -> some View {
         let isLocked = blockContainsLockedExercise(block, guard: activeGuard)
         let routineLocked = activeGuard.isRoutineLocked(routine.id)
 
         return BlockRow(
             title: blockTitle(block),
-            subtitle: BlockPrescriptionSummary(
-                block: block, effortMetric: effortMetric
-            ).subtitle,
+            subtitle: summary?.subtitle,
             details: {
                 if block.isSuperset {
                     return AnyView(
@@ -362,8 +380,11 @@ struct RoutineEditor: View {
     /// gesture while the routine is in use, and the row's "Details"
     /// `NavigationLink` tap is unaffected.
     @ViewBuilder
-    private func blockRowWithActions(for block: RoutineBlock) -> some View {
-        let row = blockRowView(for: block)
+    private func blockRowWithActions(
+        for block: RoutineBlock,
+        summary: BlockPrescriptionSummary?
+    ) -> some View {
+        let row = blockRowView(for: block, summary: summary)
             .swipeActions(allowsFullSwipe: false) {
                 blockSwipeActions(for: block)
             }

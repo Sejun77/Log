@@ -120,9 +120,25 @@ struct BlockPrescriptionSummary: Equatable {
         for p: SlotPrescription?, metric: EffortMetric?
     ) -> String? {
         guard let p, let metric else { return nil }
-        let single = metric == .rir ? p.rir : p.rpe
-        let start = metric == .rir ? p.rirStart : p.rpeStart
-        let end = metric == .rir ? p.rirEnd : p.rpeEnd
+        // Fall back to the opposite metric via `10 - x` when the active
+        // metric's field is nil — matching the editor's `doubleStepperRow`
+        // display and `SessionPlan.secondarySummary`. Without this, a value
+        // stored only under the other metric (a legacy single-metric slot, or
+        // `makeDefaultPrescription`'s single-metric seeding before an edit
+        // mirrors the pair) would render in the editor but vanish from the
+        // block-row summary.
+        let convert: (Double) -> Double = { 10 - $0 }
+        let single, start, end: Double?
+        switch metric {
+        case .rir:
+            single = p.rir ?? p.rpe.map(convert)
+            start = p.rirStart ?? p.rpeStart.map(convert)
+            end = p.rirEnd ?? p.rpeEnd.map(convert)
+        case .rpe:
+            single = p.rpe ?? p.rir.map(convert)
+            start = p.rpeStart ?? p.rirStart.map(convert)
+            end = p.rpeEnd ?? p.rirEnd.map(convert)
+        }
         return EffortTargetResolver.summary(
             metric: metric,
             mode: p.effortMode,

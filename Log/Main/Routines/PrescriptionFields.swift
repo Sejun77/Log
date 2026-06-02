@@ -177,18 +177,151 @@ private struct PrescriptionFields: View {
             optionalIntStepper("Rest after exercise", keyPath: \.restSecondsAfterExercise, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
         }
 
+        effortSection
+
+        TempoEditorView(tempo: $prescription.tempo)
+    }
+
+    // MARK: - Effort target mode (Slice D)
+
+    /// Effort controls, gated on the app-wide autoreg metric. `.none` shows
+    /// nothing; `.rir`/`.rpe` show a mode picker (None / Single / Progression)
+    /// plus the matching value steppers. Single stores into `rir`/`rpe`;
+    /// Progression stores into `rir(Start|End)` / `rpe(Start|End)`. Both keep
+    /// the opposite metric mirrored via `10 - x`, matching the prior behavior.
+    @ViewBuilder
+    private var effortSection: some View {
         switch autoregMode {
         case .rir:
-            doubleStepperRow("RIR", active: $prescription.rir, paired: $prescription.rpe,
-                             range: 0...5, step: 0.5) { 10 - $0 }
+            effortControls(
+                label: "RIR", metric: .rir, paths: Self.rirPaths,
+                range: 0...5, defaultValue: AppSettings.defaultRIR)
         case .rpe:
-            doubleStepperRow("RPE", active: $prescription.rpe, paired: $prescription.rir,
-                             range: 5...10, step: 0.5) { 10 - $0 }
+            effortControls(
+                label: "RPE", metric: .rpe, paths: Self.rpePaths,
+                range: 5...10, defaultValue: AppSettings.defaultRPE)
         case .none:
             EmptyView()
         }
+    }
 
-        TempoEditorView(tempo: $prescription.tempo)
+    /// Active/paired key paths for one metric. The "paired" set is the opposite
+    /// metric, kept mirrored (`10 - x`) so switching the app autoreg mode later
+    /// surfaces a sensible converted value — exactly as the single stepper did.
+    private struct EffortKeyPaths {
+        let single, start, end: ReferenceWritableKeyPath<SlotPrescription, Double?>
+        let pairedSingle, pairedStart, pairedEnd:
+            ReferenceWritableKeyPath<SlotPrescription, Double?>
+    }
+
+    private static let rirPaths = EffortKeyPaths(
+        single: \.rir, start: \.rirStart, end: \.rirEnd,
+        pairedSingle: \.rpe, pairedStart: \.rpeStart, pairedEnd: \.rpeEnd)
+    private static let rpePaths = EffortKeyPaths(
+        single: \.rpe, start: \.rpeStart, end: \.rpeEnd,
+        pairedSingle: \.rir, pairedStart: \.rirStart, pairedEnd: \.rirEnd)
+
+    @ViewBuilder
+    private func effortControls(
+        label: String, metric: EffortMetric, paths: EffortKeyPaths,
+        range: ClosedRange<Double>, defaultValue: Double
+    ) -> some View {
+        Picker(
+            "Effort",
+            selection: Binding(
+                get: { prescription.effortMode },
+                set: {
+                    applyEffortMode($0, paths: paths, defaultValue: defaultValue)
+                }
+            )
+        ) {
+            Text("None").tag(EffortMode.none)
+            Text("Single").tag(EffortMode.single)
+            Text("Progression").tag(EffortMode.progression)
+        }
+
+        switch prescription.effortMode {
+        case .none:
+            EmptyView()
+        case .single:
+            doubleStepperRow(
+                label, active: doubleBinding(paths.single),
+                paired: doubleBinding(paths.pairedSingle),
+                range: range, step: 0.5) { 10 - $0 }
+        case .progression:
+            doubleStepperRow(
+                "Start \(label)", active: doubleBinding(paths.start),
+                paired: doubleBinding(paths.pairedStart),
+                range: range, step: 0.5) { 10 - $0 }
+            doubleStepperRow(
+                "End \(label)", active: doubleBinding(paths.end),
+                paired: doubleBinding(paths.pairedEnd),
+                range: range, step: 0.5) { 10 - $0 }
+            effortPreview(paths: paths)
+        }
+    }
+
+    /// Live "Set targets: 2 · 1 · 0" preview from the resolver. Hidden when
+    /// there are no usable targets (no sets / missing endpoints).
+    @ViewBuilder
+    private func effortPreview(paths: EffortKeyPaths) -> some View {
+        let values = EffortTargetResolver.resolve(
+            mode: .progression, single: nil,
+            start: prescription[keyPath: paths.start],
+            end: prescription[keyPath: paths.end],
+            setCount: max(0, prescription.sets ?? 0))
+        if !values.isEmpty {
+            Text(
+                "Set targets: "
+                    + values.map(EffortTargetResolver.format)
+                        .joined(separator: " · ")
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func doubleBinding(
+        _ kp: ReferenceWritableKeyPath<SlotPrescription, Double?>
+    ) -> Binding<Double?> {
+        Binding(
+            get: { prescription[keyPath: kp] },
+            set: { prescription[keyPath: kp] = $0 }
+        )
+    }
+
+    /// Apply a mode change with non-destructive seeding:
+    ///  - → None: keep stored values; the mode flag suppresses display.
+    ///  - → Single: if the single value is nil, seed from the start value
+    ///    (Progression → Single) else the AppSettings default.
+    ///  - → Progression: seed nil start/end from the current single value
+    ///    (or the default), so a fresh ramp starts flat at the single target.
+    /// The opposite metric is mirrored (`10 - x`) on every seed.
+    private func applyEffortMode(
+        _ newMode: EffortMode, paths: EffortKeyPaths, defaultValue: Double
+    ) {
+        let convert: (Double) -> Double = { 10 - $0 }
+        switch newMode {
+        case .none:
+            break
+        case .single:
+            if prescription[keyPath: paths.single] == nil {
+                let seed = prescription[keyPath: paths.start] ?? defaultValue
+                prescription[keyPath: paths.single] = seed
+                prescription[keyPath: paths.pairedSingle] = convert(seed)
+            }
+        case .progression:
+            let base = prescription[keyPath: paths.single] ?? defaultValue
+            if prescription[keyPath: paths.start] == nil {
+                prescription[keyPath: paths.start] = base
+                prescription[keyPath: paths.pairedStart] = convert(base)
+            }
+            if prescription[keyPath: paths.end] == nil {
+                prescription[keyPath: paths.end] = base
+                prescription[keyPath: paths.pairedEnd] = convert(base)
+            }
+        }
+        prescription.effortModeRaw = newMode.rawValue
     }
 
     private func optionalIntStepper(

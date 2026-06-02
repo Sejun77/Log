@@ -315,6 +315,60 @@ final class BlockPrescriptionSummaryTests: SwiftDataTestHarness {
         )
     }
 
+    func testBlockSummaryLegacyNilModeDerivesSingleRPE() {
+        // rpe set, effortModeRaw nil → derives .single → "RPE 8".
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rpe: 8)
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rpe).subtitle,
+            "3 × 8–12 · RPE 8"
+        )
+    }
+
+    func testBlockSummaryExplicitNoneSuppressesEffort() {
+        // effortModeRaw "none" wins over a present legacy rir → no suffix.
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rest: 90,
+                     rir: 2, effortModeRaw: "none")
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            "3 × 8–12 · 90s rest"
+        )
+    }
+
+    func testBlockSummarySingleFallsBackToPairedMetric() {
+        // Value stored only under RIR, app metric is RPE → fall back via 10−x.
+        let rirOnly = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rir: 2)
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: rirOnly, effortMetric: .rpe).subtitle,
+            "3 × 8–12 · RPE 8"
+        )
+        // Value stored only under RPE, app metric is RIR → fall back via 10−x.
+        let rpeOnly = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rpe: 8)
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: rpeOnly, effortMetric: .rir).subtitle,
+            "3 × 8–12 · RIR 2"
+        )
+    }
+
+    func testBlockSummaryProgressionFallsBackToPairedMetric() {
+        // Progression stored only under RIR, app metric is RPE → mirror endpoints.
+        let block = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12,
+                     effortModeRaw: "progression", rirStart: 2, rirEnd: 0)
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rpe).subtitle,
+            "3 × 8–12 · RPE 8 → 10"
+        )
+    }
+
     func testBlockSummaryProgressionRIR() {
         let block = makeBlock(isSuperset: false, slots: [
             makeSlot(sets: 3, repMin: 8, repMax: 12,
