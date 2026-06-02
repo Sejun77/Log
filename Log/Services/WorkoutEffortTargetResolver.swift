@@ -94,6 +94,49 @@ enum WorkoutEffortTargetResolver {
         )
     }
 
+    /// Map effort labels onto a row list described by `setKinds` (the kind of
+    /// each rendered set row, in order). Only `.working` rows receive a label —
+    /// their sequential working-set ordinal indexes the resolved targets;
+    /// `.warmup` and `.dropset` rows get `nil`. The returned array is aligned
+    /// 1:1 with `setKinds`, so a row view can look up `result[rowIndex]`.
+    /// Returns all-nil when there's nothing to show (no metric / mode `.none` /
+    /// no usable value).
+    static func perRowLabels(
+        setKinds: [SetKind],
+        fields: Fields,
+        autoregMode: AutoregMode
+    ) -> [String?] {
+        let workingCount = setKinds.filter { $0 == .working }.count
+        let labels = perSetLabels(
+            fields: fields,
+            autoregMode: autoregMode,
+            workingSetCount: workingCount
+        )
+        guard !labels.isEmpty else {
+            return Array(repeating: nil, count: setKinds.count)
+        }
+        var ordinal = 0
+        return setKinds.map { kind -> String? in
+            guard kind == .working else { return nil }
+            let label = ordinal < labels.count ? labels[ordinal] : nil
+            ordinal += 1
+            return label
+        }
+    }
+
+    /// Convenience over a session snapshot payload.
+    static func perRowLabels(
+        setKinds: [SetKind],
+        payload: PrescriptionSnapshotPayload,
+        autoregMode: AutoregMode
+    ) -> [String?] {
+        perRowLabels(
+            setKinds: setKinds,
+            fields: Fields(payload: payload),
+            autoregMode: autoregMode
+        )
+    }
+
     // MARK: - Private
 
     /// Derive the effort mode purely from value fields — mirrors

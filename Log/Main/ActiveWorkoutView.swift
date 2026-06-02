@@ -487,11 +487,31 @@ struct ActiveWorkoutView: View {
         return true
     }
 
+    /// Resolve the per-row effort target labels for an exercise's Sets section,
+    /// aligned 1:1 with row indices `0..<setCount`. Reads only the immutable
+    /// `prescriptionSnapshot` (never the live routine), in the app's autoreg
+    /// metric, mapping each working-set ordinal to its target and warmup/dropset
+    /// rows to nil. Returns all-nil when there's no snapshot / nothing to show.
+    private func effortLabelsPerRow(
+        for exercise: PlanExercise, setCount: Int
+    ) -> [String?] {
+        guard setCount > 0 else { return [] }
+        guard let payload = exercise.prescriptionSnapshot else {
+            return Array(repeating: nil, count: setCount)
+        }
+        let kinds: [SetKind] = (0..<setCount).map {
+            exercise.templates[safe: $0]?.kind ?? .working
+        }
+        return WorkoutEffortTargetResolver.perRowLabels(
+            setKinds: kinds, payload: payload, autoregMode: autoregMode)
+    }
+
     private func buildSetRow(
         block: PlanBlock,
         exercise: PlanExercise,
         idx: Int,
-        template: PlanSetTemplate
+        template: PlanSetTemplate,
+        effortTarget: String? = nil
     ) -> some View {
         // Phase 5.2-B — `slotID` is the per-slot key for both in-memory
         // state and `ParentDraftStore` persistence. `exerciseID` (the
@@ -517,6 +537,7 @@ struct ActiveWorkoutView: View {
                     template: template,
                     isLogged: isLogged,
                     canLog: allowed,
+                    effortTarget: effortTarget,
                     duration: durB,
                     onStart: { durationSeconds in
                         setTimer.start(seconds: durationSeconds, mode: .set)
@@ -595,6 +616,7 @@ struct ActiveWorkoutView: View {
                     template: template,
                     isLogged: isLogged,
                     canLog: allowed,
+                    effortTarget: effortTarget,
                     reps: repsB,
                     weight: weightB,
                     onLog: { reps, weight in
@@ -1400,6 +1422,12 @@ struct ActiveWorkoutView: View {
                         let setCount = effectiveSetCount(
                             for: exercise,
                             resolvedTemplates: exercise.templates)
+                        // Resolve per-row effort labels ONCE per exercise from
+                        // the immutable session snapshot (never the live
+                        // routine), keyed to working-set ordinal. Warmup /
+                        // dropset rows map to nil. Empty → all nil.
+                        let effortRowLabels = effortLabelsPerRow(
+                            for: exercise, setCount: setCount)
                         ForEach(0..<setCount, id: \.self) { idx in
                             let t =
                                 exercise.templates[safe: idx]
@@ -1408,7 +1436,8 @@ struct ActiveWorkoutView: View {
                                 block: block,
                                 exercise: exercise,
                                 idx: idx,
-                                template: t
+                                template: t,
+                                effortTarget: effortRowLabels[safe: idx] ?? nil
                             )
                         }
                     } header: {
@@ -3019,14 +3048,15 @@ struct ActiveWorkoutView: View {
         block: PlanBlock,
         exercise: PlanExercise,
         idx: Int,
-        template: PlanSetTemplate
+        template: PlanSetTemplate,
+        effortTarget: String? = nil
     ) -> some View {
         if let snap = dropsetTechniqueApplying(to: idx, in: exercise) {
             // Unified card: parent working set + this set's other (non-dropset)
             // technique chips + dropset summary + drop sub-rows — all in ONE list
             // row so the dropset reads as a single cohesive block.
             VStack(alignment: .leading, spacing: 12) {
-                buildSetRow(block: block, exercise: exercise, idx: idx, template: template)
+                buildSetRow(block: block, exercise: exercise, idx: idx, template: template, effortTarget: effortTarget)
                 // Non-dropset techniques that also target this set (e.g. To Failure)
                 // stay visible inside the dropset card. `buildTechniqueChips` filters
                 // out the dropset itself, so the summary below is not duplicated.
@@ -3043,7 +3073,7 @@ struct ActiveWorkoutView: View {
             // so the chips are visually attached to the set rather than rendered as
             // a separate card floating in the gap between set rows.
             VStack(alignment: .leading, spacing: 8) {
-                buildSetRow(block: block, exercise: exercise, idx: idx, template: template)
+                buildSetRow(block: block, exercise: exercise, idx: idx, template: template, effortTarget: effortTarget)
                 buildTechniqueChips(exercise: exercise, setIndex: idx)
             }
         }

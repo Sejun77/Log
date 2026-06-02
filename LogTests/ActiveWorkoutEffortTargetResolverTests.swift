@@ -139,6 +139,70 @@ final class ActiveWorkoutEffortTargetResolverTests: XCTestCase {
         XCTAssertEqual(labels, ["RIR 2", "RIR 1.5", "RIR 1"])
     }
 
+    // MARK: - Per-row mapping (working-set ordinal)
+
+    func testPerRowLabels_MapsWorkingOrdinalSkippingWarmup() {
+        // Warmup row first, then 3 working sets → progression 2 → 0.
+        let kinds: [SetKind] = [.warmup, .working, .working, .working]
+        let labels = Resolver.perRowLabels(
+            setKinds: kinds,
+            fields: Fields(effortModeRaw: "progression", rirStart: 2, rirEnd: 0),
+            autoregMode: .rir)
+        XCTAssertEqual(labels, [nil, "RIR 2", "RIR 1", "RIR 0"])
+    }
+
+    func testPerRowLabels_WarmupAndDropsetRowsGetNil() {
+        // warmup + working + dropset; only the working row gets a label.
+        let kinds: [SetKind] = [.warmup, .working, .dropset]
+        let labels = Resolver.perRowLabels(
+            setKinds: kinds,
+            fields: Fields(effortModeRaw: "single", rir: 2),
+            autoregMode: .rir)
+        XCTAssertEqual(labels, [nil, "RIR 2", nil])
+    }
+
+    func testPerRowLabels_SingleRepeatedAcrossWorkingRows() {
+        let kinds: [SetKind] = [.working, .working, .working]
+        let labels = Resolver.perRowLabels(
+            setKinds: kinds, fields: Fields(rir: 2), autoregMode: .rir)
+        XCTAssertEqual(labels, ["RIR 2", "RIR 2", "RIR 2"])
+    }
+
+    func testPerRowLabels_ProgressionAcrossThreeWorkingRows() {
+        let kinds: [SetKind] = [.working, .working, .working]
+        let labels = Resolver.perRowLabels(
+            setKinds: kinds,
+            fields: Fields(effortModeRaw: "progression", rirStart: 2, rirEnd: 0),
+            autoregMode: .rir)
+        XCTAssertEqual(labels, ["RIR 2", "RIR 1", "RIR 0"])
+    }
+
+    func testPerRowLabels_PairedRPEFallbackFromRIROnly() {
+        // RIR-only snapshot displayed in RPE mode → converted labels.
+        let kinds: [SetKind] = [.warmup, .working, .working, .working]
+        let labels = Resolver.perRowLabels(
+            setKinds: kinds,
+            fields: Fields(effortModeRaw: "progression", rirStart: 2, rirEnd: 0),
+            autoregMode: .rpe)
+        XCTAssertEqual(labels, [nil, "RPE 8", "RPE 9", "RPE 10"])
+    }
+
+    func testPerRowLabels_AutoregNoneAllNil() {
+        let kinds: [SetKind] = [.warmup, .working, .working]
+        let labels = Resolver.perRowLabels(
+            setKinds: kinds,
+            fields: Fields(effortModeRaw: "single", rir: 2),
+            autoregMode: .none)
+        XCTAssertEqual(labels, [nil, nil, nil])
+    }
+
+    func testPerRowLabels_NoEffortAllNil() {
+        let kinds: [SetKind] = [.working, .working]
+        let labels = Resolver.perRowLabels(
+            setKinds: kinds, fields: Fields(), autoregMode: .rir)
+        XCTAssertEqual(labels, [nil, nil])
+    }
+
     // MARK: - Snapshot payload overload (snapshot-only path)
 
     func testPayloadOverloadResolvesFromSnapshot() {

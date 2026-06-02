@@ -10,6 +10,8 @@ struct SetEntryRow: View {
     let template: PlanSetTemplate
     let isLogged: Bool
     let canLog: Bool
+    /// Resolved per-set effort target label (e.g. "RIR 2"); nil = none shown.
+    var effortTarget: String?
     @Binding var reps: String
     @Binding var weight: String
     var onLog: (Int, Double?) -> Void
@@ -20,6 +22,7 @@ struct SetEntryRow: View {
         template: PlanSetTemplate,
         isLogged: Bool,
         canLog: Bool,
+        effortTarget: String? = nil,
         reps: Binding<String>,
         weight: Binding<String>,
         onLog: @escaping (Int, Double?) -> Void,
@@ -29,6 +32,7 @@ struct SetEntryRow: View {
         self.template = template
         self.isLogged = isLogged
         self.canLog = canLog
+        self.effortTarget = effortTarget
         self._reps = reps
         self._weight = weight
         self.onLog = onLog
@@ -49,6 +53,11 @@ struct SetEntryRow: View {
                     )
                 }
                 Spacer()
+                if let effortTarget {
+                    Text(effortTarget)
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             HStack(spacing: 12) {
@@ -111,6 +120,8 @@ struct TimeSetEntryRow: View {
     let template: PlanSetTemplate
     let isLogged: Bool
     let canLog: Bool
+    /// Resolved per-set effort target label (e.g. "RIR 2"); nil = none shown.
+    var effortTarget: String? = nil
     @Binding var duration: String
     var onStart: (Int) -> Void
     var onLog: (Int) -> Void
@@ -129,6 +140,11 @@ struct TimeSetEntryRow: View {
                     )
                 }
                 Spacer()
+                if let effortTarget {
+                    Text(effortTarget)
+                        .font(.dsCaption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             HStack(spacing: 12) {
