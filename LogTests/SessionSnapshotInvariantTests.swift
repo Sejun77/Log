@@ -677,4 +677,140 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
         XCTAssertEqual(ex.equipmentType, "Cable")
         XCTAssertEqual(ex.setupDefaults, "Mutated setup")
     }
+
+    // MARK: - Effort target modes (Slice E1) — snapshot/payload carry + invariants
+
+    /// Distinctive progression prescription so a dropped effort field fails loudly.
+    private func makeProgressionPrescription() -> SlotPrescription {
+        let p = SlotPrescription(
+            sets: 3, repMin: 8, repMax: 12,
+            effortModeRaw: "progression",
+            rirStart: 2, rirEnd: 0, rpeStart: 8, rpeEnd: 10
+        )
+        context.insert(p)
+        return p
+    }
+
+    /// `Payload(from: SlotPrescription)` copies the five effort fields,
+    /// `toModel()` persists them, and `Payload(from: snapshot)` — the exact
+    /// call the resume path makes — restores them.
+    func testEffortFields_RoundTripThroughPayloadAndSnapshot() {
+        let ex = makeExercise(name: "Squat")
+        let p = makeProgressionPrescription()
+
+        let payload = PrescriptionSnapshotPayload(from: p, exercise: ex)
+        XCTAssertEqual(payload.effortModeRaw, "progression")
+        XCTAssertEqual(payload.rirStart, 2)
+        XCTAssertEqual(payload.rirEnd, 0)
+        XCTAssertEqual(payload.rpeStart, 8)
+        XCTAssertEqual(payload.rpeEnd, 10)
+
+        let snap = payload.toModel()
+        XCTAssertEqual(snap.effortModeRaw, "progression")
+        XCTAssertEqual(snap.rirStart, 2)
+        XCTAssertEqual(snap.rirEnd, 0)
+        XCTAssertEqual(snap.rpeStart, 8)
+        XCTAssertEqual(snap.rpeEnd, 10)
+
+        // Resume boundary: payload reconstructed from the persisted snapshot.
+        let resumed = PrescriptionSnapshotPayload(from: snap)
+        XCTAssertEqual(resumed.effortModeRaw, "progression")
+        XCTAssertEqual(resumed.rirStart, 2)
+        XCTAssertEqual(resumed.rirEnd, 0)
+        XCTAssertEqual(resumed.rpeStart, 8)
+        XCTAssertEqual(resumed.rpeEnd, 10)
+    }
+
+    /// `PlannedPrescriptionSnapshot(from: SlotPrescription, exercise:)` copies
+    /// the five effort fields directly (the @Model convenience init).
+    func testSnapshotInitFromPrescription_CopiesEffortFields() {
+        let ex = makeExercise(name: "Row")
+        let p = makeProgressionPrescription()
+        let snap = PlannedPrescriptionSnapshot(from: p, exercise: ex)
+        XCTAssertEqual(snap.effortModeRaw, "progression")
+        XCTAssertEqual(snap.rirStart, 2)
+        XCTAssertEqual(snap.rirEnd, 0)
+        XCTAssertEqual(snap.rpeStart, 8)
+        XCTAssertEqual(snap.rpeEnd, 10)
+    }
+
+    /// A legacy prescription (rir/rpe set, effort fields nil) yields nil effort
+    /// fields on the payload/snapshot while preserving rir/rpe — so it derives
+    /// `.single` later, exactly as before.
+    func testLegacyPrescription_NilEffortFieldsRemainValid() {
+        let ex = makeExercise(name: "Curl")
+        let p = makeRepBasedPrescription()  // rir 1.5 / rpe 8.5, nil effort fields
+        let payload = PrescriptionSnapshotPayload(from: p, exercise: ex)
+        XCTAssertNil(payload.effortModeRaw)
+        XCTAssertNil(payload.rirStart)
+        XCTAssertNil(payload.rirEnd)
+        XCTAssertNil(payload.rpeStart)
+        XCTAssertNil(payload.rpeEnd)
+        XCTAssertEqual(payload.rir, 1.5)
+        XCTAssertEqual(payload.rpe, 8.5)
+
+        let snap = payload.toModel()
+        XCTAssertNil(snap.effortModeRaw)
+        XCTAssertNil(snap.rirStart)
+        XCTAssertEqual(snap.rir, 1.5)
+    }
+
+    /// No-silent-mutation: a payload/snapshot captured from a prescription must
+    /// not change when the source `SlotPrescription`'s effort fields are later
+    /// edited (and saved).
+    func testEditingPrescriptionEffort_DoesNotMutateSnapshot() {
+        let ex = makeExercise(name: "Deadlift")
+        let p = makeProgressionPrescription()
+        let payload = PrescriptionSnapshotPayload(from: p, exercise: ex)
+        let snap = payload.toModel()
+        context.insert(snap)
+        try? context.save()
+        let snapID = snap.persistentModelID
+
+        // Mutate the source effort fields and save.
+        p.effortModeRaw = "single"
+        p.rirStart = 5
+        p.rirEnd = 5
+        p.rpeStart = 5
+        p.rpeEnd = 5
+        p.rir = 4
+        try? context.save()
+
+        // Captured payload value type is unaffected.
+        XCTAssertEqual(payload.effortModeRaw, "progression")
+        XCTAssertEqual(payload.rirStart, 2)
+        XCTAssertEqual(payload.rirEnd, 0)
+
+        // Persisted snapshot row is durable.
+        let fetched: PlannedPrescriptionSnapshot? = {
+            let desc = FetchDescriptor<PlannedPrescriptionSnapshot>(
+                predicate: #Predicate { $0.persistentModelID == snapID }
+            )
+            return try? context.fetch(desc).first
+        }()
+        XCTAssertEqual(fetched?.effortModeRaw, "progression")
+        XCTAssertEqual(fetched?.rirStart, 2)
+        XCTAssertEqual(fetched?.rirEnd, 0)
+        XCTAssertEqual(fetched?.rpeStart, 8)
+        XCTAssertEqual(fetched?.rpeEnd, 10)
+
+        // Sanity: the source actually changed.
+        XCTAssertEqual(p.effortModeRaw, "single")
+        XCTAssertEqual(p.rirStart, 5)
+    }
+
+    /// Start path (`rebuildPlan`, reads the live routine at session start)
+    /// surfaces the effort fields on `PlanExercise.prescriptionSnapshot`.
+    func testStart_SnapshotsEffortFields() {
+        let ex = makeExercise(name: "OHP")
+        let p = makeProgressionPrescription()
+        let fx = makeRoutineAndWorkout(prescription: p, slotExercise: ex)
+        let plan = WorkoutResumeService.rebuildPlan(for: fx.workout, in: context)
+        let snap = plan?.blocks.first?.exercises.first?.prescriptionSnapshot
+        XCTAssertEqual(snap?.effortModeRaw, "progression")
+        XCTAssertEqual(snap?.rirStart, 2)
+        XCTAssertEqual(snap?.rirEnd, 0)
+        XCTAssertEqual(snap?.rpeStart, 8)
+        XCTAssertEqual(snap?.rpeEnd, 10)
+    }
 }

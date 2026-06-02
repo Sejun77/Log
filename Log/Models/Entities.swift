@@ -634,6 +634,17 @@ final class PlannedPrescriptionSnapshot {
     var rpe: Double?
     var tempo: String?
 
+    // Effort target modes (Slice E1). Additive / nil-default snapshot of the
+    // source `SlotPrescription`'s effort fields so a running workout can later
+    // render per-set targets from this immutable snapshot — never from the live
+    // template. Old snapshot rows migrate with nil values and derive `.single`
+    // (legacy rir/rpe) or `.none` exactly as `SlotPrescription.effortMode` does.
+    var effortModeRaw: String?
+    var rirStart: Double?
+    var rirEnd: Double?
+    var rpeStart: Double?
+    var rpeEnd: Double?
+
     // Duration
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
@@ -652,6 +663,11 @@ final class PlannedPrescriptionSnapshot {
         rir: Double? = nil,
         rpe: Double? = nil,
         tempo: String? = nil,
+        effortModeRaw: String? = nil,
+        rirStart: Double? = nil,
+        rirEnd: Double? = nil,
+        rpeStart: Double? = nil,
+        rpeEnd: Double? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false,
@@ -666,6 +682,11 @@ final class PlannedPrescriptionSnapshot {
         self.rir = rir
         self.rpe = rpe
         self.tempo = tempo
+        self.effortModeRaw = effortModeRaw
+        self.rirStart = rirStart
+        self.rirEnd = rirEnd
+        self.rpeStart = rpeStart
+        self.rpeEnd = rpeEnd
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
@@ -688,6 +709,11 @@ final class PlannedPrescriptionSnapshot {
             rir: source.rir,
             rpe: source.rpe,
             tempo: source.tempo,
+            effortModeRaw: source.effortModeRaw,
+            rirStart: source.rirStart,
+            rirEnd: source.rirEnd,
+            rpeStart: source.rpeStart,
+            rpeEnd: source.rpeEnd,
             durationMinSeconds: source.durationMinSeconds,
             durationMaxSeconds: source.durationMaxSeconds,
             usesDuration: source.usesDuration,

@@ -134,6 +134,14 @@ struct PrescriptionSnapshotPayload {
     var rir: Double?
     var rpe: Double?
     var tempo: String?
+    // Effort target modes (Slice E1) — carried from the source prescription
+    // through the snapshot so the active workout can render per-set targets
+    // later. All optional / nil-default for backward compatibility.
+    var effortModeRaw: String?
+    var rirStart: Double?
+    var rirEnd: Double?
+    var rpeStart: Double?
+    var rpeEnd: Double?
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool
@@ -154,6 +162,11 @@ struct PrescriptionSnapshotPayload {
         self.rir = source.rir
         self.rpe = source.rpe
         self.tempo = source.tempo
+        self.effortModeRaw = source.effortModeRaw
+        self.rirStart = source.rirStart
+        self.rirEnd = source.rirEnd
+        self.rpeStart = source.rpeStart
+        self.rpeEnd = source.rpeEnd
         self.durationMinSeconds = source.durationMinSeconds
         self.durationMaxSeconds = source.durationMaxSeconds
         self.usesDuration = source.usesDuration
@@ -171,6 +184,11 @@ struct PrescriptionSnapshotPayload {
             rir: rir,
             rpe: rpe,
             tempo: tempo,
+            effortModeRaw: effortModeRaw,
+            rirStart: rirStart,
+            rirEnd: rirEnd,
+            rpeStart: rpeStart,
+            rpeEnd: rpeEnd,
             durationMinSeconds: durationMinSeconds,
             durationMaxSeconds: durationMaxSeconds,
             usesDuration: usesDuration,
@@ -191,6 +209,11 @@ extension PrescriptionSnapshotPayload {
         self.rir = snapshot.rir
         self.rpe = snapshot.rpe
         self.tempo = snapshot.tempo
+        self.effortModeRaw = snapshot.effortModeRaw
+        self.rirStart = snapshot.rirStart
+        self.rirEnd = snapshot.rirEnd
+        self.rpeStart = snapshot.rpeStart
+        self.rpeEnd = snapshot.rpeEnd
         self.durationMinSeconds = snapshot.durationMinSeconds
         self.durationMaxSeconds = snapshot.durationMaxSeconds
         self.usesDuration = snapshot.usesDuration
