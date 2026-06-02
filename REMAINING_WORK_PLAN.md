@@ -112,6 +112,23 @@ with **one save**. No model/schema change; full suite 620/620, manual round-trip
 passed. Export-all / batch import / editor-toolbar export / reusable block templates stay
 deferred.
 
+Also updated 2026-06-02: **Effort Target Modes shipped** (§2.15) — `SlotPrescription`
+now supports **None / Single / Progression** RIR/RPE effort targets. Legacy `rir`/`rpe`
+rows (nil `effortModeRaw`) derive **Single**; empty effort derives **None**; **Progression**
+linearly interpolates start → end across working sets (rounded to nearest 0.5) and is shown
+**directionally** (`RIR 2 → 0`, never a range). A pure `EffortTargetResolver` /
+`WorkoutEffortTargetResolver` centralize interpolation, formatting, and **paired-metric
+`10 - x` fallback** (an `RIR 2 → 0` snapshot reads as `RPE 8 → 10` in RPE mode, and vice
+versa). Shipped across model/resolver, copy + Routine-Transfer preservation (additive,
+`schemaVersion` stays 1), the `PrescriptionFields` editor (mode picker + Start/End steppers
++ exact set-target preview), block-row summaries, and the active workout (per-working-set
+row labels, mode-aware Plan card, mode-aware Edit Plan sheet — Single editable, Progression
+read-only, None blank). Additive SwiftData fields only; active-workout display reads
+**immutable session snapshots**, so routine edits never mutate a running session. Full suite
+**704/704**, manual regression passed. Deferred: custom per-set editing, flexible
+(non-directional) range mode, dropset effort labels, in-workout progression editing, history
+effort display, superset aggregate effort summary.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -838,6 +855,63 @@ see §2.12** — kept separate from the search-policy commit as planned.
   routine batch import**, an **export action in the `RoutineEditor` toolbar**, and
   **reusable block templates** (the last tracked under §3.11).
 
+### 2.15 Effort Target Modes — None / Single / Progression — ✅ SHIPPED (2026-06-02)
+- **Source:** Planning audit (2026-06-02). Real programming often varies the effort target
+  across a slot's working sets (e.g. RIR 2 → 1 → 0, or RPE 8 → 9 → 10), which the prior
+  single-value `rir`/`rpe` couldn't express.
+- **Nature:** additive `SlotPrescription` enrichment + pure resolvers + editor and
+  active-workout display. **No destructive migration**; **no schemaVersion bump** (Routine
+  Transfer fields are optional/additive). v1 is **directional** progression only — not a
+  flexible range, not custom per-set editing.
+- **Completed behavior:**
+  - Three modes: **None**, **Single**, **Progression**. Legacy `rir`/`rpe` with nil
+    `effortModeRaw` derives **Single**; empty effort derives **None**.
+  - **Progression** linearly interpolates `start → end` across the working-set count,
+    rounds to the nearest **0.5**, and is displayed **directionally with an arrow**
+    (`RIR 2 → 0`, `RPE 8 → 10`) — never as a range.
+  - **Paired-metric fallback** (`10 - x`): a snapshot/prescription stored under one metric
+    displays correctly in the other — `RIR 2 → 0` ⇄ `RPE 8 → 10` per the app autoreg mode.
+- **Implementation areas (shipped in slices, each full-suite-green):**
+  - **Model / resolver foundation.** Added `effortModeRaw`, `rirStart`/`rirEnd`,
+    `rpeStart`/`rpeEnd` to `SlotPrescription`; `EffortMode` enum + derived `effortMode`
+    accessor (explicit raw wins, else legacy `rir`/`rpe` ⇒ `.single`, else `.none`); pure
+    `EffortTargetResolver` (interpolation, 0.5 rounding, `2`-not-`2.0` formatting,
+    directional summary).
+  - **Copy / transfer preservation.** `RoutineDuplicator.copyPrescription` and the Routine
+    Transfer DTO/export/import carry the five new fields; old JSON without them decodes
+    safely; **`schemaVersion` stays 1** (optional/additive).
+  - **Routine editor.** `PrescriptionFields` gained an **Effort Mode picker**
+    (None / Single / Progression); Single → one stepper; Progression → Start + End steppers
+    + an exact **set-target preview** (`Set targets: 2 · 1 · 0`) with paired fallback;
+    mode-switch seeding is non-destructive. **Normal block-row summaries** show effort
+    (`RIR 2` / `RIR 2 → 0` / `RPE 8` / `RPE 8 → 10`, paired fallback). **Superset block-row
+    summaries intentionally omit effort** (per-slot ambiguity), but each superset slot's
+    `PrescriptionFields` still edits effort mode.
+  - **Active workout.** `PlannedPrescriptionSnapshot` + `PrescriptionSnapshotPayload` carry
+    the new fields; `WorkoutEffortTargetResolver` maps snapshot effort to **per-working-set
+    labels** (warmups / dropsets get none in v1). The **Plan card** is mode-aware
+    (Single → `RIR 2`; Progression → `RIR 2 → 0`; None → no suffix), and the **Edit Plan
+    sheet** is mode-aware (**Single editable** as before; **Progression read-only** summary +
+    "progression editing during workout is not available yet" note; **None** shows no stale
+    single stepper).
+- **Data-safety rules (tested):**
+  - **Additive SwiftData fields only**, all optional / nil-default — no destructive
+    migration; existing prescriptions and **existing active workouts remain compatible**
+    (nil effort fields derive Single/None).
+  - **No history mutation**; **no silent `Routine` / `Exercise` mutation**.
+  - Active-workout display reads **immutable session snapshots**, never the live `Routine`
+    template — editing a routine mid-session does **not** change the running session's
+    effort targets.
+- **Tests:** `EffortTargetResolver`, `BlockPrescriptionSummary` effort (incl. paired
+  fallback), `RoutineDuplicator` + Routine Transfer preservation, session-snapshot
+  invariant (snapshot/payload carry + no-silent-mutation + resume), `WorkoutEffortTargetResolver`
+  (summary / per-set values / per-row working-set mapping). **Full suite 704/704**; manual
+  regression passed.
+- **Deferred follow-ups (tracked in §3.12):** custom per-set effort editing; **flexible
+  (non-directional) range** mode (e.g. `RIR 1–2`); **dropset** effort labels; **full
+  progression editing inside the Edit Plan sheet**; **history** effort display; a
+  **superset block-row aggregate** effort summary (only with a clear per-slot design).
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -1105,6 +1179,31 @@ as-built slice breakdown):**
 - **Recommendation:** **keep deferred** — implement only on a concrete need; ship §2.13
   v1 first. The reusable-template and JSON ideas need design passes before any code.
 - **Risk:** N/A while deferred (no model/schema change until a design lands).
+
+---
+
+### 3.12 Effort Target Modes follow-ups (§2.15 deferred — future)
+- **Source:** The §2.15 planning audit + implementation (2026-06-02) shipped **None /
+  Single / Progression** (directional). These are the explicitly out-of-v1 ideas.
+- **Items (all future / not v1):**
+  - **Custom per-set effort editing** — set-by-set targets instead of a single value or a
+    start→end ramp (needs a per-set editing UX and storage beyond the start/end pair).
+  - **Flexible (non-directional) range mode** — e.g. `RIR 1–2` as a range rather than a
+    direction; deliberately distinct from progression's arrow wording (`RIR 2 → 0`).
+  - **Dropset effort labels** — per-drop effort targets in active-workout rows (v1 shows
+    none on dropset sub-rows; they aren't cleanly tied to a working-set ordinal).
+  - **Full progression editing in the Edit Plan sheet** — in-workout editing of a
+    progression's start/end (and converting Single ↔ Progression); v1 is read-only for
+    progression in-session. Would need `SessionPlan` to carry the effort mode/start/end.
+  - **History effort display** — surface the resolved/target effort in workout history
+    (effort targets are prescription-side; `SetLog` does not record them today).
+  - **Superset block-row aggregate effort summary** — v1 intentionally omits effort from
+    superset block-row subtitles (per-slot ambiguity); revisit only with a clear per-slot
+    aggregate design.
+- **Recommendation:** **keep deferred** — each needs a design pass; v1 covers the common
+  directional case. The range mode and per-set editing are the most-requested next steps.
+- **Risk:** N/A while deferred. Range mode and per-set editing would be **additive**
+  (new optional fields), consistent with the §2.15 no-destructive-migration rule.
 
 ---
 
@@ -1441,10 +1540,23 @@ context menu. Picks up the routine transfer deferred from CSV v1 (§2.11 / §3.1
 model/schema change; full suite 620/620, manual round-trip regression passed. Export-all /
 batch import / editor-toolbar export / reusable block templates stay deferred.
 
+✅ **Effort Target Modes — None / Single / Progression** (§2.15) — **SHIPPED 2026-06-02**.
+Additive `SlotPrescription` effort fields + pure `EffortTargetResolver` /
+`WorkoutEffortTargetResolver`; legacy `rir`/`rpe` derives Single, empty derives None,
+**Progression** interpolates start → end (nearest 0.5) and shows **directionally**
+(`RIR 2 → 0`), with **paired-metric `10 - x` fallback** (`RIR 2 → 0` ⇄ `RPE 8 → 10`).
+Routine editor (mode picker + Start/End steppers + set-target preview), block summaries,
+and active workout (per-set row labels, mode-aware Plan card + Edit Plan sheet) all updated.
+Copy/duplicate + Routine Transfer preserve the fields (**`schemaVersion` stays 1**).
+Active-workout display reads **immutable snapshots** — routine edits don't mutate running
+sessions. No destructive migration; full suite **704/704**, manual regression passed.
+Custom per-set editing, flexible range mode, dropset labels, in-workout progression editing,
+history effort display, and a superset aggregate effort summary stay deferred (§3.12).
+
 **No "implement now" product/UX item remains.** The three top refactor-era recommendations
 plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9), the routine duplication feature
-(§2.10), the Duplicate Block tools (§2.13), and Routine Transfer v2 (§2.14) have shipped.
-Everything else is optional / future / deferred:
+(§2.10), the Duplicate Block tools (§2.13), Routine Transfer v2 (§2.14), and Effort Target
+Modes (§2.15) have shipped. Everything else is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
