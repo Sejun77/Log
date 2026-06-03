@@ -144,6 +144,21 @@ backfill. Full suite **704/704**; manual gym regression confirmed. The optional 
 backfill to null non-superset `restAfterSeconds` on existing routines stays **deferred** (§6.5)
 — it mutates persisted routine data and needs explicit approval.
 
+Also updated 2026-06-03: **Partial Rep Range picker shipped** (§2.17) — Partial Reps technique
+plans gained a **Partial Range** picker (Not set / Lengthened half / Shortened half / Middle
+range / Sticking point / Custom) replacing the free-text-only `partialRangeNote`. **Bottom
+half / Top half are intentionally not default options** (they overlap with lengthened/shortened
+and are exercise-dependent — users type those via Custom). New Partial Reps plans no longer
+prefill `"top half"`; Custom note support is preserved, the Custom note field is single-line
+with the app-consistent blue **Done** keyboard action, and legacy `partialRangeNote` values
+still display via a legacy fallback. Backed by an additive `TechniquePlan.partialRangeRaw:
+String?` + a pure `PartialRange` enum/resolver; chips, detail sheets, snapshots, resume,
+`RoutineDuplicator`, and Routine Transfer JSON all preserve the field. **No model-breaking /
+destructive migration, no backfill**; `schemaVersion` stays **1** (optional/additive), and old
+JSON missing the key imports safely. Full suite **719/719**; manual regression passed. Deferred:
+exercise-specific automatic range suggestions, top/bottom defaults, and advanced ROM targeting
+(§3.13).
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -958,6 +973,39 @@ see §2.12** — kept separate from the search-policy commit as planned.
   to null non-superset `restAfterSeconds` on existing routines — deferred pending explicit
   approval because it mutates persisted routine data.
 
+### 2.17 Partial Rep Range picker — ✅ SHIPPED (2026-06-03)
+- **Problem:** Partial Reps technique plans used a free-text-only `partialRangeNote`; new
+  plans prefilled `"top half"`. Manual typing was repetitive and inconsistent.
+- **Completed behavior:**
+  - A **Partial Range** picker on Partial Reps plans with options: **Not set / Lengthened
+    half / Shortened half / Middle range / Sticking point / Custom**.
+  - **Bottom half / Top half are intentionally NOT default options** — they overlap with
+    lengthened/shortened and are exercise-dependent. Users can still type "bottom half" /
+    "top half" via **Custom**.
+  - New Partial Reps plans **no longer prefill** `"top half"` (default = Not set).
+  - **Custom note support preserved**; the Custom note field is **single-line** and uses the
+    app-consistent **blue Done/checkmark** keyboard action (dismisses on submit), matching
+    other single-line inputs.
+  - Legacy `partialRangeNote` values (nil raw + free text) **still display** via the
+    resolver's legacy fallback.
+  - Technique **chips and detail sheets** render via the `PartialRange` resolver.
+  - Active-workout **snapshots and cold-resume** preserve `partialRangeRaw`.
+- **Model/API:** additive `TechniquePlan.partialRangeRaw: String?` (nil = Not set; pairs
+  with `partialRangeNote` when `"custom"`); pure `enum PartialRange` + `displayLabel(raw:note:)`
+  resolver. `partialRangeNote` retained for Custom + legacy.
+- **Copy / transfer:** `RoutineDuplicator.copyTechnique` and Routine Transfer JSON
+  export/import both preserve `partialRangeRaw`; **`schemaVersion` unchanged (1)** —
+  optional/additive; old JSON missing the key imports safely (synthesized `decodeIfPresent`).
+- **Data safety:** additive optional field only; **no destructive migration, no backfill**;
+  existing legacy plans remain compatible. Not a new `@Model`, so no test-harness Schema change.
+- **Tests:** new `PartialRangeTests` (resolver presets/custom/empty/legacy/not-set/unknown-raw
+  + `TechniquePlanSnapshot.setAttachedLabel` cases); extended Routine Transfer DTO/export/import
+  (round-trip + old-JSON-without-key decode) and `RoutineDuplicator` preservation. **Full suite
+  719/719**; manual regression passed.
+- **Deferred follow-ups (tracked in §3.13):** exercise-specific automatic partial-range
+  suggestions; top/bottom-half default options (unless a future design needs them); more
+  advanced ROM targeting.
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -1250,6 +1298,22 @@ as-built slice breakdown):**
   directional case. The range mode and per-set editing are the most-requested next steps.
 - **Risk:** N/A while deferred. Range mode and per-set editing would be **additive**
   (new optional fields), consistent with the §2.15 no-destructive-migration rule.
+
+### 3.13 Partial Rep Range follow-ups (§2.17 deferred — future)
+- **Source:** The §2.17 planning audit + implementation (2026-06-03) shipped the **Partial
+  Range** picker (Not set / Lengthened half / Shortened half / Middle range / Sticking point /
+  Custom). These are the explicitly out-of-v1 ideas.
+- **Items (all future / not v1):**
+  - **Exercise-specific automatic partial-range suggestions** — infer/suggest a likely range
+    from the exercise. v1 deliberately does **not** infer range from exercise type.
+  - **Top half / Bottom half as default options** — intentionally excluded in v1 (overlap with
+    lengthened/shortened, exercise-dependent); revisit only if a future design needs them.
+  - **More advanced ROM targeting** — finer range-of-motion specification beyond the v1
+    preset set (e.g. explicit degree ranges or multi-segment partials).
+- **Recommendation:** **keep deferred** — v1 covers the common training-relevant presets plus
+  Custom; the rest need a design pass.
+- **Risk:** N/A while deferred. Any additions would be **additive** (the field is already an
+  optional `partialRangeRaw: String?`), consistent with the no-destructive-migration rule.
 
 ---
 
@@ -1606,10 +1670,22 @@ sessions. No destructive migration; full suite **704/704**, manual regression pa
 Custom per-set editing, flexible range mode, dropset labels, in-workout progression editing,
 history effort display, and a superset aggregate effort summary stay deferred (§3.12).
 
+✅ **Partial Rep Range picker** (§2.17) — **SHIPPED 2026-06-03**. Partial Reps plans gained a
+**Partial Range** picker (Not set / Lengthened half / Shortened half / Middle range / Sticking
+point / Custom); **Bottom/Top half intentionally excluded** (overlap + exercise-dependent —
+available via Custom). New plans no longer prefill `"top half"`; Custom note preserved as a
+single-line field with the app-consistent **Done** keyboard action; legacy notes still display.
+Additive `TechniquePlan.partialRangeRaw: String?` + pure `PartialRange` resolver; chips, detail
+sheets, snapshots, resume, `RoutineDuplicator`, and Routine Transfer JSON all preserve it
+(**`schemaVersion` stays 1**; old JSON without the key imports safely). No destructive
+migration / backfill; full suite **719/719**, manual regression passed. Exercise-specific range
+suggestions, top/bottom defaults, and advanced ROM targeting stay deferred (§3.13).
+
 **No "implement now" product/UX item remains.** The three top refactor-era recommendations
 plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9), the routine duplication feature
-(§2.10), the Duplicate Block tools (§2.13), Routine Transfer v2 (§2.14), and Effort Target
-Modes (§2.15) have shipped. Everything else is optional / future / deferred:
+(§2.10), the Duplicate Block tools (§2.13), Routine Transfer v2 (§2.14), Effort Target
+Modes (§2.15), and the Partial Rep Range picker (§2.17) have shipped. Everything else is
+optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
