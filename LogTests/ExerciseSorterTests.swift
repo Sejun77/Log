@@ -197,8 +197,9 @@ final class ExerciseSorterTests: SwiftDataTestHarness {
     }
 
     func testSectionsLegacyCustomValueGetsOwnOrderedSection() {
-        // "Legs" is no longer canonical but remains a valid stored value; it
-        // should form its own section ordered with everything else.
+        // "Legs" and "Arms" are no longer canonical but remain valid stored
+        // values; each should form its own section ordered with everything
+        // else (the sorter is canonical-agnostic — it groups any string).
         let chest = makeExercise(name: "Bench Press", bodyPart: "Chest")
         let legs = makeExercise(name: "Squat", bodyPart: "Legs")
         let arms = makeExercise(name: "Curl", bodyPart: "Arms")

@@ -598,16 +598,19 @@ struct ExerciseDetailView: View {
     private static let maxRoutineRows = 5
 
     // Phase 10-polish-G (2026-05-24): "Legs" removed from the canonical list.
-    // The seed catalogue uses the specific lower-body buckets (Quads /
-    // Hamstrings / Glutes / Calves), so a broad "Legs" canonical option was
-    // redundant and confused the picker. Any pre-existing exercise whose
-    // `bodyPart` is still "Legs" surfaces as the `legacyCustom` row in
-    // `BodyPartPicker` (it's non-nil, non-empty, and not in this list), so
-    // the value is preserved and remains selectable — no migration of
-    // existing data, no silent rewrite. Users who want to move off "Legs"
-    // can pick a specific bucket or use the new "Remove custom value" action.
-    fileprivate static let canonicalBodyParts: [String] = [
-        "Chest", "Back", "Shoulders", "Arms", "Biceps", "Triceps",
+    // Cleanup (2026-06-03): "Arms" removed for the same reason. The seed
+    // catalogue uses the specific buckets (Biceps / Triceps for arms; Quads /
+    // Hamstrings / Glutes / Calves for legs), so the broad "Legs" / "Arms"
+    // canonical options were redundant, overlapped the specific buckets, and
+    // muddied future per-body-part analytics. Any pre-existing exercise whose
+    // `bodyPart` is still "Legs" or "Arms" surfaces as the `legacyCustom` row
+    // in `BodyPartPicker` (it's non-nil, non-empty, and not in this list), so
+    // the value is preserved and remains selectable — no migration of existing
+    // data, no silent rewrite. Users who want to move off "Legs" / "Arms" can
+    // pick a specific bucket or use the "Remove custom value" action.
+    // Internal (not fileprivate) so the canonical-list rule is unit-testable.
+    static let canonicalBodyParts: [String] = [
+        "Chest", "Back", "Shoulders", "Biceps", "Triceps",
         "Quads", "Hamstrings", "Glutes", "Calves",
         "Core", "Full Body", "Cardio"
     ]
@@ -897,7 +900,7 @@ private struct LockBadge: View {
 
 // MARK: - Body Part Picker
 
-/// Push-style picker for `Exercise.bodyPart`. Lists the canonical 13 options
+/// Push-style picker for `Exercise.bodyPart`. Lists the canonical options
 /// plus "Not set" and an "Other…" entry that opens a free-text alert.
 /// Legacy `bodyPart` values that don't match any canonical option AND are
 /// not present in the shared custom-options store are surfaced as a
