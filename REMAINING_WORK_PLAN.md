@@ -129,6 +129,21 @@ read-only, None blank). Additive SwiftData fields only; active-workout display r
 (non-directional) range mode, dropset effort labels, in-workout progression editing, history
 effort display, superset aggregate effort summary.
 
+Also updated 2026-06-03: **Stale non-superset block-rest bug fixed** (§2.16) — legacy
+`RoutineBlock.restAfterSeconds` values on **non-superset** blocks were still lengthening
+active-workout rest even though the non-superset "Rest after block" editor had been removed
+during the rest cleanup, so old **invisible** values silently added rest on newly-started
+workouts. The non-superset additive path in `ActiveWorkoutView.restSecondsAfterCurrentLog`
+was removed: normal blocks now **ignore** `RoutineBlock.restAfterSeconds` at runtime, and
+normal-block final-set rest is controlled solely by planned rest-after-exercise → between-set
+fallback → template rest. Last-set-of-workout no-rest suppression is unchanged. **Superset
+behavior is intentionally preserved** — `supersetRoundRestSeconds` still controls rest between
+rounds and `RoutineBlock.restAfterSeconds` still drives superset transition rest ("Rest before
+next block" after the final round). Dropset behavior unchanged. No model/schema change; no data
+backfill. Full suite **704/704**; manual gym regression confirmed. The optional one-time
+backfill to null non-superset `restAfterSeconds` on existing routines stays **deferred** (§6.5)
+— it mutates persisted routine data and needs explicit approval.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -912,6 +927,37 @@ see §2.12** — kept separate from the search-policy commit as planned.
   progression editing inside the Edit Plan sheet**; **history** effort display; a
   **superset block-row aggregate** effort summary (only with a clear per-slot design).
 
+### 2.16 Stale non-superset block-rest bug — ✅ SHIPPED (2026-06-03)
+- **Bug:** Legacy `RoutineBlock.restAfterSeconds` values on **non-superset** blocks were
+  still affecting active-workout rest timing even though the non-superset "Rest after block"
+  UI had been removed during the rest cleanup. Those values became **invisible** (no editor
+  surfaces them) yet still added extra rest, and because the plan re-reads the live routine,
+  the stale rest applied to **newly-started** workouts (not just an in-flight session).
+- **Fix:** Removed the non-superset additive rest path in
+  `ActiveWorkoutView.restSecondsAfterCurrentLog` (the final-set `block.restAfterSeconds`
+  add-on). The superset branch — which returns from `RestPlanner` before that code — is
+  untouched. Stale method/branch comments were updated to state the non-superset value is
+  intentionally ignored.
+- **Runtime behavior change:**
+  - **Normal (non-superset) blocks now ignore `RoutineBlock.restAfterSeconds` at runtime.**
+    Final-set rest is controlled solely by planned **rest after exercise** → **rest between
+    sets** fallback → template rest (`RestPlanner.restSecondsAfterLog`).
+  - **Last-set-of-workout no-rest suppression** remains unchanged.
+- **Superset behavior intentionally preserved:**
+  - `supersetRoundRestSeconds` still controls rest **between rounds**.
+  - `RoutineBlock.restAfterSeconds` still drives **superset transition rest** ("Rest before
+    next block") after the final round, replacing round rest when configured (`>0`).
+- **Dropset behavior unchanged** (intra-drop and final-drop paths untouched).
+- **Data safety:** No model/schema change. **No data backfill** — existing routines keep
+  their stored `restAfterSeconds`; it is simply no longer read for non-superset blocks.
+- **Tests:** No new direct unit test is practical — the removed additive lived **inline in
+  the `@State`-bound `ActiveWorkoutView` method**, not in `RestPlanner`, and no existing test
+  pinned it. The non-superset final-set chain it now relies on is already covered by
+  `RestPlannerTests`. **Full suite 704/704**; manual gym regression confirmed.
+- **Deferred follow-up (tracked in §6.5):** the optional one-time **data hygiene backfill**
+  to null non-superset `restAfterSeconds` on existing routines — deferred pending explicit
+  approval because it mutates persisted routine data.
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -1325,12 +1371,19 @@ recommended absent a strong safety reason.
 ### 6.5 Fold `RoutineBlock.restAfterSeconds` into slot-level rest fields
 - **Source:** §5 Prescription Elements (rest semantics, future).
 - **Current status:** Slot-level rest fields + `supersetRoundRestSeconds` are
-  wired; `RoutineBlock.restAfterSeconds` is retained for compatibility (superset
-  transition rest + legacy non-superset additive).
+  wired; `RoutineBlock.restAfterSeconds` is retained **only** for superset
+  transition rest ("Rest before next block"). The **legacy non-superset additive
+  was removed at runtime** (§2.16, 2026-06-03) — non-superset blocks now ignore
+  `restAfterSeconds` entirely.
+- **Deferred sub-item — optional data hygiene backfill:** a one-time, idempotent
+  migration to null `restAfterSeconds` on existing **non-superset** blocks (so
+  the dead value stops propagating through duplicate / JSON transfer). **Deferred
+  pending explicit approval** — it mutates persisted routine data. Not required
+  for correctness now that the runtime read is gone; purely housekeeping.
 - **Why it matters:** Long-term consolidation of the rest model.
 - **Recommendation:** **defer** (the current decomposition works and is tested;
-  consolidation is a design pass).
-- **Risk:** **medium**.
+  consolidation is a design pass; the backfill is approval-gated).
+- **Risk:** **medium** (the backfill is a persisted-data mutation).
 
 ### 6.6 Phase 12 — MVVM / viewmodel hoist (carried from Phase 11)
 - **Source:** Phase 11 "Deferred to Phase 12".
