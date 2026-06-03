@@ -3122,9 +3122,13 @@ struct ActiveWorkoutView: View {
     ///   falling back to restSecondsBetweenSets → template rest.
     /// • Supersets compute rest per “round”: wait until all exercises at this index are logged,
     ///   then apply the same rules; when combining, take the max of the explicit rests found.
-    /// • Finally, on the *last* set/round of the block:
+    /// • Finally, on the *last* round of a superset block:
     ///     – Supersets: block.restAfterSeconds (transition rest) replaces the round rest when configured (>0).
-    ///     – Non-superset blocks: legacy additive behavior — block.restAfterSeconds is added to the computed rest.
+    /// • Non-superset blocks: block.restAfterSeconds is intentionally ignored.
+    ///   The non-superset "Rest after block" UI was removed during the rest
+    ///   cleanup, so any non-superset restAfterSeconds is stale legacy data
+    ///   and must not affect timing — final-set rest is controlled solely by
+    ///   planned rest-after-exercise → between-sets → template fallback.
     private func restSecondsAfterCurrentLog(
         setIndex idx: Int,
         template t: PlanSetTemplate,
@@ -3157,9 +3161,9 @@ struct ActiveWorkoutView: View {
             // per-exercise fallback chain (normal-round and after-dropset
             // variants), next-round-dropset skip, final-round transition
             // replacement via `block.restAfterSeconds`, and last-set-of-workout
-            // suppression. The view returns the planner's result directly so
-            // the trailing non-superset post-processing below doesn't double-
-            // apply the additive `restAfterSeconds`.
+            // suppression. The view returns the planner's result directly.
+            // (Non-superset blocks no longer apply any `restAfterSeconds`
+            // post-processing — that legacy additive was removed.)
             let isLastBlock = currentBlockIndex == plan.blocks.count - 1
             let isLastExerciseOfBlock =
                 currentExerciseIndex == block.exercises.count - 1
@@ -3246,26 +3250,12 @@ struct ActiveWorkoutView: View {
             }
         }
 
-        // --- Append block rest if this was the final set of the block ---
-        // Non-superset only: the superset path returns from RestPlanner
-        // above (which already accounts for transition replacement).
-        if let current = currentBlock, current.id == block.id {
-            let isLastExerciseOfBlock =
-                (currentExerciseIndex == block.exercises.count - 1)
-            let exSetCount = effectiveSetCount(
-                for: exercise, resolvedTemplates: exercise.templates)
-            let isFinal =
-                (idx == exSetCount - 1) && isLastExerciseOfBlock
-
-            if isFinal, let extra = block.restAfterSeconds, extra != 0 {
-                // Non-superset legacy: additive on top of the final-set rest.
-                if let base = restSec {
-                    restSec = max(0, base + extra)
-                } else {
-                    restSec = max(0, extra)
-                }
-            }
-        }
+        // Non-superset block rest is intentionally NOT applied. The
+        // non-superset "Rest after block" UI was removed during the rest
+        // cleanup; any `block.restAfterSeconds` on a non-superset block is
+        // stale legacy data and must not lengthen final-set rest. The
+        // superset path returns from RestPlanner above (which already
+        // accounts for transition replacement via `block.restAfterSeconds`).
 
         // --- Prevent rest after the very last set of the workout ---
         if let currentBlock = currentBlock {
