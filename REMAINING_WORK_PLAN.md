@@ -159,6 +159,18 @@ JSON missing the key imports safely. Full suite **719/719**; manual regression p
 exercise-specific automatic range suggestions, top/bottom defaults, and advanced ROM targeting
 (§3.13).
 
+Also updated 2026-06-03: **"Arms" removed from canonical body parts** (§2.18) — following the
+earlier "Legs" removal, the broad **"Arms"** option was dropped from the canonical/default
+body-part list because the specific buckets (**Biceps / Triceps**, both retained) already cover
+it and broad overlapping categories muddy future per-body-part analytics. **No data is mutated**:
+existing exercises whose `bodyPart` is `"Arms"` are preserved and surface as a legacy/custom
+value in `BodyPartPicker`, and the sorted/grouped Exercise list renders "Arms" as its own
+non-canonical section (the sorter is canonical-agnostic). No model/schema change; **no migration
+/ backfill**; the seed catalogue has no `"Arms"` entries so seeding is unaffected. Added
+`CanonicalBodyPartsTests` + updated `ExerciseSorter` legacy-grouping coverage; full suite
+**724/724**. Deferred: optional remapping of existing "Arms" exercises (approval-gated) and any
+future body-part taxonomy redesign (§3.14).
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -1006,6 +1018,34 @@ see §2.12** — kept separate from the search-policy commit as planned.
   suggestions; top/bottom-half default options (unless a future design needs them); more
   advanced ROM targeting.
 
+### 2.18 Remove "Arms" from canonical body parts — ✅ SHIPPED (2026-06-03)
+- **Rationale:** Following the earlier "Legs" removal, the broad **"Arms"** option was
+  redundant — the specific buckets **Biceps / Triceps** (both retained) already cover it, and
+  broad overlapping categories muddy future per-body-part analytics (e.g. sets per body part
+  per week).
+- **Completed behavior:**
+  - **"Arms" no longer appears** as a canonical/default body-part option;
+    `ExerciseDetailView.canonicalBodyParts` drops it (widened `fileprivate` → internal so the
+    rule is unit-testable). "Legs" remains removed; Biceps/Triceps remain canonical.
+  - **Existing data preserved:** exercises with `bodyPart == "Arms"` are **not deleted or
+    rewritten**. The value surfaces as the `legacyCustom` row in `BodyPartPicker` (non-empty,
+    non-canonical, not in the shared store) — visible and selectable.
+  - **Grouping/sorting:** `ExerciseSorter` is canonical-agnostic, so "Arms" forms its own
+    correctly-ordered section (same as "Legs").
+  - **Custom-option preservation** unchanged: `CustomOptionStore.add(_:excludingCanonical:)`
+    takes the canonical list as a parameter, so "Arms" entered via "Other…" is now accepted as
+    a custom value.
+- **Data safety:** no model/schema change; **no migration / backfill**; no Exercise / Routine /
+  Workout / History mutation.
+- **Seed catalogue:** **no impact** — `ExerciseCatalog` has zero `"Arms"` entries, so no seeded
+  exercise is assigned "Arms"; `ExerciseSeedServiceTests` catalog-field validation still passes.
+- **Tests:** new `CanonicalBodyPartsTests` (Arms not canonical, Legs still removed, Biceps/
+  Triceps retained, core buckets present, no duplicates); `ExerciseSorterTests` legacy-grouping
+  test (already exercises an "Arms" row) re-commented to reflect Arms is now non-canonical.
+  **Full suite 724/724.**
+- **Deferred follow-ups (tracked in §3.14):** optional remapping of existing "Arms" exercises
+  to specific buckets (approval-gated, mutates data); any future body-part taxonomy redesign.
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -1314,6 +1354,23 @@ as-built slice breakdown):**
   Custom; the rest need a design pass.
 - **Risk:** N/A while deferred. Any additions would be **additive** (the field is already an
   optional `partialRangeRaw: String?`), consistent with the no-destructive-migration rule.
+
+### 3.14 Body-part taxonomy follow-ups (§2.18 deferred — future)
+- **Source:** The §2.18 cleanup (2026-06-03) removed "Arms" from the canonical body-part list
+  (after the earlier "Legs" removal), leaving existing "Arms"/"Legs" rows as preserved
+  legacy/custom values.
+- **Items (all future / approval-gated):**
+  - **Remap existing "Arms" (and "Legs") exercises** to specific buckets (Biceps / Triceps /
+    Shoulders, Quads / Hamstrings / Glutes / Calves). This **mutates `Exercise` data**, so it is
+    **deferred pending explicit approval** — it must not run silently. A guided in-app prompt
+    (per-exercise user choice) is preferable to an automatic backfill since the correct bucket
+    is exercise-specific.
+  - **Body-part taxonomy redesign** — a broader rethink of the canonical bucket set / grouping
+    (e.g. primary vs. secondary muscles) if analytics needs grow.
+- **Recommendation:** **keep deferred** — the current legacy-value preservation is correct and
+  non-destructive; remapping needs user intent, and a taxonomy redesign needs a design pass.
+- **Risk:** the remap is a **persisted-data mutation** (medium); the redesign is design-only
+  until scoped.
 
 ---
 
@@ -1681,11 +1738,20 @@ sheets, snapshots, resume, `RoutineDuplicator`, and Routine Transfer JSON all pr
 migration / backfill; full suite **719/719**, manual regression passed. Exercise-specific range
 suggestions, top/bottom defaults, and advanced ROM targeting stay deferred (§3.13).
 
+✅ **Remove "Arms" from canonical body parts** (§2.18) — **SHIPPED 2026-06-03**. Following the
+"Legs" removal, the broad **"Arms"** option was dropped from `ExerciseDetailView.canonicalBodyParts`
+(Biceps/Triceps retained) to keep per-body-part analytics clean. **Non-destructive:** existing
+`bodyPart == "Arms"` rows are preserved and shown as a legacy/custom value in `BodyPartPicker`;
+the sorter (canonical-agnostic) groups "Arms" into its own section. No model/schema change, no
+migration/backfill, no Exercise/Routine/Workout/History mutation; seed catalogue has no "Arms"
+so seeding is unaffected. Added `CanonicalBodyPartsTests`; full suite **724/724**. Optional
+remap of existing "Arms" rows and a body-part taxonomy redesign stay deferred (§3.14).
+
 **No "implement now" product/UX item remains.** The three top refactor-era recommendations
 plus the polish slices (§2.5, §2.6, §2.7, §2.8, §2.9), the routine duplication feature
 (§2.10), the Duplicate Block tools (§2.13), Routine Transfer v2 (§2.14), Effort Target
-Modes (§2.15), and the Partial Rep Range picker (§2.17) have shipped. Everything else is
-optional / future / deferred:
+Modes (§2.15), the Partial Rep Range picker (§2.17), and the "Arms" canonical-body-part
+cleanup (§2.18) have shipped. Everything else is optional / future / deferred:
 
 - **"Tap a listed routine → Routine Editor"** (§2.3 follow-up) is the only new
   user-facing option, and it stays **optional/future**. A planning audit (2026-05-27)
