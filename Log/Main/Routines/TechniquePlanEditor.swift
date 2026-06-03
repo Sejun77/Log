@@ -316,6 +316,9 @@ private struct TechniqueParamEditView: View {
     @State private var appliesToErrorMsg: String? = nil
     /// Transient error shown when a Dropset effort change is immediately reverted.
     @State private var effortErrorMsg: String? = nil
+    /// Focus for the Custom Partial Note field so its Done key can dismiss the
+    /// keyboard (single-line, app-consistent — mirrors `RoutineEditor`).
+    @FocusState private var customNoteFocused: Bool
 
     // MARK: - Conflict helpers (per-index)
 
@@ -638,6 +641,9 @@ private struct TechniqueParamEditView: View {
                         get: { plan.partialRangeNote ?? "" },
                         set: { plan.partialRangeNote = $0.isEmpty ? nil : $0 }
                     ))
+                    .focused($customNoteFocused)
+                    .submitLabel(.done)
+                    .onSubmit { customNoteFocused = false }
                 }
                 Stepper(
                     "Partial reps: \(plan.reps ?? 5)",
