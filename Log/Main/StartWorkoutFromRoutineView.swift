@@ -34,6 +34,9 @@ struct TechniquePlanSnapshot: Codable {
     var rounds: Int?
     var restSeconds: Int?
     var partialRangeNote: String?
+    /// Preset partial-range raw (`PartialRange.rawValue`); nil = Not set.
+    /// Optional for backward-compatible JSON decoding of pre-existing snapshots.
+    var partialRangeRaw: String? = nil
     var note: String?
     var reps: Int?
 
@@ -90,7 +93,11 @@ struct TechniquePlanSnapshot: Codable {
             return (note.flatMap { $0.isEmpty ? nil : $0 }).map { "Tempo \($0)" } ?? "Tempo"
         case .partialReps:
             var s = "Partials"
-            if let region = partialRangeNote, !region.isEmpty { s += " \(region)" }
+            if let region = PartialRange.displayLabel(
+                raw: partialRangeRaw, note: partialRangeNote
+            ) {
+                s += " \(region)"
+            }
             if let n = reps, n > 0 { s += " (\(n))" }
             return s
         case .amrap:    return "AMRAP"
@@ -365,6 +372,7 @@ struct StartWorkoutFromRoutineView: View {
                                     rounds: tp.rounds,
                                     restSeconds: tp.restSeconds,
                                     partialRangeNote: tp.partialRangeNote,
+                                    partialRangeRaw: tp.partialRangeRaw,
                                     note: tp.note,
                                     reps: tp.reps,
                                     appliesToRaw: tp.appliesToRaw,

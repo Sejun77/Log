@@ -181,6 +181,7 @@ enum RoutineTransfer {
             dropPercent: t.dropPercent,
             dropCount: t.dropCount,
             partialRangeNote: t.partialRangeNote,
+            partialRangeRaw: t.partialRangeRaw,
             note: t.note,
             appliesToRaw: t.appliesToRaw,
             appliesToSetNumber: t.appliesToSetNumber,

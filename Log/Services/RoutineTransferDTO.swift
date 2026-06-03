@@ -152,6 +152,10 @@ struct RoutineTransferTechniquePlanDTO: Codable, Equatable {
     var dropPercent: Double?
     var dropCount: Int?
     var partialRangeNote: String?
+    /// Preset partial-range raw (`PartialRange.rawValue`); nil = Not set.
+    /// Optional/additive — old documents lacking this key decode as nil
+    /// (synthesized `decodeIfPresent`); `schemaVersion` is unchanged.
+    var partialRangeRaw: String?
     var note: String?
     var appliesToRaw: String
     var appliesToSetNumber: Int?

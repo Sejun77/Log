@@ -233,6 +233,7 @@ enum RoutineDuplicator {
             dropPercent: src.dropPercent,
             dropCount: src.dropCount,
             partialRangeNote: src.partialRangeNote,
+            partialRangeRaw: src.partialRangeRaw,
             note: src.note,
             appliesToRaw: src.appliesToRaw,
             appliesToSetNumber: src.appliesToSetNumber,

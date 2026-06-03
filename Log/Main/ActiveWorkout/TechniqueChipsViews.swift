@@ -121,7 +121,9 @@ struct TechniqueDetailSheet: View {
                     }
                 case .partialReps:
                     Section("Partial Reps") {
-                        if let region = snap.partialRangeNote, !region.isEmpty {
+                        if let region = PartialRange.displayLabel(
+                            raw: snap.partialRangeRaw, note: snap.partialRangeNote
+                        ) {
                             LabeledContent("Range", value: region)
                         }
                         if let n = snap.reps, n > 0 { LabeledContent("Partial reps", value: "\(n)") }

@@ -113,7 +113,8 @@ final class RoutineTransferImportTests: SwiftDataTestHarness {
         let tech = RoutineTransferTechniquePlanDTO(
             order: 0, typeRaw: "quantumSet", repMin: 6, repMax: 10, reps: nil,
             durationSeconds: nil, restSeconds: 15, rounds: 2, dropPercent: 20,
-            dropCount: 2, partialRangeNote: "half", note: "burn",
+            dropCount: 2, partialRangeNote: "half",
+            partialRangeRaw: "lengthenedHalf", note: "burn",
             appliesToRaw: "everyThirdMoonday", appliesToSetNumber: nil,
             appliesToSetIndicesRaw: "0,2", dropsetEffortRaw: "telepathic",
             dropsetEffortReps: 8)
@@ -169,6 +170,9 @@ final class RoutineTransferImportTests: SwiftDataTestHarness {
         XCTAssertEqual(t?.appliesToRaw, "everyThirdMoonday")
         XCTAssertEqual(t?.appliesToSetIndicesRaw, "0,2")
         XCTAssertEqual(t?.dropsetEffortRaw, "telepathic")
+        // Partial-range fields imported (preset raw + free-text note).
+        XCTAssertEqual(t?.partialRangeRaw, "lengthenedHalf")
+        XCTAssertEqual(t?.partialRangeNote, "half")
         // 14. warmup materialized + sorted.
         let steps = slot?.prescription?.warmupScheme?.steps.sorted { $0.order < $1.order }
         XCTAssertEqual(steps?.map(\.kindRaw), ["percentage", "fixedReps"])

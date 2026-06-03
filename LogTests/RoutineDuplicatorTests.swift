@@ -284,6 +284,8 @@ final class RoutineDuplicatorServiceTests: SwiftDataTestHarness {
         plan.appliesToSetIndicesRaw = "0,2"
         plan.dropsetEffortRaw = "fixedReps"
         plan.dropsetEffortReps = 8
+        plan.partialRangeRaw = "stickingPoint"
+        plan.partialRangeNote = "low third"
         context.insert(plan)
         srcSlot.prescription?.techniquePlans = [plan]
 
@@ -301,6 +303,8 @@ final class RoutineDuplicatorServiceTests: SwiftDataTestHarness {
         XCTAssertEqual(copyPlan.appliesToSetIndicesRaw, "0,2")
         XCTAssertEqual(copyPlan.dropsetEffortRaw, "fixedReps")
         XCTAssertEqual(copyPlan.dropsetEffortReps, 8)
+        XCTAssertEqual(copyPlan.partialRangeRaw, "stickingPoint")
+        XCTAssertEqual(copyPlan.partialRangeNote, "low third")
         XCTAssertFalse(copyPlan === plan)
     }
 

@@ -113,8 +113,8 @@ struct TechniquePlanEditor: View {
                                  dropPercent: 20, dropCount: 1,
                                  dropsetEffortRaw: "amrap")
         case .partialReps:
-            plan = TechniquePlan(order: nextOrder, type: type,
-                                 reps: 8, partialRangeNote: "top half")
+            // Default to "Not set" (nil partialRangeRaw) — no preseeded note.
+            plan = TechniquePlan(order: nextOrder, type: type, reps: 8)
         case .restPause:
             plan = TechniquePlan(order: nextOrder, type: type,
                                  restSeconds: 15, rounds: 2)
@@ -392,6 +392,7 @@ private struct TechniqueParamEditView: View {
         .onChange(of: plan.restSeconds)              { try? ctx.save() }
         .onChange(of: plan.reps)                     { try? ctx.save() }
         .onChange(of: plan.partialRangeNote)         { try? ctx.save() }
+        .onChange(of: plan.partialRangeRaw)          { try? ctx.save() }
         .onChange(of: plan.note)                     { try? ctx.save() }
         .onChange(of: plan.appliesToRaw)             { try? ctx.save() }
         .onChange(of: plan.appliesToSetNumber)       { try? ctx.save() }
@@ -476,6 +477,17 @@ private struct TechniqueParamEditView: View {
         case .cluster:       return "Cluster"
         case .tempoOverride: return "Tempo Override"
         }
+    }
+
+    /// Effective Partial Range picker selection (`""` = Not set). Maps a legacy
+    /// row (nil raw + non-empty note) to `.custom` so its note stays visible and
+    /// editable; once the user picks anything the model's `partialRangeRaw` is
+    /// authoritative.
+    private var partialRangeSelection: String {
+        if let raw = plan.partialRangeRaw { return raw }
+        return (plan.partialRangeNote?.isEmpty == false)
+            ? PartialRange.custom.rawValue
+            : ""
     }
 
     @ViewBuilder
@@ -598,10 +610,35 @@ private struct TechniqueParamEditView: View {
 
         case .partialReps:
             Section("Partial Reps") {
-                TextField("Range note (e.g. top half)", text: Binding(
-                    get: { plan.partialRangeNote ?? "" },
-                    set: { plan.partialRangeNote = $0.isEmpty ? nil : $0 }
-                ))
+                Picker("Partial Range", selection: Binding(
+                    get: { partialRangeSelection },
+                    set: { v in
+                        plan.partialRangeRaw = v.isEmpty ? nil : v
+                        // Clear stale custom/legacy text unless Custom is chosen,
+                        // so old free text can't leak back via the resolver.
+                        if v != PartialRange.custom.rawValue {
+                            plan.partialRangeNote = nil
+                        }
+                    }
+                )) {
+                    Text("Not set").tag("")
+                    Text(PartialRange.lengthenedHalf.displayName)
+                        .tag(PartialRange.lengthenedHalf.rawValue)
+                    Text(PartialRange.shortenedHalf.displayName)
+                        .tag(PartialRange.shortenedHalf.rawValue)
+                    Text(PartialRange.middleRange.displayName)
+                        .tag(PartialRange.middleRange.rawValue)
+                    Text(PartialRange.stickingPoint.displayName)
+                        .tag(PartialRange.stickingPoint.rawValue)
+                    Text(PartialRange.custom.displayName)
+                        .tag(PartialRange.custom.rawValue)
+                }
+                if partialRangeSelection == PartialRange.custom.rawValue {
+                    TextField("Custom partial note", text: Binding(
+                        get: { plan.partialRangeNote ?? "" },
+                        set: { plan.partialRangeNote = $0.isEmpty ? nil : $0 }
+                    ))
+                }
                 Stepper(
                     "Partial reps: \(plan.reps ?? 5)",
                     value: Binding(

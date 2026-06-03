@@ -309,6 +309,7 @@ extension RoutineTransfer {
             dropPercent: dto.dropPercent,
             dropCount: dto.dropCount,
             partialRangeNote: dto.partialRangeNote,
+            partialRangeRaw: dto.partialRangeRaw,
             note: dto.note,
             appliesToRaw: dto.appliesToRaw,
             appliesToSetNumber: dto.appliesToSetNumber,

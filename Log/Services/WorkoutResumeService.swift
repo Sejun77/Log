@@ -161,6 +161,7 @@ enum WorkoutResumeService {
                                     rounds: tp.rounds,
                                     restSeconds: tp.restSeconds,
                                     partialRangeNote: tp.partialRangeNote,
+                                    partialRangeRaw: tp.partialRangeRaw,
                                     note: tp.note,
                                     reps: tp.reps,
                                     appliesToRaw: tp.appliesToRaw,

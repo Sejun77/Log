@@ -298,6 +298,44 @@ enum DropsetEffort: Equatable {
     }
 }
 
+/// Region of the range of motion a Partial Reps technique targets.
+/// Stored as `TechniquePlan.partialRangeRaw` (a `String?`): `nil` raw means
+/// "Not set". `.custom` pairs with the free-text `partialRangeNote`. Legacy
+/// rows predate this enum — they have `nil` raw + a free-text note (e.g.
+/// "top half"), which the resolver still surfaces verbatim.
+enum PartialRange: String, CaseIterable {
+    case lengthenedHalf
+    case shortenedHalf
+    case middleRange
+    case stickingPoint
+    case custom
+
+    var displayName: String {
+        switch self {
+        case .lengthenedHalf: return "Lengthened half"
+        case .shortenedHalf:  return "Shortened half"
+        case .middleRange:    return "Middle range"
+        case .stickingPoint:  return "Sticking point"
+        case .custom:         return "Custom"
+        }
+    }
+
+    /// Resolved display label for a `(partialRangeRaw, partialRangeNote)` pair.
+    /// Returns `nil` when nothing should be shown ("Not set"):
+    ///   • known preset raw            → preset display name
+    ///   • "custom" + non-empty note   → the note
+    ///   • "custom" + empty/nil note   → "Custom"
+    ///   • nil/unknown raw + note      → the note (legacy free text)
+    ///   • nil/unknown raw + no note   → nil
+    static func displayLabel(raw: String?, note: String?) -> String? {
+        let cleanNote = (note?.isEmpty == false) ? note : nil
+        if let raw, let preset = PartialRange(rawValue: raw) {
+            return preset == .custom ? (cleanNote ?? "Custom") : preset.displayName
+        }
+        return cleanNote
+    }
+}
+
 @Model
 final class WarmupStep {
     var order: Int
@@ -360,6 +398,10 @@ final class TechniquePlan {
     var dropPercent: Double?
     var dropCount: Int?
     var partialRangeNote: String?
+    /// Preset partial-range raw value (`PartialRange.rawValue`); nil = Not set.
+    /// Additive (nil default) for migration safety. Pairs with `partialRangeNote`
+    /// when set to `"custom"`. See `PartialRange`.
+    var partialRangeRaw: String? = nil
     var note: String?
 
     // appliesTo targeting (additive; default "lastWorkingSet" is migration-safe)
@@ -422,6 +464,7 @@ final class TechniquePlan {
         dropPercent: Double? = nil,
         dropCount: Int? = nil,
         partialRangeNote: String? = nil,
+        partialRangeRaw: String? = nil,
         note: String? = nil,
         appliesToRaw: String = "lastWorkingSet",
         appliesToSetNumber: Int? = nil,
@@ -440,6 +483,7 @@ final class TechniquePlan {
         self.dropPercent = dropPercent
         self.dropCount = dropCount
         self.partialRangeNote = partialRangeNote
+        self.partialRangeRaw = partialRangeRaw
         self.note = note
         self.appliesToRaw = appliesToRaw
         self.appliesToSetNumber = appliesToSetNumber

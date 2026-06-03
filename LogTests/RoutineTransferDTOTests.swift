@@ -35,7 +35,8 @@ final class RoutineTransferDTOTests: XCTestCase {
         let technique = RoutineTransferTechniquePlanDTO(
             order: 0, typeRaw: "dropset", repMin: 6, repMax: 10, reps: nil,
             durationSeconds: nil, restSeconds: 15, rounds: 2, dropPercent: 20,
-            dropCount: 2, partialRangeNote: "bottom half", note: "burn",
+            dropCount: 2, partialRangeNote: "bottom half",
+            partialRangeRaw: "stickingPoint", note: "burn",
             appliesToRaw: "lastWorkingSet", appliesToSetNumber: nil,
             appliesToSetIndicesRaw: "0,2", dropsetEffortRaw: "fixedReps",
             dropsetEffortReps: 8)
@@ -103,6 +104,9 @@ final class RoutineTransferDTOTests: XCTestCase {
         // Spot-check a deep leaf value survived.
         XCTAssertEqual(presc?.warmupScheme?.steps.last?.weight, 40)
         XCTAssertEqual(slot?.setTemplates.first?.targetWeight, 80)
+        // Partial-range fields (preset raw + free-text note) survive.
+        XCTAssertEqual(presc?.techniquePlans.first?.partialRangeRaw, "stickingPoint")
+        XCTAssertEqual(presc?.techniquePlans.first?.partialRangeNote, "bottom half")
     }
 
     // MARK: - 3. Raw enum strings survive verbatim (incl. unknown cases)
@@ -111,7 +115,8 @@ final class RoutineTransferDTOTests: XCTestCase {
         let technique = RoutineTransferTechniquePlanDTO(
             order: 0, typeRaw: "quantumSet", repMin: nil, repMax: nil,
             reps: nil, durationSeconds: nil, restSeconds: nil, rounds: nil,
-            dropPercent: nil, dropCount: nil, partialRangeNote: nil, note: nil,
+            dropPercent: nil, dropCount: nil, partialRangeNote: nil,
+            partialRangeRaw: "quantumRange", note: nil,
             appliesToRaw: "everyThirdMoonday", appliesToSetNumber: nil,
             appliesToSetIndicesRaw: nil, dropsetEffortRaw: "telepathic",
             dropsetEffortReps: nil)
@@ -148,6 +153,30 @@ final class RoutineTransferDTOTests: XCTestCase {
             "everyThirdMoonday")
         XCTAssertEqual(
             dt?.prescription?.techniquePlans.first?.dropsetEffortRaw, "telepathic")
+        // Unknown partial-range raw also survives verbatim.
+        XCTAssertEqual(
+            dt?.prescription?.techniquePlans.first?.partialRangeRaw, "quantumRange")
+    }
+
+    // MARK: - 3a. Old JSON missing partialRangeRaw decodes safely
+
+    func testDecodingOldJSONWithoutPartialRangeRawIsSafe() throws {
+        // A document exported before the partial-range picker has no
+        // `partialRangeRaw` key; synthesized decodeIfPresent yields nil while
+        // any legacy `partialRangeNote` is preserved.
+        let json = """
+        {
+            "order": 0,
+            "typeRaw": "partialReps",
+            "partialRangeNote": "top half",
+            "appliesToRaw": "lastWorkingSet"
+        }
+        """.data(using: .utf8)!
+        let dto = try JSONDecoder().decode(
+            RoutineTransferTechniquePlanDTO.self, from: json)
+        XCTAssertNil(dto.partialRangeRaw)
+        XCTAssertEqual(dto.partialRangeNote, "top half")
+        XCTAssertEqual(dto.typeRaw, "partialReps")
     }
 
     // MARK: - 3b. Effort target mode fields round-trip (Slice B)
