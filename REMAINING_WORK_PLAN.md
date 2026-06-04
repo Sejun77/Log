@@ -202,6 +202,27 @@ RoutineDuplicator, CSV, or history-storage changes; non-bodyweight and time-base
 New tests: `BodyweightEquipmentTests`, `BodyweightWarmupTests`, `BodyweightTechniqueTests`,
 `BodyweightHistoryMetricTests`; full suite **764/764**, manual regression passed for all slices.
 
+Also updated 2026-06-04: **Bodyweight load metrics shipped** (§2.21) — generalizes the §2.20 History
+gating so bodyweight contributes to **effective load** instead of being reps-only. **(1) Settings:**
+an optional user **bodyweight** (`AppSettings.userBodyweight`, UserDefaults — **no SwiftData**;
+empty/0/negative/invalid = not set) with a decimal field carrying the current unit label and reliable
+keyboard dismissal (inline focus-gated checkmark Done + `.scrollDismissesKeyboard(.immediately)`).
+**(2) Exercise flag:** additive `Exercise.includesBodyweightInLoad: Bool = false` (lightweight
+migration, **no backfill**), an "Bodyweight counts as load" toggle in `ExerciseDetailView`, defaulted
+true for seeded bodyweight catalog rows. It is **independent of `equipmentType`** — `"Bodyweight"`
+equipment still drives hiding the active-workout weight field, while this flag drives History load
+calc, so a weighted pull-up (Dip Belt + flag on) keeps its weight field and logs added weight.
+**(3) Effective load:** `effectiveLoad = (flag ? userBodyweight : 0) + loggedWeight`; e1RM / Volume /
+Best Weight compute on it for flagged exercises (non-flagged paths byte-identical to before). Added a
+**Best Reps** metric. **(4) Availability matrix** (`availableProgressMetrics(isTimeBased:
+isBodyweightEquipment:includesBodyweight:hasUserBodyweight:)`): time-based → Duration; flagged + user
+bodyweight → load + rep metrics; flagged without user bodyweight, **or** pure bodyweight-equipment with
+the flag off → Reps + Best Reps only; non-bodyweight flag-off → unchanged; selection falls back safely.
+**No** snapshot/resume, RoutineTransfer, RoutineDuplicator, CSV, or history-storage changes. New/updated
+`BodyweightLoadMetricTests` + `BodyweightHistoryMetricTests` (normalization, default inference,
+effectiveLoad, availability matrix, fallback, flag-off-bodyweight regression); full suite **784/784**,
+manual regression passed.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -1135,6 +1156,41 @@ see §2.12** — kept separate from the search-policy commit as planned.
 - **Tests:** new `BodyweightEquipmentTests`, `BodyweightWarmupTests`, `BodyweightTechniqueTests`,
   `BodyweightHistoryMetricTests` (pure-helper coverage; no fragile SwiftUI rendering tests). Suite grew
   per slice **740 → 750 → 755 → 764**, all green; manual regression passed for every slice.
+
+### 2.21 Bodyweight load metrics (Settings bodyweight + effective load) — ✅ SHIPPED (2026-06-04)
+- **Rationale:** §2.20 made bodyweight exercises reps-only in History. This generalizes that: when the
+  user records their bodyweight, bodyweight movements get real strength metrics computed on **effective
+  load** (bodyweight, optionally plus added weight), and the model distinguishes "pure bodyweight" from
+  "bodyweight + added load" (weighted pull-ups/dips).
+- **Settings bodyweight:** `AppSettings.userBodyweight: Double?` in **UserDefaults (no SwiftData)**;
+  `normalizedBodyweight(_:)` treats empty / 0 / negative / invalid as **not set**. `SettingsView` gains a
+  decimal Bodyweight field with the current unit label. Keyboard dismissal is reliable via an **inline
+  focus-gated checkmark Done** button plus **`.scrollDismissesKeyboard(.immediately)`** (the
+  `.keyboard`-placement toolbar accessory proved unreliable in a Form).
+- **Exercise flag:** additive `Exercise.includesBodyweightInLoad: Bool = false` (SwiftData lightweight
+  migration; **no backfill of existing user data**). A **"Bodyweight counts as load"** toggle in
+  `ExerciseDetailView`. Defaulted **true** for seeded bodyweight catalog rows
+  (`defaultIncludesBodyweightInLoad(equipmentType:)`). **Independent of `equipmentType`:** `"Bodyweight"`
+  equipment still hides the active-workout weight field; this flag drives History load only — so a
+  weighted pull-up (Dip Belt, flag on) keeps its weight field and logs added weight.
+- **Effective load:** pure `effectiveLoad(loggedWeight:includesBodyweight:userBodyweight:)` =
+  `(flag ? userBodyweight : 0) + loggedWeight`. e1RM / Volume / Best Weight use it for flagged exercises;
+  **non-flagged code paths are byte-identical to before**. Added a **Best Reps** metric (max reps in a
+  single working set per day).
+- **Availability matrix** (`availableProgressMetrics(isTimeBased:isBodyweightEquipment:includesBodyweight:
+  hasUserBodyweight:)`): time-based → Duration only; flagged + user bodyweight → e1RM/Volume/Best
+  Weight/Reps/Best Reps; flagged without user bodyweight **or** pure bodyweight-equipment with flag off →
+  Reps + Best Reps only; non-bodyweight flag-off → unchanged (e1RM/Volume/Best Weight/Reps). Metric
+  selection falls back to the first available when switching exercises invalidates the current metric.
+- **Data safety:** only additive model change (one defaulted `Bool`); UserDefaults for bodyweight; **no**
+  snapshot/resume, RoutineTransfer, RoutineDuplicator, CSV/export-import, or history-storage changes;
+  existing data opens without crashing and is never migrated/mutated.
+- **Tests:** new `BodyweightLoadMetricTests` + updated `BodyweightHistoryMetricTests` — bodyweight-input
+  normalization, default includes-bodyweight inference, `effectiveLoad` cases, the full availability
+  matrix, metric fallback, and the bodyweight-equipment **flag-off regression** (no load metrics without
+  effective load). **Full suite 784/784;** manual regression passed (Settings field + keyboard dismissal,
+  pure vs. weighted bodyweight load, flag-off / no-bodyweight reps-only, non-bodyweight + time-based
+  unchanged).
 
 ## 3. Optional / Future Features
 
