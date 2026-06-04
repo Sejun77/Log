@@ -7,6 +7,10 @@ import SwiftUI
 struct WarmupSchemeEditor: View {
     @Environment(\.modelContext) private var ctx
     @Bindable var prescription: SlotPrescription
+    /// True when the parent exercise is bodyweight: the kind picker drops
+    /// "% of Working" and the per-step weight field is hidden (steps save a
+    /// nil weight). Defaults false so non-bodyweight behavior is unchanged.
+    var isBodyweight: Bool = false
     @State private var showAddStep = false
     /// Non-nil drives the edit sheet (`.sheet(item:)`). Set by a row tap; the
     /// same `WarmupStepEditSheet` is reused in edit mode and writes changes
@@ -43,12 +47,12 @@ struct WarmupSchemeEditor: View {
             }
         }
         .sheet(isPresented: $showAddStep) {
-            WarmupStepEditSheet(onSave: { kind, reps, pct, rest, note, weight in
+            WarmupStepEditSheet(isBodyweight: isBodyweight, onSave: { kind, reps, pct, rest, note, weight in
                 addStep(kind: kind, reps: reps, pct: pct, rest: rest, note: note, weight: weight)
             })
         }
         .sheet(item: $editingStep) { step in
-            WarmupStepEditSheet(existing: step, onSave: { kind, reps, pct, rest, note, weight in
+            WarmupStepEditSheet(existing: step, isBodyweight: isBodyweight, onSave: { kind, reps, pct, rest, note, weight in
                 updateStep(step, kind: kind, reps: reps, pct: pct, rest: rest, note: note, weight: weight)
             })
         }
@@ -227,6 +231,7 @@ private struct WarmupStepRow: View {
 // to create a new step or write back to the existing one.
 private struct WarmupStepEditSheet: View {
     var existing: WarmupStep? = nil
+    var isBodyweight: Bool = false
     var onSave: (WarmupStepKind, Int?, Double?, Int?, String?, Double?) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -239,11 +244,32 @@ private struct WarmupStepEditSheet: View {
 
     private var isEditing: Bool { existing != nil }
 
+    /// Kinds offered in the picker, narrowed for bodyweight but always
+    /// including the existing step's kind so an edit never orphans the selection.
+    private var availableKinds: [WarmupStepKind] {
+        warmupKinds(isBodyweight: isBodyweight, currentKind: existing?.kind)
+    }
+
+    /// Picker label: `.fixedReps` reads "Reps" for bodyweight (weight hidden),
+    /// "Fixed Weight" otherwise.
+    private func kindLabel(_ k: WarmupStepKind) -> String {
+        switch k {
+        case .fixedReps:  return isBodyweight ? "Reps" : "Fixed Weight"
+        case .percentage: return "% of Working"
+        case .noteOnly:   return "Note Only"
+        }
+    }
+
+    /// Weight is only entered for non-bodyweight `.fixedReps` steps.
+    private var showsWeightField: Bool { kind == .fixedReps && !isBodyweight }
+
     init(
         existing: WarmupStep? = nil,
+        isBodyweight: Bool = false,
         onSave: @escaping (WarmupStepKind, Int?, Double?, Int?, String?, Double?) -> Void
     ) {
         self.existing = existing
+        self.isBodyweight = isBodyweight
         self.onSave = onSave
         _kind = State(initialValue: existing?.kind ?? .fixedReps)
         _reps = State(initialValue: existing?.reps ?? 5)
@@ -266,14 +292,14 @@ private struct WarmupStepEditSheet: View {
             Form {
                 Section("Type") {
                     Picker("Kind", selection: $kind) {
-                        Text("Fixed Weight").tag(WarmupStepKind.fixedReps)
-                        Text("% of Working").tag(WarmupStepKind.percentage)
-                        Text("Note Only").tag(WarmupStepKind.noteOnly)
+                        ForEach(availableKinds, id: \.self) { k in
+                            Text(kindLabel(k)).tag(k)
+                        }
                     }
                     .pickerStyle(.segmented)
                 }
 
-                if kind == .fixedReps {
+                if showsWeightField {
                     Section {
                         // Decimal example in the placeholder + footer caption
                         // signal decimal entry (the .decimalPad's "." key is
@@ -338,7 +364,8 @@ private struct WarmupStepEditSheet: View {
                         let repsVal: Int?    = kind != .noteOnly ? reps : nil
                         let pctVal: Double?  = kind == .percentage ? Double(pct) / 100.0 : nil
                         let restVal: Int?    = rest > 0 ? rest : nil
-                        let weightVal: Double? = kind == .fixedReps ? Double(weightText) : nil
+                        let weightVal: Double? = warmupSavedWeight(
+                            kind: kind, isBodyweight: isBodyweight, weightText: weightText)
                         let noteVal = note.trimmingCharacters(in: .whitespacesAndNewlines)
                         onSave(kind, repsVal, pctVal, restVal, noteVal.isEmpty ? nil : noteVal, weightVal)
                         dismiss()
@@ -347,4 +374,38 @@ private struct WarmupStepEditSheet: View {
             }
         }
     }
+}
+
+// MARK: - Bodyweight warm-up rules (pure helpers)
+
+/// Warm-up step kinds offered in the kind picker.
+///
+/// - Non-bodyweight: all kinds (`.fixedReps` = "Fixed Weight", `.percentage`,
+///   `.noteOnly`).
+/// - Bodyweight: `.percentage` is dropped (% of working weight is meaningless
+///   without a working weight), leaving `.fixedReps` (shown as "Reps") and
+///   `.noteOnly`.
+/// - Edit safety: when editing a legacy step whose `currentKind` would
+///   otherwise be hidden (e.g. a bodyweight exercise with an old `.percentage`
+///   step), that kind is appended so the `Picker` selection never orphans.
+///
+/// Order is stable and there are never duplicates.
+func warmupKinds(isBodyweight: Bool, currentKind: WarmupStepKind? = nil) -> [WarmupStepKind] {
+    guard isBodyweight else {
+        return [.fixedReps, .percentage, .noteOnly]
+    }
+    var kinds: [WarmupStepKind] = [.fixedReps, .noteOnly]
+    if let currentKind, !kinds.contains(currentKind) {
+        kinds.append(currentKind)
+    }
+    return kinds
+}
+
+/// Resolved weight to persist for a warm-up step. Only non-bodyweight
+/// `.fixedReps` steps carry a weight; percentage, note-only, and **all**
+/// bodyweight steps save nil (so editing a legacy weighted `.fixedReps` step on
+/// a bodyweight exercise clears its weight on save).
+func warmupSavedWeight(kind: WarmupStepKind, isBodyweight: Bool, weightText: String) -> Double? {
+    guard kind == .fixedReps, !isBodyweight else { return nil }
+    return Double(weightText)
 }
