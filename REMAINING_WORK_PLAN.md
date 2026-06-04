@@ -184,6 +184,24 @@ remaining rows — middle / top / bottom / single deletes preserve relative orde
 contiguously. Add / reorder behavior preserved. No model/schema change; full suite **733/733**,
 manual regression passed.
 
+Also updated 2026-06-04: **Bodyweight consistency shipped** (§2.20) — across four UI-only slices,
+the app now respects an exercise's **`Bodyweight` equipment type** end-to-end. A shared pure
+classifier `isBodyweightEquipment(_:)` (trimmed, case-insensitive) drives all four. **(1) Active
+workout:** the working-set row hides the weight field, "×" separator, and kg/lb label for bodyweight
+exercises (reps + Log stay); logged sets save **nil** weight. **(2) Warm-ups:** the warm-up editor
+offers only **Reps** + **Note Only** (no "% of Working"), hides the weight field for bodyweight Reps
+steps (saved with nil weight), and keeps legacy `.percentage` / weighted `.fixedReps` steps editable
+without orphaning the picker. **(3) Techniques:** **Drop Set** is disabled for bodyweight with
+"Not available for bodyweight exercises."; other techniques and the duration gating are unchanged and
+existing bodyweight dropsets are never auto-deleted. **(4) History:** the metric picker uses
+`availableProgressMetrics(isTimeBased:isBodyweight:)` — bodyweight strength exercises show **Total
+Reps only** (e1RM / Volume / Best Weight excluded) and selecting one resets a stale weight metric to
+Total Reps. Bodyweight detection reads the durable equipment snapshot in the active workout and the
+exercise's `equipmentType` elsewhere. **No model/schema change**; no snapshot/resume, RoutineTransfer,
+RoutineDuplicator, CSV, or history-storage changes; non-bodyweight and time-based behavior unchanged.
+New tests: `BodyweightEquipmentTests`, `BodyweightWarmupTests`, `BodyweightTechniqueTests`,
+`BodyweightHistoryMetricTests`; full suite **764/764**, manual regression passed for all slices.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -1084,6 +1102,39 @@ see §2.12** — kept separate from the search-policy commit as planned.
   and delete order preservation (middle / top / bottom / single + relationship-array-order guard).
   **Full suite 733/733;** manual regression passed (add, tap-to-edit, save, cancel, kind switch,
   swipe delete, reorder, non-top delete order, snapshot unchanged after routine edit).
+
+### 2.20 Bodyweight consistency (active workout / warm-ups / techniques / History) — ✅ SHIPPED (2026-06-04)
+- **Rationale:** Exercises tagged with the `Bodyweight` equipment type were still asking for / charting
+  weight everywhere, producing meaningless 0-weight logs and empty strength charts. The app now treats
+  bodyweight consistently across input, warm-ups, techniques, and History.
+- **Shared classifier:** pure `isBodyweightEquipment(_:)` in `ActiveWorkoutHelpers.swift` (canonical
+  `"Bodyweight"`, **trimmed + case-insensitive**) — reused by all four slices. Bodyweight is read from
+  the **durable session snapshot** (`prescriptionSnapshot.equipment`) in the active workout, and from
+  `Exercise.equipmentType` (live) in the routine editors / History (consistent with the existing
+  `isTimeBased` gate).
+- **Slice 1 — Active workout (`SetRows`/`ActiveWorkoutView`):** the working-set row hides the weight
+  `TextField`, "×" separator, and kg/lb label when bodyweight; **reps + Log stay**; logged working sets
+  save **nil** weight. Warm-up rows, dropset rows, and time-based rows are untouched.
+- **Slice 2 — Warm-ups (`WarmupSchemeEditor`/`PrescriptionFields`):** kind picker offers only **Reps**
+  (`.fixedReps`) + **Note Only**; **"% of Working" hidden**; weight field hidden for bodyweight Reps
+  (saved nil). Pure helpers `warmupKinds(isBodyweight:currentKind:)` / `warmupSavedWeight(...)`; editing
+  legacy `.percentage` / weighted `.fixedReps` steps keeps the current kind selectable (no picker
+  orphaning). No auto-migration.
+- **Slice 3 — Techniques (`TechniquePlanEditor`/`PrescriptionFields`):** **Drop Set** blocked for
+  bodyweight via pure `techniqueConflictMessage(for:isBodyweight:usesDuration:)` /
+  `isTechniqueAllowed(...)` with "Not available for bodyweight exercises."; AMRAP / rest-pause / cluster
+  / partial-reps / to-failure / tempo unaffected; duration gating unchanged; existing bodyweight
+  dropsets are **not auto-deleted**.
+- **Slice 4 — History (`HistoryView`):** pure `availableProgressMetrics(isTimeBased:isBodyweight:)` —
+  bodyweight (non-time-based) → **Total Reps only** (e1RM / Volume / Best Weight excluded); time-based
+  takes precedence and is unchanged; the selection fallback resets a stale weight metric to Total Reps.
+  Per-set rows, chart math, and history data are untouched.
+- **Data safety:** **no model/schema change**; no snapshot/resume, RoutineTransfer, RoutineDuplicator,
+  CSV/export-import, or history-storage changes; existing data (weighted logs, legacy bodyweight warm-up
+  steps / dropsets) opens without crashing and is never migrated or mutated.
+- **Tests:** new `BodyweightEquipmentTests`, `BodyweightWarmupTests`, `BodyweightTechniqueTests`,
+  `BodyweightHistoryMetricTests` (pure-helper coverage; no fragile SwiftUI rendering tests). Suite grew
+  per slice **740 → 750 → 755 → 764**, all green; manual regression passed for every slice.
 
 ## 3. Optional / Future Features
 
