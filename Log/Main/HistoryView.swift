@@ -33,6 +33,22 @@ enum ProgressMetric: String, CaseIterable, Identifiable {
     }
 }
 
+/// Progress metrics offered for an exercise in History.
+/// - Time-based: duration only (unchanged; takes precedence when an exercise
+///   is both time-based and bodyweight).
+/// - Bodyweight (non-time-based): reps only — e1RM / volume / best-weight need
+///   a logged weight, which bodyweight sets don't carry.
+/// - Otherwise: the full weight-based set (unchanged).
+func availableProgressMetrics(isTimeBased: Bool, isBodyweight: Bool) -> [ProgressMetric] {
+    if isTimeBased {
+        return [.totalDuration]
+    }
+    if isBodyweight {
+        return [.totalReps]
+    }
+    return [.e1rm, .volume, .bestWeight, .totalReps]
+}
+
 struct HistoryView: View {
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
     @Query private var routines: [Routine]
@@ -84,9 +100,10 @@ struct HistoryView: View {
         else {
             return ProgressMetric.allCases
         }
-        return ex.isTimeBased
-            ? [.totalDuration]
-            : [.e1rm, .volume, .bestWeight, .totalReps]
+        return availableProgressMetrics(
+            isTimeBased: ex.isTimeBased,
+            isBodyweight: isBodyweightEquipment(ex.equipmentType)
+        )
     }
 
     private func workoutDayComponents() -> Set<DateComponents> {
@@ -285,17 +302,23 @@ struct HistoryView: View {
             )
         }
         .onChange(of: selectedExerciseID) { _, newID in
-            if let id = newID,
-                let ex = try? ctx.fetch(
+            // Reset the selected metric if it is no longer valid for the newly
+            // selected exercise (e.g. e1RM/volume/best-weight don't apply to
+            // bodyweight; only duration applies to time-based). Falls back to
+            // the first available metric (Total Reps for bodyweight).
+            let ex = newID.flatMap { id in
+                try? ctx.fetch(
                     FetchDescriptor<Exercise>(
                         predicate: #Predicate { $0.id == id }
                     )
-                ).first,
-                ex.isTimeBased
-            {
-                metric = .totalDuration
-            } else if metric == .totalDuration {
-                metric = .e1rm
+                ).first
+            }
+            let available = availableProgressMetrics(
+                isTimeBased: ex?.isTimeBased ?? false,
+                isBodyweight: isBodyweightEquipment(ex?.equipmentType)
+            )
+            if !available.contains(metric) {
+                metric = available.first ?? .totalReps
             }
 
             if let id = newID, let earliest = earliestWorkoutDate(for: id) {
