@@ -8,6 +8,10 @@ struct WarmupSchemeEditor: View {
     @Environment(\.modelContext) private var ctx
     @Bindable var prescription: SlotPrescription
     @State private var showAddStep = false
+    /// Non-nil drives the edit sheet (`.sheet(item:)`). Set by a row tap; the
+    /// same `WarmupStepEditSheet` is reused in edit mode and writes changes
+    /// back to this exact step via `updateStep` — order is never touched.
+    @State private var editingStep: WarmupStep? = nil
     /// Non-nil drives the "Delete Warmup Step?" confirmation alert. Set
     /// by the per-row swipe Delete button (a roleless `.swipeActions`
     /// `Button`, tinted red) without mutating; the actual
@@ -41,6 +45,11 @@ struct WarmupSchemeEditor: View {
         .sheet(isPresented: $showAddStep) {
             WarmupStepEditSheet(onSave: { kind, reps, pct, rest, note, weight in
                 addStep(kind: kind, reps: reps, pct: pct, rest: rest, note: note, weight: weight)
+            })
+        }
+        .sheet(item: $editingStep) { step in
+            WarmupStepEditSheet(existing: step, onSave: { kind, reps, pct, rest, note, weight in
+                updateStep(step, kind: kind, reps: reps, pct: pct, rest: rest, note: note, weight: weight)
             })
         }
         .alert(
@@ -81,19 +90,25 @@ struct WarmupSchemeEditor: View {
     private var stepsSection: some View {
         Section {
             ForEach(sortedSteps) { step in
-                WarmupStepRow(step: step)
-                    .swipeActions(allowsFullSwipe: false) {
-                        Button {
-                            if let idx = sortedSteps.firstIndex(where: {
-                                $0.id == step.id
-                            }) {
-                                pendingDeleteOffsets = IndexSet(integer: idx)
-                            }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                Button {
+                    editingStep = step
+                } label: {
+                    WarmupStepRow(step: step)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .swipeActions(allowsFullSwipe: false) {
+                    Button {
+                        if let idx = sortedSteps.firstIndex(where: {
+                            $0.id == step.id
+                        }) {
+                            pendingDeleteOffsets = IndexSet(integer: idx)
                         }
-                        .tint(.red)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
+                    .tint(.red)
+                }
             }
             .onMove(perform: moveSteps)
         }
@@ -117,6 +132,20 @@ struct WarmupSchemeEditor: View {
         try? ctx.save()
     }
 
+    /// Writes edited values back to an existing step (edit mode). Only the
+    /// passed step is mutated — `order` is intentionally left untouched so
+    /// reordering stays the sole owner of position. The kind-conditional
+    /// nil-ing happens in the sheet, so stale fields clear when kind changes.
+    private func updateStep(_ step: WarmupStep, kind: WarmupStepKind, reps: Int?, pct: Double?, rest: Int?, note: String?, weight: Double?) {
+        step.kind = kind
+        step.reps = reps
+        step.percentOfWorking = pct
+        step.restSecondsAfter = rest
+        step.note = note
+        step.weight = weight
+        try? ctx.save()
+    }
+
     private func deleteSteps(at offsets: IndexSet) {
         guard let scheme = prescription.warmupScheme else { return }
         let sorted = sortedSteps
@@ -125,7 +154,11 @@ struct WarmupSchemeEditor: View {
             scheme.steps.removeAll { $0.id == step.id }
             ctx.delete(step)
         }
-        renumber(scheme.steps)
+        // Renumber the *sorted* remaining steps, not the raw relationship
+        // array: `scheme.steps` ordering is not guaranteed to match `order`,
+        // so renumbering it directly could swap surviving rows. Re-sorting by
+        // `order` first preserves their relative order before reindexing.
+        renumber(sortedSteps)
         try? ctx.save()
     }
 
@@ -187,17 +220,46 @@ private struct WarmupStepRow: View {
     }
 }
 
-// Sheet for creating a new warmup step.
+// Dual-mode sheet for creating or editing a warmup step. `existing == nil`
+// is Add mode ("Add Warmup Step" / "Add"); a non-nil `existing` is Edit mode
+// ("Edit Warmup Step" / "Save"), seeding fields from that step. Either way the
+// `onSave` callback delivers the resolved values — the caller decides whether
+// to create a new step or write back to the existing one.
 private struct WarmupStepEditSheet: View {
+    var existing: WarmupStep? = nil
     var onSave: (WarmupStepKind, Int?, Double?, Int?, String?, Double?) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var kind: WarmupStepKind = .fixedReps
-    @State private var reps: Int = 5
-    @State private var pct: Int = 50       // displayed as whole %, stored as fraction on save
-    @State private var rest: Int = 0       // seconds; 0 = no rest
-    @State private var weightText = ""     // optional; free-form for decimal precision
-    @State private var note = ""
+    @State private var kind: WarmupStepKind
+    @State private var reps: Int
+    @State private var pct: Int            // displayed as whole %, stored as fraction on save
+    @State private var rest: Int           // seconds; 0 = no rest
+    @State private var weightText: String  // optional; free-form for decimal precision
+    @State private var note: String
+
+    private var isEditing: Bool { existing != nil }
+
+    init(
+        existing: WarmupStep? = nil,
+        onSave: @escaping (WarmupStepKind, Int?, Double?, Int?, String?, Double?) -> Void
+    ) {
+        self.existing = existing
+        self.onSave = onSave
+        _kind = State(initialValue: existing?.kind ?? .fixedReps)
+        _reps = State(initialValue: existing?.reps ?? 5)
+        _pct = State(initialValue: existing?.percentOfWorking.map { Int(($0 * 100).rounded()) } ?? 50)
+        _rest = State(initialValue: existing?.restSecondsAfter ?? 0)
+        _weightText = State(initialValue: Self.weightSeed(existing?.weight))
+        _note = State(initialValue: existing?.note ?? "")
+    }
+
+    /// Parse-safe seed string for the weight field: integral values drop the
+    /// decimal ("60"), fractional keep it ("60.5"). `String(Double)` never
+    /// emits grouping separators, so `Double(weightText)` round-trips it.
+    private static func weightSeed(_ weight: Double?) -> String {
+        guard let weight else { return "" }
+        return weight == weight.rounded() ? String(Int(weight)) : String(weight)
+    }
 
     var body: some View {
         NavigationStack {
@@ -258,11 +320,11 @@ private struct WarmupStepEditSheet: View {
                         .lineLimit(1...3)
                 }
             }
-            .navigationTitle("Add Warmup Step")
+            .navigationTitle(isEditing ? "Edit Warmup Step" : "Add Warmup Step")
             .toolbar {
                 // Weight (.decimalPad) has no Return key and the optional Note
                 // (axis: .vertical) inserts a newline on Return, so both need a
-                // keyboard-integrated dismiss. The top-bar Cancel/Add below stay:
+                // keyboard-integrated dismiss. The top-bar Cancel/Save below stay:
                 // they commit / discard the modal, a separate concern.
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -272,7 +334,7 @@ private struct WarmupStepEditSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(isEditing ? "Save" : "Add") {
                         let repsVal: Int?    = kind != .noteOnly ? reps : nil
                         let pctVal: Double?  = kind == .percentage ? Double(pct) / 100.0 : nil
                         let restVal: Int?    = rest > 0 ? rest : nil

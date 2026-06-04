@@ -171,6 +171,19 @@ non-canonical section (the sorter is canonical-agnostic). No model/schema change
 **724/724**. Deferred: optional remapping of existing "Arms" exercises (approval-gated) and any
 future body-part taxonomy redesign (§3.14).
 
+Also updated 2026-06-04: **Editable warm-up steps + delete-order fix shipped** (§2.19) — warm-up
+steps in `WarmupSchemeEditor` are now **editable after creation**: tapping an existing warm-up row
+opens the same `WarmupStepEditSheet` in **edit mode** (pre-filled from the selected step; **Save**
+writes back to only that `WarmupStep`), while the **+** toolbar button still opens it in add mode.
+Editable fields: kind, reps, percent-of-working, fixed weight, rest-after, note; **`order` is
+intentionally not editable** and is never changed by an edit. Active-workout warm-up **snapshots are
+unaffected** — routine edits never touch a running session. Bundled a **delete-order bug fix**:
+`deleteSteps(at:)` now renumbers the **sorted** surviving steps (not the raw SwiftData relationship
+array, whose order isn't guaranteed to match `order`), so deleting a non-top row no longer swaps the
+remaining rows — middle / top / bottom / single deletes preserve relative order and renumber
+contiguously. Add / reorder behavior preserved. No model/schema change; full suite **733/733**,
+manual regression passed.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -1045,6 +1058,32 @@ see §2.12** — kept separate from the search-policy commit as planned.
   **Full suite 724/724.**
 - **Deferred follow-ups (tracked in §3.14):** optional remapping of existing "Arms" exercises
   to specific buckets (approval-gated, mutates data); any future body-part taxonomy redesign.
+
+### 2.19 Editable warm-up steps + delete-order fix — ✅ SHIPPED (2026-06-04)
+- **Rationale:** Warm-up steps could be added, deleted, and reordered but **not edited** after
+  creation — the only way to change one was delete-and-recreate. Tapping a row now edits it.
+- **Completed behavior (edit):**
+  - `WarmupStepEditSheet` is now **dual-mode**. Tapping an existing warm-up row opens it in **edit
+    mode** (title "Edit Warmup Step", confirm button "Save", fields pre-filled from the selected
+    step); the **+** toolbar button still opens it in **add mode** (unchanged).
+  - **Save mutates only the selected `WarmupStep`** (`updateStep`); **`order` is intentionally not
+    editable** and is never written by an edit.
+  - Editable fields: **kind, reps, percent-of-working, fixed weight, rest-after, note**. Switching
+    kind clears the now-irrelevant fields (same validation path as creation).
+  - Tap (edit) is separate from swipe (delete); reorder via `EditButton`/`.onMove` unchanged.
+- **Completed behavior (delete-order fix):** `deleteSteps(at:)` previously renumbered the **raw
+  `scheme.steps` relationship array**, whose ordering isn't guaranteed to match `order`, so deleting
+  a **non-top** row could swap the surviving rows. It now renumbers the **sorted** survivors, so
+  middle / top / bottom / single deletes **preserve relative order** and **renumber contiguously**
+  (`0..<count`). Delete confirmation flow unchanged.
+- **Data safety:** **no model/schema change**; active-workout warm-up display reads **immutable
+  session snapshots**, so editing a routine warm-up step never mutates a running or completed
+  session; `RoutineDuplicator` / Routine Transfer / snapshot paths untouched.
+- **Tests:** new `WarmupStepEditTests` — edit-touches-only-selected-step + order preserved, all
+  fields round-trip, kind-switch clears stale fields, snapshot immutability after a routine edit,
+  and delete order preservation (middle / top / bottom / single + relationship-array-order guard).
+  **Full suite 733/733;** manual regression passed (add, tap-to-edit, save, cancel, kind switch,
+  swipe delete, reorder, non-top delete order, snapshot unchanged after routine edit).
 
 ## 3. Optional / Future Features
 
