@@ -25,6 +25,15 @@ final class Exercise {
     /// first appear via `ExercisesView.backfillOrderIfNeeded`.
     var order: Int = 0
 
+    /// When true, the user's bodyweight (from Settings) counts toward the
+    /// effective load used in History strength metrics — bodyweight for pure
+    /// movements (pull-ups), bodyweight + logged added weight for weighted
+    /// ones (weighted pull-ups/dips). Independent of `equipmentType`: a
+    /// weighted pull-up uses a non-"Bodyweight" equipment (so the active-workout
+    /// weight field stays visible) yet still sets this true. Additive (default
+    /// false) so existing rows migrate cleanly with no backfill.
+    var includesBodyweightInLoad: Bool = false
+
     // Phase 9-E2 (2026-05-22): the former `defaultTemplates` relationship
     // was removed. Programming intent now lives entirely on
     // `RoutineExercise.setTemplates` (Tier 1) and `SlotPrescription`
@@ -46,7 +55,8 @@ final class Exercise {
         notes: String? = nil,
         equipmentType: String? = nil,
         setupDefaults: String? = nil,
-        isCustom: Bool = true
+        isCustom: Bool = true,
+        includesBodyweightInLoad: Bool = false
     ) {
         self.id = UUID()
         self.name = name
@@ -55,6 +65,7 @@ final class Exercise {
         self.equipmentType = equipmentType
         self.setupDefaults = setupDefaults
         self.isCustom = isCustom
+        self.includesBodyweightInLoad = includesBodyweightInLoad
     }
 }
 

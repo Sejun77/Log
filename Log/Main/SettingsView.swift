@@ -31,6 +31,16 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Keys.defaultRPE)
     private var defaultRPE: Double = 8.0
 
+    /// Bodyweight is stored as an optional Double in `AppSettings`, which
+    /// `@AppStorage` can't bind directly — so it's edited through a free-text
+    /// field seeded on appear and written back (normalized) on change.
+    @State private var bodyweightText: String = ""
+
+    /// Anchors the Bodyweight field in SwiftUI's focus system so the keyboard
+    /// accessory (`.keyboard` toolbar) attaches reliably — a `.decimalPad`
+    /// field with no `@FocusState` shows the Done button only intermittently.
+    @FocusState private var bodyweightFocused: Bool
+
     private var autoregMode: AutoregMode {
         AutoregMode(rawValue: autoregModeRaw) ?? .rir
     }
@@ -41,12 +51,23 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 unitsSection
+                bodyweightSection
                 autoregSection
                 defaultsSection
                 dataSection
                 showcaseSection
             }
             .navigationTitle("Settings")
+            .onAppear {
+                bodyweightText =
+                    AppSettings.userBodyweight.map { Units.formatWeight($0) } ?? ""
+            }
+            // Scrolling the Settings form dismisses the bodyweight keyboard.
+            // `.immediately` matches HistoryView's existing dismissal style.
+            // The `.keyboard`-placement toolbar accessory proved unreliable in
+            // this Form, so the visible Done control lives inline in the
+            // bodyweight row instead (see `bodyweightSection`).
+            .scrollDismissesKeyboard(.immediately)
         }
     }
 
@@ -59,6 +80,44 @@ struct SettingsView: View {
                 Text("lb").tag(false)
             }
             .pickerStyle(.segmented)
+        }
+    }
+
+    private var bodyweightSection: some View {
+        Section {
+            HStack {
+                Text("Bodyweight")
+                Spacer()
+                TextField("Not set", text: $bodyweightText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 120)
+                    .focused($bodyweightFocused)
+                Text(weightIsKg ? "kg" : "lb")
+                    .foregroundStyle(.secondary)
+                // Inline focus-gated dismiss — the `.decimalPad` has no Return
+                // key and the `.keyboard` toolbar accessory is unreliable in
+                // this Form, so this checkmark is the dependable Done control.
+                if bodyweightFocused {
+                    Button {
+                        bodyweightFocused = false
+                    } label: {
+                        Image(systemName: "checkmark").fontWeight(.semibold)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Done")
+                }
+            }
+            .onChange(of: bodyweightText) { _, newValue in
+                AppSettings.userBodyweight = normalizedBodyweight(newValue)
+            }
+        } header: {
+            Text("Bodyweight")
+        } footer: {
+            Text("Used for bodyweight-inclusive exercises (e.g. pull-ups, dips) "
+                + "in History load metrics. Leave empty if not set. Stored in the "
+                + "unit shown above.")
+                .font(.caption)
         }
     }
 

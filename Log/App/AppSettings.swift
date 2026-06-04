@@ -21,6 +21,7 @@ enum AppSettings {
         static let defaultRestAfterExercise = "settings.defaultRestAfterExercise"
         static let defaultRIR             = "settings.defaultRIR"
         static let defaultRPE             = "settings.defaultRPE"
+        static let userBodyweight         = "settings.userBodyweight"
     }
 
     // MARK: Units
@@ -88,6 +89,37 @@ enum AppSettings {
         }
         set { UserDefaults.standard.set(newValue, forKey: Keys.defaultRPE) }
     }
+
+    // MARK: User Bodyweight
+
+    /// User's bodyweight in the currently displayed weight unit (no kg/lb
+    /// conversion is performed anywhere in the app). `nil` = not set. Only
+    /// positive values are stored; absent / ≤ 0 reads back as `nil`.
+    static var userBodyweight: Double? {
+        get {
+            guard
+                let v = UserDefaults.standard.object(forKey: Keys.userBodyweight) as? Double,
+                v > 0
+            else { return nil }
+            return v
+        }
+        set {
+            if let v = newValue, v > 0 {
+                UserDefaults.standard.set(v, forKey: Keys.userBodyweight)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Keys.userBodyweight)
+            }
+        }
+    }
+}
+
+/// Parses a free-text bodyweight entry into a positive `Double`, or `nil` for
+/// empty / zero / negative / invalid input. Accepts decimals (e.g. "72.5").
+/// Pure — used by Settings to drive `AppSettings.userBodyweight`.
+func normalizedBodyweight(_ text: String) -> Double? {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let v = Double(trimmed), v > 0 else { return nil }
+    return v
 }
 
 // MARK: - Backwards Compatibility

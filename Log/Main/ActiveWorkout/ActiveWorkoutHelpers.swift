@@ -38,6 +38,15 @@ func isBodyweightEquipment(_ equipment: String?) -> Bool {
         .caseInsensitiveCompare(bodyweightEquipment) == .orderedSame
 }
 
+/// Inferred default for `Exercise.includesBodyweightInLoad` from equipment:
+/// bodyweight equipment counts bodyweight toward load; everything else does
+/// not. Used to seed sensible defaults (catalog / new exercises) — the stored
+/// flag remains user-overridable (e.g. a weighted pull-up on a Dip Belt sets it
+/// true manually). Pure.
+func defaultIncludesBodyweightInLoad(equipmentType: String?) -> Bool {
+    isBodyweightEquipment(equipmentType)
+}
+
 // MARK: - Stable rest notification ID
 
 /// Builds a stable rest-timer notification ID of the form

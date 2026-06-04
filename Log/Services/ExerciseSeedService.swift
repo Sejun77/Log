@@ -80,6 +80,8 @@ enum ExerciseSeedService {
                 isCustom: false
             )
             ex.isTimeBased = seed.isTimeBased
+            ex.includesBodyweightInLoad =
+                defaultIncludesBodyweightInLoad(equipmentType: seed.equipmentType)
             ex.order = nextOrder
             ctx.insert(ex)
 

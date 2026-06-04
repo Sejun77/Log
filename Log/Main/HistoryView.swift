@@ -4,7 +4,7 @@ import SwiftUI
 
 // MARK: - Progress metric options
 enum ProgressMetric: String, CaseIterable, Identifiable {
-    case e1rm, volume, bestWeight, totalReps, totalDuration
+    case e1rm, volume, bestWeight, totalReps, bestReps, totalDuration
     var id: String { rawValue }
 
     var title: String {
@@ -13,6 +13,7 @@ enum ProgressMetric: String, CaseIterable, Identifiable {
         case .volume: return "Volume"
         case .bestWeight: return "Best wt"
         case .totalReps: return "Reps"
+        case .bestReps: return "Best reps"
         case .totalDuration: return "Duration"
         }
     }
@@ -27,6 +28,8 @@ enum ProgressMetric: String, CaseIterable, Identifiable {
             return "Best wt (\(Units.weightIsKg ? "kg" : "lb"))"
         case .totalReps:
             return "Total reps"
+        case .bestReps:
+            return "Best reps (single set)"
         case .totalDuration:
             return "Total duration (s)"
         }
@@ -34,19 +37,49 @@ enum ProgressMetric: String, CaseIterable, Identifiable {
 }
 
 /// Progress metrics offered for an exercise in History.
-/// - Time-based: duration only (unchanged; takes precedence when an exercise
-///   is both time-based and bodyweight).
-/// - Bodyweight (non-time-based): reps only — e1RM / volume / best-weight need
-///   a logged weight, which bodyweight sets don't carry.
-/// - Otherwise: the full weight-based set (unchanged).
-func availableProgressMetrics(isTimeBased: Bool, isBodyweight: Bool) -> [ProgressMetric] {
+/// - Time-based: duration only (unchanged; takes precedence).
+/// - Bodyweight-inclusive **with** a user bodyweight: load-based metrics
+///   (computed on effective load) plus rep-based metrics.
+/// - Bodyweight-inclusive **without** a user bodyweight: rep-based metrics only
+///   (e1RM / volume / best-weight need a load, which can't be determined).
+/// - Pure bodyweight equipment with the flag **off**: rep-based metrics only —
+///   the active-workout weight field is hidden so logged weight is nil and no
+///   effective load exists.
+/// - Otherwise (normal weighted): the full weight-based set (unchanged).
+func availableProgressMetrics(
+    isTimeBased: Bool,
+    isBodyweightEquipment: Bool,
+    includesBodyweight: Bool,
+    hasUserBodyweight: Bool
+) -> [ProgressMetric] {
     if isTimeBased {
         return [.totalDuration]
     }
-    if isBodyweight {
-        return [.totalReps]
+    if includesBodyweight {
+        // Bodyweight counts toward load — load metrics need the user's bodyweight.
+        return hasUserBodyweight
+            ? [.e1rm, .volume, .bestWeight, .totalReps, .bestReps]
+            : [.totalReps, .bestReps]
+    }
+    if isBodyweightEquipment {
+        // Pure bodyweight equipment, flag off: no logged weight, no added
+        // bodyweight → no load. Rep-based metrics only.
+        return [.totalReps, .bestReps]
     }
     return [.e1rm, .volume, .bestWeight, .totalReps]
+}
+
+/// Effective load for a working set used by History strength metrics. When the
+/// exercise counts bodyweight toward load, the user's bodyweight is added to the
+/// logged (added) weight; otherwise only the logged weight is used. Returns nil
+/// when no load can be determined (e.g. bodyweight-inclusive with no logged
+/// weight and no user bodyweight). Pure.
+func effectiveLoad(
+    loggedWeight: Double?, includesBodyweight: Bool, userBodyweight: Double?
+) -> Double? {
+    let base = includesBodyweight ? (userBodyweight ?? 0) : 0
+    let total = base + (loggedWeight ?? 0)
+    return total > 0 ? total : nil
 }
 
 struct HistoryView: View {
@@ -91,18 +124,22 @@ struct HistoryView: View {
         .tint(isActive ? DSColor.brand : .secondary)
     }
 
+    private var selectedExercise: Exercise? {
+        guard let id = selectedExerciseID else { return nil }
+        return try? ctx.fetch(
+            FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
+        ).first
+    }
+
     private var metricsForSelectedExercise: [ProgressMetric] {
-        guard
-            let id = selectedExerciseID,
-            let ex = try? ctx.fetch(
-                FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
-            ).first
-        else {
+        guard let ex = selectedExercise else {
             return ProgressMetric.allCases
         }
         return availableProgressMetrics(
             isTimeBased: ex.isTimeBased,
-            isBodyweight: isBodyweightEquipment(ex.equipmentType)
+            isBodyweightEquipment: isBodyweightEquipment(ex.equipmentType),
+            includesBodyweight: ex.includesBodyweightInLoad,
+            hasUserBodyweight: AppSettings.userBodyweight != nil
         )
     }
 
@@ -287,7 +324,9 @@ struct HistoryView: View {
                 ProgressChart(
                     exerciseID: id,
                     metric: metric,
-                    startDate: chartStartDate
+                    startDate: chartStartDate,
+                    includesBodyweight: selectedExercise?.includesBodyweightInLoad ?? false,
+                    userBodyweight: AppSettings.userBodyweight
                 )
                 .frame(height: 240)
             } else {
@@ -315,7 +354,9 @@ struct HistoryView: View {
             }
             let available = availableProgressMetrics(
                 isTimeBased: ex?.isTimeBased ?? false,
-                isBodyweight: isBodyweightEquipment(ex?.equipmentType)
+                isBodyweightEquipment: isBodyweightEquipment(ex?.equipmentType),
+                includesBodyweight: ex?.includesBodyweightInLoad ?? false,
+                hasUserBodyweight: AppSettings.userBodyweight != nil
             )
             if !available.contains(metric) {
                 metric = available.first ?? .totalReps
@@ -772,6 +813,10 @@ private struct ProgressChart: View {
     let exerciseID: UUID
     let metric: ProgressMetric
     let startDate: Date
+    /// Whether the selected exercise counts bodyweight toward effective load.
+    var includesBodyweight: Bool = false
+    /// User's bodyweight (Settings) in the displayed unit; nil = not set.
+    var userBodyweight: Double? = nil
 
     private let PR_ICON_SIZE: CGFloat = 11
     private let PR_BADGE_PADDING: CGFloat = 3
@@ -850,9 +895,18 @@ private struct ProgressChart: View {
                     return items.compactMap { item in
                         item.setLogs.filter { $0.kind == .working }
                             .compactMap { log -> Double? in
-                                guard let wt = log.weight, wt > 0, log.reps > 0
+                                // Effective load for bodyweight-inclusive
+                                // exercises; raw logged weight otherwise
+                                // (identical to prior behavior).
+                                let load = includesBodyweight
+                                    ? effectiveLoad(
+                                        loggedWeight: log.weight,
+                                        includesBodyweight: true,
+                                        userBodyweight: userBodyweight)
+                                    : log.weight
+                                guard let load, load > 0, log.reps > 0
                                 else { return nil }
-                                return wt * (1.0 + Double(log.reps) / 30.0)
+                                return load * (1.0 + Double(log.reps) / 30.0)
                             }
                             .max()
                     }.max()
@@ -861,10 +915,14 @@ private struct ProgressChart: View {
                     let sum = items.reduce(0.0) { total, item in
                         total
                             + item.setLogs.filter { $0.kind == .working }
-                            .reduce(0.0) {
-                                $0
-                                    + (($1.weight ?? 0)
-                                        * Double(max(0, $1.reps)))
+                            .reduce(0.0) { acc, log in
+                                let load = includesBodyweight
+                                    ? (effectiveLoad(
+                                        loggedWeight: log.weight,
+                                        includesBodyweight: true,
+                                        userBodyweight: userBodyweight) ?? 0)
+                                    : (log.weight ?? 0)
+                                return acc + load * Double(max(0, log.reps))
                             }
                     }
                     return sum > 0 ? sum : nil
@@ -872,9 +930,23 @@ private struct ProgressChart: View {
                 case .bestWeight:
                     return items.compactMap { item in
                         item.setLogs.filter { $0.kind == .working }
-                            .compactMap { $0.weight }
+                            .compactMap { log -> Double? in
+                                includesBodyweight
+                                    ? effectiveLoad(
+                                        loggedWeight: log.weight,
+                                        includesBodyweight: true,
+                                        userBodyweight: userBodyweight)
+                                    : log.weight
+                            }
                             .max()
                     }.max()
+
+                case .bestReps:
+                    let best = items.flatMap { item in
+                        item.setLogs.filter { $0.kind == .working }
+                            .map { max(0, $0.reps) }
+                    }.max() ?? 0
+                    return best > 0 ? Double(best) : nil
 
                 case .totalReps:
                     let reps = items.reduce(0) { total, item in

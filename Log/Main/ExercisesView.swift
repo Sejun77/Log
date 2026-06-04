@@ -772,6 +772,19 @@ struct ExerciseDetailView: View {
                 // exercise.isTimeBased as the single source of truth.
                 Toggle("Time-based", isOn: $exercise.isTimeBased)
                     .disabled(isLocked)
+
+                // Independent of equipment type: a weighted pull-up keeps a
+                // non-"Bodyweight" equipment (so the active-workout weight field
+                // stays visible) yet still counts bodyweight toward load.
+                Toggle(isOn: $exercise.includesBodyweightInLoad) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Bodyweight counts as load")
+                        Text("Adds your Settings bodyweight to logged weight for History metrics.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(isLocked)
             }
 
             usedInRoutinesSection
