@@ -10,6 +10,10 @@ import SwiftUI
 struct TechniquePlanEditor: View {
     @Environment(\.modelContext) private var ctx
     @Bindable var prescription: SlotPrescription
+    /// True when the parent exercise is bodyweight: the weight-based Drop Set
+    /// technique is blocked in the picker. Defaults false so non-bodyweight
+    /// behavior is unchanged.
+    var isBodyweight: Bool = false
     @State private var showAdd = false
     @State private var addType: TechniqueType = .dropset
     /// Non-nil drives the "Delete Technique?" confirmation alert. Set by
@@ -76,6 +80,7 @@ struct TechniquePlanEditor: View {
                 existingTechniques: sorted,
                 setCount: prescription.sets ?? 3,
                 usesDuration: prescription.usesDuration,
+                isBodyweight: isBodyweight,
                 onPick: { t in addPlan(type: t) }
             )
         }
@@ -207,6 +212,8 @@ private struct TechniqueTypePickerSheet: View {
     var setCount: Int = 3
     /// When true, rep-count-dependent techniques are disabled (not applicable to duration sets).
     var usesDuration: Bool = false
+    /// When true, the weight-based Drop Set technique is blocked.
+    var isBodyweight: Bool = false
     var onPick: (TechniqueType) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -221,8 +228,6 @@ private struct TechniqueTypePickerSheet: View {
     ]
 
     private let intensityFinishers: Set<TechniqueType> = [.dropset, .amrap, .restPause, .cluster]
-    /// Techniques that require a rep count and are not applicable to duration-based prescriptions.
-    private let incompatibleForDuration: Set<TechniqueType> = [.dropset, .partialReps, .restPause, .cluster, .amrap]
 
     /// Effective 0-based indices for an existing technique (uses new field or migrates old).
     private func effectiveIndices(for plan: TechniquePlan) -> Set<Int> {
@@ -239,9 +244,12 @@ private struct TechniqueTypePickerSheet: View {
     /// Returns a block message if adding `newType` (defaults to last set index)
     /// would create a duplicate or violate conflict rules. Returns nil if allowed.
     private func conflictMessage(for newType: TechniqueType) -> String? {
-        // Duration-based prescriptions do not support rep-count-dependent techniques.
-        if usesDuration && incompatibleForDuration.contains(newType) {
-            return "Not available for duration-based exercises."
+        // Type-level availability (bodyweight + duration) — pure, independent
+        // of existing techniques.
+        if let msg = techniqueConflictMessage(
+            for: newType, isBodyweight: isBodyweight, usesDuration: usesDuration
+        ) {
+            return msg
         }
 
         let defaultIdx = max(0, setCount - 1)
@@ -299,6 +307,43 @@ private struct TechniqueTypePickerSheet: View {
             }
         }
     }
+}
+
+// MARK: - Technique availability (pure helper)
+
+/// Techniques that require a rep count and are not applicable to
+/// duration-based prescriptions.
+let techniquesIncompatibleWithDuration: Set<TechniqueType> =
+    [.dropset, .partialReps, .restPause, .cluster, .amrap]
+
+/// Type-level availability gate for adding a technique, independent of any
+/// existing techniques on the prescription. Returns a block message, or nil
+/// when the type passes these checks.
+///
+/// - Bodyweight exercises block `.dropset` (a weight-reduction technique).
+/// - Duration-based prescriptions block rep-count-dependent techniques.
+///
+/// Per-set duplicate / intensity-finisher conflict rules are evaluated
+/// separately in `TechniqueTypePickerSheet.conflictMessage(for:)`.
+func techniqueConflictMessage(
+    for type: TechniqueType, isBodyweight: Bool, usesDuration: Bool
+) -> String? {
+    if isBodyweight && type == .dropset {
+        return "Not available for bodyweight exercises."
+    }
+    if usesDuration && techniquesIncompatibleWithDuration.contains(type) {
+        return "Not available for duration-based exercises."
+    }
+    return nil
+}
+
+/// Convenience boolean wrapper around `techniqueConflictMessage`.
+func isTechniqueAllowed(
+    _ type: TechniqueType, isBodyweight: Bool, usesDuration: Bool
+) -> Bool {
+    techniqueConflictMessage(
+        for: type, isBodyweight: isBodyweight, usesDuration: usesDuration
+    ) == nil
 }
 
 // Edit parameters of an existing TechniquePlan (pushed via NavigationLink).

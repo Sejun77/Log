@@ -617,6 +617,9 @@ struct ActiveWorkoutView: View {
                     isLogged: isLogged,
                     canLog: allowed,
                     effortTarget: effortTarget,
+                    isBodyweight: isBodyweightEquipment(
+                        exercise.prescriptionSnapshot?.equipment
+                    ),
                     reps: repsB,
                     weight: weightB,
                     onLog: { reps, weight in

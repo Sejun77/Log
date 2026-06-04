@@ -68,7 +68,10 @@ struct SlotPrescriptionSection: View {
 
                 // Phase 3.5: Warmup scheme navigation
                 NavigationLink {
-                    WarmupSchemeEditor(prescription: prescription)
+                    WarmupSchemeEditor(
+                        prescription: prescription,
+                        isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType)
+                    )
                 } label: {
                     HStack {
                         Text("Warmup")
@@ -86,7 +89,10 @@ struct SlotPrescriptionSection: View {
 
                 // Phase 3.5: Technique plans navigation
                 NavigationLink {
-                    TechniquePlanEditor(prescription: prescription)
+                    TechniquePlanEditor(
+                        prescription: prescription,
+                        isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType)
+                    )
                 } label: {
                     HStack {
                         Text("Techniques")
