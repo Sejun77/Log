@@ -223,6 +223,15 @@ the flag off → Reps + Best Reps only; non-bodyweight flag-off → unchanged; s
 effectiveLoad, availability matrix, fallback, flag-off-bodyweight regression); full suite **784/784**,
 manual regression passed.
 
+Also updated 2026-06-04: **Technique overlap rule cleanup shipped** (§2.22) — the old flat
+`intensityFinishers` rule (which blocked **all** pairs among Drop Set, AMRAP, Rest-Pause, Cluster) was
+replaced with a pure, order-independent pairwise helper `techniquePairConflict(_:_:)` shared by both the
+add-picker and the per-set Applies-to-Sets toggle. **Newly allowed:** Drop Set + Rest-Pause and Rest-Pause
++ AMRAP (Rest-Pause is display-only at runtime). **Still blocked:** Drop Set + AMRAP, Drop Set + Cluster,
+Rest-Pause + Cluster, Cluster + AMRAP, and duplicate same type. Bodyweight Drop Set blocking, duration
+restrictions, dropset effort validation, and active-workout rendering/logging are all unchanged; **no model
+change**. Added `TechniquePairConflictTests`; full suite **793/793**, manual regression passed.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -1191,6 +1200,31 @@ see §2.12** — kept separate from the search-policy commit as planned.
   effective load). **Full suite 784/784;** manual regression passed (Settings field + keyboard dismissal,
   pure vs. weighted bodyweight load, flag-off / no-bodyweight reps-only, non-bodyweight + time-based
   unchanged).
+
+### 2.22 Technique overlap rule cleanup — pairwise conflict helper — ✅ SHIPPED (2026-06-04)
+- **Source:** Technique-overlap audit (2026-06-04). The old conflict rule used a flat
+  `intensityFinishers` set and blocked **every** pair among Drop Set, AMRAP, Rest-Pause, and
+  Cluster — too strict, since Rest-Pause is display-only at runtime and can validly extend a
+  dropset beyond failure.
+- **Change:** replaced the flat set with a pure, order-independent helper
+  `techniquePairConflict(_:_:) -> String?` that encodes cross-technique structural rules plus
+  same-type duplication. Both conflict sites — the add-picker
+  (`TechniqueTypePickerSheet.conflictMessage(for:)`) and the per-set Applies-to-Sets toggle
+  (`TechniqueParamEditView.conflictForAdding(idx:)`) — now share this single helper.
+- **Newly allowed:** Drop Set + Rest-Pause; Rest-Pause + AMRAP.
+- **Still blocked:** Drop Set + AMRAP (dropset already defines effort); Drop Set + Cluster
+  (different set structures); Rest-Pause + Cluster (both intra-set rest structures); Cluster +
+  AMRAP; duplicate same technique on one set.
+- **Still allowed (unchanged):** AMRAP + To Failure; Drop Set + {To Failure / Partial Reps /
+  Tempo}; Rest-Pause + Tempo; Partial Reps + Tempo.
+- **Unchanged:** bodyweight Drop Set blocking, duration-based restrictions, dropset effort
+  validation, and active-workout rendering/logging (Drop Set + Rest-Pause renders the dropset
+  card with a Rest-Pause chip, no rest/logging change). **No SwiftData model change.**
+- **Tests:** added `TechniquePairConflictTests` (allowed/blocked pairs both orders, duplicate
+  across all types); `BodyweightTechniqueTests` still passing. **Full suite 793/793;** manual
+  regression passed (both picker and Applies-to-Sets checkboxes, bodyweight/duration unchanged,
+  active workout Drop Set + Rest-Pause). (Files: `Log/Main/Routines/TechniquePlanEditor.swift`,
+  `LogTests/TechniquePairConflictTests.swift`.)
 
 ## 3. Optional / Future Features
 
