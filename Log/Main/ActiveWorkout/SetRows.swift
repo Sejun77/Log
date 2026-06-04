@@ -12,6 +12,9 @@ struct SetEntryRow: View {
     let canLog: Bool
     /// Resolved per-set effort target label (e.g. "RIR 2"); nil = none shown.
     var effortTarget: String?
+    /// When true the exercise is bodyweight: the weight field, "×" separator,
+    /// and kg/lb label are hidden and logged sets save a nil weight.
+    var isBodyweight: Bool = false
     @Binding var reps: String
     @Binding var weight: String
     var onLog: (Int, Double?) -> Void
@@ -23,6 +26,7 @@ struct SetEntryRow: View {
         isLogged: Bool,
         canLog: Bool,
         effortTarget: String? = nil,
+        isBodyweight: Bool = false,
         reps: Binding<String>,
         weight: Binding<String>,
         onLog: @escaping (Int, Double?) -> Void,
@@ -33,6 +37,7 @@ struct SetEntryRow: View {
         self.isLogged = isLogged
         self.canLog = canLog
         self.effortTarget = effortTarget
+        self.isBodyweight = isBodyweight
         self._reps = reps
         self._weight = weight
         self.onLog = onLog
@@ -69,25 +74,29 @@ struct SetEntryRow: View {
                     .disabled(isLogged)
                     .focused($focusedField, equals: .reps)
 
-                Text("×").foregroundStyle(.secondary).fixedSize()
+                // Bodyweight exercises log reps only — hide the "×" separator,
+                // weight field, and unit label.
+                if !isBodyweight {
+                    Text("×").foregroundStyle(.secondary).fixedSize()
 
-                // "0.0" placeholder signals decimal entry (the .decimalPad's
-                // "." key is easy to miss). It's the stable discoverability cue
-                // for working-set weight — a section footer caption was tried
-                // but jumped with the keyboard on first focus, so it was dropped.
-                TextField("0.0", text: $weight)
-                    .font(.dsBody.monospacedDigit())
-                    // Weight supports fractional plates (e.g. 2.5 kg) — decimal
-                    // pad. Reps above stays `.numberPad` (integer-only).
-                    .keyboardType(.decimalPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 70)
-                    .disabled(isLogged)
-                    .focused($focusedField, equals: .weight)
+                    // "0.0" placeholder signals decimal entry (the .decimalPad's
+                    // "." key is easy to miss). It's the stable discoverability cue
+                    // for working-set weight — a section footer caption was tried
+                    // but jumped with the keyboard on first focus, so it was dropped.
+                    TextField("0.0", text: $weight)
+                        .font(.dsBody.monospacedDigit())
+                        // Weight supports fractional plates (e.g. 2.5 kg) — decimal
+                        // pad. Reps above stays `.numberPad` (integer-only).
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 70)
+                        .disabled(isLogged)
+                        .focused($focusedField, equals: .weight)
 
-                Text(Units.weightIsKg ? "kg" : "lb")
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
+                    Text(Units.weightIsKg ? "kg" : "lb")
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                }
 
                 Spacer(minLength: 8)
 
@@ -97,7 +106,7 @@ struct SetEntryRow: View {
                 } else {
                     Button("Log") {
                         let r = Int(reps) ?? template.targetReps
-                        let w = Double(weight)
+                        let w = isBodyweight ? nil : Double(weight)
                         onLog(r, w)
                     }
                     .buttonStyle(.borderedProminent)

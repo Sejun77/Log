@@ -24,6 +24,20 @@ func formatWeight(_ w: Double) -> String {
     w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(w)
 }
 
+// MARK: - Equipment classification
+
+/// The canonical equipment-type string for bodyweight exercises.
+let bodyweightEquipment = "Bodyweight"
+
+/// True when an `Exercise.equipmentType` / snapshot `equipment` string
+/// represents a bodyweight exercise. Trimmed + case-insensitive so
+/// imported/legacy casings (e.g. " bodyweight ") still match. Pure.
+func isBodyweightEquipment(_ equipment: String?) -> Bool {
+    guard let equipment else { return false }
+    return equipment.trimmingCharacters(in: .whitespacesAndNewlines)
+        .caseInsensitiveCompare(bodyweightEquipment) == .orderedSame
+}
+
 // MARK: - Stable rest notification ID
 
 /// Builds a stable rest-timer notification ID of the form
