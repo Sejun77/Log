@@ -227,8 +227,6 @@ private struct TechniqueTypePickerSheet: View {
         (.tempoOverride, "Tempo Override",  "Override tempo for this exercise."),
     ]
 
-    private let intensityFinishers: Set<TechniqueType> = [.dropset, .amrap, .restPause, .cluster]
-
     /// Effective 0-based indices for an existing technique (uses new field or migrates old).
     private func effectiveIndices(for plan: TechniquePlan) -> Set<Int> {
         let idx = plan.appliesToSetIndices   // computed on TechniquePlan
@@ -255,24 +253,16 @@ private struct TechniqueTypePickerSheet: View {
         let defaultIdx = max(0, setCount - 1)
         let onDefault = existingTechniques.filter { effectiveIndices(for: $0).contains(defaultIdx) }
 
-        // 1. Duplicate: same type already exists on the last set.
+        // 1. Duplicate: same type already exists on the last set (set-number message).
         if onDefault.contains(where: { $0.type == newType }) {
             return "\(newType.displayName) already exists on set \(defaultIdx + 1)."
         }
 
-        guard intensityFinishers.contains(newType) else { return nil }
-
-        // 2. AMRAP ↔ Dropset mutual exclusion.
-        if newType == .amrap && onDefault.contains(where: { $0.type == .dropset }) {
-            return "Dropset already defines AMRAP/fixed reps; remove it to use AMRAP."
-        }
-        if newType == .dropset && onDefault.contains(where: { $0.type == .amrap }) {
-            return "Remove AMRAP first to add a Dropset."
-        }
-
-        // 3. One intensity finisher per set.
-        if let other = onDefault.first(where: { intensityFinishers.contains($0.type) }) {
-            return "\(other.type.displayName) already on set \(defaultIdx + 1)."
+        // 2. Cross-technique structural conflicts (shared pairwise rules).
+        for existing in onDefault {
+            if let msg = techniquePairConflict(newType, existing.type) {
+                return msg
+            }
         }
 
         return nil
@@ -346,6 +336,46 @@ func isTechniqueAllowed(
     ) == nil
 }
 
+/// Pairwise structural conflict between two techniques applied to the SAME set.
+/// Order-independent. Returns a block message, or nil when the pair may coexist.
+///
+/// This encodes only cross-technique structural rules plus same-type
+/// duplication. Type-level availability (bodyweight / duration) is handled
+/// separately by `techniqueConflictMessage(for:isBodyweight:usesDuration:)`, and
+/// Dropset effort × AMRAP validation by `TechniqueParamEditView.conflictForEffort`.
+///
+/// Allowed (notable): Drop Set + Rest-Pause and Rest-Pause + AMRAP — Rest-Pause
+/// is display-only at runtime, so these do not affect logging/rest. AMRAP + To
+/// Failure is a rep-target + effort-target combo, redundant but not structural.
+func techniquePairConflict(_ a: TechniqueType, _ b: TechniqueType) -> String? {
+    // Same technique twice on one set.
+    if a == b {
+        return "\(a.displayName) is already on this set."
+    }
+
+    let pair: Set<TechniqueType> = [a, b]
+
+    // Drop Set already carries its own AMRAP / fixed-reps effort mode, so a
+    // separate AMRAP technique on the same set is redundant.
+    if pair == [.dropset, .amrap] {
+        return "Dropset already defines AMRAP/fixed reps; remove it to use AMRAP."
+    }
+    // Drop Set and Cluster describe different set structures; the dropset card
+    // cannot represent a cluster.
+    if pair == [.dropset, .cluster] {
+        return "Cluster can't combine with Drop Set on the same set."
+    }
+    // Rest-Pause and Cluster are both intra-set rest structures.
+    if pair == [.restPause, .cluster] {
+        return "Rest-Pause and Cluster can't share a set."
+    }
+    // Cluster prescribes fixed reps per mini-set; AMRAP changes the rep target.
+    if pair == [.cluster, .amrap] {
+        return "Cluster and AMRAP can't share a set."
+    }
+    return nil
+}
+
 // Edit parameters of an existing TechniquePlan (pushed via NavigationLink).
 private struct TechniqueParamEditView: View {
     @Environment(\.modelContext) private var ctx
@@ -354,8 +384,6 @@ private struct TechniqueParamEditView: View {
     var siblingTechniques: [TechniquePlan] = []
     /// Working set count from the prescription (used for per-set-index UI and conflict checks).
     var setCount: Int = 3
-
-    private let intensityFinishers: Set<TechniqueType> = [.dropset, .amrap, .restPause, .cluster]
 
     /// Transient error shown when a set-index toggle is blocked by a conflict.
     @State private var appliesToErrorMsg: String? = nil
@@ -396,21 +424,15 @@ private struct TechniqueParamEditView: View {
         let sibs = siblingTechniques.filter { $0.persistentModelID != plan.persistentModelID }
         let sibsOnIdx = sibs.filter { effectiveIndices(for: $0).contains(idx) }
 
-        // Duplicate type on same index.
+        // Duplicate type on same index (set-number message).
         if sibsOnIdx.contains(where: { $0.type == plan.type }) {
             return "\(plan.type.displayName) already on set \(idx + 1)."
         }
-        guard intensityFinishers.contains(plan.type) else { return nil }
-        // AMRAP ↔ Dropset mutual exclusion.
-        if plan.type == .amrap, sibsOnIdx.contains(where: { $0.type == .dropset }) {
-            return "Dropset on set \(idx + 1); can't also add AMRAP."
-        }
-        if plan.type == .dropset, sibsOnIdx.contains(where: { $0.type == .amrap }) {
-            return "AMRAP on set \(idx + 1); remove it to add Dropset."
-        }
-        // One intensity finisher per set.
-        if let other = sibsOnIdx.first(where: { intensityFinishers.contains($0.type) }) {
-            return "\(other.type.displayName) already on set \(idx + 1)."
+        // Cross-technique structural conflicts (shared pairwise rules).
+        for sib in sibsOnIdx {
+            if let msg = techniquePairConflict(plan.type, sib.type) {
+                return msg
+            }
         }
         return nil
     }
