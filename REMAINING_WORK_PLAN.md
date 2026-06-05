@@ -1226,6 +1226,29 @@ see §2.12** — kept separate from the search-policy commit as planned.
   active workout Drop Set + Rest-Pause). (Files: `Log/Main/Routines/TechniquePlanEditor.swift`,
   `LogTests/TechniquePairConflictTests.swift`.)
 
+### 2.23 Active workout input responsiveness — Slice C (session clock isolation) — ✅ SHIPPED (2026-06-05)
+- **Source:** Active-workout input/focus audit (typing lag + unreliable tap-to-switch between
+  reps/weight `TextField`s). Slice C is the first, lowest-risk fix; see §5.4 for the full
+  performance record and the deferred Slice B.
+- **Change:** the session elapsed clock no longer ticks through `ActiveWorkoutView`'s body.
+  Previously `ActiveWorkoutView` owned `@State now`, updated every second by a `Timer.publish`
+  ticker, and the elapsed string was rendered in the toolbar from the parent body — so **every
+  tick invalidated the whole ~3400-line body, including the input rows**. A new `SessionClockView`
+  (`TimelineView(.periodic)`) now owns the per-second refresh, so only the clock text redraws.
+  Added a pure `formatSessionElapsed(start:now:)` helper (extracted verbatim from the old
+  `sessionElapsedString`); removed the parent `@State now`, the `Timer.publish` ticker, and the
+  `.onReceive` that drove it.
+- **Unchanged:** input bindings, `ParentDraftStore`, `ActiveWorkoutGuard`, input persistence, rest
+  timer, set timer, Live Activity, undo, finish workout, superset/dropset flows, and all workout
+  logic. **No SwiftData model change.**
+- **Tests:** added `SessionElapsedFormatTests` (nil-start, zero, negative-clamp, MM:SS, hour
+  boundary, H:MM:SS, fractional truncation). **Full suite 802/802;** manual regression passed on
+  both simulator and physical iPhone (clock still ticks; rest timer/Live Activity unchanged;
+  typing into reps/weight smoother; tap-to-switch more reliable; superset/dropset/undo/finish all
+  work). (Files: `Log/Main/ActiveWorkout/SessionClockView.swift`,
+  `Log/Main/ActiveWorkout/ActiveWorkoutHelpers.swift`, `Log/Main/ActiveWorkoutView.swift`,
+  `LogTests/SessionElapsedFormatTests.swift`.)
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -1614,6 +1637,24 @@ Optional tests / audits. None block any product work.
   made speculatively."
 - **Recommendation:** **defer** (only if a real nil-slot consumer appears).
 - **Risk:** **low**.
+
+### 5.4 Active workout input responsiveness (typing lag / focus reliability)
+- **Source:** Active-workout input/focus audit (2026-06-05) — typing into reps/weight fields
+  lagged (worse on a physical iPhone) and tap-to-switch between fields was unreliable.
+- **Slice C — session clock isolation — ✅ SHIPPED (2026-06-05, see §2.23).** Removed the 1 Hz
+  full-body invalidation: the toolbar clock now redraws in an isolated `SessionClockView`
+  (`TimelineView(.periodic)`) instead of through `ActiveWorkoutView`'s `@State now`. Full suite
+  **802/802**; manual regression confirmed smoother typing and more reliable focus switching on
+  simulator and device.
+- **Slice B — local row draft state / fewer per-keystroke persistence writes — DEFERRED (monitor
+  after Slice C).** The audit also found that each keystroke mutates parent `@State`, mirrors the
+  whole input dict into `ActiveWorkoutGuard.inputsCache` (`@Published`), and does a synchronous
+  `UserDefaults` write via `ParentDraftStore` — additional per-character work. The proposed fix is
+  row-local `@State` drafts that commit on focus-loss / Log / background instead of on every
+  character. **Not shipped, not scheduled.** Only pursue if input lag persists after Slice C on
+  real-device use; it touches input bindings + draft persistence, so it carries more regression
+  risk (cold-resume draft fidelity) and needs its own slice + tests.
+- **Risk:** Slice C **low** (done); Slice B **medium** (defer unless a measured/observed signal).
 
 > Host-less `LogTests` conversion was previously listed here. It has been moved to
 > §7 (Archive) — see §7.4 — because it was attempted and reverted and should not be
