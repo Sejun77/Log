@@ -24,6 +24,24 @@ func formatWeight(_ w: Double) -> String {
     w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(w)
 }
 
+// MARK: - Session elapsed clock formatting
+
+/// Formats the active session's elapsed time for the toolbar clock.
+/// Returns "00:00" when no `start` is set, clamps negative intervals to 0,
+/// and switches from MM:SS to H:MM:SS once an hour has elapsed. Pure — the
+/// caller supplies `now` so the per-second redraw can live in an isolated
+/// `TimelineView`/clock subview instead of `ActiveWorkoutView`'s body.
+func formatSessionElapsed(start: Date?, now: Date) -> String {
+    guard let start else { return "00:00" }
+    let total = max(0, Int(now.timeIntervalSince(start)))
+    let h = total / 3600
+    let m = (total % 3600) / 60
+    let s = total % 60
+    return h > 0
+        ? String(format: "%d:%02d:%02d", h, m, s)
+        : String(format: "%02d:%02d", m, s)
+}
+
 // MARK: - Equipment classification
 
 /// The canonical equipment-type string for bodyweight exercises.

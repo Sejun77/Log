@@ -945,22 +945,13 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    @State private var now = Date()
-    private let sessionTicker =
-        Timer
-        .publish(every: 1, on: .main, in: .common)
-        .autoconnect()
-
-    private var sessionElapsedString: String {
-        guard let start = activeGuard.sessionStart else { return "00:00" }
-        let total = max(0, Int(now.timeIntervalSince(start)))
-        let h = total / 3600
-        let m = (total % 3600) / 60
-        let s = total % 60
-        return h > 0
-            ? String(format: "%d:%02d:%02d", h, m, s)
-            : String(format: "%02d:%02d", m, s)
-    }
+    // Slice C: the session clock no longer lives in `ActiveWorkoutView`'s
+    // state. A parent-level `@State now` driven by a 1 Hz `Timer.publish`
+    // used to invalidate this entire body every second (it was read by the
+    // toolbar's elapsed-time text). The clock now redraws in isolation via
+    // `SessionClockView` (a `TimelineView`), so ticks no longer recompute the
+    // active workout body / input rows. The pure formatter lives in
+    // `ActiveWorkoutHelpers.formatSessionElapsed(start:now:)`.
 
     private func fetchWorkout(by id: UUID) -> Workout? {
         let d = FetchDescriptor<Workout>(predicate: #Predicate { $0.id == id })
@@ -1636,9 +1627,9 @@ struct ActiveWorkoutView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Text(sessionElapsedString)
-                        .font(.dsBody.monospacedDigit())
-                        .accessibilityIdentifier("sessionElapsedTimer")
+                    // Slice C: isolated clock — only this view redraws each
+                    // second, not the whole active workout body.
+                    SessionClockView(sessionStart: activeGuard.sessionStart)
                 }
             }
             .confirmationDialog(
@@ -1771,7 +1762,6 @@ struct ActiveWorkoutView: View {
                 // ensure overlay shows if a rest is already running in background
                 showRestOverlay = rest.isRunning
             }
-            .onReceive(sessionTicker) { now = $0 }
             .onChange(of: rest.isRunning) { _, running in
                 if !running {
                     clearPersistedRestState()
