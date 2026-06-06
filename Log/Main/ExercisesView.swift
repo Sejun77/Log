@@ -591,6 +591,15 @@ struct ExerciseDetailView: View {
     let usage: ExerciseRoutineUsage
 
     @FocusState private var focusedField: String?
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Local drafts for the two free-text fields. Typing mutates only these
+    /// strings; they are committed to `Exercise.notes` / `Exercise.setupDefaults`
+    /// at discrete points (focus change, disappear, scene backgrounding) so a
+    /// per-keystroke model write never invalidates this Form via the model's
+    /// Observation tracking.
+    @State private var notesDraft = ""
+    @State private var setupDraft = ""
 
     /// Max routine rows shown before collapsing the remainder into a
     /// "+N more" row. Realistic routine counts are tiny; this only guards
@@ -624,7 +633,16 @@ struct ExerciseDetailView: View {
     var body: some View {
         DetailForm
             .probe("ExerciseDetail.Form")
-            .onDisappear { try? ctx.save() }
+            .onAppear { seedDrafts() }
+            .onChange(of: exercise.id) { _, _ in seedDrafts() }
+            .onChange(of: focusedField) { _, _ in commitDrafts() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { commitDrafts() }
+            }
+            .onDisappear {
+                commitDrafts()
+                try? ctx.save()
+            }
             .navigationTitle("Edit Exercise")
             .listStyle(.insetGrouped)
             .scrollDismissesKeyboard(.interactively)
@@ -645,6 +663,28 @@ struct ExerciseDetailView: View {
                     }
                 }
             }
+    }
+
+    /// Seeds both drafts from the live model. Called on appear and when the
+    /// bound exercise changes identity, never during ordinary body redraws, so
+    /// an in-progress edit is not clobbered.
+    private func seedDrafts() {
+        notesDraft = exercise.notes ?? ""
+        setupDraft = exercise.setupDefaults ?? ""
+    }
+
+    /// Commits both drafts to the model, normalizing empty/whitespace-only input
+    /// to nil and writing only when the value changed (no-op commits leave the
+    /// model un-dirtied). Never called per keystroke.
+    private func commitDrafts() {
+        let normalizedNotes = normalizedOptionalNote(notesDraft)
+        if exercise.notes != normalizedNotes {
+            exercise.notes = normalizedNotes
+        }
+        let normalizedSetup = normalizedOptionalNote(setupDraft)
+        if exercise.setupDefaults != normalizedSetup {
+            exercise.setupDefaults = normalizedSetup
+        }
     }
 
     private var DetailForm: some View {
@@ -722,25 +762,16 @@ struct ExerciseDetailView: View {
                 // `axis: .vertical` makes Return insert a newline on the
                 // soft keyboard; `lineLimit(3...8)` gives the cell room to
                 // grow for typical 4–5-line setup cues before the content
-                // starts scrolling within the cell. The inline binding
-                // collapses nil / empty / whitespace-only input to nil on
-                // save (vs the shared `replacingNilWith` helper which only
-                // catches `isEmpty`) — the 10-polish-A/B display readers
-                // already trim before deciding to render, so any stored
-                // whitespace-only value would silently show nothing and
+                // starts scrolling within the cell. Editing the local
+                // `setupDraft` (committed via `commitDrafts()` →
+                // `normalizedOptionalNote`) collapses nil / empty /
+                // whitespace-only input to nil on commit — the 10-polish-A/B
+                // display readers already trim before deciding to render, so any
+                // stored whitespace-only value would silently show nothing and
                 // never round-trip back to "set" once cleared.
                 TextField(
                     "Setup defaults — e.g. seat height 4, cable at shoulder",
-                    text: Binding(
-                        get: { exercise.setupDefaults ?? "" },
-                        set: { newValue in
-                            let trimmed = newValue.trimmingCharacters(
-                                in: .whitespacesAndNewlines
-                            )
-                            exercise.setupDefaults =
-                                trimmed.isEmpty ? nil : newValue
-                        }
-                    ),
+                    text: $setupDraft,
                     axis: .vertical
                 )
                 .font(.dsBody)
@@ -752,7 +783,7 @@ struct ExerciseDetailView: View {
 
                 TextField(
                     "Notes",
-                    text: Binding($exercise.notes, replacingNilWith: "")
+                    text: $notesDraft
                 )
                 .font(.dsBodySecondary)
                 .submitLabel(.done)
