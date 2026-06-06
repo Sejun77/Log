@@ -42,6 +42,18 @@ func formatSessionElapsed(start: Date?, now: Date) -> String {
         : String(format: "%02d:%02d", m, s)
 }
 
+// MARK: - Note normalization
+
+/// Canonical optional form for free-text note input. Trims whitespace and
+/// newlines only to decide emptiness; when non-empty, stores the **original
+/// (untrimmed)** text. This matches the pre-existing inline bindings in
+/// `ActiveWorkoutView` (session notes) and `ExerciseNotesEditSheet`, where
+/// `trimmed.isEmpty ? nil : original` cleared blank/whitespace-only notes to
+/// nil while preserving the user's exact text otherwise. Pure.
+func normalizedOptionalNote(_ text: String) -> String? {
+    text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+}
+
 // MARK: - Equipment classification
 
 /// The canonical equipment-type string for bodyweight exercises.
