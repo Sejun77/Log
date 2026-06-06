@@ -246,6 +246,19 @@ logging, history, bodyweight, technique, or CSV/transfer change; full suite **80
 manual regression confirmed on physical device. A reusable `NoteEditor` extraction remains
 **optional / deferred** (§5.4).
 
+Also updated 2026-06-06: **Keyboard scroll-dismissal coverage shipped** (§2.25, §5.4) — the
+audit-found gap where scrolling did not dismiss the keyboard is closed. Added
+`.scrollDismissesKeyboard(.immediately)` to the main `ActiveWorkoutView` List (covers session
+note + working-set reps/weight, time-based duration, and dropset input rows — numeric pads
+have no Return key) and `.scrollDismissesKeyboard(.interactively)` to the two
+`BlockDetailViews` Lists hosting `SlotPrescriptionSection` (normal-block + superset slot
+notes), matching the note-heavy routine-editor house style. Purely additive UI modifiers — no
+logic/bindings/models/persistence change; session-note draft still commits on focus loss,
+input values retained, keyboard checkmark accessory and session-note newline behavior intact.
+Full suite **808/808**, manual regression passed. The **rare floating Back/Next panel after
+warm resume is NOT fixed** — it remains **monitor / debug-only** (§5.4); no layout-anchoring
+change and no debug instrumentation were added.
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -1291,6 +1304,28 @@ see §2.12** — kept separate from the search-policy commit as planned.
   `Log/Main/ActiveWorkout/ActiveWorkoutHelpers.swift`, `Log/Main/ExercisesView.swift`,
   `LogTests/NoteNormalizationTests.swift`.)
 
+### 2.25 Keyboard scroll-dismissal coverage — ✅ SHIPPED (2026-06-06)
+- **Source:** Keyboard-dismissal / bottom-panel audit (2026-06-06). Scrolling did not dismiss the
+  keyboard for the active-workout session note, the reps/weight/duration set fields, or the routine
+  block-detail slot/prescription notes — the containers were simply missing
+  `.scrollDismissesKeyboard(...)`. The numeric set fields use `.numberPad`/`.decimalPad` (no Return
+  key) and the notes are multiline (Return = newline), so scroll was the only missing dismissal.
+- **Change:** added `.scrollDismissesKeyboard(.immediately)` to the main `ActiveWorkoutView` List
+  (one modifier covers the session note **and** all set inputs — reps/weight, time-based duration,
+  dropset rows, since they share that List), and `.scrollDismissesKeyboard(.interactively)` to both
+  `BlockDetailViews` Lists that host `SlotPrescriptionSection` (`RoutineBlockDetailView` and
+  `SupersetDetailNoRest`), matching the note-heavy routine-editor house style.
+- **Unchanged:** purely additive UI modifiers — no logic, bindings, models, or persistence. Session
+  note still commits on focus loss; reps/weight/duration values retained; `.keyboard` checkmark
+  accessory still dismisses; Return in the session note still inserts a newline; logging, undo, rest
+  timer, Live Activity, dropset/superset flows, Finish, and routine steppers all unchanged. **No
+  SwiftData model change.**
+- **Tests:** none changed (no pure helper added). **Full suite 808/808;** manual regression confirmed
+  scroll-dismiss + value/note retention across all three areas on device. (Files:
+  `Log/Main/ActiveWorkoutView.swift`, `Log/Main/Routines/BlockDetailViews.swift`.)
+- **Out of scope (still open):** the **rare floating Back/Next panel after warm resume** — see §5.4,
+  **monitor / debug-only** (no layout-anchoring change, no instrumentation added in this slice).
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -1709,8 +1744,26 @@ Optional tests / audits. None block any product work.
   use `.submitLabel(.done)`). **Not shipped, not scheduled** — only pursue if the duplication becomes a
   maintenance cost; the per-field implementations are already correct and tested. Risk: **medium**
   (broad touch across working surfaces for a pure-cleanup gain).
+- **Keyboard scroll-dismissal coverage — ✅ SHIPPED 2026-06-06 (see §2.25).** Same audit found
+  scrolling did not dismiss the keyboard for the session note, the reps/weight/duration set fields,
+  or the routine slot/prescription notes (missing `.scrollDismissesKeyboard`). Fixed additively:
+  `.immediately` on the `ActiveWorkoutView` List, `.interactively` on the two `BlockDetailViews`
+  Lists. Full suite **808/808**; device-confirmed.
+- **Floating Back/Next bottom panel after warm resume — MONITOR / DEBUG-ONLY (unfixed).** Rare,
+  not yet reproduced: after resuming a workout the `.safeAreaInset(edge: .bottom)` Back/Next panel
+  occasionally floats mid-screen; re-pushing the view or discard+restart does **not** clear it, but a
+  cold relaunch does. Suspected root cause is a **stale/inflated keyboard bottom-safe-area inset at
+  the window/scene level** (survives SwiftUI view recreation, reset only by a new window), likely
+  triggered by a focused field during a push/pop/background transition. **No fix and no
+  instrumentation shipped this slice** (deliberately — a blind layout change risks hiding focused set
+  rows). Next step if it recurs: DEBUG logging of `safeAreaInsets.bottom` vs keyboard height +
+  `keyboardVisible` + first responder on resume (the tell is `bottom ≈ keyboardHeight` while
+  `keyboardVisible == false`); only then consider `.ignoresSafeArea(.keyboard, edges: .bottom)` on
+  the List (device-verified). A `.id(sessionID)` reset is **not** a candidate (window-scoped bug).
+  Risk: **medium** (load-bearing active-workout layout); recommendation: **monitor until reproduced**.
 - **Risk:** Slice C **low** (done); Slice B **medium** (defer unless a measured/observed signal);
-  note-field fix **done**; `NoteEditor` extraction **deferred** (optional cleanup only).
+  note-field fix **done**; keyboard scroll-dismissal **done**; `NoteEditor` extraction **deferred**
+  (optional cleanup only); floating-panel bug **monitor-only** until reproduced.
 
 > Host-less `LogTests` conversion was previously listed here. It has been moved to
 > §7 (Archive) — see §7.4 — because it was attempted and reverted and should not be
