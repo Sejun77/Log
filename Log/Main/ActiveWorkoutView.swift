@@ -55,6 +55,13 @@ struct ActiveWorkoutView: View {
     @State private var sessionPlans: [UUID: SessionPlan] = [:]
     @State private var showEditPlanSheet = false
     @State private var showExerciseNotesSheet = false
+    /// Local draft for session notes. Typing mutates only this string; it is
+    /// committed to `Workout.notes` at discrete points (focus loss, disappear,
+    /// scene backgrounding) so per-keystroke edits never invalidate this
+    /// ~3400-line body via the model's Observation tracking.
+    @State private var sessionNotesDraft = ""
+    @FocusState private var sessionNotesFocused: Bool
+    @Environment(\.scenePhase) private var scenePhase
     /// Tracks soft-keyboard visibility (driven by keyboardWillShow/Hide). While
     /// the keyboard is up the bottom Back/Next/Finish panel is withdrawn so it
     /// can never overlap the keyboard accessory — deterministic on first focus,
@@ -1018,17 +1025,17 @@ struct ActiveWorkoutView: View {
         return result
     }
 
-    /// Binding for session-level Workout.notes.
-    /// Reads and writes directly on the active Workout model object.
-    /// Sets nil when the trimmed value is empty so the history detail row is suppressed.
-    private var workoutNotesBinding: Binding<String> {
-        Binding<String>(
-            get: { workout?.notes ?? "" },
-            set: { newVal in
-                workout?.notes = newVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? nil : newVal
-            }
-        )
+    /// Commits the local `sessionNotesDraft` to the active `Workout.notes`.
+    /// Normalizes empty/whitespace-only input to nil (so the history detail row
+    /// stays suppressed) and only writes when the value actually changed — this
+    /// keeps the model un-dirtied on no-op commits and avoids a needless body
+    /// invalidation. Called on focus loss, disappear, and scene backgrounding,
+    /// never per keystroke.
+    private func commitSessionNotes() {
+        let normalized = normalizedOptionalNote(sessionNotesDraft)
+        if workout?.notes != normalized {
+            workout?.notes = normalized
+        }
     }
 
     // MARK: - Session Plan
@@ -1359,11 +1366,15 @@ struct ActiveWorkoutView: View {
                         // dismissal control.
                         TextField(
                             "Notes for this session…",
-                            text: workoutNotesBinding,
+                            text: $sessionNotesDraft,
                             axis: .vertical
                         )
                         .lineLimit(1...6)
                         .textInputAutocapitalization(.sentences)
+                        .focused($sessionNotesFocused)
+                        .onChange(of: sessionNotesFocused) { _, focused in
+                            if !focused { commitSessionNotes() }
+                        }
                     }
 
                     // --- Exercise-level notes (read-only display of Exercise.notes) ---
@@ -1727,6 +1738,11 @@ struct ActiveWorkoutView: View {
                     activeGuard.activeWorkoutID = w.id
                 }
 
+                // Seed the local session-notes draft from the bound workout so
+                // the field shows persisted notes on (re)appear; typing edits
+                // only the draft until a commit point.
+                sessionNotesDraft = workout?.notes ?? ""
+
                 // Restore the stable notification ID from AppState so that
                 // any subsequent rest start (or stop) can cancel the
                 // notification from the previous process by its stable ID.
@@ -1781,6 +1797,13 @@ struct ActiveWorkoutView: View {
             }
             .task {
                 await AppNotificationService.requestAuthorizationIfNeeded()
+            }
+            .onDisappear { commitSessionNotes() }
+            .onChange(of: scenePhase) { _, phase in
+                // Flush the in-flight session-notes draft to the model when the
+                // app leaves the foreground so a background/terminate mid-edit
+                // doesn't drop it. Idempotent and no-op when unchanged.
+                if phase != .active { commitSessionNotes() }
             }
             .sheet(
                 isPresented: $showSwapSheet,
