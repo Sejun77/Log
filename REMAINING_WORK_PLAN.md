@@ -232,6 +232,20 @@ Rest-Pause + Cluster, Cluster + AMRAP, and duplicate same type. Bodyweight Drop 
 restrictions, dropset effort validation, and active-workout rendering/logging are all unchanged; **no model
 change**. Added `TechniquePairConflictTests`; full suite **793/793**, manual regression passed.
 
+Also updated 2026-06-06: **Note input lag fix shipped (Slices 1 & 2)** (§2.24, §5.4) — all
+four affected note fields now use **local `@State` draft text** that commits to the SwiftData
+model only at discrete points (focus change, `onDisappear`, scenePhase leaving `.active`)
+instead of writing the `@Model` property on every keystroke (which invalidated the large
+parent bodies). **Slice 1:** active-workout **session notes** (`ActiveWorkoutView`) and the
+**`ExerciseNotesEditSheet`** (Done commits, Cancel discards without touching the model).
+**Slice 2:** Exercise Detail **notes** and **setup notes** (`ExerciseDetailView`; drafts seed
+on appear and on `exercise.id` change; existing `onDisappear` save and lock behavior
+unchanged). Added a pure `normalizedOptionalNote(_:)` helper (trim-to-test-empty → nil, else
+original text) reused across all four fields, plus `NoteNormalizationTests`. No model/schema,
+logging, history, bodyweight, technique, or CSV/transfer change; full suite **808/808**,
+manual regression confirmed on physical device. A reusable `NoteEditor` extraction remains
+**optional / deferred** (§5.4).
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -1249,6 +1263,34 @@ see §2.12** — kept separate from the search-policy commit as planned.
   `Log/Main/ActiveWorkout/ActiveWorkoutHelpers.swift`, `Log/Main/ActiveWorkoutView.swift`,
   `LogTests/SessionElapsedFormatTests.swift`.)
 
+### 2.24 Note input lag — local draft state (Slices 1 & 2) — ✅ SHIPPED (2026-06-06)
+- **Source:** Note-input lag audit (2026-06-06) — typing into every note field stuttered (worse on
+  a physical iPhone) even after §2.23. The audit found each field bound a `TextField` directly to a
+  SwiftData `@Model` property, so every keystroke mutated the model and Observation invalidated the
+  large enclosing body (the ~3400-line `ActiveWorkoutView` body; the Exercise Detail `Form`).
+- **Change:** all four fields now edit a **local `@State` draft** and commit `normalizedOptionalNote(draft)`
+  to the model only at discrete points — never per keystroke.
+  - **Slice 1 (active workout):** session notes in `ActiveWorkoutView` (draft commits on focus loss,
+    `onDisappear`, and scenePhase leaving `.active`); `ExerciseNotesEditSheet` (draft seeded on appear,
+    **Done** commits to `Exercise.notes`, **Cancel** discards without touching the model).
+  - **Slice 2 (Exercise Detail):** `ExerciseDetailView` notes and setup notes (drafts seed on appear
+    and on `exercise.id` change; commit on focus change, `onDisappear`, and scenePhase leaving
+    `.active`; the pre-existing `onDisappear` `ctx.save()` is retained).
+  - Added pure helper `normalizedOptionalNote(_:)` (trim whitespace/newlines to decide emptiness →
+    nil; otherwise store the original untrimmed text) in `ActiveWorkoutHelpers.swift`, reused by all
+    four fields so the empty/whitespace-only → nil clear semantics match the old inline bindings exactly.
+- **Unchanged:** no per-keystroke `ctx.save()`; workout logging, rest/set timers, undo, finish,
+  superset/dropset flows, Exercise Detail lock behavior, and all other detail fields are untouched.
+  **No SwiftData model change.** No history/bodyweight/technique or CSV/export/import/RoutineTransfer/
+  RoutineDuplicator change.
+- **Tests:** added `NoteNormalizationTests` (empty/whitespace/newline → nil; non-empty preserved
+  verbatim incl. surrounding/interior whitespace). Slice 2 reused the same helper (no new tests).
+  **Full suite 808/808;** manual regression confirmed responsive typing, correct persist/clear, and
+  draft survival across navigation/backgrounding on a physical iPhone. (Files:
+  `Log/Main/ActiveWorkoutView.swift`, `Log/Main/ActiveWorkout/ExerciseNotesEditSheet.swift`,
+  `Log/Main/ActiveWorkout/ActiveWorkoutHelpers.swift`, `Log/Main/ExercisesView.swift`,
+  `LogTests/NoteNormalizationTests.swift`.)
+
 ## 3. Optional / Future Features
 
 Product ideas, not refactor blockers. Implement only on demand.
@@ -1654,7 +1696,21 @@ Optional tests / audits. None block any product work.
   character. **Not shipped, not scheduled.** Only pursue if input lag persists after Slice C on
   real-device use; it touches input bindings + draft persistence, so it carries more regression
   risk (cold-resume draft fidelity) and needs its own slice + tests.
-- **Risk:** Slice C **low** (done); Slice B **medium** (defer unless a measured/observed signal).
+- **Note-field input lag (separate finding) — ✅ SHIPPED 2026-06-06 (see §2.24).** A follow-up audit
+  found the *note* fields (active-workout session notes, `ExerciseNotesEditSheet`, Exercise Detail
+  notes + setup notes) bound `TextField`s straight to `@Model` properties, so each keystroke
+  invalidated the large parent bodies. Fixed in two slices via local `@State` drafts that commit only
+  on focus change / `onDisappear` / scenePhase-inactive, plus a shared `normalizedOptionalNote(_:)`
+  helper. Full suite **808/808**; device-confirmed.
+- **Reusable `NoteEditor` component extraction — OPTIONAL / DEFERRED.** The four note fields now share
+  the same draft-then-commit pattern but each inlines it. A reusable `NoteEditor` (local draft + focus
+  handling + commit callback) could remove that duplication, but it touches four call sites with
+  slightly different keyboard-accessory rules (multiline setup needs a Done button; single-line notes
+  use `.submitLabel(.done)`). **Not shipped, not scheduled** — only pursue if the duplication becomes a
+  maintenance cost; the per-field implementations are already correct and tested. Risk: **medium**
+  (broad touch across working surfaces for a pure-cleanup gain).
+- **Risk:** Slice C **low** (done); Slice B **medium** (defer unless a measured/observed signal);
+  note-field fix **done**; `NoteEditor` extraction **deferred** (optional cleanup only).
 
 > Host-less `LogTests` conversion was previously listed here. It has been moved to
 > §7 (Archive) — see §7.4 — because it was attempted and reverted and should not be
