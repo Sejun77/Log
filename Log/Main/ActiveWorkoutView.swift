@@ -1526,6 +1526,15 @@ struct ActiveWorkoutView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                // Scrolling the active-workout list dismisses the keyboard. The
+                // set-input fields (reps/weight/duration, dropset rows) use
+                // numeric keyboards with no Return key, and the session note is
+                // multiline (Return inserts a newline), so scroll was the only
+                // missing dismissal gesture — the `.keyboard` checkmark accessory
+                // remains. `.immediately` (vs `.interactively`) gives a clean
+                // "scroll = dismiss" for the numeric-pad-dominated list. Session
+                // note commits on the resulting focus loss (see commitSessionNotes).
+                .scrollDismissesKeyboard(.immediately)
                 // Back / Next-Finish navigation, hosted as the List's bottom
                 // safe-area inset (reserves space, `.background(.bar)` keeps
                 // list rows from showing through while scrolling). It is
