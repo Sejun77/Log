@@ -66,6 +66,9 @@ struct RoutineBlockDetailView: View {
         // rows (inside `SlotPrescriptionSection`) handles the lock.
         // Body-level `.disabled` is intentionally NOT used here because
         // it blocks the List's scroll gesture on iOS.
+        // Scrolling dismisses the multiline slot-notes keyboard;
+        // `.interactively` matches the note-heavy routine-editor lists.
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Block")
     }
 }
@@ -375,6 +378,9 @@ struct SupersetDetailNoRest: View {
         // in `.disabled(isRoutineLocked)` because doing so blocks the
         // List's scroll gesture on iOS — the user must still be able
         // to scroll to read the locked routine's contents.
+        // Scrolling dismisses the multiline slot-notes keyboard;
+        // `.interactively` matches the note-heavy routine-editor lists.
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Superset")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
