@@ -259,6 +259,28 @@ Full suite **808/808**, manual regression passed. The **rare floating Back/Next 
 warm resume is NOT fixed** — it remains **monitor / debug-only** (§5.4); no layout-anchoring
 change and no debug instrumentation were added.
 
+Also updated 2026-06-07: **Last-performance prefill shipped (parent sets)** (§2.26) — starting a
+workout now prefills active-workout input drafts from the **most recent completed workout
+containing the same exercise** (not routine-restricted) instead of falling back to prescription
+defaults (reps → repMax, weight → blank). New pure, read-only `LastPerformancePrefillService`
+finds suggestions from completed workouts only (`completedAt != nil`), excludes the current
+workout, uses **working sets only** (`kind == .working && subIndex == nil`, warm-ups + dropset
+sub-rows excluded), keys by `indexInExercise`, and carries the last prior set down to extra
+current sets. `ActiveWorkoutView` fetches completed workouts once on appear, builds per-
+`routineSlotID` suggestions via `currentExerciseID`, and applies them **only at tier 4** of the
+existing priority chain — logged `SetLog` → `ParentDraftStore` draft → `ActiveWorkoutGuard`
+cache → **last-performance prefill** → prescription default — so logged values, persisted
+drafts, and in-process drafts always win; prefilled values are drafts only (no `SetLog` until
+Log). Weighted → reps + weight; bodyweight equipment → reps only (weight stays hidden/empty,
+user bodyweight never injected); weighted-bodyweight with non-bodyweight equipment (e.g. Dip
+Belt) → weight visible + last added load; time-based → duration only; no history → prescription
+defaults verbatim; duplicate exercise across slots → same history prefill per slot. Added
+`LastPerformancePrefillServiceTests` + `ActiveWorkoutPrefillSeedingTests` (pure
+`resolvedDraftDefault` merge helper). No model/schema, routine-template, History, bodyweight,
+technique, CSV/transfer, `StartWorkoutFromRoutineView`, `WorkoutResumeService`, or
+`SessionPlanResolver` change; full suite **833/833**, manual regression passed. **Dropset
+sub-row prefill is deferred** (audited; tracked as a follow-up under §2.26).
+
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
 Phase 9 (remove `Exercise.defaultTemplates`) is complete and the field no longer
@@ -1325,6 +1347,52 @@ see §2.12** — kept separate from the search-policy commit as planned.
   `Log/Main/ActiveWorkoutView.swift`, `Log/Main/Routines/BlockDetailViews.swift`.)
 - **Out of scope (still open):** the **rare floating Back/Next panel after warm resume** — see §5.4,
   **monitor / debug-only** (no layout-anchoring change, no instrumentation added in this slice).
+
+### 2.26 Last-performance prefill (active workout parent input drafts) — ✅ SHIPPED (2026-06-07)
+- **Source:** Active-workout prefill audit (2026-06-07). After `Exercise.defaultTemplates` was
+  removed (Phase 9), starting a workout fell back to prescription defaults — reps defaulted to
+  `plannedRepTarget` (usually repMax) and weight defaulted to empty — forcing the user to recall
+  their working weights/reps from memory or History.
+- **Slice 1 — service:** new pure, read-only `LastPerformancePrefillService`
+  (`suggestions(forExerciseID:in:excluding:)` + `suggestion(forCurrentSetIndex:from:)` carry-down).
+  Finds the **most recent completed workout containing the same exercise** (not routine-restricted),
+  completed only (`completedAt != nil`), excludes the current workout id, uses **working sets only**
+  (`kind == .working && subIndex == nil` — warm-ups and dropset sub-rows excluded), returns
+  suggestions keyed by `indexInExercise`, preserves order, and carries the last prior set down to
+  extra current sets. Never mutates workouts/routines/templates/exercises/logs.
+- **Slice 2 — application:** `ActiveWorkoutView` fetches completed workouts once on appear
+  (`FetchDescriptor<Workout>`, `completedAt != nil`, newest-first), builds a per-`routineSlotID`
+  suggestion map via `currentExerciseID` (`prefillBySlotID`), and applies it **only at tier 4** of
+  the existing draft seeding priority chain: logged `SetLog` → `ParentDraftStore` draft →
+  `ActiveWorkoutGuard` cache → **last-performance prefill** → prescription default. Applied in all
+  three tier-4 seeding sites (`ensureInputsInitializedFromPlan`, `rehydrateFromWorkoutIfPresent`
+  final fallback + draft-backfill) via a pure `resolvedDraftDefault(...)` merge helper. Logged
+  values, persisted drafts, and in-process drafts always win; prefilled values are **drafts only**
+  (no `SetLog` until the user taps Log) and are freely editable.
+- **Product behavior:** weighted → reps + weight (formatted with `Units.formatWeight`, matching
+  logged-set rehydration); bodyweight equipment → reps only (weight stays hidden/empty, user
+  bodyweight never injected); weighted-bodyweight with non-bodyweight equipment (e.g. Dip Belt) →
+  weight field visible + last added load prefilled; time-based → duration only; no prior history →
+  prescription defaults verbatim; set-count mismatch → carry-down; same exercise in multiple slots →
+  same exercise-history prefill per slot.
+- **Unchanged:** **no SwiftData model/schema change**; no routine-template mutation; no change to
+  `StartWorkoutFromRoutineView`, `WorkoutResumeService`, `SessionPlanResolver`, History, bodyweight
+  metrics, techniques, or CSV/transfer. **Dropset rows unchanged.** Warm/cold resume, undo, rest
+  timer, Live Activity, supersets, and Finish all unchanged.
+- **Tests:** added `LastPerformancePrefillServiceTests` and `ActiveWorkoutPrefillSeedingTests`
+  (pure merge + carry-down). **Full suite 833/833;** manual regression passed (weighted fresh start,
+  edited-then-logged, no-history fallback, bodyweight reps-only, weighted pull-up / Dip Belt added
+  load, time-based duration, set-count carry-down, warm/cold resume priority, duplicate superset
+  exercise, dropset unchanged, undo / rest timer / Live Activity / Finish unchanged).
+- **Deferred follow-up — dropset sub-row prefill:** audited (2026-06-07) but **not** in this slice.
+  Future rules: match by `exerciseID` + parent `indexInExercise` + `subIndex`; carry the last
+  previous drop down when the current dropset has more drops (ignore extras when fewer); preserve
+  the existing override priority (logged / typed / persisted drop drafts beat prefill) **and** the
+  dynamic `−dropPercent%` suggestion off the current parent weight (prefill fills only the
+  pre-parent-log gap + reps); apply as a **read-time fallback** in `buildDropSection`'s reps/weight
+  getters (no `@State` seeding, no persistence). Recommend a small extension to
+  `LastPerformancePrefillService` (`dropSuggestions` + `dropSuggestion` carry-down) plus a pure
+  `resolvedDropDraft` helper. No model change expected.
 
 ## 3. Optional / Future Features
 
