@@ -107,6 +107,15 @@ struct ActiveWorkoutView: View {
     @State private var inputsByExerciseID:
         [UUID: [Int: (reps: String, weight: String, duration: String)]] = [:]
 
+    // Slice 2 — last-performance prefill suggestions, keyed by routineSlotID,
+    // each holding the previous-session working-set map (setIndex →
+    // suggestion) for that slot's current exercise. Computed once in onAppear
+    // (`loadLastPerformancePrefill`) from completed workouts excluding this
+    // session, then consulted by `tier4Default` at the bottom of the seeding
+    // priority chain. Empty when there is no prior completed history.
+    @State private var prefillBySlotID:
+        [UUID: [Int: LastPerformancePrefillService.LastPerformanceSetSuggestion]] = [:]
+
     private func ensureInputsInitializedFromPlan() {
         guard inputsByExerciseID.isEmpty else { return }
         for block in plan.blocks {
@@ -120,17 +129,78 @@ struct ActiveWorkoutView: View {
                     let tpl =
                         ex.templates[safe: i]
                         ?? defaultTemplate(for: ex, at: i)
-                    perSet[i] = (
-                        reps: String(plannedRepTarget(for: ex, template: tpl)),
-                        weight: tpl.targetWeight.map { String($0) } ?? "",
-                        duration: plannedDurationTarget(for: ex, template: tpl)
-                            .map { String($0) } ?? ""
-                    )
+                    perSet[i] = tier4Default(for: ex, setIndex: i, template: tpl)
                 }
                 inputsByExerciseID[ex.routineSlotID] = perSet
             }
         }
         syncToGuardCaches()
+    }
+
+    /// Tier-4 seed value for one set: the lowest priority in the draft
+    /// seeding chain (below logged sets, persisted drafts, and the guard
+    /// cache). Computes the prescription defaults exactly as before, then
+    /// lets `resolvedDraftDefault` overlay any last-performance suggestion
+    /// per the v1 rules (weighted → reps+weight, bodyweight → reps only,
+    /// time-based → duration only). With no prior history the prescription
+    /// defaults pass through unchanged.
+    private func tier4Default(
+        for ex: PlanExercise,
+        setIndex i: Int,
+        template tpl: PlanSetTemplate
+    ) -> (reps: String, weight: String, duration: String) {
+        let presReps = String(plannedRepTarget(for: ex, template: tpl))
+        let presWeight = tpl.targetWeight.map { String($0) } ?? ""
+        let presDuration =
+            plannedDurationTarget(for: ex, template: tpl)
+            .map { String($0) } ?? ""
+
+        let suggestion = LastPerformancePrefillService.suggestion(
+            forCurrentSetIndex: i,
+            from: prefillBySlotID[ex.routineSlotID] ?? [:]
+        )
+
+        return resolvedDraftDefault(
+            suggestion: suggestion,
+            prescriptionReps: presReps,
+            prescriptionWeight: presWeight,
+            prescriptionDuration: presDuration,
+            isTimeBased: ex.isTimeBased,
+            isBodyweight: isBodyweightEquipment(ex.prescriptionSnapshot?.equipment)
+        )
+    }
+
+    /// Loads last-performance prefill suggestions once at session start.
+    /// Fetches completed workouts (`completedAt != nil`) and, per plan slot,
+    /// asks `LastPerformancePrefillService` for the most-recent working-set
+    /// map for that slot's CURRENT exercise (so a swapped-in exercise sources
+    /// its own history). The active session is excluded by id. Slots with no
+    /// prior history are omitted, so `tier4Default` falls back to prescription
+    /// defaults for them. Read-only; never mutates any model.
+    private func loadLastPerformancePrefill() {
+        let currentID = workout?.id
+        let descriptor = FetchDescriptor<Workout>(
+            predicate: #Predicate { $0.completedAt != nil },
+            sortBy: [SortDescriptor(\.completedAt, order: .reverse)]
+        )
+        guard let completed = try? ctx.fetch(descriptor) else { return }
+
+        var map:
+            [UUID: [Int: LastPerformancePrefillService.LastPerformanceSetSuggestion]] =
+                [:]
+        for block in plan.blocks {
+            for ex in block.exercises {
+                let suggestions = LastPerformancePrefillService.suggestions(
+                    forExerciseID: ex.currentExerciseID,
+                    in: completed,
+                    excluding: currentID
+                )
+                if !suggestions.isEmpty {
+                    map[ex.routineSlotID] = suggestions
+                }
+            }
+        }
+        prefillBySlotID = map
     }
 
     private func rehydrateFromWorkoutIfPresent() {
@@ -231,28 +301,21 @@ struct ActiveWorkoutView: View {
                         parentDraftStore?.load(slotID: slotID, setIndex: i)
                         ?? parentDraftStore?.load(slotID: exerciseID, setIndex: i)
                     {
-                        // Backfill any field absent from the draft with the prescription
-                        // default so partially-filled drafts don't blank unrelated fields.
-                        let presReps = String(plannedRepTarget(for: ex, template: tpl))
-                        let presWeight = tpl.targetWeight.map { String($0) } ?? ""
-                        let presDuration = plannedDurationTarget(for: ex, template: tpl)
-                            .map { String($0) } ?? ""
+                        // Backfill any field absent from the draft with the
+                        // tier-4 default (last-performance prefill, else
+                        // prescription) so partially-filled drafts don't blank
+                        // unrelated fields.
+                        let d = tier4Default(for: ex, setIndex: i, template: tpl)
                         perSet[i] = (
-                            reps: draft.reps ?? presReps,
-                            weight: draft.weight ?? presWeight,
-                            duration: draft.duration ?? presDuration
+                            reps: draft.reps ?? d.reps,
+                            weight: draft.weight ?? d.weight,
+                            duration: draft.duration ?? d.duration
                         )
                     } else if let cached = activeGuard.inputsCache[slotID]?[i] {
                         perSet[i] = cached
                     } else {
-                        perSet[i] = (
-                            reps: String(
-                                plannedRepTarget(for: ex, template: tpl)),
-                            weight: tpl.targetWeight.map { String($0) } ?? "",
-                            duration: plannedDurationTarget(
-                                for: ex, template: tpl)
-                                .map { String($0) } ?? ""
-                        )
+                        perSet[i] = tier4Default(
+                            for: ex, setIndex: i, template: tpl)
                     }
                 }
 
@@ -1768,6 +1831,9 @@ struct ActiveWorkoutView: View {
                 restoreSessionPlansFromAppState()
                 // 0b) restore cursor position from AppState (cold resume)
                 restorePositionFromAppState()
+                // 0c) load last-performance prefill suggestions (Slice 2) so
+                //     tier-4 seeding can use them. Must run before seeding.
+                loadLastPerformancePrefill()
                 // 1) mirror caches (if returning)
                 syncFromGuardCachesIfAny()
                 // 2) if still empty, seed from plan

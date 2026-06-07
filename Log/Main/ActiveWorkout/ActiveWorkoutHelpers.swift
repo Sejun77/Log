@@ -191,6 +191,56 @@ func makeSwapDefaultTemplates(
     }
 }
 
+// MARK: - Last-performance prefill merge (Slice 2)
+
+/// Merges a last-performance suggestion (Slice 1) into the tier-4
+/// prescription-default draft tuple for a single set. This is the lowest
+/// tier of `ActiveWorkoutView`'s seeding priority chain — it runs only after
+/// logged `SetLog`s, persisted `ParentDraftStore` drafts, and the in-process
+/// `ActiveWorkoutGuard` cache have all been ruled out, so it never overrides
+/// user data.
+///
+/// Rules (v1):
+///   * No suggestion → return the prescription defaults verbatim (existing
+///     behavior, byte-for-byte).
+///   * Time-based exercise → prefill **duration only**; reps/weight keep the
+///     prescription defaults.
+///   * Bodyweight equipment → prefill **reps only**; weight keeps the
+///     prescription default (which is empty) so user bodyweight is never
+///     injected into the load field.
+///   * Otherwise (normal weighted) → prefill reps + weight; duration keeps
+///     the prescription default.
+///
+/// Weight is formatted with `Units.formatWeight` — the same canonical
+/// formatter used for logged-set rehydration — so prefilled and rehydrated
+/// values render identically (no decimal/grouping drift). Pure.
+func resolvedDraftDefault(
+    suggestion: LastPerformancePrefillService.LastPerformanceSetSuggestion?,
+    prescriptionReps: String,
+    prescriptionWeight: String,
+    prescriptionDuration: String,
+    isTimeBased: Bool,
+    isBodyweight: Bool
+) -> (reps: String, weight: String, duration: String) {
+    guard let s = suggestion else {
+        return (prescriptionReps, prescriptionWeight, prescriptionDuration)
+    }
+
+    if isTimeBased {
+        let duration = s.durationSeconds.map(String.init) ?? prescriptionDuration
+        return (prescriptionReps, prescriptionWeight, duration)
+    }
+
+    let reps = s.reps.map(String.init) ?? prescriptionReps
+    let weight: String
+    if isBodyweight {
+        weight = prescriptionWeight  // stays empty; never inject load
+    } else {
+        weight = s.weight.map { Units.formatWeight($0) } ?? prescriptionWeight
+    }
+    return (reps, weight, prescriptionDuration)
+}
+
 // MARK: - Slot lookup (Phase 6.C1 follow-up: duplicate-Exercise superset)
 
 /// Locate the `(blockIndex, exerciseIndex)` of the plan slot whose
