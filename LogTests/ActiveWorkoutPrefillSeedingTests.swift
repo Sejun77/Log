@@ -182,4 +182,116 @@ final class ActiveWorkoutPrefillSeedingTests: XCTestCase {
         XCTAssertEqual(out.reps, "8")
         XCTAssertEqual(out.weight, "")
     }
+
+    // MARK: - Dropset merge (resolvedDropDraft, Slice 3)
+
+    private typealias DropSuggestion =
+        LastPerformancePrefillService.LastPerformanceDropSuggestion
+
+    private func drop(_ reps: Int?, _ weight: Double?) -> DropSuggestion {
+        DropSuggestion(parentSetIndex: 0, subIndex: 1, reps: reps, weight: weight)
+    }
+
+    func test_drop_typedRepsBeatPrefill() {
+        let out = resolvedDropDraft(
+            suggestion: drop(8, 20),
+            typedReps: "5",
+            isWeightOverridden: false,
+            overriddenWeight: nil,
+            percentageSuggestion: "",
+            techniqueFixedReps: nil
+        )
+        XCTAssertEqual(out.reps, "5")
+    }
+
+    func test_drop_overriddenWeightBeatsEverything() {
+        let out = resolvedDropDraft(
+            suggestion: drop(8, 20),
+            typedReps: nil,
+            isWeightOverridden: true,
+            overriddenWeight: "33",
+            percentageSuggestion: "16",  // would otherwise win
+            techniqueFixedReps: nil
+        )
+        XCTAssertEqual(out.weight, "33")
+    }
+
+    func test_drop_percentageSuggestionBeatsPrefillWeight() {
+        let out = resolvedDropDraft(
+            suggestion: drop(8, 20),
+            typedReps: nil,
+            isWeightOverridden: false,
+            overriddenWeight: nil,
+            percentageSuggestion: "16",
+            techniqueFixedReps: nil
+        )
+        XCTAssertEqual(out.weight, "16")
+    }
+
+    func test_drop_prefillWeightUsedWhenPercentageEmptyAndNoOverride() {
+        let out = resolvedDropDraft(
+            suggestion: drop(8, 20.5),
+            typedReps: nil,
+            isWeightOverridden: false,
+            overriddenWeight: nil,
+            percentageSuggestion: "",
+            techniqueFixedReps: nil
+        )
+        XCTAssertEqual(out.weight, "20.5")
+        XCTAssertEqual(out.weight, Units.formatWeight(20.5))
+    }
+
+    func test_drop_prefillRepsBeatTechniqueFixedReps() {
+        let out = resolvedDropDraft(
+            suggestion: drop(8, 20),
+            typedReps: nil,
+            isWeightOverridden: false,
+            overriddenWeight: nil,
+            percentageSuggestion: "",
+            techniqueFixedReps: 12
+        )
+        XCTAssertEqual(out.reps, "8")
+    }
+
+    func test_drop_techniqueFixedRepsUsedWhenNoPrefill() {
+        let out = resolvedDropDraft(
+            suggestion: nil,
+            typedReps: nil,
+            isWeightOverridden: false,
+            overriddenWeight: nil,
+            percentageSuggestion: "",
+            techniqueFixedReps: 12
+        )
+        XCTAssertEqual(out.reps, "12")
+    }
+
+    func test_drop_noSuggestionPreservesCurrentDefaults() {
+        // No prefill, no typed/override, no percentage, amrap (no fixed reps):
+        // reps blank, weight blank — exactly the pre-Slice-3 default.
+        let out = resolvedDropDraft(
+            suggestion: nil,
+            typedReps: nil,
+            isWeightOverridden: false,
+            overriddenWeight: nil,
+            percentageSuggestion: "",
+            techniqueFixedReps: nil
+        )
+        XCTAssertEqual(out.reps, "")
+        XCTAssertEqual(out.weight, "")
+    }
+
+    func test_drop_nilSuggestionWeightFallsBackToEmpty() {
+        // Prefill exists but its weight is nil (e.g. a bodyweight-logged drop):
+        // weight falls through to empty rather than crashing/forcing 0.
+        let out = resolvedDropDraft(
+            suggestion: drop(8, nil),
+            typedReps: nil,
+            isWeightOverridden: false,
+            overriddenWeight: nil,
+            percentageSuggestion: "",
+            techniqueFixedReps: nil
+        )
+        XCTAssertEqual(out.reps, "8")
+        XCTAssertEqual(out.weight, "")
+    }
 }

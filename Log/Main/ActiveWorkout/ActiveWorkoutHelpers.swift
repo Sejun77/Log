@@ -241,6 +241,53 @@ func resolvedDraftDefault(
     return (reps, weight, prescriptionDuration)
 }
 
+/// Resolves the displayed reps/weight for one dropset sub-row, overlaying a
+/// last-performance drop suggestion (Slice 3) as a **read-time fallback**. The
+/// caller must pass live state (typed reps, override flag, override value,
+/// dynamic percentage suggestion) so prefill never seeds `@State` and never
+/// marks a weight as user-overridden — preserving the "↩ suggest" reset and
+/// the reactive percentage-of-parent behavior.
+///
+/// Priority:
+///   * reps:   typed → suggestion → technique fixed reps → "".
+///   * weight: overridden (logged / persisted draft / typed) → non-empty
+///             percentage suggestion → suggestion (formatted) → "".
+///
+/// Weight is formatted with `Units.formatWeight` to match logged-set
+/// rehydration. Pure.
+func resolvedDropDraft(
+    suggestion: LastPerformancePrefillService.LastPerformanceDropSuggestion?,
+    typedReps: String?,
+    isWeightOverridden: Bool,
+    overriddenWeight: String?,
+    percentageSuggestion: String,
+    techniqueFixedReps: Int?
+) -> (reps: String, weight: String) {
+    let reps: String
+    if let typedReps {
+        reps = typedReps
+    } else if let r = suggestion?.reps {
+        reps = String(r)
+    } else if let fixed = techniqueFixedReps {
+        reps = String(fixed)
+    } else {
+        reps = ""
+    }
+
+    let weight: String
+    if isWeightOverridden {
+        weight = overriddenWeight ?? ""
+    } else if !percentageSuggestion.isEmpty {
+        weight = percentageSuggestion
+    } else if let w = suggestion?.weight {
+        weight = Units.formatWeight(w)
+    } else {
+        weight = ""
+    }
+
+    return (reps, weight)
+}
+
 // MARK: - Slot lookup (Phase 6.C1 follow-up: duplicate-Exercise superset)
 
 /// Locate the `(blockIndex, exerciseIndex)` of the plan slot whose

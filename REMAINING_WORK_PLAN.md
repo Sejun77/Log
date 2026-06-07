@@ -279,7 +279,31 @@ defaults verbatim; duplicate exercise across slots → same history prefill per 
 `resolvedDraftDefault` merge helper). No model/schema, routine-template, History, bodyweight,
 technique, CSV/transfer, `StartWorkoutFromRoutineView`, `WorkoutResumeService`, or
 `SessionPlanResolver` change; full suite **833/833**, manual regression passed. **Dropset
-sub-row prefill is deferred** (audited; tracked as a follow-up under §2.26).
+sub-row prefill** shipped as a follow-up — see §2.27.
+
+Also updated 2026-06-07: **Last-performance prefill — dropset sub-rows shipped** (§2.27) — extends
+§2.26 from parent working sets to **dropset sub-rows**. `LastPerformancePrefillService` gains
+`LastPerformanceDropSuggestion` + `dropSuggestions(forExerciseID:in:excluding:)` (shape
+`[parentSetIndex: [subIndex: suggestion]]`) + a `dropSuggestion(forParentSetIndex:subIndex:from:)`
+carry-down helper. Lookup uses completed workouts only, excludes the current workout, and reads
+**drop sub-rows only** (`subIndex != nil` — main working sets, warm-ups, and legacy template
+dropset logs without a `subIndex` excluded), matching by exerciseID + parent `indexInExercise` +
+`subIndex`; it selects the most recent completed workout that has drops for the exercise,
+**independently** of the parent working-set lookup. Carry-down: exact `(parent, sub)` wins; extra
+current drops carry the last previous drop **within the same parent** (no cross-parent carry in
+v1); fewer drops ignore extras. `ActiveWorkoutView` loads `dropPrefillBySlotID` in the existing
+prefill path and applies it in `buildDropSection` as a **read-time fallback** via a pure
+`resolvedDropDraft` helper — **never** seeding `dropRepsInput` / `dropWeightInput` /
+`dropWeightUserEdited`, so prefill is never mistaken for a manual override. Priority — reps:
+typed/logged → prefill → technique fixed reps → empty; weight: logged/persisted/typed override →
+dynamic `−dropPercent%` suggestion → prefill → empty (so the percentage suggestion still wins once
+the parent weight is logged, and "↩ suggest" still resets to it). Draft-only until **Log Drop**;
+undo, persisted/​logged drop restore, `Binding.set`, rest/focus/superset, rest timer, Live
+Activity, and Finish unchanged; parent working-set prefill unchanged. Added drop tests to
+`LastPerformancePrefillServiceTests` + `resolvedDropDraft` tests to `ActiveWorkoutPrefillSeedingTests`;
+**no model/schema or History/bodyweight/technique/transfer change**; full suite **852/852** (drop-count
+grow/shrink covered by service/helper tests rather than manual repro, since it needs a between-session
+dropset-config edit).
 
 **Status of the refactor as a whole:** Phases 0–10 are shipped. Phase 11
 (file decomposition) is closed with two clusters explicitly carried to Phase 12.
@@ -1384,15 +1408,43 @@ see §2.12** — kept separate from the search-policy commit as planned.
   edited-then-logged, no-history fallback, bodyweight reps-only, weighted pull-up / Dip Belt added
   load, time-based duration, set-count carry-down, warm/cold resume priority, duplicate superset
   exercise, dropset unchanged, undo / rest timer / Live Activity / Finish unchanged).
-- **Deferred follow-up — dropset sub-row prefill:** audited (2026-06-07) but **not** in this slice.
-  Future rules: match by `exerciseID` + parent `indexInExercise` + `subIndex`; carry the last
-  previous drop down when the current dropset has more drops (ignore extras when fewer); preserve
-  the existing override priority (logged / typed / persisted drop drafts beat prefill) **and** the
-  dynamic `−dropPercent%` suggestion off the current parent weight (prefill fills only the
-  pre-parent-log gap + reps); apply as a **read-time fallback** in `buildDropSection`'s reps/weight
-  getters (no `@State` seeding, no persistence). Recommend a small extension to
-  `LastPerformancePrefillService` (`dropSuggestions` + `dropSuggestion` carry-down) plus a pure
-  `resolvedDropDraft` helper. No model change expected.
+- **Follow-up — dropset sub-row prefill:** ✅ **SHIPPED** as §2.27 (2026-06-07).
+
+### 2.27 Last-performance prefill — dropset sub-rows — ✅ SHIPPED (2026-06-07)
+- **Source:** the §2.26 dropset follow-up, audited 2026-06-07. Parent working-set prefill shipped,
+  but dropset sub-rows still fell back to the blank/technique reps default and the percentage-only
+  weight suggestion (which is empty until the parent set is logged).
+- **Service (extends `LastPerformancePrefillService`, additive):** new
+  `LastPerformanceDropSuggestion` (`parentSetIndex` / `subIndex` / `reps` / `weight`),
+  `dropSuggestions(forExerciseID:in:excluding:) -> [Int: [Int: LastPerformanceDropSuggestion]]`,
+  and `dropSuggestion(forParentSetIndex:subIndex:from:)`. Completed workouts only, current workout
+  excluded, **drop sub-rows only** (`subIndex != nil`; main working sets, warm-ups, and legacy
+  template dropset logs without a `subIndex` excluded), matched by exerciseID + parent
+  `indexInExercise` + `subIndex`. Selects the most recent completed workout that has drops for the
+  exercise, **independent** of the working-set lookup. Carry-down: exact `(parent, sub)` wins; extra
+  current drops carry the last previous drop **within the same parent** (no cross-parent carry in
+  v1); fewer drops ignore extras. Working-set API untouched.
+- **Application:** `ActiveWorkoutView` loads `dropPrefillBySlotID` in the existing
+  `loadLastPerformancePrefill()` (reuses the same fetch) and applies it in `buildDropSection` as a
+  **read-time fallback** through a pure `resolvedDropDraft(...)` helper — it **never** seeds
+  `dropRepsInput` / `dropWeightInput` / `dropWeightUserEdited`, so prefill is never treated as a
+  manual override and "↩ suggest" stays accurate. Drafts only; nothing logged until **Log Drop**.
+- **Priority — reps:** typed/logged → prefill → technique fixed reps → empty. **Weight:**
+  logged/persisted/typed override → dynamic `−dropPercent%` suggestion → prefill → empty (so the
+  percentage suggestion still wins once the parent weight is logged; "↩ suggest" still resets to it).
+- **Unchanged:** parent working-set prefill; percentage suggestion still reacts to the parent logged
+  weight; undo preserves manual overrides; persisted drop-weight drafts and logged drops still
+  restore/rehydrate; `Binding.set`, rest/focus/superset flows, rest timer, Live Activity, Finish.
+  **No SwiftData model change;** no History/bodyweight/technique, `StartWorkoutFromRoutineView`,
+  `WorkoutResumeService`, `SessionPlanResolver`, or CSV/transfer/duplicator change.
+- **Tests:** drop cases added to `LastPerformancePrefillServiceTests` (subIndex filtering;
+  working-set/warm-up/legacy-no-subIndex exclusion; parent+sub & reps+weight preservation;
+  most-recent-with-drops; exclude current id; ignore in-progress; exact / carry-down / nil cases) and
+  `resolvedDropDraft` cases to `ActiveWorkoutPrefillSeedingTests` (override/percentage/prefill/
+  technique-fixed priority). **Full suite 852/852.** Manual regression passed (fresh-start drop
+  prefill, parent-logged → percentage switch, edited-then-logged, no-history, warm/cold resume, undo,
+  "↩ suggest", superset, rest timer / Live Activity / Finish). Drop-count grow/shrink is covered by
+  service/helper tests rather than manual repro (it needs a between-session dropset-config edit).
 
 ## 3. Optional / Future Features
 

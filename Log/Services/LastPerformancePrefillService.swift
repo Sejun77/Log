@@ -36,6 +36,18 @@ enum LastPerformancePrefillService {
         let durationSeconds: Int?
     }
 
+    /// One dropset sub-row's last-logged values (Slice 3). `parentSetIndex`
+    /// mirrors `SetLog.indexInExercise` (the parent working set the drop hangs
+    /// off); `subIndex` mirrors `SetLog.subIndex` (1-based drop number). Both
+    /// reps and weight are optional so the caller's merge helper can apply the
+    /// drop-specific priority chain.
+    struct LastPerformanceDropSuggestion: Equatable {
+        let parentSetIndex: Int
+        let subIndex: Int
+        let reps: Int?
+        let weight: Double?
+    }
+
     /// Most-recent completed working-set performance for `exerciseID`.
     ///
     /// Behavior:
@@ -97,6 +109,66 @@ enum LastPerformancePrefillService {
         return lower.flatMap { suggestions[$0] }
     }
 
+    // MARK: - Dropset sub-rows (Slice 3)
+
+    /// Most-recent completed dropset sub-row performance for `exerciseID`,
+    /// keyed `[parentSetIndex: [subIndex: suggestion]]`.
+    ///
+    /// Same selection contract as `suggestions(...)` — completed workouts only,
+    /// `currentWorkoutID` excluded, newest-first by `completedAt` (tie-broken by
+    /// `date`) — but walks newest → oldest and returns the FIRST workout that
+    /// has at least one dropset sub-row (`subIndex != nil`) for the exercise.
+    /// This selection is independent of the working-set lookup: the most recent
+    /// workout with drops may differ from the most recent with working sets.
+    /// Returns an empty map when nothing qualifies.
+    static func dropSuggestions(
+        forExerciseID exerciseID: UUID,
+        in workouts: [Workout],
+        excluding currentWorkoutID: UUID? = nil
+    ) -> [Int: [Int: LastPerformanceDropSuggestion]] {
+        let candidates = workouts
+            .filter { $0.completedAt != nil }
+            .filter { $0.id != currentWorkoutID }
+            .sorted { lhs, rhs in
+                let l = lhs.completedAt ?? lhs.date
+                let r = rhs.completedAt ?? rhs.date
+                if l != r { return l > r }
+                return lhs.date > rhs.date
+            }
+
+        for workout in candidates {
+            let map = dropSubRowSuggestions(forExerciseID: exerciseID, in: workout)
+            if !map.isEmpty { return map }
+        }
+        return [:]
+    }
+
+    /// Carry-down resolver for one current drop sub-row against a previous-
+    /// session drop map (typically the output of `dropSuggestions(...)`).
+    ///
+    /// Rule:
+    ///   * exact `(parentSetIndex, subIndex)` match wins,
+    ///   * else if `subIndex` is beyond the previous drop count for that SAME
+    ///     parent, carry the highest previous `subIndex` for that parent down,
+    ///   * else (a gap below the max) the nearest lower previous `subIndex`,
+    ///   * nil when the parent index has no drops, or the map is empty.
+    ///
+    /// v1 never carries across different parent set indices. Pure.
+    static func dropSuggestion(
+        forParentSetIndex parentSetIndex: Int,
+        subIndex: Int,
+        from suggestions: [Int: [Int: LastPerformanceDropSuggestion]]
+    ) -> LastPerformanceDropSuggestion? {
+        guard let drops = suggestions[parentSetIndex], !drops.isEmpty else {
+            return nil
+        }
+        if let exact = drops[subIndex] { return exact }
+        guard let maxSub = drops.keys.max() else { return nil }
+        if subIndex > maxSub { return drops[maxSub] }
+        let lower = drops.keys.filter { $0 < subIndex }.max()
+        return lower.flatMap { drops[$0] }
+    }
+
     // MARK: - Per-workout extraction
 
     /// Build the working-set suggestion map for one workout. Empty when the
@@ -115,6 +187,31 @@ enum LastPerformancePrefillService {
                     weight: log.weight,
                     durationSeconds: log.durationSeconds
                 )
+            }
+        }
+        return map
+    }
+
+    /// Build the dropset sub-row map for one workout, keyed
+    /// `[parentSetIndex: [subIndex: suggestion]]`. Only `subIndex != nil` logs
+    /// qualify — main working sets and legacy template dropset logs without a
+    /// `subIndex` are excluded. Empty when the workout has no drops for the
+    /// exercise. On duplicate `(parentSetIndex, subIndex)` the last log wins.
+    private static func dropSubRowSuggestions(
+        forExerciseID exerciseID: UUID,
+        in workout: Workout
+    ) -> [Int: [Int: LastPerformanceDropSuggestion]] {
+        var map: [Int: [Int: LastPerformanceDropSuggestion]] = [:]
+        for item in workout.items where item.exercise?.id == exerciseID {
+            for log in item.setLogs {
+                guard let sub = log.subIndex else { continue }
+                map[log.indexInExercise, default: [:]][sub] =
+                    LastPerformanceDropSuggestion(
+                        parentSetIndex: log.indexInExercise,
+                        subIndex: sub,
+                        reps: log.reps,
+                        weight: log.weight
+                    )
             }
         }
         return map
