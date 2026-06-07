@@ -116,6 +116,15 @@ struct ActiveWorkoutView: View {
     @State private var prefillBySlotID:
         [UUID: [Int: LastPerformancePrefillService.LastPerformanceSetSuggestion]] = [:]
 
+    // Slice 3 — dropset sub-row last-performance prefill, keyed by
+    // routineSlotID → [parentSetIndex: [subIndex: suggestion]] for that slot's
+    // current exercise. Loaded alongside `prefillBySlotID` in
+    // `loadLastPerformancePrefill`, then consulted as a read-time fallback in
+    // `buildDropSection` (never seeded into dropRepsInput/dropWeightInput, so
+    // it cannot mark a weight as user-overridden). Empty when no prior drops.
+    @State private var dropPrefillBySlotID:
+        [UUID: [Int: [Int: LastPerformancePrefillService.LastPerformanceDropSuggestion]]] = [:]
+
     private func ensureInputsInitializedFromPlan() {
         guard inputsByExerciseID.isEmpty else { return }
         for block in plan.blocks {
@@ -188,6 +197,10 @@ struct ActiveWorkoutView: View {
         var map:
             [UUID: [Int: LastPerformancePrefillService.LastPerformanceSetSuggestion]] =
                 [:]
+        // Slice 3 — dropset sub-row prefill, reusing the same fetch.
+        var dropMap:
+            [UUID: [Int: [Int: LastPerformancePrefillService.LastPerformanceDropSuggestion]]] =
+                [:]
         for block in plan.blocks {
             for ex in block.exercises {
                 let suggestions = LastPerformancePrefillService.suggestions(
@@ -198,9 +211,18 @@ struct ActiveWorkoutView: View {
                 if !suggestions.isEmpty {
                     map[ex.routineSlotID] = suggestions
                 }
+                let drops = LastPerformancePrefillService.dropSuggestions(
+                    forExerciseID: ex.currentExerciseID,
+                    in: completed,
+                    excluding: currentID
+                )
+                if !drops.isEmpty {
+                    dropMap[ex.routineSlotID] = drops
+                }
             }
         }
         prefillBySlotID = map
+        dropPrefillBySlotID = dropMap
     }
 
     private func rehydrateFromWorkoutIfPresent() {
@@ -2990,9 +3012,28 @@ struct ActiveWorkoutView: View {
                     dropPercent: snap.dropPercent ?? 20
                 )
                 let isOverridden = dropWeightUserEdited.contains(key)
-                let currentWeight: String = isOverridden
-                    ? (dropWeightInput[key] ?? "")
-                    : suggested
+                // Slice 3 — last-performance drop prefill, applied as a
+                // read-time fallback. It is never seeded into dropRepsInput /
+                // dropWeightInput / dropWeightUserEdited, so it cannot mark the
+                // weight as a user override or trigger "↩ suggest".
+                let techniqueFixedReps: Int? = {
+                    let effectiveRaw = snap.dropsetEffortRaw ?? "amrap"
+                    return effectiveRaw == "fixedReps" ? snap.dropsetEffortReps : nil
+                }()
+                let dropSuggestion = LastPerformancePrefillService.dropSuggestion(
+                    forParentSetIndex: parentSetIndex,
+                    subIndex: sub,
+                    from: dropPrefillBySlotID[slotID] ?? [:]
+                )
+                let resolvedDrop = resolvedDropDraft(
+                    suggestion: dropSuggestion,
+                    typedReps: dropRepsInput[key],
+                    isWeightOverridden: isOverridden,
+                    overriddenWeight: dropWeightInput[key],
+                    percentageSuggestion: suggested,
+                    techniqueFixedReps: techniqueFixedReps
+                )
+                let currentWeight: String = resolvedDrop.weight
                 // Show reset only when manually overridden, a suggestion exists, drop not yet logged,
                 // AND the visible value actually differs from the suggestion.
                 let canReset = isOverridden && !suggested.isEmpty && !isDropLogged
@@ -3003,14 +3044,7 @@ struct ActiveWorkoutView: View {
                     isLogged: isDropLogged,
                     canLog: canLogDrop,
                     reps: Binding(
-                        get: {
-                            if let v = dropRepsInput[key] { return v }
-                            let effectiveRaw = snap.dropsetEffortRaw ?? "amrap"
-                            if effectiveRaw == "fixedReps", let n = snap.dropsetEffortReps {
-                                return String(n)
-                            }
-                            return ""
-                        },
+                        get: { resolvedDrop.reps },
                         set: { dropRepsInput[key] = $0 }
                     ),
                     weight: Binding(

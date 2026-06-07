@@ -314,4 +314,181 @@ final class LastPerformancePrefillServiceTests: SwiftDataTestHarness {
         let s = LastPerformancePrefillService.suggestion(forCurrentSetIndex: 1, from: map)
         XCTAssertEqual(s?.setIndex, 0)
     }
+
+    // MARK: - Dropset sub-rows (Slice 3)
+
+    private typealias DropSuggestion =
+        LastPerformancePrefillService.LastPerformanceDropSuggestion
+
+    func test_dropSuggestions_returnsOnlySubIndexedLogs() {
+        let ex = makeExercise("Curl")
+        let w = makeWorkout(date: day(1))
+        addItem(to: w, exercise: ex, sets: [
+            // Parent working set (subIndex nil) — must be excluded.
+            SetSpec(kind: .working, reps: 10, weight: 30, subIndex: nil, index: 0),
+            // Two drop sub-rows.
+            SetSpec(kind: .dropset, reps: 8, weight: 20, subIndex: 1, index: 0),
+            SetSpec(kind: .dropset, reps: 6, weight: 15, subIndex: 2, index: 0),
+            // Warm-up — excluded.
+            SetSpec(kind: .warmup, reps: 12, weight: 10, subIndex: nil, index: 0),
+            // Legacy template dropset WITHOUT a subIndex — excluded.
+            SetSpec(kind: .dropset, reps: 5, weight: 12, subIndex: nil, index: 1),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+
+        XCTAssertEqual(Set(map.keys), [0])
+        XCTAssertEqual(Set((map[0] ?? [:]).keys), [1, 2])
+        XCTAssertEqual(map[0]?[1]?.reps, 8)
+        XCTAssertEqual(map[0]?[1]?.weight, 20)
+        XCTAssertEqual(map[0]?[2]?.reps, 6)
+        XCTAssertEqual(map[0]?[2]?.weight, 15)
+    }
+
+    func test_dropSuggestions_preservesParentAndSubIndex() {
+        let ex = makeExercise("Curl")
+        let w = makeWorkout(date: day(1))
+        addItem(to: w, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 8, weight: 20, subIndex: 1, index: 0),
+            SetSpec(kind: .dropset, reps: 7, weight: 18, subIndex: 1, index: 1),
+            SetSpec(kind: .dropset, reps: 5, weight: 12, subIndex: 2, index: 1),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+
+        XCTAssertEqual(
+            map[0]?[1],
+            DropSuggestion(parentSetIndex: 0, subIndex: 1, reps: 8, weight: 20)
+        )
+        XCTAssertEqual(
+            map[1]?[2],
+            DropSuggestion(parentSetIndex: 1, subIndex: 2, reps: 5, weight: 12)
+        )
+    }
+
+    func test_dropSuggestions_usesMostRecentCompletedWithDrops() {
+        let ex = makeExercise("Curl")
+
+        let old = makeWorkout(date: day(1))
+        addItem(to: old, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 5, weight: 10, subIndex: 1, index: 0),
+        ])
+        let recent = makeWorkout(date: day(5))
+        addItem(to: recent, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 8, weight: 20, subIndex: 1, index: 0),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+        XCTAssertEqual(map[0]?[1]?.weight, 20)
+    }
+
+    func test_dropSuggestions_skipsRecentWithoutDrops_fallsBackToOlder() {
+        let ex = makeExercise("Curl")
+
+        let older = makeWorkout(date: day(1))
+        addItem(to: older, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 6, weight: 14, subIndex: 1, index: 0),
+        ])
+        // Newer completed workout has the exercise but ONLY working sets.
+        let newer = makeWorkout(date: day(5))
+        addItem(to: newer, exercise: ex, sets: [
+            SetSpec(kind: .working, reps: 10, weight: 30, subIndex: nil, index: 0),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+        XCTAssertEqual(map[0]?[1]?.weight, 14)
+    }
+
+    func test_dropSuggestions_excludesCurrentWorkoutID() {
+        let ex = makeExercise("Curl")
+        let prior = makeWorkout(date: day(1))
+        addItem(to: prior, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 6, weight: 14, subIndex: 1, index: 0),
+        ])
+        let current = makeWorkout(date: day(5))
+        addItem(to: current, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 99, weight: 999, subIndex: 1, index: 0),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts(), excluding: current.id
+        )
+        XCTAssertEqual(map[0]?[1]?.weight, 14)
+    }
+
+    func test_dropSuggestions_ignoresInProgress() {
+        let ex = makeExercise("Curl")
+        let inProgress = makeWorkout(date: day(9), completed: false)
+        addItem(to: inProgress, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 8, weight: 20, subIndex: 1, index: 0),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+        XCTAssertTrue(map.isEmpty)
+    }
+
+    func test_dropSuggestions_emptyWhenNoDrops() {
+        let ex = makeExercise("Curl")
+        let w = makeWorkout(date: day(1))
+        addItem(to: w, exercise: ex, sets: [
+            SetSpec(kind: .working, reps: 10, weight: 30, subIndex: nil, index: 0),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+        XCTAssertTrue(map.isEmpty)
+    }
+
+    // MARK: - dropSuggestion carry-down helper
+
+    private func dropMap() -> [Int: [Int: DropSuggestion]] {
+        [
+            0: [
+                1: DropSuggestion(parentSetIndex: 0, subIndex: 1, reps: 8, weight: 20),
+                2: DropSuggestion(parentSetIndex: 0, subIndex: 2, reps: 6, weight: 15),
+            ],
+        ]
+    }
+
+    func test_dropSuggestion_exactMatch() {
+        let s = LastPerformancePrefillService.dropSuggestion(
+            forParentSetIndex: 0, subIndex: 2, from: dropMap()
+        )
+        XCTAssertEqual(s?.weight, 15)
+    }
+
+    func test_dropSuggestion_carryDownBeyondCount() {
+        // Current dropset has 3 drops; sub 3 carries the last prior (sub 2).
+        let s = LastPerformancePrefillService.dropSuggestion(
+            forParentSetIndex: 0, subIndex: 3, from: dropMap()
+        )
+        XCTAssertEqual(s?.subIndex, 2)
+        XCTAssertEqual(s?.weight, 15)
+    }
+
+    func test_dropSuggestion_nilWhenParentHasNoDrops() {
+        // Parent index 1 has no drops → nil (no cross-parent carry in v1).
+        let s = LastPerformancePrefillService.dropSuggestion(
+            forParentSetIndex: 1, subIndex: 1, from: dropMap()
+        )
+        XCTAssertNil(s)
+    }
+
+    func test_dropSuggestion_nilWhenEmpty() {
+        let s = LastPerformancePrefillService.dropSuggestion(
+            forParentSetIndex: 0, subIndex: 1, from: [:]
+        )
+        XCTAssertNil(s)
+    }
 }
