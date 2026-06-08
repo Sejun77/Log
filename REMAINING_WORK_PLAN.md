@@ -11,6 +11,14 @@ authoritative blueprint and full history. This is a derived summary of the
 *remaining* work only, generated 2026-05-27 and reconciled against the
 remaining-work audit on 2026-05-27 (host-less `LogTests` conversion moved from
 Performance/Testing to Archive; the archive set is confirmed complete).
+
+> **Current status (2026-06-08):** No hard release blockers remain. All §2.1–§2.27
+> feature slices are **shipped**; the app is in **stabilization / release-readiness
+> mode**. Everything still open (§3, §5, §6) is **optional, deferred, or
+> monitor-only** unless explicitly stated otherwise. The one pre-promotion
+> recommendation is the TestFlight 9-E2 upgrade smoke (§1). The implement-now queue
+> in §8 is empty.
+
 Updated 2026-05-27: **routine name editing shipped** (§2.1) and its two
 rename-verification items are now closed (§4); **multi-select exercise add is
 complete** (§2.2) across normal-block add, existing-superset add, and new-superset
@@ -1448,7 +1456,8 @@ see §2.12** — kept separate from the search-policy commit as planned.
 
 ## 3. Optional / Future Features
 
-Product ideas, not refactor blockers. Implement only on demand.
+**Everything in §3 is optional / future** — product ideas, not refactor blockers.
+Implement only on demand; nothing here blocks a release.
 
 ### 3.1 Technique design follow-ups (treat as future design items)
 These three are explicitly **out of scope until a design pass**, per the plan.
@@ -1508,8 +1517,9 @@ All **keep optional / defer**, low refactor relevance:
 - machine-specific weight/rep handling — Risk: medium
 - separate exercise progression history UI + charts — Risk: medium
 - full existing-history cleanup UI — Risk: medium
-- CSV import/export — **v1 SHIPPED (§2.11)**; routine import/export + history import
-  deferred to v2/future (see §3.10). The bare line is kept here for traceability.
+- CSV / routine transfer — **exercise CSV import/export + workout-history CSV export
+  shipped (§2.11)** and **routine JSON transfer shipped (§2.14)**. The only remaining
+  scope is **workout-history import**, which is **skipped / not planned** (see §3.10).
 
 ### 3.6 AP Calculus showcase polish (§9 Pending / optional)
 - **Source:** §9 addendum.
@@ -1596,107 +1606,30 @@ All **keep optional / defer**, low refactor relevance:
   history UI" backlog item).
 - **Filter History by routine, exercise, or body part** — History filtering surface
   (complements the deferred History sectioned grouping in §3.2).
-- **Export workout history as CSV** — overlaps the §3.5 / §6 CSV import/export backlog;
-  cross-referenced rather than duplicated.
+- **Export workout history as CSV** — ✅ **already shipped (§2.11)**; listed here only
+  for cross-reference, not open work.
 - **Workout notes / tags for fatigue, soreness, or performance** — optional per-workout
   notes/tags. This is the only group member that adds **persisted state**, so it needs
   an explicit additive-model design pass before any work.
 
-### 3.10 CSV Import / Export — v1 SHIPPED; routine + history-import deferred to v2/future
+### 3.10 CSV / routine transfer — shipped; only history-import remains (skipped)
 
-> **v1 SHIPPED 2026-05-31 (see §2.11).** The flat-data scope — `Exercise` library
-> import + export and `Workout` history *export* — is built, tested, and live in
-> Settings → Data. What remains in this subsection is the **deferred v2 / future**
-> scope only: **routine** CSV import/export and **workout-history import**. The
-> original audited plan (2026-05-31) is retained below for context; the per-scope and
-> staged-plan notes are annotated with what shipped vs. what is deferred.
+> **Superseded summary.** Most of this subsection's original staged plan is now
+> shipped — see the as-built records below. The full original audit (2026-05-31),
+> with the per-scope rationale and slice plan, is preserved in git history and
+> `REFACTOR_PLAN.md` if it is ever needed again.
 
-- **Source:** Planning audit (2026-05-31) over the full model graph in
-  `Log/Models/Entities.swift`, `ExerciseSeedService`, `RoutineDuplicator`,
-  `RoutineBlockBuilder`, `CustomOptionStore`, and the existing §3.5 / §3.9 backlog
-  notes. No file-I/O infrastructure exists yet (`ShareLink` / `fileImporter` /
-  `fileExporter` / `FileDocument` are all greenfield).
-- **Core finding:** CSV is the right vehicle for **flat** data (the `Exercise`
-  library; `Workout` history *export*) and the **wrong** vehicle for the **nested**
-  routine graph (`Routine → blocks → exercises → prescription → techniques /
-  warmups / per-set overrides`), which CSV can only represent losslessly across
-  several linked files. The plan is therefore "CSV for the flat data, JSON or
-  in-app tools for the nested data" — not "CSV everywhere."
-
-**Per-scope decisions:**
-- **Exercise library export** — ✅ **SHIPPED (v1, §2.11).** Read-only, flat
-  `[Exercise]` → rows; round-trip source for exercise import.
-- **Exercise library import** — ✅ **SHIPPED (v1, §2.11).** Reuses the
-  `ExerciseSeedService`-style behavior: match by trimmed+lowercased `name`, **skip**
-  collisions (never overwrite), append after `max(order)`, force `isCustom = true`,
-  single atomic `ctx.save()`; preview/confirm UI in front of it.
-- **Workout history export** — ✅ **SHIPPED (v1, §2.11).** Read-only; one denormalized
-  row per `SetLog`, using `exerciseNameSnapshot` so deleted exercises still read.
-  Satisfies the §3.9 "Export workout history as CSV" line.
-- **Workout history import** — **DEFERRED (skipped).** No real use case (training
-  history is not hand-authored) and it directly threatens the CLAUDE.md "history
-  append-only / snapshotted at start" integrity rules; forged/duplicated rows would
-  corrupt every analytics aggregate. A future whole-container *restore* is a
-  different feature, not CSV import.
-- **Routine CSV export/import** — **DEFERRED to v2 / future.** The nested routine graph
-  is better served by **JSON** (a single `Codable` document round-trips losslessly) or
-  by **in-app tools** (the shipped `RoutineDuplicator` deep-copy, plus a future "copy
-  block / copy slot to another routine" or "save block as reusable template"). CSV
-  would be lossy — `Routine → blocks → slots → prescriptions → techniques / warmups /
-  setTemplates` each need their own child file. Revisit only if the in-app/JSON route
-  proves insufficient; **probably not CSV**.
-
-**Recommended first slice (Slice 1):**
-- A **pure CSV codec + `ExerciseCSVRow` parser/validator + tests**.
-- **No SwiftData, no UI, no file I/O.** Pure value-in / value-out, mirroring how
-  `RoutineDuplicator.copiedName` and `RoutineNameValidator` were built pure-first.
-- RFC-4180 encode/decode (quote/escape commas, quotes, embedded newlines), header
-  validation, and a validator returning `(valid, skipped, rejected-with-reasons)`.
-- Zero data-safety risk and a dependency of every later scope, so never wasted.
-
-**Staged implementation plan (what actually shipped is annotated; see §2.11 for the
-as-built slice breakdown):**
-1. ✅ **SHIPPED** — Pure CSV codec + `ExerciseCSVRow` parser/validator + tests.
-2. ✅ **SHIPPED** — Exercise export (`[Exercise]` → CSV).
-3. ✅ **SHIPPED** — Workout history export (denormalized one-row-per-set CSV).
-4. ✅ **SHIPPED** — Exercise import service (`ExerciseCSVImporter`, additive / atomic).
-5. ✅ **SHIPPED** — Import preview + file-picker UI (`fileImporter`, confirm/cancel).
-   *(Export UI — `fileExporter` for exercises + history — also shipped as the as-built
-   sixth slice; see §2.11.)*
-6. **DEFERRED (v2 / future)** — **Routine import/export**, and **likely JSON instead of
-   CSV** (see the routine decision above). Workout-history *import* remains skipped.
-
-**Data-safety rules (apply to every import slice):**
-- **Preview before commit** — parse + validate in memory, show "N add / M skipped /
-  K rejected", commit only on explicit confirm.
-- **Never overwrite existing rows silently** — create-new or skip; no in-place merges
-  in v1.
-- **No deletion during import, ever** — import is **additive-only**.
-- **One explicit confirm before saving** — a single atomic `ctx.save()` per batch; on
-  any pre-save validation failure, insert nothing.
-- **Imported exercises are user/custom data** — `isCustom = true`, `order` appended
-  after `max(existing.order)` (don't reshuffle the user's manual sort).
-- **Invalid rows are rejected with reasons** — per-row validation; valid rows can
-  still commit while rejected rows are reported, or the whole batch is cancelled from
-  preview.
-- **Duplicate exercise names are skipped, not overwritten** — match by
-  trimmed+lowercased `name` (same key as `ExerciseSeedService`).
-- **Body part / equipment values are soft-validated** — non-canonical values are
-  accepted and persist as custom (consistent with `CustomOptionStore`), not rejected.
-- **No history mutation** outside an explicit history import (which is skipped in v1);
-  exercise/routine import must not touch `Workout` / `WorkoutItem` / `SetLog`.
-- **Fresh identities on any future routine import** — generate new `Routine.id` and
-  rely on fresh `RoutineBlock.slotID` / `RoutineExercise.slotID` from new instances
-  (the `RoutineDuplicator` mechanism); never carry IDs from a file. References resolve
-  **by name**, never by ID.
-
-- **Recommendation:** v1 (exercise import/export + history export) is **shipped**
-  (§2.11). The remaining routine import/export **shipped** as JSON — see **§2.14 (Routine
-  Transfer v2, ✅ SHIPPED 2026-06-01)** — confirming the **JSON / in-app, not CSV** direction
-  recommended here; workout-history import stays **skipped**.
-- **Risk (as built):** Slices 1–3 landed low (pure / read-only), Slice 4 low–medium
-  (additive inserts on the tested seed-service pattern), Slices 5–6 medium (greenfield
-  file I/O). Deferred routine support is the higher-design-cost remainder.
+- **Exercise CSV import + export** — ✅ **SHIPPED (§2.11).**
+- **Workout-history CSV export** — ✅ **SHIPPED (§2.11).**
+- **Routine transfer** — ✅ **SHIPPED as JSON, not CSV (§2.14)** — confirming the
+  "JSON / in-app, not CSV" direction the original audit recommended for the nested
+  routine graph (CSV would need lossy multi-file reconstruction).
+- **Workout-history import** — **the only live decision: SKIPPED / not planned.**
+  Training history is not hand-authored, and importing forged/duplicated rows would
+  violate the CLAUDE.md "history append-only / snapshotted at start" integrity rules
+  and corrupt every analytics aggregate. A future whole-container *restore* would be a
+  different feature, not CSV import. Revive only on an explicit, designed need.
+- **Risk:** N/A — nothing open here except the deliberately-skipped history import.
 
 ### 3.11 Copy Block Tools follow-ups (§2.13 future ideas — deferred)
 - **Source:** The §2.13 planning audit (2026-06-01) confirmed v1 as **same-routine
@@ -1707,11 +1640,10 @@ as-built slice breakdown):**
     Slice 1 would be reused, but the destination/order/lock semantics differ).
   - **Reusable block templates** — save a configured block to a library and stamp it into
     routines (new persisted concept; design pass required).
-  - **JSON routine transfer** — import/export whole routines (incl. blocks) as JSON,
-    aligned with the §3.10 recommendation that routine transfer be **JSON / in-app**, not
-    CSV.
-- **Recommendation:** **keep deferred** — implement only on a concrete need; ship §2.13
-  v1 first. The reusable-template and JSON ideas need design passes before any code.
+  - *(Whole-routine JSON transfer has since shipped separately — see §2.14 — so it is no
+    longer a Copy-Block follow-up.)*
+- **Recommendation:** **keep deferred** — implement only on a concrete need. The
+  reusable-template idea needs a design pass before any code.
 - **Risk:** N/A while deferred (no model/schema change until a design lands).
 
 ---
@@ -1807,7 +1739,8 @@ here, marked done, for traceability.
 
 ## 5. Performance / Testing Follow-ups
 
-Optional tests / audits. None block any product work.
+**Everything in §5 is optional or monitor-only.** Optional tests / audits; none block
+any product work.
 
 ### 5.1 End-to-end cold-restart resume test
 - **Source:** Phase 7 (optional). Status: *partially covered* —
@@ -1893,9 +1826,9 @@ Optional tests / audits. None block any product work.
 
 ## 6. Architecture / Deprecation Follow-ups
 
-Structural cleanup. Most are **defer** — they touch load-bearing or large surfaces
-and should not be done casually. Per guidance, Phase 8 removals are **not**
-recommended absent a strong safety reason.
+**Everything in §6 is deferred** unless a concrete safety reason forces it. Structural
+cleanup that touches load-bearing or large surfaces and should not be done casually.
+Per guidance, Phase 8 removals are **not** recommended absent a strong safety reason.
 
 ### 6.1 `RoutineExercise.setTemplates` — reframed, do NOT prune
 - **Source:** Phase 8 (broader, pending).
@@ -2093,9 +2026,9 @@ ExercisesView search-return (keyboard stays hidden, Edit/Sort return). Full
 suite **399/399**, manual regression passed. **Accepted limitation:** the
 empty-after-delete system Search key stays blue but inert and cannot be greyed
 via standard SwiftUI/UIKit APIs — Done/checkmark + scroll are the reliable
-dismissals (no introspection/appearance/custom-keyboard hacks; see §2.6 C). E
-(Exercise list send-to-top/bottom) is a future-optional scope-separated note
-under §2.6; do not bundle.
+dismissals (no introspection/appearance/custom-keyboard hacks; see §2.6 C). Sub-item E
+(Exercise list send-to-top/bottom) was kept out of this commit as planned and later
+**shipped on its own as §2.12** (2026-05-31).
 
 ✅ **Exercise list section headers** (§2.7) — **SHIPPED 2026-05-29** in two slices.
 Slice A added the pure `ExerciseSorter.sections(_:mode:)` helper + `ExerciseSection`
@@ -2149,8 +2082,9 @@ has no inverse relationship). Slice 3: `RoutineEditor` blue Duplicate swipe + ed
 context menu (shared `BlockRow` untouched). v1 is **same-routine duplicate only** (both
 single + superset blocks, superset rest preserved); **lock-gated** because it writes into
 the current routine (unlike routine duplication §2.10), with Delete/Add/move gating
-unchanged. Cross-routine copy, reusable block templates, and JSON routine transfer stay
-**future/deferred** (§3.11). No model/schema change; full suite **568/568**, manual
+unchanged. Cross-routine copy and reusable block templates stay **future/deferred**
+(§3.11); whole-routine JSON transfer (out of §2.13 v1 at the time) has since **shipped
+separately as §2.14**. No model/schema change; full suite **568/568**, manual
 regression passed.
 
 ✅ **Routine Transfer v2 — JSON routine export/import** (§2.14) — **SHIPPED 2026-06-01** in
