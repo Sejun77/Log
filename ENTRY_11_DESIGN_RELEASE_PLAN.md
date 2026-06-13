@@ -119,7 +119,15 @@ before any TestFlight / App Store promotion.
   and keeps it red/available with 3+. The existing `removeExercise(at:)` min-two
   guard and the explanatory footer were unchanged; no helper text added.
   (`design(routines): show disabled delete state for minimum supersets`)
-- All five shipped as small, reversible Entry #11 design/UX slices via dedicated
+- **History metric selector redesign** — the **first screenshot-based redesign
+  slice**. The cramped segmented metric Picker (up to six options truncating in a
+  pill row) was switched to a native Menu-style picker (`.pickerStyle(.menu)`) that
+  shows the selected metric clearly. Same label ("Metric"), options (`m.title`),
+  and `$metric` binding. History calculations, `availableProgressMetrics` /
+  metric availability, the metric-reset-on-exercise-change, chart data/rendering,
+  bodyweight effective-load logic, recent workout rows, and swipe/delete were all
+  unchanged. (`design(history): replace cramped metric pills with native selector`)
+- All six shipped as small, reversible Entry #11 design/UX slices via dedicated
   branches merged into `main`. **Build passed** and **manual testing passed** for
   each. No models, persistence, active-workout, history, or routine logic changed.
 - Still outstanding: real-device workout tests and the TestFlight upgrade smoke
@@ -166,15 +174,14 @@ Per-screen notes:
 - **Settings** — already calm; keep native, use as the reference for calm Forms.
 
 **Prioritized redesign plan:**
-1. Fix the History metric selector (**planned next slice — not started**).
+1. Fix the History metric selector (**✅ done** — segmented pill row → native Menu picker).
 2. Continue low-risk Routines / Exercises visual simplification (native-list calmness).
 3. Reduce permanent helper-text density where safe (progressive disclosure).
 4. Later: History chart visual quieting.
 5. Later: Active Workout visual hierarchy — only after real-device workout testing.
 
-History metric selector, History chart redesign, Active Workout redesign,
-real-device workout testing, TestFlight smoke, and Release Readiness all remain
-**not complete**.
+History **chart** redesign, Active Workout redesign, real-device workout testing,
+TestFlight smoke, and Release Readiness all remain **not complete**.
 
 ---
 

@@ -106,7 +106,9 @@ screens. None of this is broken — it just reads busier than it needs to.
 
 ### History
 - Feel: readable timeline; metrics legible at a glance.
-- Avoid: cramped controls and noisy chart chrome (control redesign deferred).
+- Avoid: cramped controls and noisy chart chrome.
+- Done: the cramped segmented metric pills were replaced with a native Menu picker.
+  Chart quieting (gridlines/axis labels) remains deferred.
 
 ### Settings
 - Feel: standard, quiet iOS settings; clear data/destructive labeling.
@@ -127,8 +129,8 @@ screens. None of this is broken — it just reads busier than it needs to.
 
 ### Prioritized Sequence (post-screenshot critique)
 
-1. **History metric selector** — calm native Menu / compact selector instead of the
-   cramped, truncating pill row (planned next; calculations + chart behavior untouched).
+1. **History metric selector** — ✅ done: cramped, truncating segmented pills
+   replaced with a native Menu picker; calculations + chart behavior untouched.
 2. **Routines / Exercises native-list calmness** — quieter metadata, name as the anchor.
 3. **Helper-text / progressive-disclosure pass** — reduce permanently-visible helper
    paragraphs where safe (no blind behavior change).
