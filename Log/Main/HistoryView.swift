@@ -816,7 +816,6 @@ private struct ProgressChart: View {
     var userBodyweight: Double? = nil
 
     private let PR_ICON_SIZE: CGFloat = 11
-    private let PR_BADGE_PADDING: CGFloat = 3
 
     struct Point: Identifiable {
         let id = UUID()
@@ -847,20 +846,36 @@ private struct ProgressChart: View {
                     y: .value(metric.yAxisLabel, p.value)
                 )
                 .annotation(position: .top) {
+                    // Subtle PR marker: the rosette alone (no filled badge/ring)
+                    // so it reads as a quiet accent above the point rather than a
+                    // competing floating badge.
                     Image(systemName: "rosette")
-                        .font(.system(size: PR_ICON_SIZE, weight: .semibold))
+                        .font(.system(size: PR_ICON_SIZE, weight: .regular))
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.yellow)
-                        .padding(PR_BADGE_PADDING)
-                        .background(Circle().fill(Color.yellow.opacity(0.22)))
-                        .overlay(
-                            Circle().stroke(
-                                Color.yellow.opacity(0.55),
-                                lineWidth: 0.5
-                            )
-                        )
+                        .foregroundStyle(.yellow.opacity(0.8))
                         .accessibilityLabel("Personal Record")
                 }
+            }
+        }
+        // Quiet the chart chrome so the trend line stays the focus: soft
+        // gridlines (the app's subtle border token) and quieter caption-weight
+        // axis labels. Default automatic tick positions and label formatting are
+        // preserved — only styling changes, never the data, scales, or marks.
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisGridLine().foregroundStyle(DSColor.border.opacity(0.6))
+                AxisTick().foregroundStyle(DSColor.border)
+                AxisValueLabel()
+                    .font(.dsCaption)
+                    .foregroundStyle(DSColor.textSecondary)
+            }
+        }
+        .chartYAxis {
+            AxisMarks { _ in
+                AxisGridLine().foregroundStyle(DSColor.border.opacity(0.6))
+                AxisValueLabel()
+                    .font(.dsCaption)
+                    .foregroundStyle(DSColor.textSecondary)
             }
         }
         .overlay {
