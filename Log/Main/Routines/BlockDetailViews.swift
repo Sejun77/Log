@@ -233,6 +233,15 @@ struct SupersetDetailNoRest: View {
         return "\(n) exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted."
     }
 
+    /// A superset must keep at least 2 exercises (the min-two invariant
+    /// enforced in `removeExercise(at:)`). When the block is already at the
+    /// minimum, the per-child remove swipe action renders greyed + disabled so
+    /// the constraint reads from the affordance itself instead of only after a
+    /// tap. Removal becomes available (red) again once a third child exists.
+    private var canRemoveChild: Bool {
+        block.exercises.count > 2
+    }
+
     var body: some View {
         List {
             Section {
@@ -309,7 +318,8 @@ struct SupersetDetailNoRest: View {
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
-                                .tint(.red)
+                                .tint(canRemoveChild ? .red : .gray)
+                                .disabled(!canRemoveChild)
                             }
                         }
                     }
