@@ -10,6 +10,11 @@ should reduce friction and make the next action obvious; everywhere else it
 should stay quiet and uncluttered. The app is already functional — the goal is
 to make it feel lighter and more refined, not to add features.
 
+**Direction: Native Minimal + Focused Workout Surfaces.** Keep most screens mostly
+native iOS (Routines, Exercises, Exercise Detail, Settings, History list); reserve
+focused custom surfaces for where attention matters most — the Active Workout
+current-set area and the History chart.
+
 ## Current Problem
 
 The app is structurally strong, but some surfaces can feel hard or dense:
@@ -29,6 +34,11 @@ screens. None of this is broken — it just reads busier than it needs to.
 - Keep workout logging fast.
 - Preserve existing behavior.
 - Don't redesign logic-heavy flows blindly.
+- Reduce competing surfaces — fewer things should read as "equally important."
+- One clear primary action per screen.
+- Keep metadata and helper text quieter than the content they support.
+- Prefer native Lists/Forms by default; use focused custom surfaces only where
+  they measurably improve attention.
 
 ## Visual System Direction
 
@@ -114,6 +124,17 @@ screens. None of this is broken — it just reads busier than it needs to.
      (replacing raw emoji/red text) and a disabled/grey child Delete affordance at
      the two-exercise superset minimum (red = available, gray/disabled = unavailable).
 6. **Active Workout visual hierarchy — audit only** — document, implement later after real workout testing. Risk: low (audit), higher (implementation).
+
+### Prioritized Sequence (post-screenshot critique)
+
+1. **History metric selector** — calm native Menu / compact selector instead of the
+   cramped, truncating pill row (planned next; calculations + chart behavior untouched).
+2. **Routines / Exercises native-list calmness** — quieter metadata, name as the anchor.
+3. **Helper-text / progressive-disclosure pass** — reduce permanently-visible helper
+   paragraphs where safe (no blind behavior change).
+4. **History chart quieting** — softer gridlines/axis labels later; no interactivity.
+5. **Active Workout visual hierarchy** — only after real-device workout testing;
+   section order and layout stay unchanged until then.
 
 ## Things Not To Change Yet
 

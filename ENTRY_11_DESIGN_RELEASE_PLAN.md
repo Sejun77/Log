@@ -127,6 +127,57 @@ before any TestFlight / App Store promotion.
 
 ---
 
+## Screenshot-Based Redesign Findings
+
+A screenshot critique confirmed the app is functionally strong but still reads as
+**visually too hard/dense and somewhat prototype-like**. The root cause is
+**visual-treatment density, not information density**: too many surfaces feel
+equally important, labels/values/helper text compete, some controls look cramped,
+and permanent helper paragraphs add noise.
+
+**Direction: Native Minimal + Focused Workout Surfaces.** Keep most screens mostly
+native iOS (Routines, Exercises, Exercise Detail, Settings, History list); reserve
+focused custom surfaces for where attention matters most (Active Workout current
+set, History chart). Establish a clear type hierarchy
+(numbers / active input > labels > metadata > helper text), one primary action per
+screen, and no flashy fitness decoration. Preserve behavior and stability — not a
+one-shot redesign.
+
+Per-screen notes:
+- **Routines / Exercises lists** — read as separated floating cards; should feel
+  like calm native grouped lists. The name anchors the row; body part / equipment /
+  summary metadata should be quieter.
+- **Routine detail** — Add Exercise / Add Superset compete with content; block
+  titles should anchor, metadata recede. (Warning restyle + disabled-delete
+  affordance already shipped.)
+- **Superset detail** — dense helper text + repeated stepper rows feel like a
+  settings/debug panel; the exercise list should feel central. Static helper
+  paragraphs may later move behind info/disclosure — not an immediate behavior change.
+- **Exercise Detail** — already improved (Basics / Setup & Notes / Options); keep
+  mostly native, change conservatively.
+- **History metric selector** — the most prototype-looking element (options
+  truncate/cramp); prefer a calm native Menu / compact selector over the cramped
+  pill row. Calculations and chart behavior untouched.
+- **History chart** — gridlines/axis labels may be quieted later; no interactivity yet.
+- **Active Workout** — highest impact, highest risk: the working-set input + Log
+  button should become visually dominant; warmups, tags, notes, plan, and
+  equipment/setup should recede. Keyboard state feels cramped. Do **not** change
+  section order, layout, or behavior until real-device workout testing.
+- **Settings** — already calm; keep native, use as the reference for calm Forms.
+
+**Prioritized redesign plan:**
+1. Fix the History metric selector (**planned next slice — not started**).
+2. Continue low-risk Routines / Exercises visual simplification (native-list calmness).
+3. Reduce permanent helper-text density where safe (progressive disclosure).
+4. Later: History chart visual quieting.
+5. Later: Active Workout visual hierarchy — only after real-device workout testing.
+
+History metric selector, History chart redesign, Active Workout redesign,
+real-device workout testing, TestFlight smoke, and Release Readiness all remain
+**not complete**.
+
+---
+
 ## Real-Device Testing Notes
 
 > Fill these in from actual workouts on a physical iPhone. Capture friction while
