@@ -105,8 +105,23 @@ before any TestFlight / App Store promotion.
   calculations, metric picker, chart, delete behavior, and active-workout detection
   untouched; both `LockBadge` implementations left unchanged (unification deferred).
   (`design(ui): add StatusPill for history state`)
-- All three shipped via dedicated branches merged into `main`. **Build passed** and
-  **manual testing passed** for each. No tests, models, or business logic changed.
+- **Invalid superset warning restyle** — in `Log/Main/Routines/RoutineEditor.swift`,
+  the raw red emoji caption ("⚠️ Tap Details to set Rest after round") became a
+  native SwiftUI `Label` (`exclamationmark.triangle`, `.dsCaption`,
+  `.foregroundStyle(.orange)`) with the same wording — more native, minimal, and
+  less harsh. The gating condition `blockIsInvalidSuperset(block)` and all
+  superset/rest-after-round/navigation/edit logic were unchanged.
+  (`style(routine-editor): restyle invalid-superset warning as native Label`)
+- **Superset minimum delete-state clarity** — in `SupersetDetailNoRest`
+  (`BlockDetailViews.swift`), the per-child swipe Delete now reflects the
+  two-exercise minimum: a local `canRemoveChild = block.exercises.count > 2`
+  greys out and disables child Delete when a superset has exactly two exercises,
+  and keeps it red/available with 3+. The existing `removeExercise(at:)` min-two
+  guard and the explanatory footer were unchanged; no helper text added.
+  (`design(routines): show disabled delete state for minimum supersets`)
+- All five shipped as small, reversible Entry #11 design/UX slices via dedicated
+  branches merged into `main`. **Build passed** and **manual testing passed** for
+  each. No models, persistence, active-workout, history, or routine logic changed.
 - Still outstanding: real-device workout tests and the TestFlight upgrade smoke
   (see below) have **not** been run.
 

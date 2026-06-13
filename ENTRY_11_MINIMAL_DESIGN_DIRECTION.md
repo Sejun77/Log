@@ -85,6 +85,10 @@ screens. None of this is broken — it just reads busier than it needs to.
 ### Routine Editor
 - Feel: calm, scannable list of blocks; block vs. superset clearly distinct.
 - Avoid: dense stepper walls, inconsistent fonts, raw inline warnings.
+- Started: the invalid-superset warning is now a native `Label`
+  (`exclamationmark.triangle`, orange) instead of raw emoji/red text; and the
+  superset child Delete is greyed/disabled at the two-exercise minimum
+  (red = destructive available, gray/disabled = unavailable).
 
 ### Exercise Detail
 - Feel: a tidy settings screen — grouped sections, light helper text.
@@ -106,6 +110,9 @@ screens. None of this is broken — it just reads busier than it needs to.
 4. **Status pill standardization** — one shared pill for in-use/in-progress. Risk: low–medium (touches a few files; respect the intentional `LockBadge` size note).
    - **Started (foundation shipped):** shared `StatusPill` added and adopted for History's "In Progress" label. **`LockBadge` unification remains deferred** — the two implementations are intentionally left unchanged for now.
 5. **Routine / Exercise form density reduction** — grouping + spacing. Risk: low.
+   - **Started:** routine editor minimal polish underway — native `Label` warning
+     (replacing raw emoji/red text) and a disabled/grey child Delete affordance at
+     the two-exercise superset minimum (red = available, gray/disabled = unavailable).
 6. **Active Workout visual hierarchy — audit only** — document, implement later after real workout testing. Risk: low (audit), higher (implementation).
 
 ## Things Not To Change Yet
