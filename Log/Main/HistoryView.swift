@@ -264,13 +264,16 @@ struct HistoryView: View {
 
     private var progressionSection: some View {
         Section {
-            // Metric picker (segmented)
+            // Metric picker (native Menu style). Replaces the prior segmented
+            // row, which cramped/truncated with up to 6 options; the Menu shows
+            // the selected metric inline and lists the available metrics on tap.
+            // Binding, option source, availability rules, and labels unchanged.
             Picker("Metric", selection: $metric) {
                 ForEach(metricsForSelectedExercise) { m in
                     Text(m.title).tag(m)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
 
             NavigationLink {
                 ExercisePicker(selectedID: $selectedExerciseID)
