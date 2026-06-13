@@ -304,10 +304,13 @@ struct RoutineEditor: View {
                 )
 
                 if blockIsInvalidSuperset(block) {
-                    Text("⚠️ Tap Details to set Rest after round")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .padding(.leading, 8)
+                    Label(
+                        "Tap Details to set Rest after round",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.dsCaption)
+                    .foregroundStyle(.orange)
+                    .padding(.leading, 8)
                 }
             }
             .onMove(perform: moveBlocks)
