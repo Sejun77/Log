@@ -127,7 +127,15 @@ before any TestFlight / App Store promotion.
   metric availability, the metric-reset-on-exercise-change, chart data/rendering,
   bodyweight effective-load logic, recent workout rows, and swipe/delete were all
   unchanged. (`design(history): replace cramped metric pills with native selector`)
-- All six shipped as small, reversible Entry #11 design/UX slices via dedicated
+- **History chart visual quieting** — in `ProgressChart` only: softened the chart
+  chrome (explicit `.chartXAxis`/`.chartYAxis` with `DSColor.border`-tinted
+  gridlines and quieter `.dsCaption` / `DSColor.textSecondary` axis labels;
+  default tick positions and label formatting preserved) and made the PR marker
+  subtler (dropped the filled badge + ring, regular weight, `.yellow.opacity(0.8)`,
+  accessibility label kept). Empty state left unchanged. Chart data, `computePoints`,
+  calculations, metric availability, filtering, recent rows, and swipe/delete all
+  unchanged; no interactivity added. (`design(history): quiet chart presentation`)
+- All seven shipped as small, reversible Entry #11 design/UX slices via dedicated
   branches merged into `main`. **Build passed** and **manual testing passed** for
   each. No models, persistence, active-workout, history, or routine logic changed.
 - Still outstanding: real-device workout tests and the TestFlight upgrade smoke
@@ -166,7 +174,8 @@ Per-screen notes:
 - **History metric selector** — the most prototype-looking element (options
   truncate/cramp); prefer a calm native Menu / compact selector over the cramped
   pill row. Calculations and chart behavior untouched.
-- **History chart** — gridlines/axis labels may be quieted later; no interactivity yet.
+- **History chart** — ✅ quieted: softer gridlines/axis labels and a subtler PR
+  marker; no interactivity (and none added).
 - **Active Workout** — highest impact, highest risk: the working-set input + Log
   button should become visually dominant; warmups, tags, notes, plan, and
   equipment/setup should recede. Keyboard state feels cramped. Do **not** change
@@ -177,11 +186,11 @@ Per-screen notes:
 1. Fix the History metric selector (**✅ done** — segmented pill row → native Menu picker).
 2. Continue low-risk Routines / Exercises visual simplification (native-list calmness).
 3. Reduce permanent helper-text density where safe (progressive disclosure).
-4. Later: History chart visual quieting.
+4. History chart visual quieting (**✅ done** — softer gridlines/axis labels, subtler PR marker).
 5. Later: Active Workout visual hierarchy — only after real-device workout testing.
 
-History **chart** redesign, Active Workout redesign, real-device workout testing,
-TestFlight smoke, and Release Readiness all remain **not complete**.
+Active Workout redesign, real-device workout testing, TestFlight smoke, and
+Release Readiness all remain **not complete**.
 
 ---
 

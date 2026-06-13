@@ -107,8 +107,9 @@ screens. None of this is broken — it just reads busier than it needs to.
 ### History
 - Feel: readable timeline; metrics legible at a glance.
 - Avoid: cramped controls and noisy chart chrome.
-- Done: the cramped segmented metric pills were replaced with a native Menu picker.
-  Chart quieting (gridlines/axis labels) remains deferred.
+- Done: the cramped segmented metric pills were replaced with a native Menu picker;
+  and the chart was quieted — softer axis/grid styling and a subtler PR marker, with
+  chart behavior and calculations preserved.
 
 ### Settings
 - Feel: standard, quiet iOS settings; clear data/destructive labeling.
@@ -134,7 +135,8 @@ screens. None of this is broken — it just reads busier than it needs to.
 2. **Routines / Exercises native-list calmness** — quieter metadata, name as the anchor.
 3. **Helper-text / progressive-disclosure pass** — reduce permanently-visible helper
    paragraphs where safe (no blind behavior change).
-4. **History chart quieting** — softer gridlines/axis labels later; no interactivity.
+4. **History chart quieting** — ✅ done: softer gridlines/axis labels and a subtler
+   PR marker; no interactivity added; chart behavior + calculations preserved.
 5. **Active Workout visual hierarchy** — only after real-device workout testing;
    section order and layout stay unchanged until then.
 
