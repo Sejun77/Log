@@ -701,7 +701,7 @@ struct ExerciseDetailView: View {
                 }
             }
 
-            Section("Info") {
+            Section("Basics") {
                 TextField("Name", text: $exercise.name)
                     .font(.dsBody)
                     .focused($focusedField, equals: "name")
@@ -758,7 +758,9 @@ struct ExerciseDetailView: View {
                     }
                 }
                 .disabled(isLocked)
+            }
 
+            Section {
                 // `axis: .vertical` makes Return insert a newline on the
                 // soft keyboard; `lineLimit(3...8)` gives the cell room to
                 // grow for typical 4–5-line setup cues before the content
@@ -792,7 +794,13 @@ struct ExerciseDetailView: View {
                 .textInputAutocapitalization(.sentences)
                 .focused($focusedField, equals: "notes")
                 .disabled(isLocked)
+            } header: {
+                Text("Setup & Notes")
+            } footer: {
+                Text("Setup defaults are reusable setup cues for performing the exercise. Notes are general notes about the exercise.")
+            }
 
+            Section("Options") {
                 // Phase 9-D: direct binding to Exercise.isTimeBased. The
                 // prior staging + "Switch set mode?" alert warned about
                 // discarding rows in Exercise.defaultTemplates; with the
