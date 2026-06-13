@@ -210,6 +210,35 @@ struct DSTag: View {
 }
 
 // ======================================================
+// MARK: - Status Pill
+// ======================================================
+
+/// Compact, neutral status label (e.g. "In Progress") rendered as a material
+/// capsule. Centralizes the previously hand-rolled `.thinMaterial` status chip
+/// so these labels read consistently across screens. Neutral by design — reach
+/// for `DSTag` when accent/error emphasis is wanted. The two existing
+/// `LockBadge` types are intentionally left as-is for now (separate slice).
+struct StatusPill: View {
+    let text: String
+    var systemImage: String? = nil
+
+    var body: some View {
+        HStack(spacing: DSSpacing.xs) {
+            if let systemImage {
+                Image(systemName: systemImage)
+            }
+            Text(text)
+        }
+        .font(.dsCaption.weight(.semibold))
+        .padding(.horizontal, DSSpacing.sm)
+        .padding(.vertical, 3)
+        .background(.thinMaterial)
+        .clipShape(Capsule())
+        .foregroundStyle(.secondary)
+    }
+}
+
+// ======================================================
 // MARK: - Section Header
 // ======================================================
 

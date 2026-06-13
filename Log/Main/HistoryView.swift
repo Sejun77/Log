@@ -416,13 +416,7 @@ struct HistoryView: View {
                                 Spacer()
 
                                 if isActive {
-                                    Text("In Progress")
-                                        .font(.dsCaption.weight(.semibold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 3)
-                                        .background(.thinMaterial)
-                                        .clipShape(Capsule())
-                                        .foregroundStyle(.secondary)
+                                    StatusPill(text: "In Progress")
                                 } else if let duration = workoutDuration(w) {
                                     Text(duration)
                                         .font(.dsBodySecondary.monospacedDigit())
