@@ -492,14 +492,14 @@ struct BlockRow: View {
                 Text(title)
                     .lineLimit(2)
                     .truncationMode(.tail)
-                    .font(.headline)
+                    .font(.dsSection)
                 Spacer(minLength: 8)
                 if locked { LockBadge() }
             }
 
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -508,7 +508,7 @@ struct BlockRow: View {
             HStack {
                 Spacer()
                 NavigationLink("Details", destination: details())
-                    .font(.subheadline)
+                    .font(.dsBodySecondary)
                     .foregroundStyle(.secondary)
             }
         }
