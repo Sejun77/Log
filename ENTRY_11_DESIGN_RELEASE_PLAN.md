@@ -99,8 +99,14 @@ before any TestFlight / App Store promotion.
   (no direct system text-font usages to replace safely); SF Symbol and LockBadge
   font usages were left unchanged intentionally.
   (`style(routine-editor): use DS font tokens in BlockRow`)
-- Both shipped via dedicated branches merged into `main`. **Build passed** and
-  **manual testing passed** for both. No tests, models, or business logic changed.
+- **Shared StatusPill foundation** — added a reusable `StatusPill` component in
+  `Log/UI/UIComponents.swift` and adopted it only for HistoryView's active-workout
+  row "In Progress" label (wording unchanged). Visual/component-only: History
+  calculations, metric picker, chart, delete behavior, and active-workout detection
+  untouched; both `LockBadge` implementations left unchanged (unification deferred).
+  (`design(ui): add StatusPill for history state`)
+- All three shipped via dedicated branches merged into `main`. **Build passed** and
+  **manual testing passed** for each. No tests, models, or business logic changed.
 - Still outstanding: real-device workout tests and the TestFlight upgrade smoke
   (see below) have **not** been run.
 

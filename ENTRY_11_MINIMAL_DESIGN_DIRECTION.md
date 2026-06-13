@@ -104,6 +104,7 @@ screens. None of this is broken — it just reads busier than it needs to.
 2. **Minimal `DSCard` / section surface refinement** — soften fills, reduce borders. Risk: low.
 3. **Button hierarchy pass** — promote primary, quiet secondary, tame destructive. Risk: low.
 4. **Status pill standardization** — one shared pill for in-use/in-progress. Risk: low–medium (touches a few files; respect the intentional `LockBadge` size note).
+   - **Started (foundation shipped):** shared `StatusPill` added and adopted for History's "In Progress" label. **`LockBadge` unification remains deferred** — the two implementations are intentionally left unchanged for now.
 5. **Routine / Exercise form density reduction** — grouping + spacing. Risk: low.
 6. **Active Workout visual hierarchy — audit only** — document, implement later after real workout testing. Risk: low (audit), higher (implementation).
 
