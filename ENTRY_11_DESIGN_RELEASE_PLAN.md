@@ -62,6 +62,9 @@ before any TestFlight / App Store promotion.
 - [ ] Empty states — empty routine / empty block read sensibly
 - [ ] Destructive action clarity — delete vs. duplicate vs. locked/in-use styling
 
+> Completed: BlockRow title/subtitle/Details typography now uses DS font tokens
+> (`.dsSection` / `.dsCaption` / `.dsBodySecondary`). See Completed Design Polish.
+
 ### History
 - [ ] Workout list readability — date / routine / summary subtitle scannable
 - [ ] Workout detail readability — sets grouped per exercise clearly
@@ -71,8 +74,8 @@ before any TestFlight / App Store promotion.
 - [ ] Progress chart readability — axes/points legible on device
 
 ### Exercises
-- [ ] Exercise detail layout — sections ordered logically
-- [ ] Notes / setup notes clarity — purpose of each field obvious
+- [x] Exercise detail layout — sections ordered logically
+- [x] Notes / setup notes clarity — purpose of each field obvious
 - [ ] "Bodyweight counts as load" toggle — explanation is understandable
 - [ ] Equipment / body part picker clarity — canonical vs. custom values clear
 
@@ -81,6 +84,25 @@ before any TestFlight / App Store promotion.
 - [ ] Unit display — current unit shown consistently
 - [ ] Data management / destructive actions — import/export/delete clearly labeled
 - [ ] TestFlight / debug-only information, if any — hidden or clearly marked
+
+### Completed Design Polish
+
+- **Exercise Detail section grouping** — split the single "Info" section into
+  **Basics**, **Setup & Notes**, and **Options**, with footer text clarifying
+  Setup defaults vs. Notes. Layout/style-only: bindings, focus logic,
+  `commitDrafts`/`seedDrafts`, lock behavior, Time-based, and
+  Bodyweight-counts-as-load behavior all preserved.
+  (`design(exercises): clarify exercise detail sections`)
+- **Routine BlockRow typography** — title/subtitle/Details now use DS font tokens
+  (`.headline → .dsSection`, `.caption → .dsCaption`,
+  `.subheadline → .dsBodySecondary`). `BlockDetailViews.swift` was left unchanged
+  (no direct system text-font usages to replace safely); SF Symbol and LockBadge
+  font usages were left unchanged intentionally.
+  (`style(routine-editor): use DS font tokens in BlockRow`)
+- Both shipped via dedicated branches merged into `main`. **Build passed** and
+  **manual testing passed** for both. No tests, models, or business logic changed.
+- Still outstanding: real-device workout tests and the TestFlight upgrade smoke
+  (see below) have **not** been run.
 
 ---
 
