@@ -141,6 +141,44 @@ before any TestFlight / App Store promotion.
 - Still outstanding: real-device workout tests and the TestFlight upgrade smoke
   (see below) have **not** been run.
 
+> Note: the count of completed **visual design** slices remains **seven**. The
+> item below is a separate **workout-usability** feature, not an eighth design
+> slice.
+
+### Completed Workout Usability
+
+- **Exclude recovery/deload workouts from future prefill** — surfaced while
+  planning a full-body **recovery session**: last-performance prefill seeds new
+  workouts from the most recent completed workout containing the same exercise,
+  which is right for normal training but wrong for recovery/deload days. Those
+  sessions use intentionally reduced load and/or sets, so finishing one normally
+  would pollute the **next** normal workout's prefill values. A recovery/deload
+  workout should stay in **History** but should not necessarily overwrite future
+  training prefill. The new **"Use for future prefill"** toggle solves this, and
+  **default behavior is unchanged** because the toggle is **ON by default** (all
+  existing and normal workouts remain included).
+  - **Implementation summary:**
+    - Additive `Workout.excludedFromPrefill: Bool = false` flag (migration-safe;
+      existing workouts default to included).
+    - **Active Workout** toggle — appears in the active-workout info List after
+      Session Notes, so a recovery/deload workout can be marked OFF before
+      finishing.
+    - **History workout detail** toggle — appears in `WorkoutDetailView` Overview
+      for completed workouts, so the setting can be corrected after the fact.
+    - `LastPerformancePrefillService` now skips completed workouts where
+      `excludedFromPrefill == true` for **both** parent-set and dropset prefill,
+      **falling back to the next newest included completed workout**. Incomplete
+      workouts are still ignored as before, and current-active-workout exclusion
+      still works as before.
+  - **Not changed:** History charts/metrics, PR logic, e1RM, Volume, Best Weight,
+    Best Reps, Reps, Duration, bodyweight effective-load logic, metric
+    availability, recent rows, swipe/delete, routine templates, exercise
+    defaults, rest timer, and Live Activity.
+  - **Validation:** build succeeded; full test suite passed (**859 tests, 0
+    failures**) including **7 new `LastPerformancePrefillService` exclusion
+    tests**; phone manual testing confirmed.
+    (`feat(prefill): exclude marked workouts from last-performance prefill`)
+
 ---
 
 ## Screenshot-Based Redesign Findings
