@@ -22,9 +22,14 @@ final class LastPerformancePrefillServiceTests: SwiftDataTestHarness {
     // MARK: - Fixtures
 
     @discardableResult
-    private func makeWorkout(date: Date, completed: Bool = true) -> Workout {
+    private func makeWorkout(
+        date: Date,
+        completed: Bool = true,
+        excludedFromPrefill: Bool = false
+    ) -> Workout {
         let w = Workout(date: date, items: [])
         if completed { w.completedAt = date.addingTimeInterval(3600) }
+        w.excludedFromPrefill = excludedFromPrefill
         context.insert(w)
         return w
     }
@@ -132,6 +137,134 @@ final class LastPerformancePrefillServiceTests: SwiftDataTestHarness {
 
         let map = LastPerformancePrefillService.suggestions(
             forExerciseID: ex.id, in: allWorkouts(), excluding: current.id
+        )
+
+        XCTAssertEqual(map.count, 1)
+        XCTAssertEqual(map[0]?.weight, 60)
+    }
+
+    // MARK: - Excluded-from-prefill source selection
+
+    /// Sanity baseline: a single included most-recent workout is still used
+    /// exactly as before once the exclusion flag exists (defaults to false).
+    func test_excludedFromPrefill_includedMostRecentStillUsed() {
+        let ex = makeExercise("Bench")
+
+        let w = makeWorkout(date: day(5))  // excludedFromPrefill defaults false
+        addItem(to: w, exercise: ex, sets: [SetSpec(reps: 8, weight: 80)])
+
+        let map = LastPerformancePrefillService.suggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+        XCTAssertEqual(map[0]?.weight, 80)
+    }
+
+    /// The most recent workout is flagged excluded → it must be skipped and the
+    /// older included workout used instead.
+    func test_excludedFromPrefill_skipsExcludedMostRecent_usesOlderIncluded() {
+        let ex = makeExercise("Bench")
+
+        let older = makeWorkout(date: day(1))
+        addItem(to: older, exercise: ex, sets: [SetSpec(reps: 5, weight: 60)])
+
+        // Newer but marked excluded (e.g. a deload day).
+        let recovery = makeWorkout(date: day(5), excludedFromPrefill: true)
+        addItem(to: recovery, exercise: ex, sets: [SetSpec(reps: 12, weight: 30)])
+
+        let map = LastPerformancePrefillService.suggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+
+        XCTAssertEqual(map.count, 1)
+        XCTAssertEqual(map[0]?.weight, 60)
+        XCTAssertEqual(map[0]?.reps, 5)
+    }
+
+    /// When the only completed workout with the exercise is excluded, parent-set
+    /// prefill returns nothing.
+    func test_excludedFromPrefill_excludedOnlyWorkout_noParentSuggestion() {
+        let ex = makeExercise("Bench")
+
+        let recovery = makeWorkout(date: day(5), excludedFromPrefill: true)
+        addItem(to: recovery, exercise: ex, sets: [SetSpec(reps: 12, weight: 30)])
+
+        let map = LastPerformancePrefillService.suggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+        XCTAssertTrue(map.isEmpty)
+    }
+
+    /// When the only completed workout with drops is excluded, dropset prefill
+    /// returns nothing.
+    func test_excludedFromPrefill_excludedOnlyWorkout_noDropSuggestion() {
+        let ex = makeExercise("Curl")
+
+        let recovery = makeWorkout(date: day(5), excludedFromPrefill: true)
+        addItem(to: recovery, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 6, weight: 14, subIndex: 1, index: 0),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+        XCTAssertTrue(map.isEmpty)
+    }
+
+    /// Dropset prefill skips an excluded most-recent workout and falls back to
+    /// the older included one.
+    func test_excludedFromPrefill_dropSuggestionsSkipExcluded_usesOlder() {
+        let ex = makeExercise("Curl")
+
+        let older = makeWorkout(date: day(1))
+        addItem(to: older, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 6, weight: 14, subIndex: 1, index: 0),
+        ])
+        let recovery = makeWorkout(date: day(5), excludedFromPrefill: true)
+        addItem(to: recovery, exercise: ex, sets: [
+            SetSpec(kind: .dropset, reps: 12, weight: 6, subIndex: 1, index: 0),
+        ])
+
+        let map = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: ex.id, in: allWorkouts()
+        )
+        XCTAssertEqual(map[0]?[1]?.weight, 14)
+    }
+
+    /// Excluding the current active workout still works alongside the new flag:
+    /// the excluded-current workout is dropped, and a separately-excluded older
+    /// workout is also skipped, leaving the included one.
+    func test_excludedFromPrefill_currentWorkoutExclusionStillApplies() {
+        let ex = makeExercise("Bench")
+
+        let included = makeWorkout(date: day(1))
+        addItem(to: included, exercise: ex, sets: [SetSpec(reps: 5, weight: 60)])
+
+        // Most recent is the in-progress current workout (completed but resumed).
+        let current = makeWorkout(date: day(9))
+        addItem(to: current, exercise: ex, sets: [SetSpec(reps: 99, weight: 999)])
+
+        let map = LastPerformancePrefillService.suggestions(
+            forExerciseID: ex.id, in: allWorkouts(), excluding: current.id
+        )
+
+        XCTAssertEqual(map.count, 1)
+        XCTAssertEqual(map[0]?.weight, 60)
+    }
+
+    /// Incomplete workouts remain ignored even when not excluded (regression
+    /// guard for the unchanged in-progress filter).
+    func test_excludedFromPrefill_incompleteStillIgnored() {
+        let ex = makeExercise("Bench")
+
+        let completed = makeWorkout(date: day(1))
+        addItem(to: completed, exercise: ex, sets: [SetSpec(reps: 5, weight: 60)])
+
+        // Newer but not completed, not excluded — must still be skipped.
+        let inProgress = makeWorkout(date: day(9), completed: false)
+        addItem(to: inProgress, exercise: ex, sets: [SetSpec(reps: 99, weight: 999)])
+
+        let map = LastPerformancePrefillService.suggestions(
+            forExerciseID: ex.id, in: allWorkouts()
         )
 
         XCTAssertEqual(map.count, 1)

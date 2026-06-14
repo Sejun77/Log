@@ -558,8 +558,30 @@ private struct WorkoutDetailView: View {
                             .multilineTextAlignment(.trailing)
                     }
                 }
+
+                // Future-prefill exclusion, editable after the fact for
+                // completed workouts. Positive wording: ON means this workout
+                // may seed last-performance prefill; OFF (recovery/deload)
+                // keeps it in History but ignored by prefill. Maps to
+                // Workout.excludedFromPrefill (inverted). Hidden while active —
+                // that case is handled live in ActiveWorkoutView.
+                if !isActive {
+                    Toggle(
+                        "Use for future prefill",
+                        isOn: Binding(
+                            get: { !workout.excludedFromPrefill },
+                            set: { workout.excludedFromPrefill = !$0 }
+                        )
+                    )
+                }
             } header: {
                 Text("Overview")
+            } footer: {
+                if !isActive {
+                    Text(
+                        "Turn off for recovery or deload workouts so they don't become the source for your next workout's prefill."
+                    )
+                }
             }
 
             // Phase 6.C2 — group items by source block snapshot.

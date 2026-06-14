@@ -53,12 +53,16 @@ enum LastPerformancePrefillService {
     /// Behavior:
     ///   1. Keep only completed workouts (`completedAt != nil`).
     ///   2. Drop `currentWorkoutID` if provided (the in-progress session).
-    ///   3. Sort by `completedAt` descending (newest first); ties broken by
+    ///   3. Drop workouts the user marked excluded from prefill
+    ///      (`excludedFromPrefill == true`) — they stay in History but never
+    ///      seed a future prefill, so selection falls back to the next most
+    ///      recent included workout.
+    ///   4. Sort by `completedAt` descending (newest first); ties broken by
     ///      `date` descending so order is deterministic.
-    ///   4. Walk newest → oldest and return the suggestions from the FIRST
+    ///   5. Walk newest → oldest and return the suggestions from the FIRST
     ///      workout that has at least one qualifying working set for the
     ///      exercise. Older workouts are not consulted once a match is found.
-    ///   5. Returns an empty map when nothing qualifies.
+    ///   6. Returns an empty map when nothing qualifies.
     ///
     /// Qualifying sets: items whose live `Exercise.id == exerciseID`, logs
     /// with `kind == .working && subIndex == nil`. When a single index appears
@@ -72,6 +76,7 @@ enum LastPerformancePrefillService {
         let candidates = workouts
             .filter { $0.completedAt != nil }
             .filter { $0.id != currentWorkoutID }
+            .filter { !$0.excludedFromPrefill }
             .sorted { lhs, rhs in
                 let l = lhs.completedAt ?? lhs.date
                 let r = rhs.completedAt ?? rhs.date
@@ -115,9 +120,10 @@ enum LastPerformancePrefillService {
     /// keyed `[parentSetIndex: [subIndex: suggestion]]`.
     ///
     /// Same selection contract as `suggestions(...)` — completed workouts only,
-    /// `currentWorkoutID` excluded, newest-first by `completedAt` (tie-broken by
-    /// `date`) — but walks newest → oldest and returns the FIRST workout that
-    /// has at least one dropset sub-row (`subIndex != nil`) for the exercise.
+    /// `currentWorkoutID` excluded, workouts flagged `excludedFromPrefill`
+    /// skipped, newest-first by `completedAt` (tie-broken by `date`) — but walks
+    /// newest → oldest and returns the FIRST workout that has at least one
+    /// dropset sub-row (`subIndex != nil`) for the exercise.
     /// This selection is independent of the working-set lookup: the most recent
     /// workout with drops may differ from the most recent with working sets.
     /// Returns an empty map when nothing qualifies.
@@ -129,6 +135,7 @@ enum LastPerformancePrefillService {
         let candidates = workouts
             .filter { $0.completedAt != nil }
             .filter { $0.id != currentWorkoutID }
+            .filter { !$0.excludedFromPrefill }
             .sorted { lhs, rhs in
                 let l = lhs.completedAt ?? lhs.date
                 let r = rhs.completedAt ?? rhs.date

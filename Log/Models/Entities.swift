@@ -885,6 +885,14 @@ final class Workout {
     @Relationship(deleteRule: .cascade)
     var items: [WorkoutItem]
     var notes: String?
+    /// When true, this completed workout is kept in History but is NOT used as
+    /// a source for last-performance prefill in future workouts (e.g. recovery
+    /// / deload sessions whose reduced loads would otherwise become the next
+    /// prefill baseline). Additive: defaults to `false` so all existing and new
+    /// workouts behave exactly as before. Read only by
+    /// `LastPerformancePrefillService`; History charts, PRs, volume, e1RM,
+    /// bodyweight, and analytics ignore it.
+    var excludedFromPrefill: Bool = false
 
     init(
         date: Date = .now,
@@ -892,7 +900,8 @@ final class Workout {
         routineID: UUID? = nil,
         routineVariantID: UUID? = nil,
         items: [WorkoutItem],
-        notes: String? = nil
+        notes: String? = nil,
+        excludedFromPrefill: Bool = false
     ) {
         self.id = UUID()
         self.date = date
@@ -901,5 +910,6 @@ final class Workout {
         self.routineVariantID = routineVariantID
         self.items = items
         self.notes = notes
+        self.excludedFromPrefill = excludedFromPrefill
     }
 }

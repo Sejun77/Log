@@ -1462,6 +1462,28 @@ struct ActiveWorkoutView: View {
                         }
                     }
 
+                    // --- Future-prefill exclusion (workout-level) ---
+                    // Positive wording: ON (default) means this workout may seed
+                    // last-performance prefill. Turn OFF for recovery/deload days
+                    // whose reduced loads shouldn't become the next baseline.
+                    // Maps to Workout.excludedFromPrefill (inverted). The workout
+                    // still stays in History either way.
+                    if let w = workout {
+                        Section {
+                            Toggle(
+                                "Use for future prefill",
+                                isOn: Binding(
+                                    get: { !w.excludedFromPrefill },
+                                    set: { w.excludedFromPrefill = !$0 }
+                                )
+                            )
+                        } footer: {
+                            Text(
+                                "Turn off for recovery or deload workouts so they don't become the source for your next workout's prefill. The workout still appears in History."
+                            )
+                        }
+                    }
+
                     // --- Exercise-level notes (read-only display of Exercise.notes) ---
                     // Source: live Exercise.notes for the currently-focused exercise.
                     // Inline editing is intentionally disabled to preserve the
