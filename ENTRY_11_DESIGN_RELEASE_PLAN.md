@@ -42,6 +42,7 @@ before any TestFlight / App Store promotion.
 > slice has been logged for it.
 
 ### Active Workout
+
 - [ ] Visual hierarchy — eye lands on the current set first
 - [ ] Set cards — reps/weight/log clearly grouped and tappable
 - [ ] Warm-up rows — visually distinct from working sets
@@ -53,6 +54,7 @@ before any TestFlight / App Store promotion.
 - [ ] Rest timer visibility — clear when running, clear when done
 
 ### Routine Editor
+
 - [ ] Block card clarity — block vs. superset visually distinct
 - [ ] Exercise slot layout — name + prescription summary readable at a glance
 - [ ] Prescription fields — sets/reps/rest/effort understandable without docs
@@ -66,6 +68,7 @@ before any TestFlight / App Store promotion.
 > (`.dsSection` / `.dsCaption` / `.dsBodySecondary`). See Completed Design Polish.
 
 ### History
+
 - [ ] Workout list readability — date / routine / summary subtitle scannable
 - [ ] Workout detail readability — sets grouped per exercise clearly
 - [ ] Metric picker clarity — available metrics make sense per exercise type
@@ -74,12 +77,14 @@ before any TestFlight / App Store promotion.
 - [ ] Progress chart readability — axes/points legible on device
 
 ### Exercises
+
 - [x] Exercise detail layout — sections ordered logically
 - [x] Notes / setup notes clarity — purpose of each field obvious
 - [ ] "Bodyweight counts as load" toggle — explanation is understandable
 - [ ] Equipment / body part picker clarity — canonical vs. custom values clear
 
 ### Settings
+
 - [ ] Bodyweight input clarity — purpose, decimals, "empty = not set" understood
 - [ ] Unit display — current unit shown consistently
 - [ ] Data management / destructive actions — import/export/delete clearly labeled
@@ -138,8 +143,9 @@ before any TestFlight / App Store promotion.
 - All seven shipped as small, reversible Entry #11 design/UX slices via dedicated
   branches merged into `main`. **Build passed** and **manual testing passed** for
   each. No models, persistence, active-workout, history, or routine logic changed.
-- Still outstanding: real-device workout tests and the TestFlight upgrade smoke
-  (see below) have **not** been run.
+- Real-device workout tests are **complete** (three end-to-end sessions; see
+  Real-Device Testing Notes). The TestFlight upgrade smoke (see below) has **not**
+  been run.
 
 > Note: the count of completed **visual design** slices remains **seven**. The
 > item below is a separate **workout-usability** feature, not an eighth design
@@ -198,6 +204,7 @@ screen, and no flashy fitness decoration. Preserve behavior and stability — no
 one-shot redesign.
 
 Per-screen notes:
+
 - **Routines / Exercises lists** — read as separated floating cards; should feel
   like calm native grouped lists. The name anchors the row; body part / equipment /
   summary metadata should be quieter.
@@ -221,51 +228,43 @@ Per-screen notes:
 - **Settings** — already calm; keep native, use as the reference for calm Forms.
 
 **Prioritized redesign plan:**
+
 1. Fix the History metric selector (**✅ done** — segmented pill row → native Menu picker).
 2. Continue low-risk Routines / Exercises visual simplification (native-list calmness).
 3. Reduce permanent helper-text density where safe (progressive disclosure).
 4. History chart visual quieting (**✅ done** — softer gridlines/axis labels, subtler PR marker).
 5. Later: Active Workout visual hierarchy — only after real-device workout testing.
 
-Active Workout redesign, real-device workout testing, TestFlight smoke, and
-Release Readiness all remain **not complete**.
+Real-device workout testing is **complete** (three end-to-end sessions). Active
+Workout redesign, TestFlight smoke, and Release Readiness all remain **not
+complete**.
 
 ---
 
 ## Real-Device Testing Notes
 
-> Fill these in from actual workouts on a physical iPhone. Capture friction while
-> it's fresh — these notes drive the polish slices and the Entry #11 story.
+> Full per-workout logs (checklists, friction, bugs, follow-ups) now live in
+> **[`ENTRY_11_WORKOUT_TESTING_NOTES.md`](ENTRY_11_WORKOUT_TESTING_NOTES.md)** to
+> keep this plan high-level. Summary below.
 
-### Workout Test 1
-- Date:
-- Routine:
-- Device:
-- What felt smooth:
-- What felt confusing:
-- Bugs noticed:
-- Design issues noticed:
-- Follow-up actions:
+**Three workout tests completed** on a real device (iPhone 13 Pro), 6/14–6/17/2026.
 
-### Workout Test 2
-- Date:
-- Routine:
-- Device:
-- What felt smooth:
-- What felt confusing:
-- Bugs noticed:
-- Design issues noticed:
-- Follow-up actions:
+**Status: complete.** All three were real-device, end-to-end passes covering the
+full workout flow — start workout, last-performance prefill, logging sets,
+keyboard/input, rest timer, Save & Exit / Resume, and Finish → History.
 
-### Workout Test 3
-- Date:
-- Routine:
-- Device:
-- What felt smooth:
-- What felt confusing:
-- Bugs noticed:
-- Design issues noticed:
-- Follow-up actions:
+**What passed:** the core workout loop worked on device across all three
+sessions, including Finish → History in every test.
+
+**Remaining issues / follow-up (usability, not flow gaps):**
+
+- Weight / rep field switching not smooth on the first instance, somewhat random
+  (Test 1, recurred in Test 3) — needs a confirmed repro before any fix.
+- Setup Notes not updating when switching exercises (Test 2); want proper refresh
+  of exercise info on switch, plus prefill from history when available.
+
+See `ENTRY_11_WORKOUT_TESTING_NOTES.md` for the detailed notes and consolidated
+follow-up.
 
 ---
 
@@ -276,6 +275,7 @@ Release Readiness all remain **not complete**.
 > local validation already passed; this widens the sample before public promotion.
 
 **Set up state on an older build first:**
+
 - [ ] Install older build
 - [ ] Create exercises
 - [ ] Create routine
@@ -285,6 +285,7 @@ Release Readiness all remain **not complete**.
 - [ ] Create bodyweight and weighted exercise data
 
 **Upgrade and verify:**
+
 - [ ] Upgrade through TestFlight
 - [ ] Confirm routines survive
 - [ ] Confirm exercises survive
@@ -325,6 +326,7 @@ Release Readiness all remain **not complete**.
 ## Known Monitor-Only Issues
 
 ### Floating Back/Next panel after warm resume
+
 - **Status:** monitor-only
 - Not consistently reproducible
 - Suspected cause: stale keyboard safe-area inset at the window/scene level
@@ -333,14 +335,13 @@ Release Readiness all remain **not complete**.
   focused before resume, whether keyboard was visible) before attempting a fix
 
 ### New issues found during real-device testing
+
 > Log anything discovered during the workout tests above. One short entry each:
 > what happened, how to reproduce, suspected cause, and whether it blocks release.
 
 -
 -
--
-
----
+- ***
 
 ## Deferred / Not for Entry #11
 
