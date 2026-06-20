@@ -119,5 +119,3 @@ release plan links here instead of carrying the long logs inline.
   rest timer, Save & Exit / Resume, and Finish → History. The two open items
   above (field-switching friction and Setup Notes refresh) are usability
   follow-ups, not flow-completion gaps.
-</content>
-</invoke>
