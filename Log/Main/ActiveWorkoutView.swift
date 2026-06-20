@@ -38,8 +38,19 @@ struct ActiveWorkoutView: View {
         _plan = State(initialValue: plan)
     }
 
+    /// Identifiable presentation token for the Switch Exercise picker sheet.
+    /// Driving the sheet via `.sheet(item:)` (instead of a separate `Bool`
+    /// plus an optional index read inside the content closure) guarantees the
+    /// picker only renders once a valid slot index exists — fixing a blank
+    /// first presentation when the index hadn't committed yet. `index` is the
+    /// slot's position in `currentBlock`.
+    private struct SwapPickerItem: Identifiable {
+        let index: Int
+        var id: Int { index }
+    }
+
     @State private var exerciseToSwapIndex: Int? = nil
-    @State private var showSwapSheet = false
+    @State private var swapPickerItem: SwapPickerItem? = nil
     @State private var pendingSwapNewExercise: Exercise? = nil
     @State private var showSwapPlanChoice = false
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
@@ -175,8 +186,24 @@ struct ActiveWorkoutView: View {
             prescriptionWeight: presWeight,
             prescriptionDuration: presDuration,
             isTimeBased: ex.isTimeBased,
-            isBodyweight: isBodyweightEquipment(ex.prescriptionSnapshot?.equipment)
+            isBodyweight: isBodyweightEquipment(resolvedActiveEquipment(for: ex))
         )
+    }
+
+    /// Equipment string to use for a slot's equipment-dependent behavior
+    /// during the active workout — both prefill's bodyweight classification
+    /// and the set-row weight-field visibility / bodyweight handling.
+    /// Non-swapped slots use the immutable session-start snapshot (unchanged
+    /// behavior); a swapped-in exercise uses its own LIVE `equipmentType` so
+    /// e.g. swapping a bodyweight movement for a barbell lift shows the weight
+    /// field (and vice-versa) instead of trusting the old exercise's snapshot.
+    private func resolvedActiveEquipment(for ex: PlanExercise) -> String? {
+        let isSwapped = ex.currentExerciseID != ex.originalExerciseID
+        return resolvedSwappedValue(
+            isSwapped: isSwapped,
+            live: isSwapped
+                ? fetchExercise(by: ex.currentExerciseID)?.equipmentType : nil,
+            snapshot: ex.prescriptionSnapshot?.equipment)
     }
 
     /// Loads last-performance prefill suggestions once at session start.
@@ -223,6 +250,33 @@ struct ActiveWorkoutView: View {
         }
         prefillBySlotID = map
         dropPrefillBySlotID = dropMap
+    }
+
+    /// Re-resolves last-performance prefill for a single slot after its
+    /// exercise was swapped, so the swapped-in exercise sources ITS OWN
+    /// history (parent + dropset). Mirrors `loadLastPerformancePrefill`'s
+    /// fetch / service / exclusion rules — including the current session
+    /// exclusion and `excludedFromPrefill` (skipped inside the service) —
+    /// but scoped to one slot. Clears the slot's entry when the swapped-in
+    /// exercise has no history so seeding falls back to prescription
+    /// defaults. Read-only; never mutates any model.
+    private func refreshLastPerformancePrefill(
+        forSlotID slotID: UUID, exerciseID: UUID
+    ) {
+        let currentID = workout?.id
+        let descriptor = FetchDescriptor<Workout>(
+            predicate: #Predicate { $0.completedAt != nil },
+            sortBy: [SortDescriptor(\.completedAt, order: .reverse)]
+        )
+        guard let completed = try? ctx.fetch(descriptor) else { return }
+
+        let suggestions = LastPerformancePrefillService.suggestions(
+            forExerciseID: exerciseID, in: completed, excluding: currentID)
+        prefillBySlotID[slotID] = suggestions.isEmpty ? nil : suggestions
+
+        let drops = LastPerformancePrefillService.dropSuggestions(
+            forExerciseID: exerciseID, in: completed, excluding: currentID)
+        dropPrefillBySlotID[slotID] = drops.isEmpty ? nil : drops
     }
 
     private func rehydrateFromWorkoutIfPresent() {
@@ -710,7 +764,7 @@ struct ActiveWorkoutView: View {
                     canLog: allowed,
                     effortTarget: effortTarget,
                     isBodyweight: isBodyweightEquipment(
-                        exercise.prescriptionSnapshot?.equipment
+                        resolvedActiveEquipment(for: exercise)
                     ),
                     reps: repsB,
                     weight: weightB,
@@ -1248,8 +1302,25 @@ struct ActiveWorkoutView: View {
 
     @ViewBuilder
     private func equipmentAndSetupSection(for exercise: PlanExercise) -> some View {
-        let equipment = trimmedOrNil(exercise.prescriptionSnapshot?.equipment)
-        let setup = trimmedOrNil(exercise.prescriptionSnapshot?.setupNotes)
+        // Snapshot is keyed to the slot's ORIGINAL exercise and is
+        // intentionally immutable (Phase 10) for non-swapped slots. When the
+        // slot was swapped this session, the snapshot still describes the old
+        // exercise, so resolve the swapped-in exercise's LIVE equipment/setup
+        // instead — mirroring how the Exercise Notes section already reads live
+        // via `fetchExercise(by: currentExerciseID)`.
+        let isSwapped = exercise.currentExerciseID != exercise.originalExerciseID
+        let liveExercise = isSwapped
+            ? fetchExercise(by: exercise.currentExerciseID) : nil
+        let equipment = trimmedOrNil(
+            resolvedSwappedValue(
+                isSwapped: isSwapped,
+                live: liveExercise?.equipmentType,
+                snapshot: exercise.prescriptionSnapshot?.equipment))
+        let setup = trimmedOrNil(
+            resolvedSwappedValue(
+                isSwapped: isSwapped,
+                live: liveExercise?.setupDefaults,
+                snapshot: exercise.prescriptionSnapshot?.setupNotes))
 
         if equipment != nil || setup != nil {
             Section("Equipment & Setup") {
@@ -1521,7 +1592,8 @@ struct ActiveWorkoutView: View {
                     Section("Actions") {
                         Button {
                             exerciseToSwapIndex = currentExerciseIndex
-                            showSwapSheet = true
+                            swapPickerItem = SwapPickerItem(
+                                index: currentExerciseIndex)
                         } label: {
                             Label(
                                 "Switch Exercise",
@@ -1925,15 +1997,15 @@ struct ActiveWorkoutView: View {
                 if phase != .active { commitSessionNotes() }
             }
             .sheet(
-                isPresented: $showSwapSheet,
+                item: $swapPickerItem,
                 onDismiss: {
                     if pendingSwapNewExercise != nil {
                         showSwapPlanChoice = true
                     }
                 }
-            ) {
-                if let idx = exerciseToSwapIndex,
-                    let block = currentBlock
+            ) { target in
+                if let block = currentBlock,
+                    target.index < block.exercises.count
                 {
                     // Phase 9-B2 fix: per-slot identity is `routineSlotID`,
                     // and both logging (`WorkoutItem.routineSlotID`) and
@@ -1943,17 +2015,15 @@ struct ActiveWorkoutView: View {
                     // filter was a stale Phase-3-era guard. Now only the
                     // current slot's own exercise is excluded (avoids a
                     // no-op self-swap).
-                    let currentSlotExerciseID: UUID? =
-                        idx < block.exercises.count
-                            ? block.exercises[idx].currentExerciseID
-                            : nil
+                    let currentSlotExerciseID =
+                        block.exercises[target.index].currentExerciseID
                     let filtered = allExercises.filter {
                         $0.id != currentSlotExerciseID
                     }
 
                     ExercisePickerSingle(exercises: filtered) { picked in
                         pendingSwapNewExercise = picked
-                        showSwapSheet = false
+                        swapPickerItem = nil
                         if picked == nil {
                             exerciseToSwapIndex = nil
                         }
@@ -2334,6 +2404,17 @@ struct ActiveWorkoutView: View {
         // bound above in step (2) for the template-build priority chain.
         let swappedPlanEx = plan.blocks[blockIndex].exercises[exIndex]
 
+        // Re-resolve last-performance prefill for this slot against the
+        // swapped-in exercise's OWN history before seeding, so `tier4Default`
+        // overlays Exercise B's last performance (not Exercise A's, which was
+        // loaded at session start) over the prescription defaults. The slot is
+        // being rebuilt fresh here — every set is empty and unlogged at swap
+        // time (logs/inputs for the replaced exercise are cleared below and in
+        // steps 6–7) — so this seeds, never overwrites, user data. If B has no
+        // history the maps clear and seeding falls back to prescription.
+        refreshLastPerformancePrefill(
+            forSlotID: slotID, exerciseID: newEx.id)
+
         let swappedCount = effectiveSetCount(
             for: swappedPlanEx, resolvedTemplates: newTemplates)
         var perSet: [Int: (reps: String, weight: String, duration: String)] =
@@ -2342,14 +2423,8 @@ struct ActiveWorkoutView: View {
             let tpl =
                 newTemplates[safe: i]
                 ?? defaultTemplate(for: swappedPlanEx, at: i)
-            perSet[i] = (
-                reps: String(
-                    plannedRepTarget(for: swappedPlanEx, template: tpl)),
-                weight: tpl.targetWeight.map { String($0) } ?? "",
-                duration: plannedDurationTarget(
-                    for: swappedPlanEx, template: tpl)
-                    .map { String($0) } ?? ""
-            )
+            perSet[i] = tier4Default(
+                for: swappedPlanEx, setIndex: i, template: tpl)
         }
 
         inputsByExerciseID[slotID] = perSet
@@ -2876,12 +2951,33 @@ struct ActiveWorkoutView: View {
 
     // MARK: - Dropset Sub-logging
 
+    /// Whether Drop Set is active for this slot during the workout.
+    ///
+    /// Bodyweight exercises do not support Drop Set in the current app model
+    /// (no assisted / negative / mechanical-variation load), so a stale Drop
+    /// Set technique on a Bodyweight-resolved slot must be treated as INACTIVE
+    /// for Active Workout rendering, completion, rest, and logging — without
+    /// mutating the underlying template/technique. Uses the resolved ACTIVE
+    /// equipment so the parent weight field and dropset rendering share one
+    /// rule: non-swapped slots follow the session-start snapshot; swapped slots
+    /// follow the switched-in exercise's live equipment.
+    private func dropsetSupportedActive(for exercise: PlanExercise) -> Bool {
+        !isBodyweightEquipment(resolvedActiveEquipment(for: exercise))
+    }
+
     /// Returns the first Dropset TechniquePlanSnapshot that applies to `setIndex`
     /// in the given exercise, or nil if no Dropset technique covers that set.
+    ///
+    /// Single source of truth for "does a dropset apply here?" — consulted by
+    /// dropset rendering (`buildWorkingSetGroup` / `buildDropSection`),
+    /// working-set completion, and rest pacing. Returns nil for a
+    /// Bodyweight-resolved slot (see `dropsetSupportedActive`) so every one of
+    /// those paths suppresses the stale dropset consistently.
     private func dropsetTechniqueApplying(
         to setIndex: Int,
         in exercise: PlanExercise
     ) -> TechniquePlanSnapshot? {
+        guard dropsetSupportedActive(for: exercise) else { return nil }
         let templates = exercise.templates
         let setCount = effectiveSetCount(for: exercise, resolvedTemplates: templates)
         // Last index whose template kind is .working (fallback: last index)

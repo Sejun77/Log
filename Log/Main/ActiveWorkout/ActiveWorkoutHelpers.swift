@@ -77,6 +77,23 @@ func defaultIncludesBodyweightInLoad(equipmentType: String?) -> Bool {
     isBodyweightEquipment(equipmentType)
 }
 
+// MARK: - Swapped-exercise info resolution
+
+/// Resolves which value an active-workout slot should use for a field that
+/// has both an immutable session-start snapshot value and a live
+/// swapped-in value (equipment, setup notes, bodyweight classification).
+///
+/// - When the slot's exercise was swapped during the session
+///   (`currentExerciseID != originalExerciseID`), the `live` value of the
+///   swapped-in exercise wins so the displayed info and prefill reflect the
+///   exercise the user actually selected.
+/// - Otherwise the `snapshot` value wins so later library edits never
+///   retroactively change a non-swapped active workout (the Phase 10
+///   snapshot-immutability invariant). Pure.
+func resolvedSwappedValue<T>(isSwapped: Bool, live: T, snapshot: T) -> T {
+    isSwapped ? live : snapshot
+}
+
 // MARK: - Stable rest notification ID
 
 /// Builds a stable rest-timer notification ID of the form
