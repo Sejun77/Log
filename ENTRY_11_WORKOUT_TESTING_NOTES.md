@@ -98,17 +98,23 @@ release plan links here instead of carrying the long logs inline.
 
 ### Design friction
 
-- **Setup Notes do not update when switching exercises** (Test 2). Exercise info
-  shown during the active workout should refresh correctly when moving between
-  exercises.
+- ✅ **RESOLVED — Setup Notes do not update when switching exercises** (Test 2).
+  Fixed and **shipped on main** as the *Active Workout switch-exercise
+  consistency* pass (`fix(active-workout): refresh switched exercise info and
+  prefill`). Equipment & Setup now resolves from the session-start snapshot for
+  non-swapped exercises and the live switched-in exercise for swapped ones; the
+  same pass also fixed the blank Switch Exercise sheet, switched-in prefill,
+  Bodyweight ↔ Barbell weight-field visibility, and stale Bodyweight dropset
+  suppression. Validated: build succeeded, **875 tests / 0 failures** (16 in the
+  new `SwitchExerciseConsistencyTests`), manual device testing confirmed.
 
 ### Active Workout hierarchy concerns
 
-- Both recurring issues live in the **Active Workout** surface
-  (keyboard/input field switching and exercise-info refresh on switch). These
-  are inputs for the deferred, higher-risk Active Workout visual-hierarchy /
-  redesign work — confirm and reproduce on device before changing layout or
-  behavior.
+- The exercise-info refresh on switch is now **resolved** (see above). The
+  remaining open item on this surface is the keyboard/input field switching
+  friction (still unresolved — see Bugs). It remains an input for the deferred,
+  higher-risk Active Workout visual-hierarchy / redesign work; confirm and
+  reproduce on device before changing layout or behavior.
 - Follow-up wishlist from Test 2: prefill exercise info from history when
   available.
 
@@ -116,6 +122,7 @@ release plan links here instead of carrying the long logs inline.
 
 - Real-device workout testing is **complete**: all three tests were real-device,
   end-to-end passes covering start workout, prefill, logging, keyboard/input,
-  rest timer, Save & Exit / Resume, and Finish → History. The two open items
-  above (field-switching friction and Setup Notes refresh) are usability
-  follow-ups, not flow-completion gaps.
+  rest timer, Save & Exit / Resume, and Finish → History. Of the two usability
+  follow-ups surfaced, the Setup Notes / switch-exercise refresh is now
+  **resolved and shipped**; the field-switching friction remains monitor-only
+  pending a deterministic reproduction. Neither was a flow-completion gap.

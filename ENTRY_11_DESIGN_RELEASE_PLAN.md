@@ -185,6 +185,39 @@ before any TestFlight / App Store promotion.
     tests**; phone manual testing confirmed.
     (`feat(prefill): exclude marked workouts from last-performance prefill`)
 
+- **Active Workout switch-exercise consistency** — a **workout-tested** follow-up
+  (not a visual redesign slice): surfaced from **real-device workout testing**
+  (Setup Notes not refreshing when switching exercises, Test 2), then expanded
+  into a small consistency pass once related stale-state bugs were found on
+  device. Fixes:
+  - **Blank Switch Exercise sheet** — the picker sometimes opened as a blank
+    white sheet on first tap; now item-driven sheet state guarantees it opens
+    with a valid swap target.
+  - **Stale Equipment & Setup after switching** — now resolves from the
+    **session-start snapshot for non-swapped** exercises and the **live
+    current/switched-in exercise for swapped** exercises.
+  - **Switched-in prefill** — a swapped-in exercise now prefills from **its own**
+    last-performance history, still honoring the existing priority order (logged →
+    persisted draft → in-memory cache → last-performance → prescription default)
+    and still respecting `excludedFromPrefill`.
+  - **Bodyweight ↔ Barbell field visibility** — resolved active equipment now
+    drives the parent weight-field visibility, so Bodyweight → Barbell shows the
+    weight field and Barbell → Bodyweight hides it.
+  - **Stale Bodyweight dropset suppression** — resolved active equipment also
+    gates dropset support, so a Bodyweight exercise suppresses dropset UI at
+    runtime (including stale/test Bodyweight + Drop Set combinations) without
+    deleting or mutating the underlying technique/template.
+  - **Not changed:** no model/SwiftData schema changes; no History, chart, PR,
+    rest timer, Live Activity, or routine-template changes.
+  - **Validation:** build succeeded; full test suite passed (**875 tests, 0
+    failures**) including **16 tests in the new `SwitchExerciseConsistencyTests`
+    suite**; manual device testing confirmed the Switch Exercise sheet opens,
+    Equipment & Setup updates to the switched-in exercise, switched-in prefill
+    works, Bodyweight → Barbell shows the weight field, Barbell → Bodyweight
+    hides it, stale Bodyweight dropsets are suppressed, and Save & Exit / Resume
+    and Finish → History still work.
+    (`fix(active-workout): refresh switched exercise info and prefill`)
+
 ---
 
 ## Screenshot-Based Redesign Findings
