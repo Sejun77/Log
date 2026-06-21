@@ -1,7 +1,15 @@
 # Entry #11 Design & Release Plan
 
-**Working Title:** Design Polish, Real-Device Testing & Release Preparation  
+**Working Title:** Design Polish, Real-Device Testing & Personal/Internal Milestone Readiness  
 **Date Range:** 2026-06-09 → TBD
+
+> **Scope note:** Log is currently built primarily for **personal use** and as an
+> **extracurricular / portfolio project** — a working iOS gym log tested directly
+> on my own iPhone. Release readiness here means **personal/internal milestone
+> readiness**, not public App Store readiness. **TestFlight is optional / deferred**
+> for the current scope and is **not a blocker** for finishing Entry #11. External
+> tester invitation is not part of this milestone; TestFlight remains available as
+> a **future distribution smoke test** if external distribution later becomes a goal.
 
 ---
 
@@ -14,9 +22,12 @@ blockers remain). The job now is to make the app feel **clear, trustworthy, and
 smooth in real gym use**, and to confirm that existing data survives an upgrade —
 not to add major new functionality.
 
-Entry #11 should read as the "getting ready for real users" phase: tightening
-visual clarity, validating on a physical device, and running the upgrade smoke
-before any TestFlight / App Store promotion.
+Entry #11 should read as the "getting ready for real personal use" phase:
+tightening visual clarity and validating on a physical device. Direct iPhone
+workout testing is the main validation method for this milestone. The TestFlight
+upgrade smoke is an **optional / deferred** future distribution check, not a
+required step before finishing Entry #11; no public App Store / external-testing
+promotion is in scope right now.
 
 ---
 
@@ -144,8 +155,10 @@ before any TestFlight / App Store promotion.
   branches merged into `main`. **Build passed** and **manual testing passed** for
   each. No models, persistence, active-workout, history, or routine logic changed.
 - Real-device workout tests are **complete** (three end-to-end sessions; see
-  Real-Device Testing Notes). The TestFlight upgrade smoke (see below) has **not**
-  been run.
+  Real-Device Testing Notes) — direct iPhone testing is the main validation method
+  for this milestone. The TestFlight upgrade smoke (see below) is **optional /
+  deferred** for the current personal/internal scope and has **not** been run (and
+  is **not required** to finish Entry #11).
 
 > Note: the count of completed **visual design** slices remains **seven**. The
 > item below is a separate **workout-usability** feature, not an eighth design
@@ -268,9 +281,12 @@ Per-screen notes:
 4. History chart visual quieting (**✅ done** — softer gridlines/axis labels, subtler PR marker).
 5. Later: Active Workout visual hierarchy — only after real-device workout testing.
 
-Real-device workout testing is **complete** (three end-to-end sessions). Active
-Workout redesign, TestFlight smoke, and Release Readiness all remain **not
-complete**.
+Real-device workout testing is **complete** (three end-to-end sessions) and is the
+main validation method for this milestone. The Active Workout redesign remains
+**not complete / not required right now**. The TestFlight smoke is **optional /
+deferred** (a future distribution smoke test, not required for Entry #11), and
+Release Readiness is scoped as **personal/internal milestone readiness** rather
+than public App Store readiness.
 
 ---
 
@@ -301,11 +317,15 @@ follow-up.
 
 ---
 
-## TestFlight Upgrade Smoke
+## TestFlight Upgrade Smoke (Optional / Deferred)
 
-> Validates that real user data survives an upgrade (SwiftData migration safety).
-> **This is a soft pre-promotion recommendation, not a hard release blocker** —
-> local validation already passed; this widens the sample before public promotion.
+> **Status: optional / deferred for the current personal/internal milestone.**
+> This is **not required** before finishing Entry #11 and is **not marked
+> complete**. It validates that real user data survives an upgrade (SwiftData
+> migration safety); local on-device validation already passed. Treat it as an
+> **optional distribution smoke test** and a **future external-testing path** —
+> worth running later if external distribution becomes a project goal, but not a
+> blocker now. The checklist below is retained for that future run.
 
 **Set up state on an older build first:**
 
@@ -331,9 +351,13 @@ follow-up.
 
 ---
 
-## Release Readiness Checklist
+## Release Readiness Checklist (Personal / Internal Milestone)
 
-> A quick end-to-end pass to confirm the core loop is intact before promotion.
+> A quick end-to-end pass to confirm the core loop is intact for **personal/internal
+> milestone readiness**. This does **not** imply public App Store readiness, and no
+> external testers have been invited. The core workout flow has already been
+> validated through **direct iPhone use** (three completed real-device sessions);
+> this checklist is a final self-check, not a public-promotion gate.
 
 - [ ] App launches cleanly
 - [ ] Create exercise
@@ -394,14 +418,16 @@ Do **not** start these unless a clear, tested need appears:
 The likely devlog story for Entry #11:
 
 - After a feature-heavy stabilization phase (Entry #10), the app moved into
-  **release-readiness**.
+  **personal/internal milestone readiness**.
 - The focus shifted from building to **design clarity and real-world validation**.
 - The goal is to make Log feel **trustworthy, not just functional** — clear screens,
   predictable input, data you can rely on.
-- **Real-device testing** guided small, targeted polish fixes (rather than another
-  feature wave).
-- The **TestFlight upgrade smoke** validated that existing user data survives an
-  upgrade safely.
+- **Real-device direct testing** on my own iPhone guided small, targeted polish
+  fixes (rather than another feature wave) and is the main validation method for
+  this milestone.
+- **TestFlight is deferred:** the app is validated for personal use on device;
+  the TestFlight upgrade smoke is kept as an **optional distribution smoke test**
+  and **future external-testing path** rather than a step taken for this milestone.
 
 Keep it honest: this is a "tightening and validating" entry, not a "we added X"
 entry. Note anything still monitor-only.
@@ -415,15 +441,16 @@ entry. Note anything still monitor-only.
 - [ ] History metrics
 - [ ] Settings bodyweight
 - [ ] Last-performance prefill in action
-- [ ] TestFlight build / installed build
+- [ ] Installed on-device build (TestFlight build optional / only if external testing later happens)
 - [ ] Before/after design polish (if any polish slices ship)
 
 ---
 
 ## First Suggested Work Order
 
-1. Run 2–3 real workouts and fill out the testing notes.
+1. Run 2–3 real workouts and fill out the testing notes. *(Done — three completed.)*
 2. Identify the actual UI friction from real use (not guesses).
 3. Do small, individually-testable design polish slices.
-4. Run the TestFlight upgrade smoke.
+4. *(Optional / deferred)* Run the TestFlight upgrade smoke only if external
+   distribution becomes a goal — not required for this personal/internal milestone.
 5. Write Entry #11 from the gathered evidence.

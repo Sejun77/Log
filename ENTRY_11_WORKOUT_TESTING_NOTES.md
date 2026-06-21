@@ -120,9 +120,20 @@ release plan links here instead of carrying the long logs inline.
 
 ### Release-readiness notes
 
+- **Scope:** this is a **personal/internal milestone** (personal-use + portfolio
+  project tested directly on my own iPhone), not a public App Store release. No
+  external testers have been invited.
 - Real-device workout testing is **complete**: all three tests were real-device,
   end-to-end passes covering start workout, prefill, logging, keyboard/input,
-  rest timer, Save & Exit / Resume, and Finish → History. Of the two usability
-  follow-ups surfaced, the Setup Notes / switch-exercise refresh is now
-  **resolved and shipped**; the field-switching friction remains monitor-only
-  pending a deterministic reproduction. Neither was a flow-completion gap.
+  rest timer, Save & Exit / Resume, and Finish → History. **Three real-device
+  workout tests are sufficient for the current personal-use milestone** —
+  real-device direct testing is the main validation method here.
+- Of the two usability follow-ups surfaced, the Setup Notes / switch-exercise
+  refresh is now **resolved and shipped**; the field-switching friction remains
+  **monitor-only** pending a deterministic reproduction. Neither was a
+  flow-completion gap.
+- **TestFlight is optional and deferred** unless external distribution becomes a
+  goal. It is **not marked complete** and is **not required** for this milestone;
+  it stays available as an **optional distribution smoke test** / **future
+  external-testing path**.
+- Current known issues remain documented and monitored (see Bugs above).
