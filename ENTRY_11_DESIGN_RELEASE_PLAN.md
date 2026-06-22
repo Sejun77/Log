@@ -231,6 +231,49 @@ promotion is in scope right now.
     and Finish → History still work.
     (`fix(active-workout): refresh switched exercise info and prefill`)
 
+- **Uneven superset set counts** — surfaced while preparing the **final showcase**
+  and adapting Log to my **real current routine**, where several supersets pair
+  exercises with **different set counts** (e.g. A = 3 working sets, B = 2). The app
+  previously assumed equal set counts per superset, so the routine was only accurate
+  if the extra set was split into a separate normal block. Supersets now support a
+  **different set count per exercise**, with rounds driven by the **maximum** set
+  count among participating exercises and the shorter exercise **dropping out after
+  its final set** — **no fake set, no duplicated set, no hidden placeholder row, and
+  no automatic equalization** of the routine template.
+  - **Example (A = 3, B = 2):** Round 1 A1 → B1 → rest; Round 2 A2 → B2 → rest;
+    Round 3 A3 → rest/finish. **(A = 2, B = 3):** Round 1 A1 → B1 → rest; Round 2
+    A2 → B2 → rest; Round 3 B3 → rest/finish.
+  - **Authoring (Superset Detail):** each exercise now has its **own set count**.
+    The previous single "Set all to" stepper (which overwrote every exercise as you
+    tapped ±) was replaced with an explicit **bulk control** — a draft stepper plus
+    an **"Apply to all exercises"** button — and **individual set counts stay
+    editable** afterward, so they can differ. The per-exercise set count shown in the
+    superset reorder list now updates **immediately** after an edit.
+  - **Active Workout:** auto-advance now **skips exercises with no remaining sets**
+    (A = 2, B = 3 advances to **B3** instead of looping back to A); rest priority is
+    correct for uneven blocks — the **final set of the workout suppresses rest**, the
+    **final set of a superset block followed by another block uses rest-after-block /
+    transition rest**, and **round rest still fires after non-final completed rounds**;
+    Finish → History records **only the sets actually logged**.
+  - **Implementation summary:** added `SupersetRoundMath` for pure, tested
+    round/order logic; fixed `lastRoundIndex` to use the **maximum** set count across
+    the superset (previously it read only the first exercise); routed Active Workout
+    auto-advance and the rest-firing position through it.
+  - **Not changed:** equal-set supersets behave exactly as before; bodyweight stale
+    Drop Set suppression preserved; Switch Exercise inside an uneven superset
+    preserved; no SwiftData schema, History, chart, PR, prefill-structure,
+    rest-timer, or Live Activity changes.
+  - **Validation:** build succeeded; full test suite passed (**911 tests, 0
+    failures**) with added/updated uneven-superset tests (ordering math, auto-advance,
+    rest behavior, authoring / bulk apply, prefill, history grouping); manual device
+    testing confirmed A = 2 / B = 3 advances to B3, A = 3 / B = 2 final A3 starts no
+    rest when the workout is complete, a following block uses rest-after-block, row
+    counts update immediately, "Apply to all exercises" reads clearly, and Save &
+    Exit / Resume, Finish → History, bodyweight stale Drop Set suppression, and Switch
+    Exercise inside uneven supersets all still work.
+    (`feat(superset): support uneven set counts per exercise`,
+    `Merge branch 'feat/uneven-superset-set-counts'`)
+
 ---
 
 ## Screenshot-Based Redesign Findings

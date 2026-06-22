@@ -118,6 +118,27 @@ release plan links here instead of carrying the long logs inline.
 - Follow-up wishlist from Test 2: prefill exercise info from history when
   available.
 
+### Post-testing addition — uneven superset set counts (final showcase prep)
+
+- **Added after the original three workout tests**, not part of them. While
+  preparing the final showcase and setting up my **real current routine**, the
+  routine revealed a real mismatch: several supersets pair exercises with
+  **different set counts** (e.g. A = 3 working sets, B = 2), but the app assumed
+  equal set counts per superset — so the routine was only accurate if the extra
+  set was split into a separate normal block.
+- **Resolved before the final showcase** and shipped on `main`: supersets now
+  support a different set count per exercise (rounds use the **maximum** count, the
+  shorter exercise drops out after its last set; no fake/duplicate/placeholder
+  rows). Authoring gained per-exercise set counts plus an explicit "Apply to all
+  exercises" bulk control; Active Workout auto-advance and rest priority were
+  corrected for uneven blocks. Validated: build succeeded, **911 tests / 0
+  failures**, manual device testing confirmed (A = 2 / B = 3 advances to B3; A = 3
+  / B = 2 final A3 suppresses rest when the workout is complete; a following block
+  uses rest-after-block; Save & Exit / Resume and Finish → History still work).
+  See the *Uneven superset set counts* entry in
+  `ENTRY_11_DESIGN_RELEASE_PLAN.md` → Completed Workout Usability
+  (`feat(superset): support uneven set counts per exercise`).
+
 ### Release-readiness notes
 
 - **Scope:** this is a **personal/internal milestone** (personal-use + portfolio
