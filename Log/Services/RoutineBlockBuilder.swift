@@ -79,6 +79,24 @@ enum RoutineBlockBuilder {
         return created
     }
 
+    /// Bulk "Apply to all exercises" for a superset's set count. Writes
+    /// `value` (clamped: `> 0` ⇒ the value, else `nil`) to every child slot's
+    /// `prescription.sets`, then saves once. This is the explicit, opt-in bulk
+    /// convenience behind the "Set All Exercises → Apply" button; it never runs
+    /// while the user is merely adjusting a draft stepper. Per-slot counts
+    /// remain independently editable afterwards (no enforced equality). Slots
+    /// without a prescription are skipped.
+    static func applySetCountToAll(
+        _ value: Int,
+        in block: RoutineBlock,
+        ctx: ModelContext
+    ) {
+        for re in block.exercises {
+            re.prescription?.sets = value > 0 ? value : nil
+        }
+        try? ctx.save()
+    }
+
     /// Duplicate `source` into the **same** `routine`, inserting the copy
     /// **immediately after** the source block. Every existing block ordered
     /// after the source shifts down by one (`order += 1`); the source block and

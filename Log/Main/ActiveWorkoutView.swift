@@ -558,61 +558,41 @@ struct ActiveWorkoutView: View {
         setIndex: Int
     ) -> Bool {
         let logged = loggedByExercise[exercise.routineSlotID, default: []]
-        if logged.contains(setIndex) { return false }
 
-        // 1. Within this exercise: earlier sets must be fully complete
-        //    (parent + all configured drops for dropset sets).
-        for j in 0..<setIndex {
-            if !isWorkingSetComplete(exercise: exercise, setIndex: j) { return false }
-        }
-
-        // 2. Superset gating. Two complementary checks:
-        //    (a) Round-progression — round N+1 stays locked until round N
-        //        is complete across every participating exercise. Prevents
-        //        the user from manually navigating back to exercise A and
-        //        logging A2 before B1 is done.
-        //    (b) In-round ordering — within a round, exercises log in
-        //        block.exercises order (A1 → B1 → C1).
-        //    Both use isWorkingSetComplete so dropsets are respected
-        //    (parent logged AND all configured drops logged).
+        // Superset round gating (round-progression + in-round ordering) plus
+        // the within-exercise prior-set check is centralized in the pure,
+        // unit-tested `SupersetRoundMath.isSetLoggable`. Rounds are driven by
+        // the MAX set count across the block, so uneven supersets work (a
+        // shorter exercise drops out of later rounds) while equal-set blocks
+        // behave exactly as before. The exercise's block position is matched
+        // by `routineSlotID` so duplicate Exercises across slots stay
+        // independent; an exercise not found in the block is not loggable.
+        let exIdx: Int
         if block.isSuperset {
-            // (a) Previous round must be complete for every participating
-            //     exercise (those whose effectiveSetCount reaches setIndex-1).
-            if setIndex > 0 {
-                let prevRound = setIndex - 1
-                for ex in block.exercises {
-                    let exSetCount = effectiveSetCount(
-                        for: ex, resolvedTemplates: ex.templates)
-                    guard prevRound < exSetCount else { continue }
-                    if !isWorkingSetComplete(exercise: ex, setIndex: prevRound) {
-                        return false
-                    }
-                }
-            }
-
-            // (b) In-round ordering: prior exercises at this set index must
-            //     be complete first. Matches by routineSlotID so duplicate
-            //     Exercise across slots stay independent.
             guard
-                let exIdx = block.exercises.firstIndex(where: {
+                let idx = block.exercises.firstIndex(where: {
                     $0.routineSlotID == exercise.routineSlotID
                 })
-            else {
-                return false
-            }
-            for j in 0..<exIdx {
-                let prevEx = block.exercises[j]
-                if setIndex < effectiveSetCount(
-                    for: prevEx, resolvedTemplates: prevEx.templates)
-                {
-                    if !isWorkingSetComplete(exercise: prevEx, setIndex: setIndex) {
-                        return false
-                    }
-                }
-            }
+            else { return false }
+            exIdx = idx
+        } else {
+            exIdx = 0
         }
 
-        return true
+        let setCounts = block.exercises.map {
+            effectiveSetCount(for: $0, resolvedTemplates: $0.templates)
+        }
+
+        return SupersetRoundMath.isSetLoggable(
+            isSuperset: block.isSuperset,
+            exerciseIndex: exIdx,
+            setIndex: setIndex,
+            setCounts: setCounts,
+            alreadyLogged: logged.contains(setIndex),
+            isComplete: { i, s in
+                isWorkingSetComplete(exercise: block.exercises[i], setIndex: s)
+            }
+        )
     }
 
     /// A working set is complete when its parent-set log exists AND — for sets that have
@@ -3408,8 +3388,27 @@ struct ActiveWorkoutView: View {
             // (Non-superset blocks no longer apply any `restAfterSeconds`
             // post-processing — that legacy additive was removed.)
             let isLastBlock = currentBlockIndex == plan.blocks.count - 1
-            let isLastExerciseOfBlock =
-                currentExerciseIndex == block.exercises.count - 1
+            // The planner uses `isLastExerciseOfBlock` to fire the final-round
+            // transition rest and last-set-of-workout suppression exactly once,
+            // on the log that COMPLETES the final round. For uneven supersets
+            // the round-completing log is on the last *participating* exercise
+            // of this round (the highest block-order slot whose set count
+            // reaches `idx`) — which is NOT necessarily the last exercise in
+            // block order (e.g. A=3, B=2: round 2 completes on A, not B). For
+            // equal-set supersets every exercise participates in every round, so
+            // the last participant is the last exercise — behavior unchanged.
+            let blockSetCounts = block.exercises.map {
+                effectiveSetCount(for: $0, resolvedTemplates: $0.templates)
+            }
+            let lastParticipantIdx =
+                SupersetRoundMath.lastParticipantIndex(
+                    setCounts: blockSetCounts, roundIndex: idx)
+                ?? (block.exercises.count - 1)
+            let loggedExerciseIdx =
+                block.exercises.firstIndex {
+                    $0.routineSlotID == exercise.routineSlotID
+                } ?? currentExerciseIndex
+            let isLastExerciseOfBlock = loggedExerciseIdx == lastParticipantIdx
             let participants: [SupersetRoundParticipant] =
                 block.exercises.map { ex in
                     let sc = effectiveSetCount(
@@ -3559,90 +3558,55 @@ struct ActiveWorkoutView: View {
         item.sourceExerciseOrderInBlock = planEx.sourceExerciseOrderInBlock
     }
 
-    /// True iff every exercise in the block has its round at `idx` fully complete
-    /// (parent logged AND, when a dropset technique applies, all configured drops logged).
-    private func allExercisesLogged(setIndex idx: Int, in block: PlanBlock)
-        -> Bool
-    {
-        for ex in block.exercises {
-            let sc = effectiveSetCount(
-                for: ex, resolvedTemplates: ex.templates)
-            guard idx < sc else { return false }
-            if !isWorkingSetComplete(exercise: ex, setIndex: idx) {
-                return false
-            }
-        }
-        return true
-    }
-
-    /// Assumes your superset safeguard ensures equal set counts across exercises.
+    /// 0-based index of the final round in a superset block.
+    ///
+    /// Rounds are driven by the **maximum** effective set count across all
+    /// exercises in the block, not the first exercise's count. This supports
+    /// uneven supersets (e.g. A=3, B=2): the block runs `max` rounds and the
+    /// shorter exercise simply drops out of the later rounds — no
+    /// equalization, no phantom sets. For equal-set supersets the max equals
+    /// every exercise's count, so behavior is unchanged.
     private func lastRoundIndex(in block: PlanBlock) -> Int {
-        guard let first = block.exercises.first else { return 0 }
-        return max(
-            0,
-            effectiveSetCount(for: first, resolvedTemplates: first.templates)
-                - 1)
-    }
-
-    /// True iff every exercise in the block has fully completed its round at `setIndex`
-    /// (parent set logged AND, when a dropset technique applies, all configured drops logged).
-    /// Exercises whose set count does not reach `setIndex` are skipped.
-    private func supersetRoundComplete(
-        block: PlanBlock,
-        setIndex: Int
-    ) -> Bool {
-        for ex in block.exercises {
-            let sc = effectiveSetCount(
-                for: ex, resolvedTemplates: ex.templates)
-            guard setIndex < sc else { continue }
-            if !isWorkingSetComplete(exercise: ex, setIndex: setIndex) {
-                return false
-            }
+        let setCounts = block.exercises.map {
+            effectiveSetCount(for: $0, resolvedTemplates: $0.templates)
         }
-        return true
+        return SupersetRoundMath.lastRoundIndex(setCounts: setCounts)
     }
 
-    /// Advance focus after logging within a superset.
-    /// - Next unlogged exercise in the current round
-    /// - If round finished and more rounds remain: wrap to first
-    /// - If round finished and it was the last round: **stay** on current exercise
+    /// Advance focus after logging within a superset. Focus moves to the
+    /// exercise that owns the **next loggable set** in the uneven-aware round
+    /// schedule (`SupersetRoundMath.nextLoggableSlot`):
+    ///   - within a round, to the next not-yet-complete participating exercise;
+    ///   - when a round completes, to the first participating exercise of the
+    ///     next round — **skipping any exercise that has dropped out** (a
+    ///     shorter exercise with no set in that round). It never lands on an
+    ///     exercise that has no remaining loggable set just because it is next
+    ///     in block order.
+    ///   - when the whole block is complete, focus **stays** on the current
+    ///     exercise.
+    ///
+    /// For equal-set supersets the schedule is the plain round-robin, so this
+    /// is behavior-identical to the previous wrap-to-first logic. The `idx`
+    /// parameter is retained for call-site symmetry; the decision is derived
+    /// from the full per-exercise completion state.
     private func advanceForSupersetAfterLog(
         setIndex idx: Int,
         in block: PlanBlock
     ) {
         guard block.isSuperset else { return }
 
-        // 0) Stay on the current exercise if its round isn't fully complete yet
-        //    (e.g., parent logged but a dropset technique still has drops pending).
-        if currentExerciseIndex < block.exercises.count {
-            let cur = block.exercises[currentExerciseIndex]
-            let curSc = effectiveSetCount(
-                for: cur, resolvedTemplates: cur.templates)
-            if idx < curSc, !isWorkingSetComplete(exercise: cur, setIndex: idx) {
-                return
+        let setCounts = block.exercises.map {
+            effectiveSetCount(for: $0, resolvedTemplates: $0.templates)
+        }
+        if let next = SupersetRoundMath.nextLoggableSlot(
+            setCounts: setCounts,
+            isComplete: { i, s in
+                isWorkingSetComplete(exercise: block.exercises[i], setIndex: s)
             }
+        ) {
+            currentExerciseIndex = next.exercise
         }
-
-        // 1) Find the next exercise whose round at this index isn't fully complete.
-        let total = block.exercises.count
-        var next = currentExerciseIndex
-        for _ in 0..<total {
-            next = (next + 1) % total
-            let ex = block.exercises[next]
-            let sc = effectiveSetCount(
-                for: ex, resolvedTemplates: ex.templates)
-            if idx < sc, !isWorkingSetComplete(exercise: ex, setIndex: idx) {
-                currentExerciseIndex = next
-                return
-            }
-        }
-
-        // 2) Round is complete. Move to next round (wrap to first), or stay on last.
-        guard supersetRoundComplete(block: block, setIndex: idx) else { return }
-        let lastIdx = lastRoundIndex(in: block)
-        if idx < lastIdx {
-            currentExerciseIndex = 0
-        }
+        // nil → every set in the block is complete; keep focus where it is.
     }
 }
 

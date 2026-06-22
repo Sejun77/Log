@@ -75,7 +75,8 @@ struct RoutineEditor: View {
     /// is a deliberate view-lifecycle trigger — NOT a nested-`@Model`
     /// observation hack — because edits to a grandchild `SlotPrescription`
     /// property are not reliably observed by `@Bindable var routine` (the same
-    /// limitation documented on `SupersetDetailNoRest.displayedSets`).
+    /// nested-@Model limitation `SupersetDetailNoRest` works around by binding
+    /// each child `SlotPrescription` directly in `SupersetSetCountLabel`).
     @State private var blockSummaryRefresh = 0
 
     // Routine rename (Slice A). `nameDraft` is the editable buffer; the model's
