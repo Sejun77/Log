@@ -90,15 +90,15 @@ struct SupersetDetailNoRest: View {
     /// can be presented from this sheet without re-querying SwiftData.
     let allExercises: [Exercise]
 
-    /// Locally-tracked displayed value for the "Sets per exercise" Stepper.
-    /// Seeded lazily from the max of child prescriptions on first read, and updated
-    /// explicitly on user edits. Backing this with @State (rather than a computed
-    /// property over `block.exercises[i].prescription?.sets`) is required because
-    /// SwiftUI's observation on `@Bindable var block` does not fire for mutations
-    /// to properties of nested @Model instances (SlotPrescription.sets), so a
-    /// purely-computed display value would not refresh the Stepper label after
-    /// the user pressed +/-.
-    @State private var displayedSets: Int? = nil
+    /// Draft value for the explicit "Set All Exercises" bulk control. Exercises
+    /// in a superset may have **different** set counts (each is authored
+    /// independently in its own Prescription section below). This draft is a
+    /// staging value only — adjusting the stepper does **not** touch any child;
+    /// the counts change only when the user taps "Apply to all exercises"
+    /// (`RoutineBlockBuilder.applySetCountToAll`). Seeded once from the current
+    /// max child count on first appear.
+    @State private var bulkSetsDraft: Int = 0
+    @State private var bulkDraftSeeded = false
 
     @State private var showAddExerciseSheet = false
     @State private var showMinExerciseAlert = false
@@ -119,22 +119,31 @@ struct SupersetDetailNoRest: View {
         re.resolvedTemplates(in: ctx)
     }
 
-    /// Current value shown in the Stepper label and used as its binding getter.
-    /// Reads from `@State` once seeded; otherwise falls back to the max across
-    /// child prescriptions (mismatched legacy data is shown as the max so nothing
-    /// gets silently truncated). No mutation here — legacy data is normalized
-    /// only when the user explicitly changes the Stepper.
+    /// The max set count across child prescriptions — used to seed both the
+    /// "Set All Exercises" draft and the default count for newly-added slots
+    /// (`addExercises`). The max is shown so mismatched/uneven data is never
+    /// silently truncated. Read-only; no mutation.
     private var currentSetsValue: Int {
-        if let d = displayedSets { return d }
-        return block.exercises.compactMap { $0.prescription?.sets }.max() ?? 0
+        block.exercises.compactMap { $0.prescription?.sets }.max() ?? 0
     }
 
-    private func applySetsToAllExercises(_ newValue: Int) {
-        displayedSets = newValue
-        for re in block.exercises {
-            re.prescription?.sets = newValue > 0 ? newValue : nil
-        }
-        try? ctx.save()
+    /// Seed the bulk draft once from the current data. Idempotent per view
+    /// lifetime so re-renders (e.g. after a per-slot edit) don't clobber a
+    /// value the user is mid-adjusting.
+    private func seedBulkDraftIfNeeded() {
+        guard !bulkDraftSeeded else { return }
+        bulkDraftSeeded = true
+        bulkSetsDraft = currentSetsValue > 0
+            ? currentSetsValue
+            : AppSettings.defaultSets
+    }
+
+    /// Explicit bulk apply, invoked only by the "Apply to all exercises"
+    /// button. Delegates to the tested `RoutineBlockBuilder.applySetCountToAll`.
+    private func applyBulkSetCount() {
+        guard !isRoutineLocked else { return }
+        RoutineBlockBuilder.applySetCountToAll(
+            bulkSetsDraft, in: block, ctx: ctx)
     }
 
     private func moveExercises(from offsets: IndexSet, to newOffset: Int) {
@@ -147,11 +156,12 @@ struct SupersetDetailNoRest: View {
     }
 
     /// Phase 5.2 / Multi-select Slice B — append one or more `RoutineExercise`
-    /// slots to this superset, in tap-selection order. Each new slot inherits
-    /// the superset's shared "Sets per exercise" value (the builder falls back
-    /// to `AppSettings.defaultSets` when `currentSetsValue` is 0 — i.e. no
-    /// child prescription has a `sets` value yet) so adding doesn't disturb the
-    /// block-wide invariant. Duplicate `Exercise` references are intentionally
+    /// slots to this superset, in tap-selection order. Each new slot is seeded
+    /// with a sensible default set count — the current "Set all to" value
+    /// (`currentSetsValue`, the max across existing children), falling back to
+    /// `AppSettings.defaultSets` when that is 0 — but the user can then edit
+    /// each slot's count independently (uneven supersets are allowed).
+    /// Duplicate `Exercise` references are intentionally
     /// allowed: per-slot identity is `RoutineExercise.slotID` (unique per slot),
     /// so two slots of the same Exercise log and persist independently. Existing
     /// slots are not mutated. Delegates to the tested `RoutineBlockBuilder`. The
@@ -246,18 +256,6 @@ struct SupersetDetailNoRest: View {
         List {
             Section {
                 Stepper(
-                    currentSetsValue == 0
-                        ? "Sets per exercise: —"
-                        : "Sets per exercise: \(currentSetsValue)",
-                    value: Binding(
-                        get: { currentSetsValue },
-                        set: { applySetsToAllExercises($0) }
-                    ),
-                    in: 0...20,
-                    step: 1
-                )
-                .disabled(isRoutineLocked)
-                Stepper(
                     (block.supersetRoundRestSeconds.map { "Rest after round: \($0)s" })
                         ?? "Rest after round: none",
                     value: Binding(
@@ -282,7 +280,28 @@ struct SupersetDetailNoRest: View {
             } header: {
                 Text("Timing")
             } footer: {
-                Text("Sets per exercise applies to every exercise in this superset (one round = one set per exercise). Rest after round fires between completed rounds. Rest before next block fires after the final round, replacing round rest.")
+                Text("A round runs one set of each exercise that still has sets remaining; shorter exercises drop out of the later rounds. Rest after round fires between completed rounds. Rest before next block fires after the final round, replacing round rest.")
+            }
+
+            Section {
+                Stepper(
+                    "Sets: \(bulkSetsDraft)",
+                    value: $bulkSetsDraft,
+                    in: 0...20,
+                    step: 1
+                )
+                .monospacedDigit()
+                .disabled(isRoutineLocked)
+                Button {
+                    applyBulkSetCount()
+                } label: {
+                    Label("Apply to all exercises", systemImage: "equal.circle")
+                }
+                .disabled(isRoutineLocked)
+            } header: {
+                Text("Set All Exercises")
+            } footer: {
+                Text("Optional shortcut. Choose a count, then tap Apply to set every exercise in this superset to that many sets at once. Adjusting the stepper alone changes nothing — each exercise still keeps its own set count (edit it in that exercise's section below), so they can differ.")
             }
 
             Section {
@@ -298,9 +317,20 @@ struct SupersetDetailNoRest: View {
                         HStack {
                             Text(ex.name)
                             Spacer()
-                            Text("\(re.prescription?.sets ?? 0) sets")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
+                            // Bind the nested prescription directly so the count
+                            // refreshes immediately when the per-exercise sets
+                            // field below changes. Observation on the parent's
+                            // `@Bindable var block` does not fire for nested
+                            // @Model (SlotPrescription.sets) mutations, so a
+                            // plain `re.prescription?.sets` read here would stay
+                            // stale until the view was reopened.
+                            if let prescription = re.prescription {
+                                SupersetSetCountLabel(prescription: prescription)
+                            } else {
+                                Text("0 sets")
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
                         }
                         .swipeActions(allowsFullSwipe: false) {
                             if !isRoutineLocked {
@@ -375,7 +405,7 @@ struct SupersetDetailNoRest: View {
                         re: re,
                         isTimeBased: ex.isTimeBased,
                         hideRestFields: true,
-                        hideSetsField: true,
+                        hideSetsField: false,
                         isLocked: isRoutineLocked
                     )
                 }
@@ -391,6 +421,7 @@ struct SupersetDetailNoRest: View {
         // Scrolling dismisses the multiline slot-notes keyboard;
         // `.interactively` matches the note-heavy routine-editor lists.
         .scrollDismissesKeyboard(.interactively)
+        .onAppear(perform: seedBulkDraftIfNeeded)
         .navigationTitle("Superset")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -432,5 +463,19 @@ struct SupersetDetailNoRest: View {
         } message: {
             Text(deletionMessage(for: pendingDeleteOffsets))
         }
+    }
+}
+
+/// Trailing "N sets" label for a superset exercise row. Holding the
+/// `SlotPrescription` as `@Bindable` ties this small view's invalidation to
+/// that nested @Model, so the count updates the instant the per-exercise sets
+/// field changes — without reopening the superset detail or forcing a save.
+private struct SupersetSetCountLabel: View {
+    @Bindable var prescription: SlotPrescription
+
+    var body: some View {
+        Text("\(prescription.sets ?? 0) sets")
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
     }
 }

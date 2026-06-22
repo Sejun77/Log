@@ -134,9 +134,11 @@ struct SupersetRoundContext {
     let participants: [SupersetRoundParticipant]
 
     /// 0-based index of the last round in the block. The inline view
-    /// derives this from `effectiveSetCount(firstExercise) - 1` under
-    /// the documented assumption that all exercises in a superset share
-    /// a set count; the planner just consumes the value.
+    /// derives this from the **maximum** `effectiveSetCount` across the
+    /// block's exercises minus one, so uneven supersets run the full
+    /// number of rounds and shorter exercises drop out of later rounds
+    /// (filtered here via `participates`); the planner just consumes the
+    /// value.
     let lastRoundIndex: Int
 
     /// Block-level round rest, when configured (`> 0`). When set, takes
