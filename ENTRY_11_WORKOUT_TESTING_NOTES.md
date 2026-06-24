@@ -139,6 +139,24 @@ release plan links here instead of carrying the long logs inline.
   `ENTRY_11_DESIGN_RELEASE_PLAN.md` → Completed Workout Usability
   (`feat(superset): support uneven set counts per exercise`).
 
+### Post-testing addition — switched exercise History snapshot (final showcase)
+
+- **Found during final showcase recording**, after the original three real-device
+  workout tests — not part of them. Switching Exercise A → B in an active workout
+  updated Active Workout correctly and History showed B's **name**, but finished
+  History still showed **Exercise A's equipment/setup metadata**.
+- **Fixed before finalizing the showcase** and shipped on `main`: the switched-in
+  exercise's equipment/setup is now frozen into the `WorkoutItem` snapshot before
+  History is created, so finished History stays consistent with the switched
+  exercise (the original routine template is not mutated). This was a
+  persistence/snapshot bug, not a History display bug. Validated: build succeeded,
+  **916 tests / 0 failures**, manual device testing confirmed (Switch Exercise →
+  Finish → History shows the switched exercise and no longer the original's setup;
+  Save & Exit / Resume, bodyweight ↔ weighted switching, and uneven superset
+  behavior still work). See the *Final-showcase follow-up — History snapshot
+  consistency* note in `ENTRY_11_DESIGN_RELEASE_PLAN.md` → Completed Workout
+  Usability.
+
 ### Release-readiness notes
 
 - **Scope:** this is a **personal/internal milestone** (personal-use + portfolio

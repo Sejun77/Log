@@ -230,6 +230,21 @@ promotion is in scope right now.
     hides it, stale Bodyweight dropsets are suppressed, and Save & Exit / Resume
     and Finish → History still work.
     (`fix(active-workout): refresh switched exercise info and prefill`)
+  - **Final-showcase follow-up — History snapshot consistency** — discovered
+    during **final showcase recording**, one remaining consistency gap surfaced:
+    after switching Exercise A → B in an active workout, Active Workout correctly
+    showed B's name, equipment, and setup, and finished History showed B's
+    **name**, but History still showed **Exercise A's equipment/setup metadata**.
+    The switched-in exercise's equipment/setup is now **frozen into the
+    `WorkoutItem` snapshot before History is created**, so finished History stays
+    consistent with the switched exercise; the **original routine template is not
+    mutated**. This was a **persistence/snapshot bug, not a History display bug**.
+    - **Validation:** build succeeded; full test suite passed (**916 tests, 0
+      failures**); manual device testing confirmed Switch Exercise → Finish →
+      History now shows the switched exercise's name/equipment/setup and **no
+      longer shows the original exercise's setup metadata**, and that Save & Exit /
+      Resume, bodyweight ↔ weighted switching, and uneven superset behavior all
+      still work.
 
 - **Uneven superset set counts** — surfaced while preparing the **final showcase**
   and adapting Log to my **real current routine**, where several supersets pair
