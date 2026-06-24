@@ -94,6 +94,44 @@ func resolvedSwappedValue<T>(isSwapped: Bool, live: T, snapshot: T) -> T {
     isSwapped ? live : snapshot
 }
 
+/// Resolves the `(equipment, setupNotes)` pair to **freeze** into a finished
+/// `WorkoutItem`'s `plannedPrescriptionSnapshot` at session-snapshot time.
+///
+/// History reads Equipment & Setup exclusively from that frozen snapshot
+/// (never live `Exercise` fields), so the value chosen here is exactly what
+/// History will display:
+/// - **Non-swapped slot** → the session-start snapshot values win, preserving
+///   the Phase 10 snapshot-immutability invariant (later library edits to the
+///   exercise never retroactively change finished History).
+/// - **Swapped slot** (`currentExerciseID != originalExerciseID`) → the
+///   swapped-in exercise's LIVE values win — the same `resolvedSwappedValue`
+///   contract the live Active Workout "Equipment & Setup" section uses — so a
+///   finished workout that records the switched exercise's NAME also records
+///   the switched exercise's equipment/setup, never the original's. The live
+///   value is frozen at snapshot time; subsequent library edits do not mutate
+///   it. A nil live value resolves to nil (the field is hidden) rather than
+///   falling back to the stale original snapshot. Pure.
+func resolvedSnapshotEquipmentSetup(
+    isSwapped: Bool,
+    liveEquipment: String?,
+    liveSetup: String?,
+    snapshotEquipment: String?,
+    snapshotSetup: String?
+) -> (equipment: String?, setupNotes: String?) {
+    (
+        resolvedSwappedValue(
+            isSwapped: isSwapped,
+            live: liveEquipment,
+            snapshot: snapshotEquipment
+        ),
+        resolvedSwappedValue(
+            isSwapped: isSwapped,
+            live: liveSetup,
+            snapshot: snapshotSetup
+        )
+    )
+}
+
 // MARK: - Stable rest notification ID
 
 /// Builds a stable rest-timer notification ID of the form
