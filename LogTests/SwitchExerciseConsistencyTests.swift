@@ -178,6 +178,87 @@ final class SwitchExerciseConsistencyTests: SwiftDataTestHarness {
         XCTAssertTrue(dropsetSupported(resolvedEquipment: resolved))
     }
 
+    // MARK: - History snapshot equipment/setup resolution (Bug fix)
+    //
+    // `resolvedSnapshotEquipmentSetup` is the pure resolver `populateSnapshotFields`
+    // uses to decide which equipment/setup pair is FROZEN into a finished
+    // `WorkoutItem.plannedPrescriptionSnapshot`. History reads Equipment & Setup
+    // exclusively from that frozen snapshot, so this resolver's output is exactly
+    // what History will display. These pin: no-switch keeps the original
+    // snapshot; a switch freezes the swapped-in exercise's live metadata (never
+    // the original's), across bodyweight↔weighted swaps; and a nil live value
+    // hides the field rather than falling back to the stale original.
+
+    func test_historySnapshot_noSwitch_keepsOriginalSnapshot() {
+        // Case 1 (no-switch regression): a non-swapped slot freezes the
+        // session-start snapshot values, never the (irrelevant) live values.
+        let resolved = resolvedSnapshotEquipmentSetup(
+            isSwapped: false,
+            liveEquipment: "Dumbbell",
+            liveSetup: "Live setup",
+            snapshotEquipment: "Barbell",
+            snapshotSetup: "Original setup")
+        XCTAssertEqual(resolved.equipment, "Barbell")
+        XCTAssertEqual(resolved.setupNotes, "Original setup")
+    }
+
+    func test_historySnapshot_switch_freezesSwappedInMetadata() {
+        // Case 2: A → B switch freezes B's live equipment/setup, and crucially
+        // does NOT retain Exercise A's snapshot setup.
+        let resolved = resolvedSnapshotEquipmentSetup(
+            isSwapped: true,
+            liveEquipment: "Cable",
+            liveSetup: "B setup notes",
+            snapshotEquipment: "Barbell",
+            snapshotSetup: "A setup notes")
+        XCTAssertEqual(resolved.equipment, "Cable")
+        XCTAssertEqual(resolved.setupNotes, "B setup notes")
+        XCTAssertNotEqual(resolved.setupNotes, "A setup notes")
+    }
+
+    func test_historySnapshot_bodyweightToBarbell_freezesBarbell() {
+        // Case 3: Bodyweight original → Barbell swapped-in. History should show
+        // the switched-in barbell equipment/setup.
+        let resolved = resolvedSnapshotEquipmentSetup(
+            isSwapped: true,
+            liveEquipment: "Barbell",
+            liveSetup: "Rack at pin 12",
+            snapshotEquipment: bodyweightEquipment,
+            snapshotSetup: nil)
+        XCTAssertEqual(resolved.equipment, "Barbell")
+        XCTAssertFalse(isBodyweightEquipment(resolved.equipment))
+        XCTAssertEqual(resolved.setupNotes, "Rack at pin 12")
+    }
+
+    func test_historySnapshot_barbellToBodyweight_freezesBodyweight() {
+        // Case 4: Barbell original → Bodyweight swapped-in. History should show
+        // the switched-in bodyweight equipment/setup.
+        let resolved = resolvedSnapshotEquipmentSetup(
+            isSwapped: true,
+            liveEquipment: bodyweightEquipment,
+            liveSetup: "Parallettes",
+            snapshotEquipment: "Barbell",
+            snapshotSetup: "Bench press setup")
+        XCTAssertEqual(resolved.equipment, bodyweightEquipment)
+        XCTAssertTrue(isBodyweightEquipment(resolved.equipment))
+        XCTAssertEqual(resolved.setupNotes, "Parallettes")
+        XCTAssertNotEqual(resolved.setupNotes, "Bench press setup")
+    }
+
+    func test_historySnapshot_switchToBlankMetadata_hidesNotStale() {
+        // A swapped-in exercise with no equipment/setup resolves to nil so the
+        // History row is HIDDEN — it must never fall back to the original
+        // exercise's stale metadata.
+        let resolved = resolvedSnapshotEquipmentSetup(
+            isSwapped: true,
+            liveEquipment: nil,
+            liveSetup: nil,
+            snapshotEquipment: "Barbell",
+            snapshotSetup: "Original setup")
+        XCTAssertNil(resolved.equipment)
+        XCTAssertNil(resolved.setupNotes)
+    }
+
     // MARK: - Fixtures (mirror LastPerformancePrefillServiceTests)
 
     @discardableResult

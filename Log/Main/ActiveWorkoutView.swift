@@ -3532,6 +3532,32 @@ struct ActiveWorkoutView: View {
         item.exerciseNameSnapshot = planEx.name
         if let payload = planEx.prescriptionSnapshot {
             let snapshot = payload.toModel()
+            // Switch Exercise consistency: the `prescriptionSnapshot` payload
+            // captured at session start still describes the ORIGINAL exercise's
+            // equipment/setup (the keep-plan swap path preserves it verbatim),
+            // while `item.exercise` / `exerciseNameSnapshot` already point at
+            // the swapped-in exercise. History reads Equipment & Setup solely
+            // from this frozen snapshot, so without this it would show the
+            // switched exercise's NAME alongside the original's equipment/setup.
+            // Freeze the swapped-in exercise's LIVE equipment/setup here —
+            // mirroring the `resolvedSwappedValue` contract the live Active
+            // Workout display uses — so finished History is internally
+            // consistent. Frozen at snapshot time: later library edits never
+            // mutate it (snapshot-immutability invariant preserved for the
+            // non-swapped case, which keeps the snapshot values).
+            let isSwapped =
+                planEx.currentExerciseID != planEx.originalExerciseID
+            let liveExercise =
+                isSwapped ? fetchExercise(by: planEx.currentExerciseID) : nil
+            let resolved = resolvedSnapshotEquipmentSetup(
+                isSwapped: isSwapped && liveExercise != nil,
+                liveEquipment: liveExercise?.equipmentType,
+                liveSetup: liveExercise?.setupDefaults,
+                snapshotEquipment: snapshot.equipment,
+                snapshotSetup: snapshot.setupNotes
+            )
+            snapshot.equipment = resolved.equipment
+            snapshot.setupNotes = resolved.setupNotes
             ctx.insert(snapshot)
             item.plannedPrescriptionSnapshot = snapshot
         }
