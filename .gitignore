@@ -4,3 +4,22 @@
 
 # Local Claude Code metadata
 .claude/
+
+# Xcode user-specific files
+xcuserdata/
+*.xcuserstate
+
+# Signing / provisioning files
+*.mobileprovision
+*.p12
+*.cer
+
+# Local build output
+DerivedData/
+.build/
+
+# Local agent/tool logs
+.agent_logs/
+
+# macOS
+.DS_Store
