@@ -189,9 +189,10 @@ At this stage:
 - real workouts have been tested on an iPhone
 - the automated test suite passes
 - known limitations are documented
-- TestFlight and public release work are deferred
+- TestFlight beta testing with friends and family is now planned
+- public App Store release is still not claimed
 
-Current validation:
+Current validation (as of Entry #11):
 
 - **916 automated tests passing**
 - **0 failures**
@@ -261,7 +262,30 @@ If using a free Apple Developer account, the app may need to be rebuilt and rein
 
 This is acceptable for personal development, but it is not a good distribution method for regular users.
 
-For future peer testing, TestFlight would be a better option.
+For wider peer testing, TestFlight is a better option, and it is now planned (see **Beta Testing** below).
+
+---
+
+## Beta Testing
+
+TestFlight beta testing is planned with a small group of friends and family.
+
+This was previously deferred, but a few friends and family members are now willing to try the app on their own iPhones.
+
+The goal of this beta is practical feedback from real use, not a public release. It is meant to surface everyday usability issues and rough edges before any wider distribution is considered.
+
+Testing will likely focus on:
+
+- exercise setup
+- routine setup
+- active workout logging
+- rest timer
+- Save & Exit / Resume
+- Finish → History
+- progress charts
+- Korean-language usability, if localization is added
+
+TestFlight testing is planned but not completed yet.
 
 ---
 
@@ -285,8 +309,9 @@ Some work is intentionally deferred.
 
 Current known limitations include:
 
-- TestFlight is not completed yet
+- TestFlight beta testing is planned/in progress, not completed yet
 - public App Store readiness is not claimed
+- UI polish may continue during and after beta feedback
 - full Active Workout redesign is deferred
 - weight/rep field-switching friction is being monitored until it is reproducible
 - future UI polish may still be needed after more real use
@@ -307,7 +332,7 @@ Current known limitations include:
 
 The project includes automated tests for core app behavior.
 
-Current test status:
+Current test status (as of Entry #11):
 
 - **916 tests passing**
 - **0 failures**
