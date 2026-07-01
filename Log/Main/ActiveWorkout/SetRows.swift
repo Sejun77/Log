@@ -50,8 +50,10 @@ struct SetEntryRow: View {
                 Text("#\(index)")
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
-                Text(template.kind.rawValue.capitalized)
-                    .font(.dsBody.weight(.semibold))
+                if let kindLabel = template.kind.activeRowLabel {
+                    Text(kindLabel)
+                        .font(.dsBody.weight(.semibold))
+                }
                 if isLogged {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(
                         .green
@@ -141,8 +143,10 @@ struct TimeSetEntryRow: View {
             HStack(spacing: 8) {
                 Text("#\(index)")
                     .font(.dsCaption)
-                Text(template.kind.rawValue.capitalized)
-                    .font(.dsBody.weight(.semibold))
+                if let kindLabel = template.kind.activeRowLabel {
+                    Text(kindLabel)
+                        .font(.dsBody.weight(.semibold))
+                }
                 if isLogged {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(
                         .green

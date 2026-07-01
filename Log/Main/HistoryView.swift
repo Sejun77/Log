@@ -495,7 +495,7 @@ struct HistoryView: View {
         if h > 0 {
             return String(format: "%dh %02dm", h, m)
         }
-        return "\(max(1, m))m"
+        return String(localized: "\(max(1, m))m")
     }
 }
 
@@ -546,7 +546,7 @@ private struct WorkoutDetailView: View {
                         Text(
                             h > 0
                                 ? String(format: "%dh %02dm", h, m)
-                                : "\(max(1, m))m"
+                                : String(localized: "\(max(1, m))m")
                         )
                         .monospacedDigit()
                     }
@@ -658,7 +658,7 @@ private struct WorkoutDetailView: View {
                     .font(.dsCaption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 80, alignment: .leading)
-                Text(equipment)
+                Text(LocalizedStringKey(equipment))
                     .font(.dsBody)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)

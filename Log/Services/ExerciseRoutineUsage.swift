@@ -69,6 +69,8 @@ struct ExerciseRoutineUsage {
 
     /// Pluralized count line, e.g. `"Used in 0 routines"` / `"Used in 1 routine"`.
     var summary: String {
-        "Used in \(routineCount) routine\(routineCount == 1 ? "" : "s")"
+        routineCount == 1
+            ? String(localized: "Used in \(routineCount) routine")
+            : String(localized: "Used in \(routineCount) routines")
     }
 }

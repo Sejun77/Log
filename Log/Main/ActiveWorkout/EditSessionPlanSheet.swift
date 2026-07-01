@@ -140,8 +140,9 @@ struct EditSessionPlanSheet: View {
     ) -> some View {
         let current = plan[keyPath: keyPath] ?? 0
         let valStr = current == 0 ? zeroLabel : (unit.map { "\(current)\($0)" } ?? "\(current)")
+        let title = NSLocalizedString(label, comment: "")
         return Stepper(
-            "\(label): \(valStr)",
+            "\(title): \(valStr)",
             value: Binding(
                 get: { plan[keyPath: keyPath] ?? 0 },
                 set: { plan[keyPath: keyPath] = $0 == 0 ? nil : $0 }

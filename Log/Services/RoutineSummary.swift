@@ -52,12 +52,14 @@ struct RoutineSummary: Equatable {
     ///  - slots, no supersets → `"5 exercises"` / `"1 exercise"`
     ///  - slots + supersets → `"8 exercises · 2 supersets"` / `"… · 1 superset"`
     var subtitle: String {
-        guard exerciseCount > 0 else { return "Empty routine" }
-        let exercises =
-            "\(exerciseCount) exercise\(exerciseCount == 1 ? "" : "s")"
+        guard exerciseCount > 0 else { return String(localized: "Empty routine") }
+        let exercises = exerciseCount == 1
+            ? String(localized: "\(exerciseCount) exercise")
+            : String(localized: "\(exerciseCount) exercises")
         guard supersetCount > 0 else { return exercises }
-        let supersets =
-            "\(supersetCount) superset\(supersetCount == 1 ? "" : "s")"
+        let supersets = supersetCount == 1
+            ? String(localized: "\(supersetCount) superset")
+            : String(localized: "\(supersetCount) supersets")
         return "\(exercises) · \(supersets)"
     }
 

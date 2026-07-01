@@ -187,7 +187,7 @@ private struct TechniquePlanRow: View {
             case .fixedReps(let n): parts.append("\(n) reps/drop")
             }
         }
-        if let s = plan.restSeconds, s > 0 { parts.append("\(s)s rest") }
+        if let s = plan.restSeconds, s > 0 { parts.append(String(localized: "\(s)s rest")) }
         if let n = plan.note, !n.isEmpty  { parts.append(n) }
         return parts.joined(separator: " · ")
     }
@@ -278,10 +278,10 @@ private struct TechniqueTypePickerSheet: View {
                     dismiss()
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(name)
+                        Text(LocalizedStringKey(name))
                             .font(.dsBody)
                             .foregroundStyle(conflict != nil ? Color.secondary : Color.primary)
-                        Text(conflict ?? desc)
+                        Text(LocalizedStringKey(conflict ?? desc))
                             .font(.dsBodySecondary)
                             .foregroundStyle(conflict != nil ? Color.red.opacity(0.75) : Color.secondary)
                     }

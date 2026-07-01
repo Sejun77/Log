@@ -57,9 +57,9 @@ struct SessionPlan: Codable {
     /// `WorkoutEffortTargetResolver` / `EffortTargetResolver`.
     func secondarySummary(effortSummary: String?) -> String {
         var parts: [String] = []
-        if let r = restSecondsBetweenSets, r > 0 { parts.append("\(r)s rest") }
+        if let r = restSecondsBetweenSets, r > 0 { parts.append(String(localized: "\(r)s rest")) }
         if let effortSummary, !effortSummary.isEmpty { parts.append(effortSummary) }
-        if let t = tempo, !t.isEmpty { parts.append("Tempo \(t)") }
+        if let t = tempo, !t.isEmpty { parts.append(String(localized: "Tempo \(t)")) }
         return parts.joined(separator: " · ")
     }
 

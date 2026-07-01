@@ -727,7 +727,7 @@ struct ExerciseDetailView: View {
                         Text("Body Part")
                             .font(.dsBody)
                         Spacer()
-                        Text(exercise.bodyPart ?? "Not set")
+                        Text(LocalizedStringKey(exercise.bodyPart ?? "Not set"))
                             .font(.dsBodySecondary)
                             .foregroundStyle(.secondary)
                     }
@@ -752,7 +752,7 @@ struct ExerciseDetailView: View {
                         Text("Equipment")
                             .font(.dsBody)
                         Spacer()
-                        Text(exercise.equipmentType ?? "Not set")
+                        Text(LocalizedStringKey(exercise.equipmentType ?? "Not set"))
                             .font(.dsBodySecondary)
                             .foregroundStyle(.secondary)
                     }
@@ -1180,7 +1180,7 @@ private struct BodyPartPicker: View {
             dismiss()
         } label: {
             HStack {
-                Text(label)
+                Text(LocalizedStringKey(label))
                     .foregroundStyle(.primary)
                 Spacer()
                 if isSelected(value) {
@@ -1424,7 +1424,7 @@ private struct EquipmentPicker: View {
             dismiss()
         } label: {
             HStack {
-                Text(label)
+                Text(LocalizedStringKey(label))
                     .foregroundStyle(.primary)
                 Spacer()
                 if isSelected(value) {

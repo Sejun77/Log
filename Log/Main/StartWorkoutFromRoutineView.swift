@@ -83,16 +83,16 @@ struct TechniquePlanSnapshot: Codable {
             }
             if let r = restSeconds, r > 0 { parts.append("\(r)s") }
             let tail = parts.isEmpty ? "" : " " + parts.joined(separator: " ")
-            return "Dropset\(tail)"
+            return "\(String(localized: "Drop Set"))\(tail)"
         case .restPause:
-            var s = "Rest-Pause"
+            var s = String(localized: "Rest-Pause")
             if let r = restSeconds, r > 0 { s += " \(r)s" }
             if let n = rounds, n > 0 { s += " ×\(n)" }
             return s
         case .tempoOverride:
-            return (note.flatMap { $0.isEmpty ? nil : $0 }).map { "Tempo \($0)" } ?? "Tempo"
+            return (note.flatMap { $0.isEmpty ? nil : $0 }).map { String(localized: "Tempo \($0)") } ?? String(localized: "Tempo")
         case .partialReps:
-            var s = "Partials"
+            var s = String(localized: "Partials")
             if let region = PartialRange.displayLabel(
                 raw: partialRangeRaw, note: partialRangeNote
             ) {
@@ -100,10 +100,10 @@ struct TechniquePlanSnapshot: Codable {
             }
             if let n = reps, n > 0 { s += " (\(n))" }
             return s
-        case .amrap:    return "AMRAP"
-        case .toFailure: return "To Failure"
+        case .amrap:    return String(localized: "AMRAP")
+        case .toFailure: return String(localized: "To Failure")
         case .cluster:
-            var s = "Cluster"
+            var s = String(localized: "Cluster")
             if let n = reps, n > 0 { s += " \(n)r" }
             if let c = rounds, c > 0 { s += " ×\(c)" }
             if let r = restSeconds, r > 0 { s += " (\(r)s)" }

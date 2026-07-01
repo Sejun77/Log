@@ -280,9 +280,7 @@ private struct PrescriptionFields: View {
             workingSetCount: max(0, prescription.sets ?? 0))
         if !values.isEmpty {
             Text(
-                "Set targets: "
-                    + values.map(EffortTargetResolver.format)
-                        .joined(separator: " · ")
+                "Set targets: \(values.map(EffortTargetResolver.format).joined(separator: " · "))"
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -342,8 +340,9 @@ private struct PrescriptionFields: View {
     ) -> some View {
         let current = prescription[keyPath: keyPath] ?? 0
         let valStr = current == 0 ? zeroLabel : (unit.map { "\(current)\($0)" } ?? "\(current)")
+        let title = NSLocalizedString(label, comment: "")
         return Stepper(
-            "\(label): \(valStr)",
+            "\(title): \(valStr)",
             value: Binding(
                 get: { prescription[keyPath: keyPath] ?? 0 },
                 set: { prescription[keyPath: keyPath] = $0 == 0 ? nil : $0 }

@@ -185,8 +185,9 @@ private struct WarmupStepRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(step.kind == .percentage ? "% of Working" :
-                     step.kind == .fixedReps  ? "Fixed Weight" : "Note")
+                Text(LocalizedStringKey(
+                    step.kind == .percentage ? "% of Working" :
+                    step.kind == .fixedReps  ? "Fixed Weight" : "Note"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -254,9 +255,9 @@ private struct WarmupStepEditSheet: View {
     /// "Fixed Weight" otherwise.
     private func kindLabel(_ k: WarmupStepKind) -> String {
         switch k {
-        case .fixedReps:  return isBodyweight ? "Reps" : "Fixed Weight"
-        case .percentage: return "% of Working"
-        case .noteOnly:   return "Note Only"
+        case .fixedReps:  return isBodyweight ? NSLocalizedString("Reps", comment: "") : NSLocalizedString("Fixed Weight", comment: "")
+        case .percentage: return NSLocalizedString("% of Working", comment: "")
+        case .noteOnly:   return NSLocalizedString("Note Only", comment: "")
         }
     }
 
@@ -332,7 +333,7 @@ private struct WarmupStepEditSheet: View {
 
                 Section {
                     Stepper(
-                        rest == 0 ? "No rest" : "\(rest)s rest",
+                        rest == 0 ? LocalizedStringKey("No rest") : "\(rest)s rest",
                         value: $rest,
                         in: 0...300,
                         step: 15

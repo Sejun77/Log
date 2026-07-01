@@ -18,10 +18,10 @@ enum ExerciseSortMode: String, CaseIterable, Identifiable {
     /// User-facing label for the toolbar Picker.
     var label: String {
         switch self {
-        case .manual: return "Manual"
-        case .alphabetical: return "Name"
-        case .bodyPart: return "Body Part"
-        case .equipment: return "Equipment"
+        case .manual: return NSLocalizedString("Manual", comment: "")
+        case .alphabetical: return NSLocalizedString("Name", comment: "")
+        case .bodyPart: return NSLocalizedString("Body Part", comment: "")
+        case .equipment: return NSLocalizedString("Equipment", comment: "")
         }
     }
 

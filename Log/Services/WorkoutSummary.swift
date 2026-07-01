@@ -55,11 +55,14 @@ struct WorkoutSummary: Equatable {
     ///  - items, no counted sets → `"5 exercises"` / `"1 exercise"`
     ///  - items + sets → `"6 exercises · 24 sets"` / `"1 exercise · 1 set"`
     var subtitle: String {
-        guard exerciseCount > 0 else { return "Empty workout" }
-        let exercises =
-            "\(exerciseCount) exercise\(exerciseCount == 1 ? "" : "s")"
+        guard exerciseCount > 0 else { return String(localized: "Empty workout") }
+        let exercises = exerciseCount == 1
+            ? String(localized: "\(exerciseCount) exercise")
+            : String(localized: "\(exerciseCount) exercises")
         guard setCount > 0 else { return exercises }
-        let sets = "\(setCount) set\(setCount == 1 ? "" : "s")"
+        let sets = setCount == 1
+            ? String(localized: "\(setCount) set")
+            : String(localized: "\(setCount) sets")
         return "\(exercises) · \(sets)"
     }
 

@@ -152,27 +152,32 @@ struct BlockPrescriptionSummary: Equatable {
     var subtitle: String {
         switch content {
         case let .superset(exerciseCount, sets):
-            let exercises =
-                "\(exerciseCount) exercise\(exerciseCount == 1 ? "" : "s")"
-            guard let m = sets, m > 0 else { return "Superset · \(exercises)" }
-            return "Superset · \(exercises) · \(m) set\(m == 1 ? "" : "s")"
+            let superset = String(localized: "Superset")
+            let exercises = exerciseCount == 1
+                ? String(localized: "\(exerciseCount) exercise")
+                : String(localized: "\(exerciseCount) exercises")
+            guard let m = sets, m > 0 else { return "\(superset) · \(exercises)" }
+            let setsText = m == 1
+                ? String(localized: "\(m) set")
+                : String(localized: "\(m) sets")
+            return "\(superset) · \(exercises) · \(setsText)"
 
         case let .normal(sets, repMin, repMax, duration, usesDuration, rest, effort):
-            guard let s = sets, s > 0 else { return "Not set" }
+            guard let s = sets, s > 0 else { return String(localized: "Not set") }
             let core: String
             if usesDuration {
                 if let d = duration, d > 0 {
                     core = "\(s) × \(d)s"
                 } else {
-                    core = "\(s) set\(s == 1 ? "" : "s")"
+                    core = s == 1 ? String(localized: "\(s) set") : String(localized: "\(s) sets")
                 }
             } else if let reps = Self.repRange(min: repMin, max: repMax) {
                 core = "\(s) × \(reps)"
             } else {
-                core = "\(s) set\(s == 1 ? "" : "s")"
+                core = s == 1 ? String(localized: "\(s) set") : String(localized: "\(s) sets")
             }
             var parts = [core]
-            if let r = rest, r > 0 { parts.append("\(r)s rest") }
+            if let r = rest, r > 0 { parts.append(String(localized: "\(r)s rest")) }
             if let effort { parts.append(effort) }
             return parts.joined(separator: " · ")
         }

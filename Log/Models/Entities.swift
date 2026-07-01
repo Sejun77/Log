@@ -73,6 +73,18 @@ enum SetKind: String, Codable, CaseIterable {
     case warmup
     case working
     case dropset
+
+    /// Localized label for an Active Workout set row. Returns `nil` for the
+    /// default `.working` kind so normal working-set rows show no redundant
+    /// label; non-default kinds return their localized name. Display-only —
+    /// does not affect the persisted `rawValue`.
+    var activeRowLabel: String? {
+        switch self {
+        case .working: return nil
+        case .warmup:  return NSLocalizedString("Warmup", comment: "")
+        case .dropset: return NSLocalizedString("Drop Set", comment: "")
+        }
+    }
 }
 
 @Model
@@ -247,13 +259,13 @@ enum TechniqueType: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .dropset:       return "Drop Set"
-        case .partialReps:   return "Partial Reps"
-        case .restPause:     return "Rest-Pause"
-        case .amrap:         return "AMRAP"
-        case .toFailure:     return "To Failure"
-        case .cluster:       return "Cluster"
-        case .tempoOverride: return "Tempo Override"
+        case .dropset:       return NSLocalizedString("Drop Set", comment: "")
+        case .partialReps:   return NSLocalizedString("Partial Reps", comment: "")
+        case .restPause:     return NSLocalizedString("Rest-Pause", comment: "")
+        case .amrap:         return NSLocalizedString("AMRAP", comment: "")
+        case .toFailure:     return NSLocalizedString("To Failure", comment: "")
+        case .cluster:       return NSLocalizedString("Cluster", comment: "")
+        case .tempoOverride: return NSLocalizedString("Tempo Override", comment: "")
         }
     }
 }
@@ -282,9 +294,9 @@ enum TechniqueAppliesTo: Equatable {
 
     var displayLabel: String {
         switch self {
-        case .lastWorkingSet:   return "Last working set"
-        case .allWorkingSets:   return "All working sets"
-        case .setNumber(let n): return "Set \(n)"
+        case .lastWorkingSet:   return NSLocalizedString("Last working set", comment: "")
+        case .allWorkingSets:   return NSLocalizedString("All working sets", comment: "")
+        case .setNumber(let n): return String(localized: "Set \(n)")
         }
     }
 }
@@ -323,11 +335,11 @@ enum PartialRange: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .lengthenedHalf: return "Lengthened half"
-        case .shortenedHalf:  return "Shortened half"
-        case .middleRange:    return "Middle range"
-        case .stickingPoint:  return "Sticking point"
-        case .custom:         return "Custom"
+        case .lengthenedHalf: return NSLocalizedString("Lengthened half", comment: "")
+        case .shortenedHalf:  return NSLocalizedString("Shortened half", comment: "")
+        case .middleRange:    return NSLocalizedString("Middle range", comment: "")
+        case .stickingPoint:  return NSLocalizedString("Sticking point", comment: "")
+        case .custom:         return NSLocalizedString("Custom", comment: "")
         }
     }
 
@@ -341,7 +353,7 @@ enum PartialRange: String, CaseIterable {
     static func displayLabel(raw: String?, note: String?) -> String? {
         let cleanNote = (note?.isEmpty == false) ? note : nil
         if let raw, let preset = PartialRange(rawValue: raw) {
-            return preset == .custom ? (cleanNote ?? "Custom") : preset.displayName
+            return preset == .custom ? (cleanNote ?? NSLocalizedString("Custom", comment: "")) : preset.displayName
         }
         return cleanNote
     }

@@ -253,7 +253,7 @@ struct DSSectionHeader: View {
                     .font(.system(size: 13, weight: .semibold))
             }
 
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.dsSection)
                 .foregroundColor(DSColor.textSecondary)
 

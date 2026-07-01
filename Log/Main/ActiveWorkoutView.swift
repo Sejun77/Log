@@ -1310,7 +1310,7 @@ struct ActiveWorkoutView: View {
                             .font(.dsCaption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(width: 80, alignment: .leading)
-                        Text(equipment)
+                        Text(LocalizedStringKey(equipment))
                             .font(.dsBody)
                             .foregroundStyle(.primary)
                             .fixedSize(horizontal: false, vertical: true)
