@@ -274,6 +274,8 @@ This was previously deferred, but a few friends and family members are now willi
 
 The goal of this beta is practical feedback from real use, not a public release. It is meant to surface everyday usability issues and rough edges before any wider distribution is considered.
 
+To help family members who are more comfortable in Korean, **Korean UI support was added** so they can test the app in their own language.
+
 Testing will likely focus on:
 
 - exercise setup
@@ -283,7 +285,9 @@ Testing will likely focus on:
 - Save & Exit / Resume
 - Finish → History
 - progress charts
-- Korean-language usability, if localization is added
+- Korean-language usability (translations that are confusing or clipped)
+
+The detailed beta plan — tester instructions, testing tasks, feedback questions, and the feedback log — lives in [`TESTFLIGHT_FEEDBACK_PLAN.md`](TESTFLIGHT_FEEDBACK_PLAN.md).
 
 TestFlight testing is planned but not completed yet.
 
@@ -356,8 +360,9 @@ Test coverage includes areas such as:
 
 Possible future work includes:
 
-- more real-device testing
-- TestFlight testing with a small group
+- TestFlight testing with a small group of friends and family
+- collecting and acting on beta feedback
+- refining Korean translations based on family testers' input
 - additional UI polish
 - improved Active Workout visual hierarchy
 - continued fixes based on real workout use
