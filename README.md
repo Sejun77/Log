@@ -289,6 +289,8 @@ Testing will likely focus on:
 
 The detailed beta plan — tester instructions, testing tasks, feedback questions, and the feedback log — lives in [`TESTFLIGHT_FEEDBACK_PLAN.md`](TESTFLIGHT_FEEDBACK_PLAN.md).
 
+Log stores workout data locally on the device and does not collect or transmit personal data. See [`PRIVACY.md`](PRIVACY.md) for details.
+
 TestFlight testing is planned but not completed yet.
 
 ---
