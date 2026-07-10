@@ -563,22 +563,11 @@ struct RoutineEditor: View {
     // MARK: - Logic Helpers
 
     private func routineIsStartable(_ r: Routine) -> Bool {
-        var hasAnyContent = false
-
-        for block in r.blocks {
-            if block.exercises.contains(where: { re in
-                re.safeExercise(in: ctx) != nil
-            }) {
-                hasAnyContent = true
-            }
-
-            if block.isSuperset {
-                guard let rr = block.supersetRoundRestSeconds, rr > 0 else {
-                    return false
-                }
-            }
-        }
-        return hasAnyContent
+        // Logic lives on `Routine.isStartable(in:)` so the exact rule that
+        // gates the Start button can be regression-tested. It no longer runs
+        // any `#Predicate`/fetch (see `RoutineExercise.safeExercise(in:)`),
+        // which was the source of the release/TestFlight crash on this path.
+        r.isStartable(in: ctx)
     }
 
     private func blockIsInvalidSuperset(_ b: RoutineBlock) -> Bool {
