@@ -364,7 +364,14 @@ struct ExercisesView: View {
                         .minimumScaleFactor(0.85)
 
                     if let bp = ex.bodyPart, !bp.isEmpty {
-                        Text(bp)
+                        // Localize known canonical body parts (e.g. "Chest" →
+                        // "가슴") at display time. Seeded/default exercises persist
+                        // the English canonical string, so this row must go
+                        // through the string catalog like Exercise Detail's Body
+                        // Part label and the grouped section headers do. Custom
+                        // values not in the catalog fall back to their literal
+                        // text, so user-created exercises are unchanged.
+                        Text(LocalizedStringKey(bp))
                             .font(.dsBodySecondary)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
