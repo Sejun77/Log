@@ -114,9 +114,15 @@ struct SettingsView: View {
         } header: {
             Text("Bodyweight")
         } footer: {
-            Text("Used for bodyweight-inclusive exercises (e.g. pull-ups, dips) "
+            // `LocalizedStringKey(_:)` is required here: concatenating string
+            // literals with `+` yields a `String`, which binds `Text`'s
+            // non-localizing `init(_ verbatim:)` overload — so the footer would
+            // always render in English regardless of the string catalog. Wrapping
+            // the concatenation in `LocalizedStringKey` restores catalog lookup.
+            Text(LocalizedStringKey(
+                "Used for bodyweight-inclusive exercises (e.g. pull-ups, dips) "
                 + "in History load metrics. Leave empty if not set. Stored in the "
-                + "unit shown above.")
+                + "unit shown above."))
                 .font(.caption)
         }
     }
@@ -191,12 +197,16 @@ struct SettingsView: View {
         } header: {
             Text("Data")
         } footer: {
-            Text("Import a CSV of exercises (name,bodyPart,equipmentType,setupDefaults,"
+            // See the bodyweight footer above: the `+`-concatenated literals
+            // produce a `String`, so this must be wrapped in `LocalizedStringKey`
+            // to localize instead of binding `Text`'s verbatim initializer.
+            Text(LocalizedStringKey(
+                "Import a CSV of exercises (name,bodyPart,equipmentType,setupDefaults,"
                 + "isTimeBased,notes). New names are added as custom exercises; existing "
                 + "names are skipped. Import a routine JSON to add it as a new routine "
                 + "(existing routines are never overwritten; missing exercises are created "
                 + "as custom). Nothing is overwritten or deleted. Export saves your "
-                + "exercise library or workout history as CSV.")
+                + "exercise library or workout history as CSV."))
                 .font(.caption)
         }
     }
