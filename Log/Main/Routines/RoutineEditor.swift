@@ -600,6 +600,12 @@ struct RoutineEditor: View {
     private func endActiveSessionIfAny() {
         // Preserve the active workout (non-destructive override).
         if let id = activeGuard.activeWorkoutID {
+            // SAFE `.id == id` predicate: unlike `RoutineBlock` (no stored id →
+            // `.id` is the computed `persistentModelID`, which crashed
+            // `graph_keyPathToString`), `Workout.id` is a real stored
+            // `@Attribute(.unique) var id: UUID` and `activeWorkoutID` is a
+            // `UUID`, so SwiftData maps this key path to the stored column.
+            // Covered by `RoutineEditorDeletionTests.testFetchWorkoutByStoredID`.
             let d = FetchDescriptor<Workout>(
                 predicate: #Predicate { $0.id == id }
             )
@@ -639,25 +645,27 @@ struct RoutineEditor: View {
 
     @MainActor
     private func deleteBlockSafely(id: PersistentIdentifier) {
-        if let idx = routine.blocks.firstIndex(where: { $0.id == id }) {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                _ = routine.blocks.remove(at: idx)
-            }
+        // Resolve the block from the in-memory relationship array (comparing
+        // `persistentModelID` in Swift — NOT via a `#Predicate`, which for a
+        // model with no stored `id` reads the computed `persistentModelID` and
+        // crashed `graph_keyPathToString` on TestFlight). Capture the object so
+        // the deferred delete needs no refetch.
+        guard let idx = routine.blocks.firstIndex(where: { $0.id == id })
+        else { return }
+        let block = routine.blocks[idx]
+
+        // Animate the row removal from the visible list first.
+        withAnimation(.easeInOut(duration: 0.25)) {
+            _ = routine.blocks.remove(at: idx)
         }
 
+        // Defer the persistent-store mutation until the collapse animation
+        // settles. The captured `block` is already detached from
+        // `routine.blocks`; `deleteBlock` deletes it and its children and
+        // renormalizes survivor order — no `#Predicate`, no fetch, no read of
+        // a deleted slot.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            let d = FetchDescriptor<RoutineBlock>(
-                predicate: #Predicate { $0.id == id }
-            )
-            if let toDelete = try? ctx.fetch(d).first {
-                for re in Array(toDelete.exercises) { ctx.delete(re) }
-                ctx.delete(toDelete)
-            }
-
-            let sorted = routine.blocks.sorted { $0.order < $1.order }
-            for (i, blk) in sorted.enumerated() { blk.order = i }
-            try? ctx.save()
-
+            RoutineBlockBuilder.deleteBlock(block, from: routine, in: ctx)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
     }

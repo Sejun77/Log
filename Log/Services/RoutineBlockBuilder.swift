@@ -141,4 +141,96 @@ enum RoutineBlockBuilder {
         try? ctx.save()
         return copy
     }
+
+    /// Delete an entire `RoutineBlock` from `routine` (the routine-editor swipe
+    /// / edit-mode block delete, which for a single-exercise block is how the
+    /// user "removes an exercise from the routine").
+    ///
+    /// Ordering is load-bearing and mirrors `removeExercises`:
+    ///   1. Detach the block from `routine.blocks` **first** so the
+    ///      `@Relationship` array never references the soon-to-be-deleted
+    ///      block (a lingering tombstone reference is what
+    ///      `normalizeRoutineModel` would later trip over).
+    ///   2. Delete each child `RoutineExercise` (cascades its
+    ///      `SlotPrescription` / templates), then the block itself.
+    ///   3. Renormalize the surviving blocks' `order` to `0…n-1` so the
+    ///      list stays contiguous.
+    ///
+    /// **No `#Predicate`/fetch.** The block is passed by reference. The prior
+    /// implementation refetched it with `#Predicate<RoutineBlock> { $0.id == id }`;
+    /// `RoutineBlock` has no stored `id` attribute, so `.id` is the computed
+    /// `PersistentModel.persistentModelID` and SwiftData's
+    /// `graph_keyPathToString(keypath:)` crashed translating that key path in
+    /// release/TestFlight builds. `firstIndex(where:)` compares
+    /// `persistentModelID` in memory (safe — no key-path-to-string), and works
+    /// whether or not the caller has already detached the block (idempotent:
+    /// the animated editor path removes the row before the deferred model
+    /// mutation runs).
+    static func deleteBlock(
+        _ block: RoutineBlock,
+        from routine: Routine,
+        in ctx: ModelContext
+    ) {
+        if let idx = routine.blocks.firstIndex(where: {
+            $0.persistentModelID == block.persistentModelID
+        }) {
+            routine.blocks.remove(at: idx)
+        }
+
+        // A child slot cascade-deleted when its `Exercise` was removed
+        // (`Exercise.routineUsages` is `.cascade`) lingers in `block.exercises`
+        // as an *invalidated* tombstone whose backing data is gone —
+        // `RoutineExercise` declares no inverse to `RoutineBlock`, so SwiftData
+        // never nullifies the block's array. Deleting the block would then
+        // cascade into that dead backing data and fatally trap. Detach such
+        // tombstones from the relationship FIRST — `persistentModelID` is safe
+        // to read even on an invalidated instance, so filtering against the
+        // store's live slots (the same guard `Routine.isStartable(in:)` uses)
+        // never touches dead data. Predicate-free fetch — no key path.
+        let liveSlotIDs: Set<PersistentIdentifier> = Set(
+            ((try? ctx.fetch(FetchDescriptor<RoutineExercise>())) ?? [])
+                .map(\.persistentModelID)
+        )
+        block.exercises.removeAll {
+            !liveSlotIDs.contains($0.persistentModelID)
+        }
+        for re in block.exercises { ctx.delete(re) }
+        ctx.delete(block)
+
+        let sorted = routine.blocks.sorted { $0.order < $1.order }
+        for (i, blk) in sorted.enumerated() { blk.order = i }
+        try? ctx.save()
+    }
+
+    /// Remove specific child slots from a superset `block` (the per-exercise
+    /// swipe delete inside `SupersetDetailNoRest`). Detaches the removed slots
+    /// from the parent `@Relationship` array **first**, then deletes them
+    /// (cascading their `SlotPrescription` / templates), then renormalizes the
+    /// survivors' `order` to `0…n-1`.
+    ///
+    /// No min-count enforcement here — the "a superset keeps ≥ 2 exercises"
+    /// guard stays at the UI call site (`removeExercise(at:)`). Membership is
+    /// matched by `persistentModelID` in memory (no `#Predicate`, no fetch), so
+    /// slots not belonging to `block`, or an empty `toRemove`, are safe no-ops.
+    static func removeExercises(
+        _ toRemove: [RoutineExercise],
+        from block: RoutineBlock,
+        in ctx: ModelContext
+    ) {
+        let removeIDs = Set(toRemove.map(\.persistentModelID))
+        guard !removeIDs.isEmpty else { return }
+
+        let survivors = block.exercises
+            .filter { !removeIDs.contains($0.persistentModelID) }
+            .sorted { $0.order < $1.order }
+
+        // Detach from the parent FIRST so the @Relationship array no longer
+        // references the soon-to-be-deleted children.
+        block.exercises = survivors
+        for re in toRemove where removeIDs.contains(re.persistentModelID) {
+            ctx.delete(re)
+        }
+        for (i, re) in survivors.enumerated() { re.order = i }
+        try? ctx.save()
+    }
 }
