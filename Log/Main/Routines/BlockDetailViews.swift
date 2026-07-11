@@ -214,15 +214,11 @@ struct SupersetDetailNoRest: View {
     /// stay the single gate before any state writes).
     private func performRemoveExercise(at offsets: IndexSet) {
         let sorted = block.exercises.sorted { $0.order < $1.order }
-        let removed = offsets.map { sorted[$0] }
-        var survivors = sorted
-        survivors.remove(atOffsets: offsets)
-        // Detach from the parent FIRST so the @Relationship array no
-        // longer references the soon-to-be-deleted children.
-        block.exercises = survivors
-        for re in removed { ctx.delete(re) }
-        for (i, re) in survivors.enumerated() { re.order = i }
-        try? ctx.save()
+        // Bounds-guard the offsets, then resolve to slot objects and delegate
+        // the detach-first delete + order renormalize to the tested
+        // `RoutineBlockBuilder.removeExercises` (no `#Predicate`/fetch).
+        let removed = offsets.compactMap { $0 < sorted.count ? sorted[$0] : nil }
+        RoutineBlockBuilder.removeExercises(removed, from: block, in: ctx)
     }
 
     /// Renders the deletion confirmation's message body for the current
