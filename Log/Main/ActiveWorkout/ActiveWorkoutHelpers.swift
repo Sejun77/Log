@@ -343,6 +343,52 @@ func resolvedDropDraft(
     return (reps, weight)
 }
 
+// MARK: - Bottom-panel Next / Finish navigation decision
+
+/// The action the active-workout bottom "Next / Finish" button resolves to for
+/// a given position in the plan. Pure decision, split out from
+/// `ActiveWorkoutView.next()` so the finish-safety contract is unit-testable:
+/// reaching the last step yields `.confirmFinish` (which drives the finish
+/// confirmation dialog) and NEVER finishes the workout outright, so repeatedly
+/// tapping Next near the end can't skip the confirmation.
+enum WorkoutNextAction: Equatable {
+    /// Advance within the current block to this new exercise index.
+    case advanceExercise(Int)
+    /// Advance to the next block, starting at its first exercise.
+    case advanceBlock
+    /// Last step of the workout — request finish confirmation (never finish
+    /// directly).
+    case confirmFinish
+}
+
+/// Resolves the next navigation action from the current position and the
+/// per-block exercise counts. Mirrors the original inline logic in
+/// `ActiveWorkoutView.next()` exactly:
+///   * not at the last exercise of the block → advance the exercise index;
+///   * at the last exercise but not the last block → advance the block;
+///   * at the last exercise of the last block → `.confirmFinish`.
+/// Pure — no SwiftUI/SwiftData state.
+func workoutNextAction(
+    currentBlockIndex: Int,
+    currentExerciseIndex: Int,
+    exerciseCountsPerBlock: [Int]
+) -> WorkoutNextAction {
+    let exCount: Int = {
+        guard currentBlockIndex >= 0,
+              currentBlockIndex < exerciseCountsPerBlock.count
+        else { return 0 }
+        return exerciseCountsPerBlock[currentBlockIndex]
+    }()
+
+    if currentExerciseIndex < max(0, exCount - 1) {
+        return .advanceExercise(currentExerciseIndex + 1)
+    } else if currentBlockIndex < exerciseCountsPerBlock.count - 1 {
+        return .advanceBlock
+    } else {
+        return .confirmFinish
+    }
+}
+
 // MARK: - Slot lookup (Phase 6.C1 follow-up: duplicate-Exercise superset)
 
 /// Locate the `(blockIndex, exerciseIndex)` of the plan slot whose
