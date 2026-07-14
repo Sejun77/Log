@@ -1838,7 +1838,7 @@ struct ActiveWorkoutView: View {
                 )
             }
             .confirmationDialog(
-                "Apply changes?",
+                finishConfirmTitle,
                 isPresented: $showFinishConfirm,
                 titleVisibility: .visible
             ) {
@@ -2084,23 +2084,37 @@ struct ActiveWorkoutView: View {
     // MARK: - Navigation
 
     private func next() {
-        let exCount = plan.blocks[safe: currentBlockIndex]?.exercises.count ?? 0
-        if currentExerciseIndex < max(0, exCount - 1) {
-            currentExerciseIndex += 1
-        } else if currentBlockIndex < plan.blocks.count - 1 {
+        switch workoutNextAction(
+            currentBlockIndex: currentBlockIndex,
+            currentExerciseIndex: currentExerciseIndex,
+            exerciseCountsPerBlock: plan.blocks.map { $0.exercises.count }
+        ) {
+        case .advanceExercise(let idx):
+            currentExerciseIndex = idx
+        case .advanceBlock:
             currentBlockIndex += 1
             currentExerciseIndex = 0
-        } else {
+        case .confirmFinish:
+            // Always confirm before finishing. Reaching the last step must
+            // never finish the workout outright — otherwise spam-tapping Next
+            // near the end finishes accidentally. The confirmation dialog
+            // (showFinishConfirm) offers Finish + Cancel in every case, and
+            // adds the "apply pending changes" options when relevant.
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            if hasSwapsPending || hasSessionPlanPending {
-                showFinishConfirm = true
-            } else {
-                finishWorkout(applySwaps: false)
-            }
+            showFinishConfirm = true
         }
     }
 
     // MARK: - Finish helpers
+
+    /// Title for the finish confirmation dialog. Reads "Apply changes?" only
+    /// when there are pending swaps / session-plan edits to apply; otherwise a
+    /// plain "Finish workout?" (the dialog then shows just Finish + Cancel).
+    private var finishConfirmTitle: LocalizedStringKey {
+        (hasSwapsPending || hasSessionPlanPending)
+            ? "Apply changes?"
+            : "Finish this workout?"
+    }
 
     private var hasSwapsPending: Bool {
         plan.blocks.flatMap(\.exercises).contains {

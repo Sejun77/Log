@@ -256,4 +256,101 @@ final class WarmupStepEditTests: SwiftDataTestHarness {
         XCTAssertEqual(aOrder, 0)
         XCTAssertEqual(cOrder, 1)
     }
+
+    // MARK: - 6. Add appends immediately + preserves order.
+
+    /// Mirrors `WarmupSchemeEditor.addStep`: lazily creates the scheme on the
+    /// prescription, computes the next `order` from the max, inserts the step,
+    /// and appends via a **whole-array reassignment** (`steps + [step]`) — the
+    /// exact fix that makes the new row observable/render immediately. Kept in
+    /// lockstep with the production method.
+    @discardableResult
+    private func addStep(
+        to prescription: SlotPrescription,
+        kind: WarmupStepKind,
+        reps: Int?,
+        pct: Double?,
+        rest: Int?,
+        note: String?,
+        weight: Double?
+    ) -> WarmupStep {
+        let scheme: WarmupScheme
+        if let existing = prescription.warmupScheme {
+            scheme = existing
+        } else {
+            let s = WarmupScheme(name: "Warmup")
+            context.insert(s)
+            prescription.warmupScheme = s
+            scheme = s
+        }
+        let nextOrder = (scheme.steps.map(\.order).max() ?? -1) + 1
+        let step = WarmupStep(order: nextOrder, kind: kind, reps: reps,
+                              percentOfWorking: pct, restSecondsAfter: rest,
+                              note: note, weight: weight)
+        context.insert(step)
+        scheme.steps = scheme.steps + [step]
+        try? context.save()
+        return step
+    }
+
+    private func makePrescription() -> SlotPrescription {
+        let p = SlotPrescription()
+        context.insert(p)
+        try? context.save()
+        return p
+    }
+
+    // Adding the very first step lazily creates the scheme and the new step is
+    // immediately present in the relationship (no pop/re-push needed).
+    func testAddingFirstStepCreatesSchemeAndAppearsImmediately() {
+        let p = makePrescription()
+        XCTAssertNil(p.warmupScheme)
+
+        addStep(to: p, kind: .fixedReps, reps: 5, pct: nil, rest: nil,
+                note: "first", weight: 40)
+
+        XCTAssertNotNil(p.warmupScheme)
+        XCTAssertEqual(p.warmupScheme?.steps.count, 1)
+        XCTAssertEqual(p.warmupScheme?.steps.first?.note, "first")
+        XCTAssertEqual(p.warmupScheme?.steps.first?.order, 0)
+    }
+
+    // Each subsequent add appends to the end (monotonically increasing order),
+    // and every step is present in the live relationship right after the call.
+    func testAddingStepsAppendsInOrderAndAllPresentImmediately() {
+        let p = makePrescription()
+        addStep(to: p, kind: .noteOnly, reps: nil, pct: nil, rest: nil, note: "A", weight: nil)
+        addStep(to: p, kind: .noteOnly, reps: nil, pct: nil, rest: nil, note: "B", weight: nil)
+        addStep(to: p, kind: .noteOnly, reps: nil, pct: nil, rest: nil, note: "C", weight: nil)
+
+        guard let scheme = p.warmupScheme else {
+            return XCTFail("scheme should exist after adds")
+        }
+        // All three visible immediately, in insertion order.
+        XCTAssertEqual(scheme.steps.count, 3)
+        XCTAssertEqual(orderedNotes(scheme), ["A", "B", "C"])
+        XCTAssertEqual(
+            scheme.steps.sorted { $0.order < $1.order }.map(\.order), [0, 1, 2])
+    }
+
+    // A new step's order is derived from the current max, so it lands last even
+    // when the existing relationship array is stored out of `order` sequence.
+    func testAddedStepOrderIsAfterExistingMaxRegardlessOfArrayOrder() {
+        let p = makePrescription()
+        // Seed a scheme whose relationship-array order does not match `order`.
+        let scheme = WarmupScheme(name: "Warmup")
+        context.insert(scheme)
+        let s1 = WarmupStep(order: 1, kind: .noteOnly, note: "B")
+        let s0 = WarmupStep(order: 0, kind: .noteOnly, note: "A")
+        context.insert(s1); context.insert(s0)
+        scheme.steps = [s1, s0] // array order B,A; order field 1,0
+        p.warmupScheme = scheme
+        try? context.save()
+
+        let added = addStep(to: p, kind: .noteOnly, reps: nil, pct: nil,
+                            rest: nil, note: "C", weight: nil)
+
+        XCTAssertEqual(added.order, 2) // max(1,0)+1
+        XCTAssertEqual(orderedNotes(scheme), ["A", "B", "C"])
+    }
 }

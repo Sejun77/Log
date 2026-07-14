@@ -132,7 +132,14 @@ struct WarmupSchemeEditor: View {
         let step = WarmupStep(order: nextOrder, kind: kind, reps: reps,
                               percentOfWorking: pct, restSecondsAfter: rest, note: note, weight: weight)
         ctx.insert(step)
-        scheme.steps.append(step)
+        // Reassign the whole relationship array instead of `scheme.steps.append`.
+        // An in-place append on a SwiftData to-many relationship does not
+        // reliably fire the Observation change notification, so the editor's
+        // `@Bindable prescription` body did not re-read `warmupScheme.steps` —
+        // the new row only appeared after popping and re-pushing the editor.
+        // A full setter assignment guarantees SwiftUI observes the change and
+        // renders the new step immediately. Order/persistence are unchanged.
+        scheme.steps = scheme.steps + [step]
         try? ctx.save()
     }
 

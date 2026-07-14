@@ -1766,6 +1766,17 @@
         }
       }
     },
+    "Finish this workout?": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "운동을 종료할까요?"
+          }
+        }
+      }
+    },
     "Finish a workout with logged working sets to analyze your real progress, or switch to Sample Data to see the showcase.": {
       "extractionState": "manual",
       "localizations": {
