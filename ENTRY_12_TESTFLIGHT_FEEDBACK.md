@@ -78,11 +78,11 @@ TestFlight setup is planned; details filled in once the build is up.
 
 ## Tester Groups
 
-| Group | Who | Focus | Status |
-|-------|-----|-------|--------|
-| Lifting friends | Friends who train regularly | Real workout use | `[TBD]` |
-| Family (Korean UI) | Family, Korean-comfortable | Korean usability | `[TBD]` |
-| Casual testers | People who don't lift much | Understandable without gym context | `[TBD]` |
+| Group              | Who                         | Focus                              | Status  |
+| ------------------ | --------------------------- | ---------------------------------- | ------- |
+| Lifting friends    | Friends who train regularly | Real workout use                   | `[TBD]` |
+| Family (Korean UI) | Family, Korean-comfortable  | Korean usability                   | `[TBD]` |
+| Casual testers     | People who don't lift much  | Understandable without gym context | `[TBD]` |
 
 Number of testers invited: `[TBD]`
 Number who installed: `[TBD]`
@@ -106,9 +106,9 @@ The checklist testers are asked to walk through (full version in
 - Finish the workout
 - Check History
 - Check the progress charts
-- *(optional)* Switch an exercise during a workout
-- *(optional)* Try the Korean UI
-- *(optional)* Try an uneven superset, if comfortable
+- _(optional)_ Switch an exercise during a workout
+- _(optional)_ Try the Korean UI
+- _(optional)_ Try an uneven superset, if comfortable
 
 ---
 
@@ -136,21 +136,36 @@ Feedback is recorded here (and in `TESTFLIGHT_FEEDBACK_PLAN.md`) as it arrives.
 Severity: **P0** crash/data loss/can't finish · **P1** major confusion/broken
 flow · **P2** annoying but avoidable · **P3** polish/feature request.
 
-| Date | Tester | Group | Severity | Feedback | Status |
-|------|--------|-------|----------|----------|--------|
-| [TBD] | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] |
+| Date       | Tester                            | Group                     | Severity | Feedback                                                                                                                                       | Status                                                                                                  |
+| ---------- | --------------------------------- | ------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 2026-07-10 | Developer / TestFlight validation | Internal pre-peer testing | P0       | App crashed when opening routines or adding the first exercise to a blank routine. Organizer showed a SwiftData `graph_keyPathToString` crash. | Fixed. Removed fragile SwiftData predicate in routine startability path and added regression tests.     |
+| 2026-07-13 | Developer / TestFlight validation | Internal pre-peer testing | P0       | App crashed when deleting/removing an exercise from a routine. Organizer showed the same SwiftData key-path translation crash.                 | Fixed. Removed fragile `RoutineBlock.id` predicate from deletion path and made deletion tombstone-safe. |
+| 2026-07-13 | Developer / manual testing        | Internal pre-peer testing | P1       | Final workout step could finish immediately if the user accidentally tapped Next too many times.                                               | Fixed. Added confirmation dialog before finishing workouts.                                             |
+| 2026-07-13 | Developer / manual testing        | Internal pre-peer testing | P2       | Newly added warm-up sets sometimes did not appear until leaving and reopening the warm-up editor.                                              | Fixed. Reassigned warm-up steps array so SwiftUI observes the insertion immediately.                    |
+| [TBD]      | Peer/family tester                | Friends & Family Beta     | [TBD]    | [TBD]                                                                                                                                          | [TBD]                                                                                                   |
 
-No feedback recorded yet — testing has not started.
+Peer/family feedback has not been fully collected yet. The entries above came from early TestFlight validation and manual beta-readiness testing before expanding the tester group.
 
 ---
 
-## Fixes Made From Feedback
+## Fixes Made From Feedback / TestFlight Validation
 
-Fixes that came directly out of beta feedback go here.
+These fixes came from early TestFlight validation, crash reports, and manual beta-readiness testing.
 
-- `[TBD]`
+- Removed a fragile SwiftData predicate from the routine startability path after a TestFlight-only crash occurred when opening routines or adding the first exercise to a blank routine.
+- Removed a second fragile SwiftData predicate from the routine deletion path after deleting an exercise from a routine caused another TestFlight crash.
+- Hardened routine deletion so empty routines, empty blocks, deleted exercises, and stale SwiftData relationship objects are handled safely.
+- Added a confirmation dialog before finishing a workout so accidental repeated taps on Next cannot immediately end the workout.
+- Fixed warm-up set insertion so newly added warm-up steps appear immediately without leaving and reopening the editor.
+- Added regression tests for routine startability, routine deletion, finish confirmation behavior, and warm-up step insertion.
 
-No fixes yet — no feedback has been collected.
+Current validation status:
+
+- Routine startability crash fix: tested with regression coverage.
+- Routine deletion crash fix: tested with regression coverage.
+- Finish confirmation: tested with pure navigation helper tests and manual checklist.
+- Warm-up rendering fix: tested with warm-up insertion tests.
+- Latest full test suite result: 955 tests, 0 failures.
 
 ---
 
@@ -161,20 +176,28 @@ larger redesigns, or out of scope).
 
 - `[TBD]`
 
+No peer/family feedback has been deferred yet.
+
 ---
 
 ## What I Learned
 
 Reflections from running the beta.
 
-- `[TBD]`
+- TestFlight exposed SwiftData issues that did not reproduce reliably in the simulator or normal debug builds.
+- Release/TestFlight builds can fail differently from local debug builds, especially around SwiftData predicates and model identity.
+- Crash reports from Organizer were essential because they showed the real failing frame: `PersistentModel.graph_keyPathToString(keypath:)`.
+- Regression tests are important after every crash fix so the same class of bug does not return.
+- Beta readiness is not only about adding features; it also means preventing accidental destructive actions, such as finishing a workout unintentionally.
+- SwiftUI relationship updates can fail to render immediately if a SwiftData relationship array is mutated in place, so some relationship updates need whole-array reassignment.
 
-Likely themes to watch (to confirm or reject with real data):
+Likely themes to watch as peer/family testing expands:
 
 - whether the core flow is understandable without me explaining it
 - whether the rest timer and Save & Exit / Resume make sense to new users
 - whether progress charts help or confuse
 - whether Korean wording holds up in real use
+- whether routine editing feels stable after the TestFlight crash fixes
 
 ---
 
