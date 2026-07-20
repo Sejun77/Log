@@ -62,6 +62,17 @@ In the Exercises tab, you can organize the exercise list in different ways:
 7. Switch exercises, edit the workout plan, or edit exercise notes if needed.
 8. Tap Finish and confirm to save the workout to History.
 
+## Rest Timer
+
+After you log a set, the rest timer starts automatically.
+
+If you close the rest timer overlay while the timer is still running, you can show it again by:
+
+- briefly opening Notification Center / Lock Screen, then returning to the app
+- going to the Home Screen, then opening the app again
+
+The timer continues running even if the overlay is dismissed.
+
 ## Last Performance Prefill
 
 The app can use previous workout data to help fill in future workouts.
@@ -166,6 +177,17 @@ You can:
 6. 필요하면 세션 메모를 기록합니다.
 7. 필요하면 운동을 교체하거나, 운동 계획을 수정하거나, 운동 메모를 수정합니다.
 8. 종료를 누른 뒤 확인하면 운동이 기록에 저장됩니다.
+
+## 휴식 타이머
+
+세트를 기록하면 휴식 타이머가 자동으로 시작됩니다.
+
+타이머가 아직 실행 중일 때 휴식 타이머 화면을 닫은 경우, 다음 방법으로 다시 표시할 수 있습니다.
+
+- 알림 센터 / 잠금 화면을 잠깐 열었다가 앱으로 돌아오기
+- 홈 화면으로 나갔다가 앱을 다시 열기
+
+타이머 화면을 닫아도 타이머는 계속 진행됩니다.
 
 ## 이전 기록 자동 입력
 
