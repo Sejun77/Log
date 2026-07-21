@@ -567,21 +567,24 @@ private struct WorkoutDetailView: View {
                 // that case is handled live in ActiveWorkoutView.
                 if !isActive {
                     Toggle(
-                        "Use for future prefill",
                         isOn: Binding(
                             get: { !workout.excludedFromPrefill },
                             set: { workout.excludedFromPrefill = !$0 }
                         )
-                    )
+                    ) {
+                        // Explanation moved off the footer into an on-demand info
+                        // button next to the toggle label to reduce clutter.
+                        HStack(spacing: DSSpacing.xs) {
+                            Text("Use for future prefill")
+                            InfoButton(
+                                "Use for future prefill",
+                                message: "Turn off for recovery or deload workouts so they don't become the source for your next workout's prefill."
+                            )
+                        }
+                    }
                 }
             } header: {
                 Text("Overview")
-            } footer: {
-                if !isActive {
-                    Text(
-                        "Turn off for recovery or deload workouts so they don't become the source for your next workout's prefill."
-                    )
-                }
             }
 
             // Phase 6.C2 — group items by source block snapshot.
