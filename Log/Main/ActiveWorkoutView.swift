@@ -1522,16 +1522,22 @@ struct ActiveWorkoutView: View {
                     if let w = workout {
                         Section {
                             Toggle(
-                                "Use for future prefill",
                                 isOn: Binding(
                                     get: { !w.excludedFromPrefill },
                                     set: { w.excludedFromPrefill = !$0 }
                                 )
-                            )
-                        } footer: {
-                            Text(
-                                "Turn off for recovery or deload workouts so they don't become the source for your next workout's prefill. The workout still appears in History."
-                            )
+                            ) {
+                                // Explanation moved off the footer into an
+                                // on-demand info button next to the toggle label
+                                // to reduce clutter.
+                                HStack(spacing: DSSpacing.xs) {
+                                    Text("Use for future prefill")
+                                    InfoButton(
+                                        "Use for future prefill",
+                                        message: "Turn off for recovery or deload workouts so they don't become the source for your next workout's prefill. The workout still appears in History."
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -1561,9 +1567,9 @@ struct ActiveWorkoutView: View {
                             } label: {
                                 Label("Edit Exercise Notes", systemImage: "square.and.pencil")
                             }
-                            Text("Saved to this exercise. Editing here affects every routine and workout that uses this exercise.")
-                                .font(.dsCaption)
-                                .foregroundStyle(.secondary)
+                            // The "affects every routine/workout" caption was
+                            // removed here — the edit sheet opened by the button
+                            // above already carries that explanation in its footer.
                         } header: {
                             Text("Exercise Notes")
                         }

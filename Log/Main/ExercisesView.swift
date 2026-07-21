@@ -803,8 +803,6 @@ struct ExerciseDetailView: View {
                 .disabled(isLocked)
             } header: {
                 Text("Setup & Notes")
-            } footer: {
-                Text("Setup defaults are reusable setup cues for performing the exercise. Notes are general notes about the exercise.")
             }
 
             Section("Options") {
@@ -822,12 +820,17 @@ struct ExerciseDetailView: View {
                 // Independent of equipment type: a weighted pull-up keeps a
                 // non-"Bodyweight" equipment (so the active-workout weight field
                 // stays visible) yet still counts bodyweight toward load.
+                // Explanation moved off the inline caption into an on-demand info
+                // button next to the label, keeping the row to a single line. The
+                // `.borderless` InfoButton handles its own tap independently of
+                // the toggle switch.
                 Toggle(isOn: $exercise.includesBodyweightInLoad) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: DSSpacing.xs) {
                         Text("Bodyweight counts as load")
-                        Text("Adds your Settings bodyweight to logged weight for History metrics.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        InfoButton(
+                            "Bodyweight counts as load",
+                            message: "Adds your Settings bodyweight to logged weight for History metrics."
+                        )
                     }
                 }
                 .disabled(isLocked)

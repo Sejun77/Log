@@ -55,6 +55,7 @@ struct SettingsView: View {
                 autoregSection
                 defaultsSection
                 dataSection
+                helpSection
                 showcaseSection
             }
             .navigationTitle("Settings")
@@ -112,18 +113,17 @@ struct SettingsView: View {
                 AppSettings.userBodyweight = normalizedBodyweight(newValue)
             }
         } header: {
-            Text("Bodyweight")
-        } footer: {
-            // `LocalizedStringKey(_:)` is required here: concatenating string
-            // literals with `+` yields a `String`, which binds `Text`'s
-            // non-localizing `init(_ verbatim:)` overload — so the footer would
-            // always render in English regardless of the string catalog. Wrapping
-            // the concatenation in `LocalizedStringKey` restores catalog lookup.
-            Text(LocalizedStringKey(
-                "Used for bodyweight-inclusive exercises (e.g. pull-ups, dips) "
-                + "in History load metrics. Leave empty if not set. Stored in the "
-                + "unit shown above."))
-                .font(.caption)
+            // Explanation moved off the footer into an on-demand info button to
+            // reduce inline clutter. `LocalizedStringKey(_:)` on the concatenated
+            // literal preserves string-catalog lookup (a `+`-joined `String`
+            // would otherwise bind Text's verbatim, non-localizing initializer).
+            HStack(spacing: DSSpacing.xs) {
+                Text("Bodyweight")
+                InfoButton("Bodyweight", message: LocalizedStringKey(
+                    "Used for bodyweight-inclusive exercises (e.g. pull-ups, dips) "
+                    + "in History load metrics. Leave empty if not set. Stored in the "
+                    + "unit shown above."))
+            }
         }
     }
 
@@ -153,10 +153,13 @@ struct SettingsView: View {
                 EmptyView()
             }
         } header: {
-            Text("Autoregulation")
-        } footer: {
-            Text("Applies to new slots and the intensity field in active workouts.")
-                .font(.caption)
+            HStack(spacing: DSSpacing.xs) {
+                Text("Autoregulation")
+                InfoButton(
+                    "Autoregulation",
+                    message: "Applies to new slots and the intensity field in active workouts."
+                )
+            }
         }
     }
 
@@ -195,19 +198,29 @@ struct SettingsView: View {
             RoutineJSONImportButton()
             DataExportButtons()
         } header: {
-            Text("Data")
-        } footer: {
-            // See the bodyweight footer above: the `+`-concatenated literals
-            // produce a `String`, so this must be wrapped in `LocalizedStringKey`
-            // to localize instead of binding `Text`'s verbatim initializer.
-            Text(LocalizedStringKey(
-                "Import a CSV of exercises (name,bodyPart,equipmentType,setupDefaults,"
-                + "isTimeBased,notes). New names are added as custom exercises; existing "
-                + "names are skipped. Import a routine JSON to add it as a new routine "
-                + "(existing routines are never overwritten; missing exercises are created "
-                + "as custom). Nothing is overwritten or deleted. Export saves your "
-                + "exercise library or workout history as CSV."))
-                .font(.caption)
+            // See the bodyweight header: the `+`-concatenated literals produce a
+            // `String`, so `LocalizedStringKey(_:)` is needed to keep catalog
+            // localization instead of Text's verbatim initializer.
+            HStack(spacing: DSSpacing.xs) {
+                Text("Data")
+                InfoButton("Data", message: LocalizedStringKey(
+                    "Import a CSV of exercises (name,bodyPart,equipmentType,setupDefaults,"
+                    + "isTimeBased,notes). New names are added as custom exercises; existing "
+                    + "names are skipped. Import a routine JSON to add it as a new routine "
+                    + "(existing routines are never overwritten; missing exercises are created "
+                    + "as custom). Nothing is overwritten or deleted. Export saves your "
+                    + "exercise library or workout history as CSV."))
+            }
+        }
+    }
+
+    private var helpSection: some View {
+        Section("Help") {
+            NavigationLink {
+                UserGuideView()
+            } label: {
+                Label("User Guide", systemImage: "book")
+            }
         }
     }
 

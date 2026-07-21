@@ -71,6 +71,51 @@ func dismissKeyboard() {
 }
 
 // ======================================================
+// MARK: - Info Button
+// ======================================================
+
+/// A small circular "i" button that reveals a short explanation in an alert,
+/// keeping helper text available on demand instead of occupying vertical space
+/// inline. Place it next to a section header or a setting label.
+///
+/// Both `title` and `message` are `LocalizedStringKey`, so passing the same
+/// literal that previously lived in a footer preserves its string-catalog
+/// translation (e.g. the existing Korean localizations).
+///
+/// An alert (rather than a popover) is used deliberately: it presents
+/// identically on every device and OS with no anchoring quirks — the simplest,
+/// most TestFlight-stable option for read-only helper text.
+struct InfoButton: View {
+    private let title: LocalizedStringKey
+    private let message: LocalizedStringKey
+    @State private var isShowing = false
+
+    init(_ title: LocalizedStringKey, message: LocalizedStringKey) {
+        self.title = title
+        self.message = message
+    }
+
+    var body: some View {
+        Button {
+            isShowing = true
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        // `.borderless` keeps the tap target scoped to the glyph so it doesn't
+        // trigger a surrounding row/cell's tap gesture inside a Form.
+        .buttonStyle(.borderless)
+        .accessibilityLabel(Text("More information"))
+        .alert(title, isPresented: $isShowing) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(message)
+        }
+    }
+}
+
+// ======================================================
 // MARK: - Primary Button
 // ======================================================
 
