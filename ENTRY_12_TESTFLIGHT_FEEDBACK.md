@@ -188,7 +188,7 @@ Severity:
 - **Group:** Friends & Family Beta
 - **Severity:** P1
 - **Feedback:** The Finish Workout confirmation sometimes required a second tap before the workout actually finished.
-- **Status:** Fixed. The confirm button ran the finish (ending in a navigation dismissal) synchronously inside the dialog's own dismissal transaction, so the dismissal could be dropped when a same-frame re-render (e.g. the per-second rest-timer tick) landed. The dialog now only records the chosen finish option; the finish runs once on the next main-actor turn, after the dialog teardown commits. One confirmation tap reliably finishes, exactly once; Cancel and the apply-changes options are unchanged.
+- **Status:** Fixed. Made the confirmation action reliable so one tap finishes the workout exactly once, while keeping Cancel and the apply-changes options unchanged.
 
 ### TBD — Peer/family tester
 
@@ -220,7 +220,7 @@ Current validation status:
 - Routine startability crash fix: tested with regression coverage.
 - Routine deletion crash fix: tested with regression coverage.
 - Finish confirmation: tested with pure navigation helper tests and manual checklist.
-- Finish confirmation reliability fix: tested with dialog option-routing and single-fire consumption tests; manual one-tap re-check on device pending.
+- Finish confirmation reliability fix: tested with dialog option-routing and single-fire consumption tests; manual one-tap re-check on device completed.
 - Warm-up rendering fix: tested with warm-up insertion tests.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
