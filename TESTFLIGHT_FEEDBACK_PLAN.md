@@ -139,6 +139,8 @@ Fill this in as feedback arrives.
 
 | Date | Tester | Group | Severity | What happened / feedback | Status |
 |------|--------|-------|----------|--------------------------|--------|
+| 2026-07-15 | Peer/family tester | Friends & Family Beta | P2 | Setup notes are useful during workouts, but could not be edited from the active workout screen like exercise notes. | fixed |
+| 2026-07-15 | Peer/family tester | Friends & Family Beta | P1 | The Finish Workout confirmation sometimes required a second tap before the workout actually finished. | fixed |
 | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] |
 
 Status values: `new`, `investigating`, `fixed`, `deferred`, `won't fix`.

@@ -1450,6 +1450,17 @@
         }
       }
     },
+    "Edit Setup Notes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세팅 메모 편집"
+          }
+        }
+      }
+    },
     "Edit Warmup Step" : {
       "localizations" : {
         "ko" : {
@@ -2423,6 +2434,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이 운동에 아직 기록된 세트가 없습니다."
+          }
+        }
+      }
+    },
+    "No setup notes yet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아직 세팅 메모가 없습니다."
           }
         }
       }
@@ -3623,6 +3645,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "세팅 기본값은 운동 수행을 위한 재사용 가능한 세팅 안내입니다. 메모는 운동에 대한 일반 메모입니다."
+          }
+        }
+      }
+    },
+    "Setup notes are saved to the exercise and reused across routines and workouts." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세팅 메모는 운동에 저장되어 여러 루틴과 운동에서 재사용됩니다."
           }
         }
       }
