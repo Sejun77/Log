@@ -56,7 +56,7 @@ In the Exercises tab, you can organize the exercise list in different ways:
 4. Tap Log after completing a set.
 5. Rest when the timer starts.
 6. Record notes about the session if needed.
-7. Switch exercises, edit the workout plan, or edit exercise notes if needed.
+7. Switch exercises, edit the workout plan, edit setup notes, or edit exercise notes if needed.
 8. Tap Finish and confirm to save the workout to History.
 
 ## Rest Timer
@@ -165,7 +165,7 @@ You can:
 4. 세트를 완료한 뒤 기록을 누릅니다.
 5. 타이머가 시작되면 휴식합니다.
 6. 필요하면 세션 메모를 기록합니다.
-7. 필요하면 운동을 교체하거나, 운동 계획을 수정하거나, 운동 메모를 수정합니다.
+7. 필요하면 운동을 교체하거나, 운동 계획을 수정하거나, 세팅 메모 또는 운동 메모를 수정합니다.
 8. 종료를 누른 뒤 확인하면 운동이 기록에 저장됩니다.
 
 ## 휴식 타이머

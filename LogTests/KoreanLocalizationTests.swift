@@ -162,4 +162,43 @@ final class KoreanLocalizationTests: XCTestCase {
         XCTAssertEqual(localized(Self.bodyweightFooterKey, in: en), Self.bodyweightFooterKey)
         XCTAssertEqual(localized(Self.dataFooterKey, in: en), Self.dataFooterKey)
     }
+
+    // MARK: - Active-workout setup notes editing
+
+    /// Exact keys introduced by the in-workout setup-notes editing flow
+    /// (`SetupNotesEditSheet` + the Equipment & Setup section's edit row).
+    /// (The sheet's section header reuses the pre-existing "Setup" key — a
+    /// dedicated "Setup Notes" key would collide with "Setup & Notes" in
+    /// generated string symbols.)
+    private static let setupNotesEditingKeys = [
+        "Edit Setup Notes",
+        "No setup notes yet.",
+        "Setup notes are saved to the exercise and reused across routines and workouts.",
+    ]
+
+    /// Every user-facing string of the setup-notes editing flow must have a
+    /// non-identity Korean translation, so Korean-family testers never see
+    /// English text in the new active-workout affordance.
+    func testSetupNotesEditingStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.setupNotesEditingKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Setup-notes editing string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testSetupNotesEditingStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.setupNotesEditingKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
 }

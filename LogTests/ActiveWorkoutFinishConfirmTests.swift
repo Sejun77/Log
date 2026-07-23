@@ -92,4 +92,97 @@ final class ActiveWorkoutFinishConfirmTests: XCTestCase {
             exerciseCountsPerBlock: [0])
         XCTAssertEqual(action, .confirmFinish)
     }
+
+    // MARK: - Dialog option routing (pending-change confirmation)
+
+    // The dialog's buttons are generated from `finishDialogOptions`; these
+    // tests pin which options appear for each pending state and which
+    // apply-back flags each option carries into `finishWorkout`.
+
+    func test_noPendingChanges_offersPlainFinishOnly() {
+        XCTAssertEqual(
+            finishDialogOptions(
+                hasSwapsPending: false, hasSessionPlanPending: false),
+            [.finishOnly]
+        )
+    }
+
+    func test_pendingSwaps_addsUpdateTemplateOption() {
+        XCTAssertEqual(
+            finishDialogOptions(
+                hasSwapsPending: true, hasSessionPlanPending: false),
+            [.finishOnly, .applySwaps]
+        )
+    }
+
+    func test_pendingSessionPlan_addsSlotPrescriptionOption() {
+        XCTAssertEqual(
+            finishDialogOptions(
+                hasSwapsPending: false, hasSessionPlanPending: true),
+            [.finishOnly, .applySlotPrescription]
+        )
+    }
+
+    func test_bothPending_addsApplyAllAndKeepsPlainFinishFirst() {
+        let options = finishDialogOptions(
+            hasSwapsPending: true, hasSessionPlanPending: true)
+        XCTAssertEqual(
+            options,
+            [.finishOnly, .applySwaps, .applySlotPrescription, .applyAll]
+        )
+        XCTAssertEqual(
+            options.first, .finishOnly,
+            "A plain no-apply finish must always be the first option"
+        )
+    }
+
+    func test_optionFlags_routeToExpectedFinishArguments() {
+        XCTAssertFalse(FinishDialogOption.finishOnly.applySwaps)
+        XCTAssertFalse(FinishDialogOption.finishOnly.applySlotPrescription)
+
+        XCTAssertTrue(FinishDialogOption.applySwaps.applySwaps)
+        XCTAssertFalse(FinishDialogOption.applySwaps.applySlotPrescription)
+
+        XCTAssertFalse(FinishDialogOption.applySlotPrescription.applySwaps)
+        XCTAssertTrue(FinishDialogOption.applySlotPrescription.applySlotPrescription)
+
+        XCTAssertTrue(FinishDialogOption.applyAll.applySwaps)
+        XCTAssertTrue(FinishDialogOption.applyAll.applySlotPrescription)
+    }
+
+    // MARK: - Single-fire consumption (one confirm tap → one finish)
+
+    func test_consumePendingFinish_returnsChoiceOnceThenNil() {
+        var slot: FinishDialogOption? = .finishOnly
+
+        XCTAssertEqual(
+            consumePendingFinish(&slot), .finishOnly,
+            "First consume must deliver the recorded choice"
+        )
+        XCTAssertNil(slot, "Consuming must clear the slot")
+        XCTAssertNil(
+            consumePendingFinish(&slot),
+            "A duplicate consume (double tap / duplicate change notification) "
+                + "must not run the finish pipeline again"
+        )
+    }
+
+    func test_cancelRecordsNothing_soNothingConsumes() {
+        // Cancel leaves the slot nil — the consume that follows any dialog
+        // dismissal then yields nil and the workout stays active.
+        var slot: FinishDialogOption? = nil
+        XCTAssertNil(consumePendingFinish(&slot))
+    }
+
+    func test_reconfirmAfterSurvivingView_isReArmable() {
+        // If the view ever survives a finish attempt, a NEW confirmation can
+        // record and consume again — the single-fire guard is per-request,
+        // not a permanent latch that would strand the user.
+        var slot: FinishDialogOption? = .applyAll
+        XCTAssertEqual(consumePendingFinish(&slot), .applyAll)
+
+        slot = .finishOnly  // user confirms again
+        XCTAssertEqual(consumePendingFinish(&slot), .finishOnly)
+        XCTAssertNil(slot)
+    }
 }

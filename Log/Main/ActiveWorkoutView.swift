@@ -17,6 +17,7 @@ import UserNotifications
 //   `TechniqueDetailSheet`                  → `TechniqueChipsViews.swift`
 //   `RestOverlayScreen`                     → `RestOverlayScreen.swift`
 //   `ExerciseNotesEditSheet`                → `ExerciseNotesEditSheet.swift`
+//   `SetupNotesEditSheet`                   → `SetupNotesEditSheet.swift`
 //   `EditSessionPlanSheet` (+ its private
 //    `intStepperRow`, `doubleStepperRow`,
 //    `optionalString` helpers)              → `EditSessionPlanSheet.swift`
@@ -63,9 +64,19 @@ struct ActiveWorkoutView: View {
     @State private var currentExerciseIndex = 0
     @State private var showEndConfirm = false
     @State private var showFinishConfirm = false
+    /// The finish variant chosen in the finish-confirmation dialog, recorded
+    /// by the dialog button and consumed exactly once on the next main-actor
+    /// turn (see the `.onChange` next to the dialog). Running `finishWorkout`
+    /// directly inside the dialog button action made its final `dismiss()`
+    /// (navigation pop) race the dialog's own dismissal transaction — when a
+    /// same-frame re-render landed (e.g. the per-second rest-timer toolbar
+    /// tick), the pop was intermittently dropped and the first confirm tap
+    /// appeared to do nothing.
+    @State private var pendingFinishOption: FinishDialogOption? = nil
     @State private var sessionPlans: [UUID: SessionPlan] = [:]
     @State private var showEditPlanSheet = false
     @State private var showExerciseNotesSheet = false
+    @State private var showSetupNotesSheet = false
     /// Local draft for session notes. Typing mutates only this string; it is
     /// committed to `Workout.notes` at discrete points (focus loss, disappear,
     /// scene backgrounding) so per-keystroke edits never invalidate this
@@ -1267,11 +1278,14 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    /// Read-only Equipment / Setup row sourced exclusively from the
-    /// session-start snapshot (`prescriptionSnapshot.equipment` /
-    /// `.setupNotes`). The entire section is omitted when both values are
-    /// nil or whitespace-only so the surface adds no visual noise for
-    /// exercises that never captured these fields.
+    /// Equipment / Setup section. Equipment stays a read-only row sourced
+    /// from the session-start snapshot for non-swapped slots (Phase 10).
+    /// Setup notes read the live `Exercise.setupDefaults` (snapshot only as
+    /// a deleted-exercise fallback) and are editable via the "Edit Setup
+    /// Notes" button below, which opens a focused sheet that writes through
+    /// to `Exercise.setupDefaults` — the same explicit-edit pattern as the
+    /// Exercise Notes section. The section is omitted only when there is
+    /// neither a value to show nor a live exercise to edit.
     /// Trim and treat empty/whitespace-only strings as nil so a blank
     /// snapshot value does not render an empty row.
     private func trimmedOrNil(_ raw: String?) -> String? {
@@ -1282,27 +1296,29 @@ struct ActiveWorkoutView: View {
 
     @ViewBuilder
     private func equipmentAndSetupSection(for exercise: PlanExercise) -> some View {
-        // Snapshot is keyed to the slot's ORIGINAL exercise and is
-        // intentionally immutable (Phase 10) for non-swapped slots. When the
-        // slot was swapped this session, the snapshot still describes the old
-        // exercise, so resolve the swapped-in exercise's LIVE equipment/setup
-        // instead — mirroring how the Exercise Notes section already reads live
-        // via `fetchExercise(by: currentExerciseID)`.
+        // Equipment: snapshot for non-swapped slots (Phase 10 immutability),
+        // live for swapped slots — unchanged. Setup: live
+        // `Exercise.setupDefaults` whenever the library exercise still
+        // exists, so edits made via `SetupNotesEditSheet` render immediately
+        // (mirroring the live-read Exercise Notes section); the snapshot is
+        // only the deleted-exercise fallback. A committed edit is also
+        // propagated into the current session's snapshots
+        // (`applyActiveSetupNotesEdit`), so this workout's History matches
+        // what this row showed; finished workouts stay frozen.
         let isSwapped = exercise.currentExerciseID != exercise.originalExerciseID
-        let liveExercise = isSwapped
-            ? fetchExercise(by: exercise.currentExerciseID) : nil
+        let liveExercise = fetchExercise(by: exercise.currentExerciseID)
         let equipment = trimmedOrNil(
             resolvedSwappedValue(
                 isSwapped: isSwapped,
                 live: liveExercise?.equipmentType,
                 snapshot: exercise.prescriptionSnapshot?.equipment))
         let setup = trimmedOrNil(
-            resolvedSwappedValue(
-                isSwapped: isSwapped,
-                live: liveExercise?.setupDefaults,
-                snapshot: exercise.prescriptionSnapshot?.setupNotes))
+            resolvedActiveSetupNotes(
+                liveExerciseExists: liveExercise != nil,
+                liveSetupNotes: liveExercise?.setupDefaults,
+                snapshotSetupNotes: exercise.prescriptionSnapshot?.setupNotes))
 
-        if equipment != nil || setup != nil {
+        if equipment != nil || setup != nil || liveExercise != nil {
             Section("Equipment & Setup") {
                 if let equipment {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -1316,16 +1332,32 @@ struct ActiveWorkoutView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                if let setup {
+                if setup != nil || liveExercise != nil {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Setup")
                             .font(.dsCaption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Text(setup)
-                            .font(.dsBody)
-                            .foregroundStyle(.primary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if let setup {
+                            Text(setup)
+                                .font(.dsBody)
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text("No setup notes yet.")
+                                .font(.dsBodySecondary)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                }
+                if liveExercise != nil {
+                    Button {
+                        showSetupNotesSheet = true
+                    } label: {
+                        Label("Edit Setup Notes", systemImage: "square.and.pencil")
+                    }
+                    // No inline explanation here — the edit sheet's footer
+                    // carries the "saved to the exercise, reused everywhere"
+                    // explanation, matching the Exercise Notes cleanup.
                 }
             }
         }
@@ -1591,13 +1623,12 @@ struct ActiveWorkoutView: View {
                     // --- Plan summary (compact) + edit via sheet ---
                     planSummarySection(for: exercise)
 
-                    // --- Equipment & Setup (snapshotted) ---
-                    // Source: prescriptionSnapshot.equipment / .setupNotes
-                    // captured at session start (Phase 10). Live
-                    // Exercise.equipmentType / setupDefaults are intentionally
-                    // NOT read here — later edits to the Exercise definition
-                    // must not retroactively change what the user sees
-                    // mid-workout.
+                    // --- Equipment & Setup ---
+                    // Equipment: prescriptionSnapshot.equipment captured at
+                    // session start (Phase 10) for non-swapped slots. Setup:
+                    // live Exercise.setupDefaults (editable in-workout via
+                    // SetupNotesEditSheet, mirroring Exercise Notes); the
+                    // snapshot value is only a deleted-exercise fallback.
                     equipmentAndSetupSection(for: exercise)
 
                     // --- Warmup section ---
@@ -1848,41 +1879,39 @@ struct ActiveWorkoutView: View {
                 isPresented: $showFinishConfirm,
                 titleVisibility: .visible
             ) {
-                Button("Finish (this workout only)") {
-                    finishWorkout(applySwaps: false)
-                }
-
-                if hasSwapsPending {
-                    Button("Finish + Update routine template") {
-                        finishWorkout(applySwaps: true)
-                    }
-                }
-
-                if hasSessionPlanPending {
-                    Button("Finish + Update slot prescription") {
-                        finishWorkout(
-                            applySwaps: false,
-                            applySlotPrescription: true)
-                    }
-                }
-
-                // Combined option when multiple categories are pending.
-                // Exercise.notes is intentionally NOT in this list — it's
-                // edited write-through via ExerciseNotesEditSheet, so
-                // there's no "pending notes" state to apply at finish.
-                let pendingCount = [
-                    hasSwapsPending,
-                    hasSessionPlanPending,
-                ].filter(\.self).count
-                if pendingCount >= 2 {
-                    Button("Finish + Apply all") {
-                        finishWorkout(
-                            applySwaps: hasSwapsPending,
-                            applySlotPrescription: hasSessionPlanPending)
+                // Options (order + routing) come from the pure
+                // `finishDialogOptions` helper, pinned by
+                // ActiveWorkoutFinishConfirmTests. Buttons only RECORD the
+                // choice — the finish itself runs after the dialog's
+                // dismissal transaction commits (see .onChange below), so
+                // one confirm tap reliably finishes.
+                ForEach(
+                    finishDialogOptions(
+                        hasSwapsPending: hasSwapsPending,
+                        hasSessionPlanPending: hasSessionPlanPending),
+                    id: \.self
+                ) { option in
+                    Button(finishOptionLabel(option)) {
+                        pendingFinishOption = option
                     }
                 }
 
                 Button("Cancel", role: .cancel) {}
+            }
+            .onChange(of: pendingFinishOption) { _, option in
+                guard option != nil else { return }
+                // Next main-actor turn: the dialog teardown has committed by
+                // the time this runs, so the navigation pop inside
+                // `unlockAndDismiss()` no longer races it. Consuming via
+                // `consumePendingFinish` nils the slot first — the finish
+                // pipeline can only ever run once per confirmation.
+                Task { @MainActor in
+                    guard let chosen = consumePendingFinish(&pendingFinishOption)
+                    else { return }
+                    finishWorkout(
+                        applySwaps: chosen.applySwaps,
+                        applySlotPrescription: chosen.applySlotPrescription)
+                }
             }
             .onAppear {
                 Task {
@@ -2065,6 +2094,25 @@ struct ActiveWorkoutView: View {
                     ExerciseNotesEditSheet(exercise: liveEx)
                 }
             }
+            .sheet(isPresented: $showSetupNotesSheet) {
+                if let ex = currentExercise,
+                    let liveEx = fetchExercise(by: ex.currentExerciseID)
+                {
+                    SetupNotesEditSheet(exercise: liveEx) { normalized in
+                        // Propagate the committed edit into the CURRENT
+                        // session's snapshots (plan payload + any persisted
+                        // WorkoutItem snapshots) so this workout's finished
+                        // History records the corrected setup notes. The
+                        // sheet saves the context right after this closure.
+                        applyActiveSetupNotesEdit(
+                            normalized,
+                            editedExerciseID: liveEx.id,
+                            plan: &plan,
+                            itemsBySlotID: itemsByExerciseID
+                        )
+                    }
+                }
+            }
         } else {
             #if DEBUG
                 VStack(spacing: 12) {
@@ -2120,6 +2168,20 @@ struct ActiveWorkoutView: View {
         (hasSwapsPending || hasSessionPlanPending)
             ? "Apply changes?"
             : "Finish this workout?"
+    }
+
+    /// User-facing label for one finish-dialog option. Kept here (not on the
+    /// enum) so `ActiveWorkoutHelpers` stays SwiftUI-free; the literals are
+    /// the pre-existing localized keys (Korean included).
+    private func finishOptionLabel(
+        _ option: FinishDialogOption
+    ) -> LocalizedStringKey {
+        switch option {
+        case .finishOnly: "Finish (this workout only)"
+        case .applySwaps: "Finish + Update routine template"
+        case .applySlotPrescription: "Finish + Update slot prescription"
+        case .applyAll: "Finish + Apply all"
+        }
     }
 
     private var hasSwapsPending: Bool {

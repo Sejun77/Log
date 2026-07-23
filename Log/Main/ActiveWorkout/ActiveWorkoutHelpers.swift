@@ -94,6 +94,76 @@ func resolvedSwappedValue<T>(isSwapped: Bool, live: T, snapshot: T) -> T {
     isSwapped ? live : snapshot
 }
 
+/// Resolves the setup-notes string the active workout should **display** in
+/// its "Equipment & Setup" section.
+///
+/// Unlike equipment (which stays snapshot-sourced for non-swapped slots),
+/// setup notes read the **live** `Exercise.setupDefaults` whenever the
+/// library exercise still exists, so an in-workout edit via
+/// `SetupNotesEditSheet` is visible immediately — the same live-read contract
+/// the Exercise Notes section already uses for `Exercise.notes`. The
+/// session-start snapshot value is only the fallback for a slot whose
+/// exercise was deleted from the library mid-session (no live row to read or
+/// edit). Display resolution only — the committed edit is propagated into
+/// the current session's snapshots separately by
+/// `applyActiveSetupNotesEdit`, so what this row shows and what finished
+/// History records stay in agreement. Pure.
+func resolvedActiveSetupNotes(
+    liveExerciseExists: Bool,
+    liveSetupNotes: String?,
+    snapshotSetupNotes: String?
+) -> String? {
+    liveExerciseExists ? liveSetupNotes : snapshotSetupNotes
+}
+
+/// Propagates a committed in-workout setup-notes edit (`SetupNotesEditSheet`
+/// Done) into the **current** session's snapshots so this workout's finished
+/// History records the setup notes the user actually used/corrected while
+/// training:
+///
+///  * the in-memory plan payload (`PlanExercise.prescriptionSnapshot`) of
+///    every non-swapped slot currently running the edited exercise — so a
+///    `WorkoutItem` created later (at the slot's first log) freezes the new
+///    value via `populateSnapshotFields`;
+///  * the persisted `WorkoutItem.plannedPrescriptionSnapshot` of every slot
+///    currently running the edited exercise that already has an item — so
+///    already-logged slots freeze the new value too.
+///
+/// A swapped slot's payload is left untouched: that payload still describes
+/// the slot's ORIGINAL exercise (the keep-plan swap contract preserves it
+/// verbatim, including across a swap-back), and swapped item creation
+/// resolves live exercise values anyway.
+///
+/// This runs ONLY from the sheet's Done commit — Cancel never reaches it,
+/// and no other code path writes session setup snapshots — so finished
+/// (past) workouts stay frozen: later edits to `Exercise.setupDefaults`
+/// never touch a completed workout's snapshot rows.
+///
+/// Returns the number of matched slots (test hook).
+@discardableResult
+func applyActiveSetupNotesEdit(
+    _ normalizedSetupNotes: String?,
+    editedExerciseID: UUID,
+    plan: inout WorkoutPlan,
+    itemsBySlotID: [UUID: WorkoutItem]
+) -> Int {
+    var matched = 0
+    for bi in plan.blocks.indices {
+        for ei in plan.blocks[bi].exercises.indices {
+            let slot = plan.blocks[bi].exercises[ei]
+            guard slot.currentExerciseID == editedExerciseID else { continue }
+            matched += 1
+            if slot.currentExerciseID == slot.originalExerciseID {
+                plan.blocks[bi].exercises[ei].prescriptionSnapshot?
+                    .setupNotes = normalizedSetupNotes
+            }
+            itemsBySlotID[slot.routineSlotID]?
+                .plannedPrescriptionSnapshot?.setupNotes = normalizedSetupNotes
+        }
+    }
+    return matched
+}
+
 /// Resolves the `(equipment, setupNotes)` pair to **freeze** into a finished
 /// `WorkoutItem`'s `plannedPrescriptionSnapshot` at session-snapshot time.
 ///
@@ -387,6 +457,67 @@ func workoutNextAction(
     } else {
         return .confirmFinish
     }
+}
+
+// MARK: - Finish-confirmation dialog options + single-fire consumption
+
+/// One finish variant offered by the active workout's finish-confirmation
+/// dialog. Each case carries the apply-back flags `finishWorkout` needs; the
+/// user-facing label stays in `ActiveWorkoutView` so this file remains
+/// SwiftUI-free.
+enum FinishDialogOption: CaseIterable, Hashable {
+    /// Plain finish — never applies anything back to the routine.
+    case finishOnly
+    /// Finish and write mid-workout exercise swaps back to the template.
+    case applySwaps
+    /// Finish and write dirty session-plan edits back to slot prescriptions.
+    case applySlotPrescription
+    /// Combined option, offered only when both categories are pending.
+    case applyAll
+
+    var applySwaps: Bool {
+        self == .applySwaps || self == .applyAll
+    }
+    var applySlotPrescription: Bool {
+        self == .applySlotPrescription || self == .applyAll
+    }
+}
+
+/// The ordered finish options the confirmation dialog offers for the current
+/// pending state. `finishOnly` is always first (and Cancel is appended by the
+/// dialog itself), preserving the finish-safety contract: reaching the last
+/// step only ever *presents* this dialog, and a plain no-apply finish is
+/// always available. Exercise.notes / setup notes are intentionally NOT a
+/// pending category — both are edited write-through via their sheets, so
+/// there is nothing to apply at finish. Pure.
+func finishDialogOptions(
+    hasSwapsPending: Bool,
+    hasSessionPlanPending: Bool
+) -> [FinishDialogOption] {
+    var options: [FinishDialogOption] = [.finishOnly]
+    if hasSwapsPending { options.append(.applySwaps) }
+    if hasSessionPlanPending { options.append(.applySlotPrescription) }
+    if hasSwapsPending && hasSessionPlanPending { options.append(.applyAll) }
+    return options
+}
+
+/// Consumes the pending finish request exactly once: returns the stored
+/// option and clears the slot; a second consume returns nil.
+///
+/// This is the single-fire mechanism behind the finish-confirmation
+/// reliability fix: the dialog buttons only *record* their option, and the
+/// actual `finishWorkout` runs on the next main-actor turn — after the
+/// dialog's dismissal transaction has committed, so the navigation pop in
+/// `unlockAndDismiss()` no longer races the dialog teardown. Consuming
+/// through this helper guarantees a duplicate tap or a duplicate change
+/// notification can never run the finish pipeline twice, while leaving the
+/// slot re-armable if the view ever survives (the user can simply confirm
+/// again). Pure.
+func consumePendingFinish(
+    _ slot: inout FinishDialogOption?
+) -> FinishDialogOption? {
+    defer { slot = nil }
+    return slot
 }
 
 // MARK: - Slot lookup (Phase 6.C1 follow-up: duplicate-Exercise superset)
