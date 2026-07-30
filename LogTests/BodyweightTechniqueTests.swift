@@ -54,9 +54,26 @@ final class BodyweightTechniqueTests: XCTestCase {
                 "Not available for duration-based exercises."
             )
         }
-        // Tempo override is not rep-count dependent, so duration does not block it.
+        // Entry #12 P1: Tempo Override is now blocked for duration too. A
+        // tempo describes eccentric/concentric rep phases, and a duration
+        // exercise has no reps to phase — this matches the prescription-level
+        // rule that hides and clears the tempo field for duration slots.
         XCTAssertTrue(
+            techniquesIncompatibleWithDuration.contains(.tempoOverride))
+        XCTAssertFalse(
             isTechniqueAllowed(.tempoOverride, isBodyweight: false, usesDuration: true)
+        )
+        XCTAssertEqual(
+            techniqueConflictMessage(
+                for: .tempoOverride, isBodyweight: false, usesDuration: true),
+            "Not available for duration-based exercises."
+        )
+        // Unchanged for non-duration exercises.
+        XCTAssertTrue(
+            isTechniqueAllowed(.tempoOverride, isBodyweight: false, usesDuration: false)
+        )
+        XCTAssertTrue(
+            isTechniqueAllowed(.tempoOverride, isBodyweight: true, usesDuration: false)
         )
     }
 

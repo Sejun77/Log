@@ -59,6 +59,10 @@ In the Exercises tab, you can organize the exercise list in different ways:
 7. Switch exercises, edit the workout plan, edit setup notes, or edit exercise notes if needed.
 8. Tap Finish and confirm to save the workout to History.
 
+When switching exercises during a workout, the app keeps compatible plan details
+and may prefill input fields from the new exercise's previous performance, but
+the workout plan itself remains controlled by the selected switch option.
+
 ## Rest Timer
 
 After you log a set, the rest timer starts automatically.
@@ -167,6 +171,10 @@ You can:
 6. 필요하면 세션 메모를 기록합니다.
 7. 필요하면 운동을 교체하거나, 운동 계획을 수정하거나, 세팅 메모 또는 운동 메모를 수정합니다.
 8. 종료를 누른 뒤 확인하면 운동이 기록에 저장됩니다.
+
+운동 중 다른 운동으로 교체할 때, 앱은 호환되는 계획 정보는 유지하고 새 운동의 이전
+기록을 입력 칸에 미리 채울 수 있습니다. 하지만 실제 운동 계획은 사용자가 선택한 교체
+옵션에 따라 결정됩니다.
 
 ## 휴식 타이머
 

@@ -168,7 +168,11 @@ struct PrescriptionSnapshotPayload {
         self.restSecondsAfterExercise = source.restSecondsAfterExercise
         self.rir = source.rir
         self.rpe = source.rpe
-        self.tempo = source.tempo
+        // `effectiveTempo`, not `tempo`: a duration-based slot must not freeze
+        // a stale tempo into a NEW session snapshot (and from there into
+        // History). Already-written snapshots are untouched — this is the
+        // capture point only, so completed workouts keep whatever they froze.
+        self.tempo = source.effectiveTempo
         self.effortModeRaw = source.effortModeRaw
         self.rirStart = source.rirStart
         self.rirEnd = source.rirEnd
@@ -206,6 +210,56 @@ struct PrescriptionSnapshotPayload {
 }
 
 extension PrescriptionSnapshotPayload {
+    /// An all-nil payload with no tracking type asserted.
+    ///
+    /// Base for `ExerciseSwitchPlanAdapter.adaptedSnapshot` when a switched slot
+    /// had no prior snapshot to carry effort-progression fields over from.
+    static var empty: PrescriptionSnapshotPayload {
+        PrescriptionSnapshotPayload(usesDuration: false)
+    }
+
+    /// Memberwise-style init used by `.empty` and the switch adapter. Every
+    /// field defaults to nil so callers only state what they mean to set.
+    init(
+        sets: Int? = nil,
+        repMin: Int? = nil,
+        repMax: Int? = nil,
+        restSecondsBetweenSets: Int? = nil,
+        restSecondsAfterExercise: Int? = nil,
+        rir: Double? = nil,
+        rpe: Double? = nil,
+        tempo: String? = nil,
+        effortModeRaw: String? = nil,
+        rirStart: Double? = nil,
+        rirEnd: Double? = nil,
+        rpeStart: Double? = nil,
+        rpeEnd: Double? = nil,
+        durationMinSeconds: Int? = nil,
+        durationMaxSeconds: Int? = nil,
+        usesDuration: Bool = false,
+        equipment: String? = nil,
+        setupNotes: String? = nil
+    ) {
+        self.sets = sets
+        self.repMin = repMin
+        self.repMax = repMax
+        self.restSecondsBetweenSets = restSecondsBetweenSets
+        self.restSecondsAfterExercise = restSecondsAfterExercise
+        self.rir = rir
+        self.rpe = rpe
+        self.tempo = tempo
+        self.effortModeRaw = effortModeRaw
+        self.rirStart = rirStart
+        self.rirEnd = rirEnd
+        self.rpeStart = rpeStart
+        self.rpeEnd = rpeEnd
+        self.durationMinSeconds = durationMinSeconds
+        self.durationMaxSeconds = durationMaxSeconds
+        self.usesDuration = usesDuration
+        self.equipment = equipment
+        self.setupNotes = setupNotes
+    }
+
     /// Reconstruct a payload from a persisted snapshot (for resume path).
     init(from snapshot: PlannedPrescriptionSnapshot) {
         self.sets = snapshot.sets
@@ -304,36 +358,61 @@ struct StartWorkoutFromRoutineView: View {
     @State private var cachedPlan: WorkoutPlan?
 
     // 9-B2 bug-fix (Issue 4 Part B): when an active workout exists for
-    // this routine, the Start button must route through
-    // `WorkoutResumeService.rebuildPlan(for:in:)` so the swap
-    // reconciliation matches what `RoutinesView`'s in-memory resume
-    // banner already shows. Without these, navigating into the routine
-    // and tapping Start pushes a freshly-built plan that reflects the
-    // routine's original slot exercises — silently overriding any
-    // in-flight swap state.
+    // this routine, the Start button must NOT push a freshly-built plan
+    // that reflects the routine's original slot exercises — that would
+    // silently override any in-flight swap state.
     @Environment(\.modelContext) private var ctx
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
 
-    /// Returns the plan to push into `ActiveWorkoutView`. Prefers the
-    /// resume-rebuilt plan when an active workout exists for THIS
-    /// routine (so swap state survives); otherwise falls back to the
-    /// freshly-built `cachedPlan`.
+    /// Returns the plan to push into `ActiveWorkoutView`.
+    ///
+    /// **Entry #12 P1 resume-consistency contract:** when a session is already
+    /// active for THIS routine, this entry point must surface the *same* plan
+    /// the "Resume workout" banner surfaces, and must never rebuild,
+    /// reinterpret, or "fix" it. The banner (`RoutinesView` / `RootTabView`)
+    /// pushes `activeGuard.activePlan` — the live in-memory plan that
+    /// `swapExercise` keeps current — so this path now prefers exactly that.
+    ///
+    /// Previously this always called `WorkoutResumeService.rebuildPlan(...)`,
+    /// which reconstructs from the **routine template**. That gave the two
+    /// entry points genuinely different plans after a switch: the rebuild
+    /// re-derived the set count from `re.prescription.sets` and re-attached a
+    /// `prescriptionSnapshot` built from the slot's ORIGINAL exercise — so a
+    /// Plank → Bench Press switch rendered Bench Press with Plank's duration
+    /// fields, while Resume showed something else entirely.
+    ///
+    /// `rebuildPlan` remains the fallback for the one case it is actually for:
+    /// a cold restart, where the in-memory plan is gone and the persisted
+    /// workout is the only source left.
     @MainActor
     private func resolvedStartPlan() -> WorkoutPlan? {
+        var activeWorkout: Workout? = nil
         if let activeID = activeGuard.activeWorkoutID {
             let descriptor = FetchDescriptor<Workout>(
                 predicate: #Predicate { $0.id == activeID }
             )
             if let workout = try? ctx.fetch(descriptor).first,
-               workout.routineID == routine.id,
-               let rebuilt = WorkoutResumeService.rebuildPlan(
-                for: workout, in: ctx
-               )
+               workout.routineID == routine.id
             {
-                return rebuilt
+                activeWorkout = workout
             }
         }
-        return cachedPlan
+
+        switch activeWorkoutPlanSource(
+            hasActiveWorkoutForThisRoutine: activeWorkout != nil,
+            hasLiveActivePlan: activeGuard.activePlan != nil
+        ) {
+        case .liveActiveSession:
+            // Same object the Resume banner pushes.
+            return activeGuard.activePlan ?? cachedPlan
+        case .coldRestartRebuild:
+            guard let activeWorkout else { return cachedPlan }
+            return WorkoutResumeService.rebuildPlan(
+                for: activeWorkout, in: ctx
+            ) ?? cachedPlan
+        case .freshStart:
+            return cachedPlan
+        }
     }
 
     // MARK: - Plan Builder
@@ -359,9 +438,19 @@ struct StartWorkoutFromRoutineView: View {
                                     durationSeconds: tpl.durationSeconds
                                 )
                             }
-                        // Snapshot technique plans (read-only; no live SwiftData references)
+                        // Snapshot technique plans (read-only; no live SwiftData
+                        // references). Techniques the slot's exercise can't
+                        // support are dropped at capture time — a duration
+                        // exercise must not carry a Tempo Override (or any
+                        // rep-count technique) into the session or into the
+                        // History snapshot frozen from it.
                         let techniquePlansSnapshot: [TechniquePlanSnapshot] =
-                            (re.prescription?.techniquePlans ?? [])
+                            compatibleTechniquePlans(
+                                re.prescription?.techniquePlans ?? [],
+                                isBodyweight: isBodyweightEquipment(
+                                    ex.equipmentType),
+                                usesDuration: ex.isTimeBased
+                            )
                             .sorted { $0.order < $1.order }
                             .map { tp in
                                 TechniquePlanSnapshot(

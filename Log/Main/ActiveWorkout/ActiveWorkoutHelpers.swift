@@ -520,6 +520,50 @@ func consumePendingFinish(
     return slot
 }
 
+// MARK: - Active-session plan source (Entry #12 P1 resume consistency)
+
+/// Where an entry point into the active workout should get its `WorkoutPlan`.
+enum ActiveWorkoutPlanSource: Equatable {
+    /// The live in-memory plan (`ActiveWorkoutGuard.activePlan`) — the single
+    /// source of truth for a session that is already running, and the one the
+    /// "Resume workout" banner pushes.
+    case liveActiveSession
+    /// Reconstruct from persisted data. Valid ONLY after a cold restart, where
+    /// the in-memory plan no longer exists.
+    case coldRestartRebuild
+    /// No active session for this routine — build a fresh plan from the
+    /// template and start a new workout.
+    case freshStart
+}
+
+/// Decide which plan an entry point should push into `ActiveWorkoutView`.
+///
+/// **The contract this encodes:** once a session is active, no entry point may
+/// rebuild, partially reset, reinterpret, or "fix" its plan. Every route
+/// resolves to the same live plan, so "Resume workout" and walking into the
+/// routine and tapping Start show identical state.
+///
+/// This exists because those two routes used to disagree. `RoutinesView` /
+/// `RootTabView` pushed `activeGuard.activePlan`, while
+/// `StartWorkoutFromRoutineView` always called
+/// `WorkoutResumeService.rebuildPlan(...)`, which reconstructs from the
+/// **routine template**. After a mid-workout exercise switch the rebuild
+/// re-derived the set count from the template's prescription and re-attached a
+/// snapshot describing the slot's ORIGINAL exercise — so one route showed the
+/// switched exercise with the old exercise's duration fields and a different
+/// set count than the other.
+///
+/// A rebuild is still correct for the cold-restart case it was written for:
+/// there is no live plan, and the persisted workout is the only source left.
+/// Pure.
+func activeWorkoutPlanSource(
+    hasActiveWorkoutForThisRoutine: Bool,
+    hasLiveActivePlan: Bool
+) -> ActiveWorkoutPlanSource {
+    guard hasActiveWorkoutForThisRoutine else { return .freshStart }
+    return hasLiveActivePlan ? .liveActiveSession : .coldRestartRebuild
+}
+
 // MARK: - Slot lookup (Phase 6.C1 follow-up: duplicate-Exercise superset)
 
 /// Locate the `(blockIndex, exerciseIndex)` of the plan slot whose

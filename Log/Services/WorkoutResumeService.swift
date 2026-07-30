@@ -98,26 +98,80 @@ enum WorkoutResumeService {
                             currentName = snap
                         }
 
+                        // Entry #12 P1: a swapped slot's authoritative plan is
+                        // the one the switch already froze onto its
+                        // `WorkoutItem.plannedPrescriptionSnapshot` (written by
+                        // `populateSnapshotFields` from the
+                        // `ExerciseSwitchPlanAdapter` outcome). Read THAT here
+                        // rather than re-deriving from `re.prescription`, which
+                        // still describes the routine's original exercise —
+                        // re-deriving is what made a cold resume show the
+                        // template's set count and the replaced exercise's
+                        // tracking type (duration fields on a reps/weight
+                        // exercise).
+                        //
+                        // A workout swapped BEFORE this fix shipped has no
+                        // adapted snapshot to restore. Rather than fall back to
+                        // the raw template payload (which would put the
+                        // replaced exercise's tracking type and tempo back on
+                        // screen), run the same keep-plan adaptation the live
+                        // switch would have run, so legacy in-flight sessions
+                        // heal into a valid single-mode prescription too.
+                        let swappedSessionSnapshot: PrescriptionSnapshotPayload? =
+                            swappedExerciseForTemplates.map { swappedEx in
+                                if let frozen = itemsBySlotID[re.slotID]?
+                                    .plannedPrescriptionSnapshot
+                                    .map(PrescriptionSnapshotPayload.init(from:))
+                                {
+                                    return frozen
+                                }
+                                let templatePayload = re.prescription.map {
+                                    PrescriptionSnapshotPayload(
+                                        from: $0, exercise: ex)
+                                }
+                                let outcome = ExerciseSwitchPlanAdapter.outcome(
+                                    choice: .keepCurrentPlan,
+                                    current: templatePayload.map {
+                                        SessionPlan(
+                                            from: $0, notes: re.templateNotes)
+                                    },
+                                    oldIsTimeBased: ex.isTimeBased,
+                                    newIsTimeBased: swappedEx.isTimeBased,
+                                    resetSource: .appDefaults(
+                                        isTimeBased: swappedEx.isTimeBased)
+                                )
+                                return ExerciseSwitchPlanAdapter.adaptedSnapshot(
+                                    from: outcome,
+                                    base: templatePayload,
+                                    equipment: swappedEx.equipmentType,
+                                    setupNotes: swappedEx.setupDefaults
+                                )
+                            }
+
                         // Templates: when a swap is reconciled, mirror what
                         // `ActiveWorkoutView.swapExercise` does in 9-B2 —
-                        // derive from the slot's prescription via
-                        // `makeSwapDefaultTemplates` so the post-resume
-                        // plan matches the in-memory plan that the
-                        // RoutinesView resume banner already shows.
-                        // Non-swap slots keep the original `resolvedTemplates`
-                        // path (unchanged behavior).
+                        // derive via `makeSwapDefaultTemplates` so the
+                        // post-resume plan matches the in-memory plan that the
+                        // RoutinesView resume banner already shows. Hints come
+                        // from the session snapshot above, falling back to the
+                        // template only for a pre-Entry-#12 workout whose swap
+                        // predates the frozen session snapshot.
                         let templates: [PlanSetTemplate]
                         if let swappedEx = swappedExerciseForTemplates {
+                            let hints = swappedSessionSnapshot
                             templates = makeSwapDefaultTemplates(
                                 forExerciseID: swappedEx.id,
                                 isTimeBased: swappedEx.isTimeBased,
-                                setsHint: re.prescription?.sets,
+                                setsHint: hints?.sets ?? re.prescription?.sets,
                                 restBetweenSetsHint:
-                                    re.prescription?.restSecondsBetweenSets,
+                                    hints?.restSecondsBetweenSets
+                                    ?? re.prescription?.restSecondsBetweenSets,
                                 durationMinHint:
-                                    re.prescription?.durationMinSeconds,
+                                    hints?.durationMinSeconds
+                                    ?? re.prescription?.durationMinSeconds,
                                 durationMaxHint:
-                                    re.prescription?.durationMaxSeconds
+                                    hints?.durationMaxSeconds
+                                    ?? re.prescription?.durationMaxSeconds
                             )
                         } else {
                             templates = re.resolvedTemplates().enumerated()
@@ -135,8 +189,26 @@ enum WorkoutResumeService {
                                 }
                         }
 
+                        // Entry #12 P1: a swapped slot's warm-up / technique
+                        // state was already resolved at switch time and frozen
+                        // onto the `WorkoutItem` — the routine template's own
+                        // steps belong to the exercise that was replaced, so
+                        // re-reading them here would resurrect warm-ups and
+                        // techniques the switch deliberately cleared. Decode
+                        // the persisted session snapshots instead (the same
+                        // JSON the fallback `planFromWorkoutItems` path reads).
+                        let swappedItem = swappedExerciseForTemplates == nil
+                            ? nil
+                            : itemsBySlotID[re.slotID]
+
                         let warmupStepsSnapshot: [WarmupStepSnapshot] =
-                            (re.prescription?.warmupScheme?.steps ?? [])
+                            swappedExerciseForTemplates != nil
+                            ? (swappedItem?.warmupStepsSnapshotData
+                                .flatMap {
+                                    try? JSONDecoder().decode(
+                                        [WarmupStepSnapshot].self, from: $0)
+                                } ?? [])
+                            : (re.prescription?.warmupScheme?.steps ?? [])
                             .sorted { $0.order < $1.order }
                             .map { step in
                                 WarmupStepSnapshot(
@@ -149,8 +221,16 @@ enum WorkoutResumeService {
                                 )
                             }
 
-                        let techniquePlansSnapshot: [TechniquePlanSnapshot] =
-                            (re.prescription?.techniquePlans ?? [])
+                        // Mirrors `makePlan`: techniques the slot's exercise
+                        // can't support (e.g. a Tempo Override on a duration
+                        // exercise) are dropped at capture time.
+                        let templateTechniquePlansSnapshot: [TechniquePlanSnapshot] =
+                            compatibleTechniquePlans(
+                                re.prescription?.techniquePlans ?? [],
+                                isBodyweight: isBodyweightEquipment(
+                                    ex.equipmentType),
+                                usesDuration: ex.isTimeBased
+                            )
                             .sorted { $0.order < $1.order }
                             .map { tp in
                                 TechniquePlanSnapshot(
@@ -172,6 +252,15 @@ enum WorkoutResumeService {
                                 )
                             }
 
+                        let techniquePlansSnapshot: [TechniquePlanSnapshot] =
+                            swappedExerciseForTemplates != nil
+                            ? (swappedItem?.techniquePlansSnapshotData
+                                .flatMap {
+                                    try? JSONDecoder().decode(
+                                        [TechniquePlanSnapshot].self, from: $0)
+                                } ?? [])
+                            : templateTechniquePlansSnapshot
+
                         return PlanExercise(
                             id: ex.id,
                             routineExerciseID: re.id,
@@ -182,17 +271,30 @@ enum WorkoutResumeService {
                             templates: templates,
                             isTimeBased: currentIsTimeBased,
                             routineSlotID: re.slotID,
-                            templateNotesSnapshot: re.templateNotes,
+                            // A swapped slot's prescription note is whatever the
+                            // switch resolved (normally cleared — the routine's
+                            // note described the replaced exercise). Only a
+                            // non-swapped slot reads `re.templateNotes`.
+                            templateNotesSnapshot:
+                                swappedExerciseForTemplates != nil
+                                ? swappedItem?.templateNotesSnapshot
+                                : re.templateNotes,
                             // Phase 10-E: equipment + setup are sourced from
                             // the linked `Exercise`. Use the slot's original
                             // `ex` (re.exercise) — mirrors `makePlan` and
                             // preserves "snapshot captures the slot's
-                            // original Exercise" semantics across swaps.
-                            prescriptionSnapshot: re.prescription.map {
-                                PrescriptionSnapshotPayload(
-                                    from: $0, exercise: ex
-                                )
-                            },
+                            // original Exercise" semantics for NON-swapped
+                            // slots. A swapped slot instead restores the
+                            // session snapshot the switch froze, so its
+                            // tracking type, set count, tempo, and
+                            // equipment/setup all describe the switched-in
+                            // exercise.
+                            prescriptionSnapshot: swappedSessionSnapshot
+                                ?? re.prescription.map {
+                                    PrescriptionSnapshotPayload(
+                                        from: $0, exercise: ex
+                                    )
+                                },
                             techniquePlansSnapshot: techniquePlansSnapshot,
                             warmupStepsSnapshot: warmupStepsSnapshot,
                             // Phase 6.C1 — mirror makePlan(from:)'s block snapshot

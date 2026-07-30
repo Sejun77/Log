@@ -13,7 +13,7 @@ import Foundation
 /// Persisted via `AppState` to survive force-quit + cold-resume; the
 /// Codable conformance is intentionally synthesized so field renames /
 /// reorderings would be visible diffs.
-struct SessionPlan: Codable {
+struct SessionPlan: Codable, Equatable {
     var sets: Int?
     var repMin: Int?
     var repMax: Int?
@@ -49,17 +49,32 @@ struct SessionPlan: Codable {
         return parts.joined(separator: " · ")
     }
 
+    /// The tempo value this plan may actually display/edit.
+    ///
+    /// Tempo describes eccentric/concentric rep phases, so it is meaningless
+    /// for a duration-based exercise. Reading through this property (rather
+    /// than `tempo` directly) makes every render site duration-safe in one
+    /// place and, critically, suppresses **stale** tempo that older data — or
+    /// a prescription that was later flipped to duration — may still carry.
+    var effectiveTempo: String? {
+        guard !usesDuration, let t = tempo, !t.isEmpty else { return nil }
+        return t
+    }
+
     /// Line 2: rest + effort + tempo. The effort segment is **injected** by the
     /// caller (`effortSummary`) so it can be mode-aware (None / Single /
     /// Progression) and snapshot-derived — this value type no longer assumes a
     /// single rir/rpe. Pass `nil` (e.g. autoreg `.none`, or mode `.none`) to omit
     /// the effort segment. Centralized formatting lives in
     /// `WorkoutEffortTargetResolver` / `EffortTargetResolver`.
+    ///
+    /// Tempo reads through `effectiveTempo`, so a duration-based slot never
+    /// shows a tempo segment even if one is stored.
     func secondarySummary(effortSummary: String?) -> String {
         var parts: [String] = []
         if let r = restSecondsBetweenSets, r > 0 { parts.append(String(localized: "\(r)s rest")) }
         if let effortSummary, !effortSummary.isEmpty { parts.append(effortSummary) }
-        if let t = tempo, !t.isEmpty { parts.append(String(localized: "Tempo \(t)")) }
+        if let t = effectiveTempo { parts.append(String(localized: "Tempo \(t)")) }
         return parts.joined(separator: " · ")
     }
 
@@ -71,7 +86,10 @@ struct SessionPlan: Codable {
         self.repMax = snapshot.repMax
         self.restSecondsBetweenSets = snapshot.restSecondsBetweenSets
         self.restSecondsAfterExercise = snapshot.restSecondsAfterExercise
-        self.tempo = snapshot.tempo
+        // Drop tempo carried by a duration-based snapshot at the ingest point,
+        // so stale saved tempo can never re-enter the live session plan (and so
+        // `isSessionPlanDirty` doesn't report a phantom edit against it).
+        self.tempo = snapshot.usesDuration ? nil : snapshot.tempo
         self.rir = snapshot.rir
         self.rpe = snapshot.rpe
         self.durationMinSeconds = snapshot.durationMinSeconds

@@ -556,6 +556,19 @@ final class SlotPrescription {
     var durationMaxSeconds: Int?
     var usesDuration: Bool = false
 
+    /// The tempo this prescription may actually display.
+    ///
+    /// Tempo describes eccentric/concentric rep phases and is meaningless for a
+    /// duration-based slot, so it resolves to nil there. Editors hide the field
+    /// and clear the stored value when a slot flips to duration; this accessor
+    /// is the read-side guarantee for **stale** values that predate that rule
+    /// (imported routines, rows written before the flip). Mirrors
+    /// `SessionPlan.effectiveTempo`.
+    var effectiveTempo: String? {
+        guard !usesDuration, let t = tempo, !t.isEmpty else { return nil }
+        return t
+    }
+
     // Phase 10-E (2026-05-24): the former `equipment` / `setupNotes`
     // slot fields were removed. Source of truth lives on `Exercise`
     // (`equipmentType` / `setupDefaults`); the session-start snapshot
@@ -716,6 +729,17 @@ final class PlannedPrescriptionSnapshot {
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool = false
+
+    /// The tempo History / session detail may display for this frozen snapshot.
+    /// Nil for a duration-based row, so an already-completed workout that
+    /// captured a stale tempo never renders one. Mirrors
+    /// `SlotPrescription.effectiveTempo` / `SessionPlan.effectiveTempo`.
+    /// Read-only: the stored value stays untouched, so old History rows are not
+    /// rewritten.
+    var effectiveTempo: String? {
+        guard !usesDuration, let t = tempo, !t.isEmpty else { return nil }
+        return t
+    }
 
     // Context
     var equipment: String?

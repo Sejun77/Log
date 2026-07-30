@@ -263,17 +263,51 @@ struct ActiveWorkoutView: View {
         dropPrefillBySlotID = dropMap
     }
 
-    /// Re-resolves last-performance prefill for a single slot after its
-    /// exercise was swapped, so the swapped-in exercise sources ITS OWN
-    /// history (parent + dropset). Mirrors `loadLastPerformancePrefill`'s
-    /// fetch / service / exclusion rules — including the current session
-    /// exclusion and `excludedFromPrefill` (skipped inside the service) —
-    /// but scoped to one slot. Clears the slot's entry when the swapped-in
-    /// exercise has no history so seeding falls back to prescription
-    /// defaults. Read-only; never mutates any model.
+    /// Re-points a slot's last-performance prefill at the exercise that was
+    /// just switched in.
+    ///
+    /// **Draft-only, by construction.** The only state this writes is
+    /// `prefillBySlotID` / `dropPrefillBySlotID` — two `@State` dictionaries of
+    /// value-type suggestions. They are read in exactly two places, both of
+    /// which produce *editable draft text*:
+    ///
+    ///  * `tier4Default` → `resolvedDraftDefault`, the lowest tier of the set
+    ///    draft seeding chain, whose result lands in `inputsByExerciseID`;
+    ///  * `buildDropSection`, as a read-time fallback for dropset sub-rows
+    ///    (never seeded, so it can't mark a weight user-overridden).
+    ///
+    /// Nothing here touches `sessionPlans`, `prescriptionSnapshot`,
+    /// `WorkoutItem.plannedPrescriptionSnapshot`, the routine template, the
+    /// `Exercise` row, or any of the plan values (set count, rest, RIR/RPE,
+    /// tempo, warm-ups, techniques, prescription notes). The plan is decided
+    /// solely by `ExerciseSwitchPlanAdapter`, and this runs *after* that
+    /// decision has already been applied — so a suggestion can only ever
+    /// change what a field is pre-filled with, never what the workout plans.
+    /// It is also read-only against SwiftData: it fetches completed workouts
+    /// and mutates no model.
+    ///
+    /// **Order matters.** The clear is not optional: `prefillBySlotID[slotID]`
+    /// still holds the suggestions loaded at session start for the exercise
+    /// that was just REPLACED. Overwriting unconditionally would be enough
+    /// when the new exercise HAS history, but when it has none the stale
+    /// entry would survive and overlay Exercise A's last performance onto
+    /// Exercise B. Clearing first makes the no-history case fall through to
+    /// prescription defaults, as required.
+    ///
+    /// Mirrors `loadLastPerformancePrefill`'s fetch / service / exclusion
+    /// rules — current session excluded by id, `excludedFromPrefill` workouts
+    /// skipped inside the service — but scoped to one slot, so other slots and
+    /// the normal workout-start prefill are untouched.
     private func refreshLastPerformancePrefill(
         forSlotID slotID: UUID, exerciseID: UUID
     ) {
+        // 1) Clear the replaced exercise's stale suggestions for this slot.
+        prefillBySlotID[slotID] = nil
+        dropPrefillBySlotID[slotID] = nil
+
+        // 2) Load the switched-in exercise's own history, if any. A nil/empty
+        //    result leaves the slot cleared, so seeding falls back to the
+        //    prescription defaults resolved from the adapted plan.
         let currentID = workout?.id
         let descriptor = FetchDescriptor<Workout>(
             predicate: #Predicate { $0.completedAt != nil },
@@ -1703,7 +1737,9 @@ struct ActiveWorkoutView: View {
                                         .map(\.order)
                                 }
                             )
-                            let orphanTechs = exercise.techniquePlansSnapshot.filter {
+                            let orphanTechs = compatibleTechniqueSnapshots(
+                                for: exercise
+                            ).filter {
                                 $0.type != .dropset
                                     && !coveredOrders.contains($0.order)
                             }
@@ -2319,44 +2355,25 @@ struct ActiveWorkoutView: View {
         }
 
         let planEx = block.exercises[idx]
-        #if DEBUG
-        let preSwapPlan = sessionPlans[planEx.routineSlotID]
-        let preSwapSnap = planEx.prescriptionSnapshot
-        let preSwapNotes = planEx.templateNotesSnapshot
-        #endif
+        let slotID = planEx.routineSlotID
 
-        if resetPlan {
-            let slotID = planEx.routineSlotID
-            sessionPlans[slotID] = SessionPlan()
-            // Clear stale snapshot so input rebuild uses new template values.
-            // Phase 6.C1 follow-up — slot identity is `routineSlotID`, not
-            // `PlanExercise.id` (which is `Exercise.id` and collides when
-            // a superset has duplicate Exercise slots; see findSlotIndex).
-            if let (bi, ei) = findSlotIndex(
-                in: plan, routineSlotID: slotID
-            ) {
-                plan.blocks[bi].exercises[ei].prescriptionSnapshot = nil
-                plan.blocks[bi].exercises[ei].templateNotesSnapshot = nil
-            }
-        } else {
-            // Keep plan: verify nothing was cleared
-            #if DEBUG
-            assert(
-                sessionPlans[planEx.routineSlotID]?.sets == preSwapPlan?.sets
-                    && sessionPlans[planEx.routineSlotID]?.repMin == preSwapPlan?.repMin
-                    && sessionPlans[planEx.routineSlotID]?.repMax == preSwapPlan?.repMax,
-                "performPendingSwap(resetPlan: false) must not mutate sessionPlans"
-            )
-            assert(
-                planEx.prescriptionSnapshot != nil || preSwapSnap == nil,
-                "performPendingSwap(resetPlan: false) must not nil prescriptionSnapshot"
-            )
-            assert(
-                planEx.templateNotesSnapshot == preSwapNotes,
-                "performPendingSwap(resetPlan: false) must not clear templateNotesSnapshot"
-            )
-            #endif
-        }
+        // Resolve the slot's post-switch plan through the ONE adapter that
+        // owns keep/reset compatibility (Entry #12 P1). Both choices run the
+        // same path, so neither can leave mixed duration + reps/weight state.
+        //
+        // Critically, this reads the pre-switch `SessionPlan` BEFORE anything
+        // is cleared. The previous implementation blanked the plan and the
+        // snapshot first and only then derived the set-count hint, so a
+        // tracking-type change silently fell back to `AppSettings.defaultSets`
+        // (the reported "2 sets became 3 sets" bug).
+        let outcome = ExerciseSwitchPlanAdapter.outcome(
+            choice: resetPlan ? .resetPlan : .keepCurrentPlan,
+            current: sessionPlans[slotID],
+            oldIsTimeBased: planEx.isTimeBased,
+            newIsTimeBased: newEx.isTimeBased,
+            resetSource: .appDefaults(isTimeBased: newEx.isTimeBased)
+        )
+        applySwitchOutcome(outcome, slotID: slotID, newExercise: newEx)
 
         swapExercise(planExercise: planEx, with: newEx)
 
@@ -2375,6 +2392,71 @@ struct ActiveWorkoutView: View {
         exerciseToSwapIndex = nil
     }
 
+    /// Write an `ExerciseSwitchPlanAdapter.Outcome` into the slot's live state.
+    ///
+    /// This is the single write point that makes the switched slot's plan
+    /// authoritative and durable:
+    ///
+    ///  * `sessionPlans[slotID]` (tier 1) takes the adapted plan;
+    ///  * `prescriptionSnapshot` (tier 2) is **rewritten** from the same
+    ///    outcome instead of being left stale (keep) or nil'd (reset), so
+    ///    every `SessionPlanResolver` read agrees with tier 1 — this is what
+    ///    stops a switched-in barbell lift from rendering the replaced
+    ///    exercise's duration fields;
+    ///  * the prescription/routine-specific note follows the adapter's rule
+    ///    rather than carrying the replaced exercise's note over;
+    ///  * warm-up and technique snapshots are kept only when the switch stayed
+    ///    within one tracking type, and kept techniques are re-filtered against
+    ///    the switched-in exercise's compatibility rules;
+    ///  * the result is persisted immediately, so leaving and resuming the
+    ///    workout restores exactly this plan.
+    ///
+    /// The routine template is never touched — apply-back stays gated behind
+    /// the explicit finish option (`applySessionPlansToSlotPrescriptions`).
+    private func applySwitchOutcome(
+        _ outcome: ExerciseSwitchPlanAdapter.Outcome,
+        slotID: UUID,
+        newExercise: Exercise
+    ) {
+        sessionPlans[slotID] = outcome.sessionPlan
+
+        // Phase 6.C1 follow-up — slot identity is `routineSlotID`, not
+        // `PlanExercise.id` (which is `Exercise.id` and collides when a
+        // superset has duplicate Exercise slots; see findSlotIndex).
+        if let (bi, ei) = findSlotIndex(in: plan, routineSlotID: slotID) {
+            plan.blocks[bi].exercises[ei].prescriptionSnapshot =
+                ExerciseSwitchPlanAdapter.adaptedSnapshot(
+                    from: outcome,
+                    base: plan.blocks[bi].exercises[ei].prescriptionSnapshot,
+                    equipment: newExercise.equipmentType,
+                    setupNotes: newExercise.setupDefaults
+                )
+            plan.blocks[bi].exercises[ei].templateNotesSnapshot =
+                outcome.sessionPlan.slotNotes
+
+            // Warm-ups survive a same-tracking-type switch as authored; a
+            // tracking-type change or a reset clears them.
+            if !outcome.keepWarmupSteps {
+                plan.blocks[bi].exercises[ei].warmupStepsSnapshot = []
+            }
+
+            if outcome.keepTechniques {
+                plan.blocks[bi].exercises[ei].techniquePlansSnapshot =
+                    ExerciseSwitchPlanAdapter.retainedTechniques(
+                        from: plan.blocks[bi].exercises[ei]
+                            .techniquePlansSnapshot,
+                        isBodyweight: isBodyweightEquipment(
+                            newExercise.equipmentType),
+                        usesDuration: newExercise.isTimeBased
+                    )
+            } else {
+                plan.blocks[bi].exercises[ei].techniquePlansSnapshot = []
+            }
+        }
+
+        persistSessionPlans()
+    }
+
     private func swapExercise(planExercise: PlanExercise, with newEx: Exercise)
     {
         // 1) Locate slot by `routineSlotID` — the slot-unique identifier.
@@ -2391,27 +2473,19 @@ struct ActiveWorkoutView: View {
             .isTimeBased
         let modeChanged = oldIsTimeBased != newEx.isTimeBased
 
-        // 1a) Mode-change cleanup (9-B2 bug-fix): rep ↔ duration swaps
-        // strand mode-incompatible plan/draft state on the slot —
-        // dropset / warmup snapshots assume rep+weight semantics, drop
-        // draft inputs carry reps + weight strings, the session plan
-        // may carry the old mode's reps/duration fields, and the
-        // prescription snapshot mirrors the old mode. Force-reset
-        // these on a mode change regardless of the user's
-        // keep/reset-plan choice; the user is implicitly opting into
-        // fresh per-mode defaults by swapping across modes.
+        // 1a) Mode-change draft cleanup: rep ↔ duration swaps strand
+        // mode-incompatible DRAFT state on the slot — drop draft inputs carry
+        // reps + weight strings that mean nothing for a timed exercise.
+        //
+        // The plan-level half of this cleanup (session plan, prescription
+        // snapshot, warm-up + technique snapshots, slot note) is NOT done here
+        // any more: `applySwitchOutcome` already resolved all of it through
+        // `ExerciseSwitchPlanAdapter` before this call. Re-blanking it here was
+        // the second half of the set-count bug — it discarded the adapter's
+        // preserved set count and forced `makeSwapDefaultTemplates` below onto
+        // `AppSettings.defaultSets`.
         let slotID = plan.blocks[blockIndex].exercises[exIndex].routineSlotID
         if modeChanged {
-            plan.blocks[blockIndex].exercises[exIndex]
-                .techniquePlansSnapshot = []
-            plan.blocks[blockIndex].exercises[exIndex]
-                .warmupStepsSnapshot = []
-            plan.blocks[blockIndex].exercises[exIndex]
-                .prescriptionSnapshot = nil
-            plan.blocks[blockIndex].exercises[exIndex]
-                .templateNotesSnapshot = nil
-            sessionPlans[slotID] = SessionPlan()
-
             dropsLoggedByExercise[slotID] = nil
             let dropPrefix = "\(slotID)_"
             // Capture affected keys before pruning the in-memory dicts so
@@ -2429,16 +2503,15 @@ struct ActiveWorkoutView: View {
             }
         }
 
-        // 2) Build new templates from the slot's existing session plan +
+        // 2) Build new templates from the slot's ADAPTED session plan +
         // snapshot rather than from `newEx.defaultTemplates` (Phase 9-B2 —
         // see `makeSwapDefaultTemplates` doc for the field-by-field
         // contract and the 9-A.5 audit's documented `targetWeight` loss).
-        // Preserving the slot's set count + rest across the swap keeps
-        // the UI from shrinking/growing unexpectedly when the user
-        // substitutes a different exercise into a programmed slot. On a
-        // mode change the snapshot/session plan above were just cleared,
-        // so the helper falls through to AppSettings defaults — correct
-        // for a fresh-mode authoring intent.
+        // Both tiers were just written by `applySwitchOutcome` and already
+        // agree on the new exercise's tracking type, so the hints below carry
+        // the set count / rest the user is entitled to keep (Keep) or the
+        // reset source's values (Reset) — never the replaced exercise's
+        // mode-specific leftovers.
         let sp = sessionPlans[slotID]
         let snap = plan.blocks[blockIndex].exercises[exIndex]
             .prescriptionSnapshot
@@ -2466,14 +2539,23 @@ struct ActiveWorkoutView: View {
         // bound above in step (2) for the template-build priority chain.
         let swappedPlanEx = plan.blocks[blockIndex].exercises[exIndex]
 
-        // Re-resolve last-performance prefill for this slot against the
-        // swapped-in exercise's OWN history before seeding, so `tier4Default`
-        // overlays Exercise B's last performance (not Exercise A's, which was
-        // loaded at session start) over the prescription defaults. The slot is
-        // being rebuilt fresh here — every set is empty and unlogged at swap
-        // time (logs/inputs for the replaced exercise are cleared below and in
-        // steps 6–7) — so this seeds, never overwrites, user data. If B has no
-        // history the maps clear and seeding falls back to prescription.
+        // Re-point last-performance prefill at the switched-in exercise before
+        // seeding the drafts below, so `tier4Default` can overlay Exercise B's
+        // own last performance (never Exercise A's, which was loaded at session
+        // start) onto the prescription defaults.
+        //
+        // This is DRAFT-ONLY and deliberately runs here, at step 4: steps 1a–3
+        // already applied the `ExerciseSwitchPlanAdapter` outcome and rewrote
+        // `isTimeBased` / `templates`, so the plan is fully valid for the new
+        // exercise type before any history is consulted. `resolvedDraftDefault`
+        // then keys off that adapted type — duration drafts for a timed
+        // exercise, reps/weight for a normal one — and prefill can only change
+        // what the input fields start at, never the plan itself.
+        //
+        // The slot is being rebuilt fresh (every set empty and unlogged at swap
+        // time; logs/inputs for the replaced exercise are cleared below and in
+        // steps 6–7), so this seeds and never overwrites user data. If B has no
+        // history the maps stay cleared and seeding falls back to prescription.
         refreshLastPerformancePrefill(
             forSlotID: slotID, exerciseID: newEx.id)
 
@@ -2959,8 +3041,30 @@ struct ActiveWorkoutView: View {
     // current model does not support — do not add it without an explicit
     // rest-semantics design pass.
 
+    /// The slot's technique snapshots that are still legal for the exercise the
+    /// slot is CURRENTLY running.
+    ///
+    /// A snapshot can outlive its own validity — the slot was flipped to
+    /// duration, the exercise was switched, or the routine was imported — and
+    /// the active workout's snapshots are immutable, so the only correct
+    /// response is to suppress at read time. Same "resolve, don't mutate"
+    /// precedent as `dropsetSupportedActive`. Notably this is what keeps a
+    /// Tempo Override off a duration-based exercise.
+    private func compatibleTechniqueSnapshots(
+        for exercise: PlanExercise
+    ) -> [TechniquePlanSnapshot] {
+        compatibleTechniques(
+            exercise.techniquePlansSnapshot,
+            isBodyweight: isBodyweightEquipment(
+                resolvedActiveEquipment(for: exercise)),
+            usesDuration: exercise.isTimeBased
+        )
+    }
+
     /// Returns all TechniquePlanSnapshots that apply to `setIndex` in the exercise.
     /// Checks explicit appliesToSetIndices first, then falls back to the old appliesTo enum.
+    /// Incompatible techniques are filtered out first, so neither the set chips
+    /// nor the orphan-summary fallback can surface one.
     private func techniquesApplying(
         to setIndex: Int,
         in exercise: PlanExercise
@@ -2971,7 +3075,7 @@ struct ActiveWorkoutView: View {
             (templates[safe: $0]?.kind ?? .working) == .working
         } ?? (setCount - 1)
 
-        return exercise.techniquePlansSnapshot.filter { snap in
+        return compatibleTechniqueSnapshots(for: exercise).filter { snap in
             let indices = snap.appliesToSetIndices
             if !indices.isEmpty {
                 return indices.contains(setIndex)

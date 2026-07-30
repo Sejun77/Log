@@ -132,8 +132,6 @@ The questions asked after testing:
 
 ## Feedback Log
 
-Feedback is recorded here (and in `TESTFLIGHT_FEEDBACK_PLAN.md`) as it arrives.
-
 Severity:
 
 - **P0** crash, data loss, or cannot finish core flow
@@ -190,6 +188,13 @@ Severity:
 - **Feedback:** The Finish Workout confirmation sometimes required a second tap before the workout actually finished.
 - **Status:** Fixed. Made the confirmation action reliable so one tap finishes the workout exactly once, while keeping Cancel and the apply-changes options unchanged.
 
+### 2026-07-30 — Peer/family tester + developer reproduction
+
+- **Group:** Friends & Family Beta
+- **Severity:** P1
+- **Feedback:** Switching an exercise during an active workout produced an inconsistent plan, especially between duration-based and normal exercises. Switching a duration exercise for a normal one could leave **mixed duration/reps prescription state** — a reps/weight exercise still showing duration fields. Choosing "Keep Current Plan" also made the **set count inconsistent** (2 sets became 3). And leaving the workout and coming back showed that **the two resume paths restored different plans**: the routine's Start screen showed the original set count again but still rendered duration fields, while Resume Workout showed something else.
+- **Status:** Fixed. "Keep Current Plan" and "Reset Plan" now resolve through **one compatibility adapter**, so duration and normal exercises no longer leave mixed prescription state. Incompatible tempo, Tempo Override, warm-ups, techniques, and routine-specific notes are handled safely — preserved where they remain valid, cleared or adapted where they do not. **All resume paths now restore the same active session plan.** Switching may still prefill the input fields from the switched-in exercise's previous performance, but that is draft-only and never changes the workout plan.
+
 ### TBD — Peer/family tester
 
 - **Group:** Friends & Family Beta
@@ -213,7 +218,12 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 - Added a tester-facing user guide in both GitHub documentation and inside the app under Settings → Help → User Guide.
 - Added setup-notes editing to the active workout screen (same focused-sheet pattern as exercise notes) so wrong or missing setup cues can be corrected while training. Edits write to the exercise definition for future sessions and to the current session's snapshot so this workout's History records the corrected notes; templates and previously completed History are untouched.
 - Made the Finish Workout confirmation reliable: the dialog records the chosen finish option and runs the finish once after the dialog's dismissal transaction commits, instead of racing the navigation dismissal inside the button action. No change to the confirm-before-finish safety behavior, the Cancel path, or the apply-changes options.
-- Added regression tests for routine startability, routine deletion, finish confirmation behavior, and warm-up step insertion.
+- Fixed mid-workout exercise switching between duration-based and normal exercises. Both "Keep Current Plan" and "Reset Plan" now resolve through a single compatibility adapter, so a switch can never leave mixed duration + reps/weight state. Keep preserves set count, rest, and RIR/RPE across a tracking-type change (previously the set count silently fell back to the app default — the reported 2 → 3 bug) and adapts everything the new exercise type can't express; Reset rebuilds from the app's default prescription source for the new type. Warm-ups and techniques survive only within the same tracking type, kept techniques are re-checked against the existing conflict rules, and the routine-specific note no longer follows the user to a different exercise. Routine templates are still never mutated silently.
+- Made all active-workout entry points restore the same session plan. Walking into a routine and tapping Start while a workout is running now pushes the same live plan the Resume banner pushes, instead of rebuilding it from the routine template — the rebuild is reserved for the cold-restart case it was written for, and now sources a switched slot from the session snapshot rather than the template.
+- Cleaned up tempo for duration-based exercises: hidden in the routine prescription editor and the in-workout Edit Plan sheet, dropped from the plan summary, cleared when a slot flips to duration, and suppressed at read time so stale saved values (including on old History rows) never render. Tempo behavior for normal exercises is unchanged, and stored History values are not rewritten.
+- Made the Tempo Override technique incompatible with duration-based exercises, matching the prescription tempo field. It can no longer be added to a duration slot; a stale one (imported routine, or a slot switched to duration later) is removed when the prescription editor opens and suppressed everywhere it would otherwise render — routine technique list and count, active-workout set chips, and the orphan-technique summary row. Techniques are also filtered when the session plan is captured, so nothing incompatible reaches a workout or the History snapshot frozen from it. Tempo Override is unchanged for normal exercises, and the pairwise technique conflict rules are untouched.
+- Kept last-performance prefill on exercise switching, as **draft-only** behavior. Switching to a new exercise clears the replaced exercise's stale suggestions for that slot, then loads the switched-in exercise's own latest performance and uses it to prefill the editable reps/weight (or duration) input fields. It runs only after the chosen plan option has already been adapted to the new exercise type, and it writes nothing but draft text — the plan, prescription snapshot, set count, rest, RIR/RPE, tempo, warm-ups, techniques, prescription notes, routine template, and History are all decided elsewhere and unaffected. If the new exercise has no history the slot falls back to its prescription defaults.
+- Added regression tests for routine startability, routine deletion, finish confirmation behavior, warm-up step insertion, and exercise-switch compatibility / resume consistency / draft-only prefill.
 
 Current validation status:
 
@@ -224,7 +234,12 @@ Current validation status:
 - Warm-up rendering fix: tested with warm-up insertion tests.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
-- Latest full test suite result: 976 tests, 0 failures.
+- Exercise-switch compatibility: tested with 22 value-level adapter tests covering Keep/Reset across duration → normal, normal → duration, and same-type switches.
+- Resume consistency: tested with 15 SwiftData tests covering plan-source routing, cold-restart rebuild from session snapshots, session-plan persistence, switched-session History, the frozen-History invariant, and a switch-with-prefill case proving the restored plan follows the switch rather than the switched-in exercise's history.
+- Tempo / Tempo Override cleanup: tested so duration exercises do not keep prescription tempo or Tempo Override, while non-duration technique behavior and the pairwise conflict rules remain unchanged.
+- Switch-time draft prefill: tested so switching prefills reps/weight (or duration) input fields from the switched-in exercise's own latest history, clears the replaced exercise's stale suggestions first, falls back to prescription defaults when the new exercise has no history, and leaves the plan and prescription snapshot byte-identical.
+- Manual switch/restart/History re-check on device: completed.
+- Latest full test suite result: 1035 tests, 0 failures.
 
 ---
 
@@ -255,6 +270,8 @@ Reflections from running the beta.
 - Beta readiness is not only about adding features; it also means preventing accidental destructive actions, such as finishing a workout unintentionally.
 - SwiftUI relationship updates can fail to render immediately if a SwiftData relationship array is mutated in place, so some relationship updates need whole-array reassignment.
 - Tester feedback can reveal documentation and usability gaps that are easy for the developer to miss.
+- Active workout state needs one clear source of truth; otherwise different resume paths can appear to restore different versions of the same workout.
+- Compatibility rules should be explicit when switching between different exercise types, because preserving everything can create invalid mixed state.
 
 Themes to continue watching as peer/family testing expands:
 
@@ -273,4 +290,4 @@ Themes to continue watching as peer/family testing expands:
 
 This section will be written once the beta phase has more complete feedback. It should honestly state what the feedback showed, what was fixed, and what was deferred — without claiming a public App Store release. The goal of this phase is external feedback, not distribution.
 
-**As of now:** Friends & Family Beta testing has started. Several crash, usability, and documentation issues have already been fixed, but the beta phase is still ongoing.
+**As of now:** Friends & Family Beta testing has started. Crash, usability, documentation, active-workout consistency, and exercise-switching issues have already been fixed, and the exercise-switching fix has passed both the automated test suite and manual device validation. Beta testing is still ongoing, so the phase result stays open until more tester feedback comes in.

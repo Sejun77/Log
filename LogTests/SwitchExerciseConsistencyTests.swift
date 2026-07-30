@@ -11,10 +11,17 @@ import XCTest
 ///      (non-swapped) or the live swapped-in exercise value (swapped). This
 ///      backs both the Equipment & Setup display and the prefill bodyweight
 ///      classification.
-///   2. `LastPerformancePrefillService` resolution by the swapped-in
-///      exercise's id — the same service call `refreshLastPerformancePrefill`
-///      makes after a swap, proving the switched-in exercise sources ITS OWN
-///      history (parent + dropset) and that `excludedFromPrefill` is honored.
+///   2. `LastPerformancePrefillService` resolution by exercise id — the same
+///      service call both `loadLastPerformancePrefill` (session start, every
+///      slot) and `refreshLastPerformancePrefill` (after a switch, one slot)
+///      make, proving a slot sources ITS OWN exercise's history (parent +
+///      dropset) and that `excludedFromPrefill` is honored.
+///
+/// **Entry #12 P1 note:** switch-time prefill is **draft-only**. It seeds the
+/// slot's editable reps/weight/duration input fields and nothing else — the
+/// plan is decided by `ExerciseSwitchPlanAdapter` before prefill runs. See
+/// `SwitchExerciseTempoAndPrefillTests` for the draft-only guarantees and the
+/// clear-stale-then-load ordering.
 ///
 /// The end-to-end seeding + overwrite-protection on swap lives in
 /// `ActiveWorkoutView` SwiftUI `@State` and is exercised via the manual
@@ -324,11 +331,17 @@ final class SwitchExerciseConsistencyTests: SwiftDataTestHarness {
         (try? context.fetch(FetchDescriptor<Workout>())) ?? []
     }
 
-    // MARK: - Switched-exercise prefill resolution
+    // MARK: - Per-exercise prefill resolution
+    //
+    // These pin `LastPerformancePrefillService`'s resolve-by-exercise-id
+    // contract, which both prefill entry points rely on to give a slot its OWN
+    // exercise's history: `loadLastPerformancePrefill` at session start, and
+    // `refreshLastPerformancePrefill` for the one slot whose exercise was just
+    // switched. Both feed draft input fields only.
 
-    func test_switchToB_usesBHistory_notA() {
-        // Item 3: after switching A → B, prefill resolves by B's id and must
-        // NOT pull Exercise A's last performance.
+    func test_prefillResolvesByExerciseID_notAnotherExercise() {
+        // Prefill resolves strictly by the requested exercise's id and must
+        // never bleed another exercise's last performance in.
         let a = makeExercise("Bench")
         let b = makeExercise("Incline Press")
 
@@ -343,7 +356,7 @@ final class SwitchExerciseConsistencyTests: SwiftDataTestHarness {
         XCTAssertEqual(map[0]?.weight, 60)
     }
 
-    func test_switchToB_noBHistory_fallsBackToEmpty() {
+    func test_prefillWithNoHistory_fallsBackToEmpty() {
         // If B has never been performed, the slot's suggestion map is empty so
         // seeding falls back to prescription defaults (normal fallback).
         let a = makeExercise("Bench")
@@ -357,7 +370,7 @@ final class SwitchExerciseConsistencyTests: SwiftDataTestHarness {
         XCTAssertTrue(map.isEmpty)
     }
 
-    func test_switchToB_skipsExcludedFromPrefillWorkouts() {
+    func test_prefillSkipsExcludedFromPrefillWorkouts() {
         // Item 8: a recovery/deload workout for B (excludedFromPrefill) must be
         // skipped, falling back to B's older included workout.
         let b = makeExercise("Incline Press")
@@ -373,8 +386,8 @@ final class SwitchExerciseConsistencyTests: SwiftDataTestHarness {
         XCTAssertEqual(map[0]?.weight, 60)
     }
 
-    func test_switchToB_dropPrefillUsesBHistory() {
-        // Item 6: dropset prefill after a switch resolves by B's id too.
+    func test_dropPrefillResolvesByExerciseID() {
+        // Item 6: dropset prefill resolves by the requested exercise's id too.
         let a = makeExercise("Bench")
         let b = makeExercise("Incline Press")
 
@@ -389,7 +402,7 @@ final class SwitchExerciseConsistencyTests: SwiftDataTestHarness {
         XCTAssertEqual(drops[0]?[1]?.weight, 30)
     }
 
-    func test_switchToB_dropPrefillSkipsExcludedFromPrefill() {
+    func test_dropPrefillSkipsExcludedFromPrefill() {
         // Item 8 (dropset path): excluded workouts are skipped for drops too.
         let b = makeExercise("Incline Press")
 

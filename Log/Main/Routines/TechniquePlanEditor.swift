@@ -27,14 +27,26 @@ struct TechniquePlanEditor: View {
     /// here — `EditButton` still drives reordering via `.onMove`.
     @State private var pendingDeleteOffsets: IndexSet? = nil
 
+    /// The plans this editor lists: only those still legal for the slot.
+    ///
+    /// `SlotPrescriptionSection.ensurePrescription` deletes incompatible plans
+    /// when it appears, but that runs *after* the first render — and this
+    /// editor can also be reached with a prescription that has not been through
+    /// that heal yet. Filtering here keeps the list honest at all times, so a
+    /// duration slot never lists a Tempo Override.
     private var sorted: [TechniquePlan] {
-        prescription.techniquePlans.sorted { $0.order < $1.order }
+        compatibleTechniquePlans(
+            prescription.techniquePlans,
+            isBodyweight: isBodyweight,
+            usesDuration: prescription.usesDuration
+        )
+        .sorted { $0.order < $1.order }
     }
 
     var body: some View {
         List {
             Section {
-                if prescription.techniquePlans.isEmpty {
+                if sorted.isEmpty {
                     Text("No techniques. Tap + to add.")
                         .foregroundStyle(.secondary)
                 }
@@ -301,10 +313,17 @@ private struct TechniqueTypePickerSheet: View {
 
 // MARK: - Technique availability (pure helper)
 
-/// Techniques that require a rep count and are not applicable to
-/// duration-based prescriptions.
+/// Techniques that are not applicable to duration-based prescriptions.
+///
+/// Most of these require a rep count (`.dropset`, `.partialReps`, `.restPause`,
+/// `.cluster`, `.amrap`). `.tempoOverride` is here for the same underlying
+/// reason expressed differently: a tempo describes eccentric/concentric rep
+/// phases, and a duration-based exercise has no reps to phase. This mirrors the
+/// prescription-level rule that hides and clears `SlotPrescription.tempo` for
+/// duration slots — Entry #12 P1 made the two consistent so tempo cannot reach
+/// a duration exercise by either route.
 let techniquesIncompatibleWithDuration: Set<TechniqueType> =
-    [.dropset, .partialReps, .restPause, .cluster, .amrap]
+    [.dropset, .partialReps, .restPause, .cluster, .amrap, .tempoOverride]
 
 /// Type-level availability gate for adding a technique, independent of any
 /// existing techniques on the prescription. Returns a block message, or nil
@@ -334,6 +353,42 @@ func isTechniqueAllowed(
     techniqueConflictMessage(
         for: type, isBodyweight: isBodyweight, usesDuration: usesDuration
     ) == nil
+}
+
+/// Filter technique snapshots down to the ones that are legal for a slot with
+/// the given equipment / tracking type.
+///
+/// The authoring path blocks incompatible techniques at add time, but a
+/// prescription can still *hold* one that later became illegal — the slot was
+/// flipped to duration, the exercise was switched, or the routine was imported
+/// from JSON. Render paths run everything through this so a stale technique is
+/// suppressed rather than displayed, following the same
+/// "resolve-don't-mutate" precedent as
+/// `ActiveWorkoutView.dropsetSupportedActive` for stale bodyweight Drop Sets.
+/// Pure.
+func compatibleTechniques(
+    _ snapshots: [TechniquePlanSnapshot],
+    isBodyweight: Bool,
+    usesDuration: Bool
+) -> [TechniquePlanSnapshot] {
+    snapshots.filter {
+        isTechniqueAllowed(
+            $0.type, isBodyweight: isBodyweight, usesDuration: usesDuration)
+    }
+}
+
+/// `compatibleTechniques` over live `TechniquePlan` models (routine-editor
+/// side). Same rule, different element type — returns the plans that are still
+/// legal for the slot.
+func compatibleTechniquePlans(
+    _ plans: [TechniquePlan],
+    isBodyweight: Bool,
+    usesDuration: Bool
+) -> [TechniquePlan] {
+    plans.filter {
+        isTechniqueAllowed(
+            $0.type, isBodyweight: isBodyweight, usesDuration: usesDuration)
+    }
 }
 
 /// Pairwise structural conflict between two techniques applied to the SAME set.
