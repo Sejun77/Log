@@ -47,7 +47,12 @@ struct EditSessionPlanSheet: View {
 
                 Section("Intensity") {
                     effortContent
-                    TempoEditorView(tempo: $plan.tempo)
+                    // Tempo describes rep phases, so it is neither shown nor
+                    // editable for a duration-based slot. Effort (RIR/RPE)
+                    // stays — it applies to both tracking types.
+                    if !plan.usesDuration {
+                        TempoEditorView(tempo: $plan.tempo)
+                    }
                 }
 
                 Section("Notes") {

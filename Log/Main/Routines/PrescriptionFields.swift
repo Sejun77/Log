@@ -97,7 +97,16 @@ struct SlotPrescriptionSection: View {
                     HStack {
                         Text("Techniques")
                         Spacer()
-                        let count = prescription.techniquePlans.count
+                        // Count only the techniques the slot can actually use,
+                        // matching what `TechniquePlanEditor` will list — the
+                        // on-appear heal deletes the rest, but this renders
+                        // before it runs.
+                        let count = compatibleTechniquePlans(
+                            prescription.techniquePlans,
+                            isBodyweight: isBodyweightEquipment(
+                                re.exercise?.equipmentType),
+                            usesDuration: prescription.usesDuration
+                        ).count
                         if count > 0 {
                             Text("\(count) technique\(count == 1 ? "" : "s")")
                                 .foregroundStyle(.secondary)
@@ -146,9 +155,51 @@ struct SlotPrescriptionSection: View {
         if re.prescription == nil {
             re.prescription = makeDefaultPrescription(isTimeBased: isTimeBased, in: ctx)
             try? ctx.save()
-        } else if let p = re.prescription, p.usesDuration != isTimeBased {
+            return
+        }
+        guard let p = re.prescription else { return }
+
+        if p.usesDuration != isTimeBased {
             p.usesDuration = isTimeBased
         }
+
+        // Reconcile a duration slot to the duration rules. Runs on every
+        // appear (not only on the reps ↔ duration transition) so a slot that
+        // was ALREADY duration-based still heals: imported routines and rows
+        // written before these rules existed can both carry tempo state that
+        // the editor now refuses to create.
+        //
+        // Tempo is cleared rather than merely hidden — an invisible-but-stored
+        // value would still reach the session snapshot and any summary that
+        // renders tempo. Tempo Override is the same rule expressed as a
+        // technique, so incompatible technique plans go with it.
+        guard isTimeBased else { return }
+        var didChange = false
+
+        if p.tempo != nil {
+            p.tempo = nil
+            didChange = true
+        }
+
+        let allowed = compatibleTechniquePlans(
+            p.techniquePlans,
+            isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType),
+            usesDuration: true
+        )
+        if allowed.count != p.techniquePlans.count {
+            let allowedIDs = Set(allowed.map(\.id))
+            let dropped = p.techniquePlans.filter { !allowedIDs.contains($0.id) }
+            p.techniquePlans = allowed
+            for plan in dropped { ctx.delete(plan) }
+            for (i, plan) in p.techniquePlans.sorted(by: { $0.order < $1.order })
+                .enumerated()
+            {
+                plan.order = i
+            }
+            didChange = true
+        }
+
+        if didChange { try? ctx.save() }
     }
 }
 
@@ -185,7 +236,12 @@ private struct PrescriptionFields: View {
 
         effortSection
 
-        TempoEditorView(tempo: $prescription.tempo)
+        // Tempo describes rep phases — hidden and uneditable for a
+        // duration-based slot. `ensurePrescription` clears any stored value
+        // when a slot becomes duration-based, so nothing stale hides here.
+        if !isTimeBased {
+            TempoEditorView(tempo: $prescription.tempo)
+        }
     }
 
     // MARK: - Effort target mode (Slice D)
