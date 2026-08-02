@@ -214,6 +214,16 @@
         }
       }
     },
+    "%lld%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld%2$@"
+          }
+        }
+      }
+    },
     "%lld%% of working weight" : {
       "localizations" : {
         "ko" : {
@@ -2385,6 +2395,7 @@
       }
     },
     "No rest" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3116,6 +3127,7 @@
       }
     },
     "Rest after exercise: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3126,6 +3138,7 @@
       }
     },
     "Rest after exercise: none" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3147,6 +3160,7 @@
       }
     },
     "Rest after round: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3157,6 +3171,7 @@
       }
     },
     "Rest after round: none" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3177,6 +3192,7 @@
       }
     },
     "Rest before next block: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3187,6 +3203,7 @@
       }
     },
     "Rest before next block: none" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3248,6 +3265,7 @@
       }
     },
     "Rest between sets: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
