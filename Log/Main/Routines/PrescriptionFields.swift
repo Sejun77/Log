@@ -221,17 +221,21 @@ private struct PrescriptionFields: View {
             optionalIntStepper("Sets", keyPath: \.sets, range: 0...20)
         }
 
+        // Duration and rest use `DurationFieldRow` (preset strip + h/m/s
+        // wheels) rather than a stepper: the bounds are now 6h / 60m, which no
+        // fixed-step stepper can cover in a usable number of taps. Reps still
+        // step — their range is small and the ± affordance suits it.
         if isTimeBased {
-            optionalIntStepper("Duration min", keyPath: \.durationMinSeconds, range: 0...600, step: 15, unit: "s")
-            optionalIntStepper("Duration max", keyPath: \.durationMaxSeconds, range: 0...600, step: 15, unit: "s")
+            durationRow("Duration min", keyPath: \.durationMinSeconds)
+            durationRow("Duration max", keyPath: \.durationMaxSeconds)
         } else {
             optionalIntStepper("Rep min", keyPath: \.repMin, range: 0...50)
             optionalIntStepper("Rep max", keyPath: \.repMax, range: 0...50)
         }
 
         if !hideRestFields {
-            optionalIntStepper("Rest between sets", keyPath: \.restSecondsBetweenSets, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
-            optionalIntStepper("Rest after exercise", keyPath: \.restSecondsAfterExercise, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
+            restRow("Rest between sets", keyPath: \.restSecondsBetweenSets)
+            restRow("Rest after exercise", keyPath: \.restSecondsAfterExercise)
         }
 
         effortSection
@@ -384,6 +388,44 @@ private struct PrescriptionFields: View {
             }
         }
         prescription.effortModeRaw = newMode.rawValue
+    }
+
+    /// Exercise-duration field (6h bound). Writes are normalized by the row, so
+    /// the stored value stays nil-or-positive and within range.
+    private func durationRow(
+        _ label: String,
+        keyPath: ReferenceWritableKeyPath<SlotPrescription, Int?>
+    ) -> some View {
+        DurationFieldRow(
+            title: label,
+            seconds: secondsBinding(keyPath),
+            maxSeconds: DurationLimits.maxExerciseSeconds,
+            presets: DurationPresets.exerciseDuration
+        )
+    }
+
+    /// Rest field (60m bound). `zeroLabel` keeps the stepper's "no rest"
+    /// wording for an unset value.
+    private func restRow(
+        _ label: String,
+        keyPath: ReferenceWritableKeyPath<SlotPrescription, Int?>
+    ) -> some View {
+        DurationFieldRow(
+            title: label,
+            seconds: secondsBinding(keyPath),
+            maxSeconds: DurationLimits.maxRestSeconds,
+            zeroLabel: "None",
+            presets: DurationPresets.rest
+        )
+    }
+
+    private func secondsBinding(
+        _ keyPath: ReferenceWritableKeyPath<SlotPrescription, Int?>
+    ) -> Binding<Int?> {
+        Binding(
+            get: { prescription[keyPath: keyPath] },
+            set: { prescription[keyPath: keyPath] = $0 }
+        )
     }
 
     private func optionalIntStepper(

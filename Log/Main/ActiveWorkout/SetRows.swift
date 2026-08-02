@@ -138,6 +138,21 @@ struct TimeSetEntryRow: View {
     var onLog: (Int) -> Void
     var onUndo: () -> Void
 
+    /// Seconds this row would start/log right now.
+    ///
+    /// The field is free-text `.numberPad`, so it can be empty, partial, or
+    /// larger than the app's bound. `DurationLimits.parseSeconds` resolves
+    /// empty/non-numeric input to nil (falling back to the planned duration)
+    /// and clamps anything oversized, so neither button can act on a negative
+    /// or out-of-range value. Both the buttons and the compact echo read this,
+    /// so what the user sees is exactly what gets logged.
+    private var resolvedDuration: Int {
+        DurationLimits.parseSeconds(
+            duration, max: DurationLimits.maxExerciseSeconds)
+            ?? DurationLimits.normalizedExerciseDuration(
+                template.durationSeconds) ?? 0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -169,6 +184,15 @@ struct TimeSetEntryRow: View {
                     .disabled(isLogged)
                     .focused($focused, equals: .duration)
 
+                // Long cardio durations are entered in raw seconds, where
+                // "2700" is hard to read back. Echo the compact form once the
+                // value passes a minute so a typo is obvious before logging.
+                if resolvedDuration >= 60 {
+                    Text(DurationFormat.compact(resolvedDuration))
+                        .font(.dsCaption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
                 Spacer(minLength: 8)
 
                 if isLogged {
@@ -176,7 +200,7 @@ struct TimeSetEntryRow: View {
                         .buttonStyle(.bordered)
                 } else {
                     Button("Start") {
-                        let d = Int(duration) ?? (template.durationSeconds ?? 0)
+                        let d = resolvedDuration
                         guard d > 0 else { return }
                         onStart(d)  // just runs the set timer/overlay
                     }
@@ -184,7 +208,7 @@ struct TimeSetEntryRow: View {
                     .disabled(!canLog)
 
                     Button("Log") {
-                        let d = Int(duration) ?? (template.durationSeconds ?? 0)
+                        let d = resolvedDuration
                         guard d > 0 else { return }
                         onLog(d)  // persist + trigger rest
                     }

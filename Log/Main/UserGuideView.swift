@@ -39,7 +39,7 @@ struct UserGuideView: View {
 
 /// One block of the guide: a heading, an optional intro paragraph, and an
 /// optional list. `ordered` picks numbered vs. bulleted rendering.
-private struct GuideSection: Identifiable {
+struct GuideSection: Identifiable {
     let id = UUID()
     let heading: String
     var intro: String? = nil
@@ -113,7 +113,7 @@ private struct GuideListRow: View {
 
 extension UserGuideView {
 
-    fileprivate static let englishGuide: [GuideSection] = [
+    static let englishGuide: [GuideSection] = [
         GuideSection(
             heading: "User Guide"
         ),
@@ -126,6 +126,7 @@ extension UserGuideView {
                 "Set: one round of an exercise",
                 "Reps: how many times you perform the movement in one set",
                 "Weight: the load used for the set",
+                "Duration: time-based tracking, used instead of reps and weight",
                 "RIR/RPE: effort ratings used to describe how hard a set felt",
                 "History: completed workouts saved after finishing",
             ]
@@ -193,6 +194,17 @@ extension UserGuideView {
             outro: "When switching exercises during a workout, the app keeps compatible plan details and may prefill input fields from the new exercise's previous performance, but the workout plan itself remains controlled by the selected switch option."
         ),
         GuideSection(
+            heading: "Duration Exercises and Cardio",
+            intro: "Some exercises are tracked by time instead of reps, such as a plank hold, a wall sit, or cardio.\n\nTo set a duration or a rest time, tap the field. You can then tap a preset value, or scroll the hour / minute / second wheels.\n\nLimits and behavior:",
+            items: [
+                "exercise duration can be set up to 6 hours",
+                "rest can be set up to 60 minutes",
+                "duration exercises do not show reps, weight, or tempo",
+                "leaving a field empty means it is not set",
+            ],
+            outro: "Cardio can be logged as a duration-based exercise. For now, details like distance, speed, incline, resistance, or heart-rate zone can be written in notes.\n\nCardio exercises are grouped under the Cardio body part. The app includes Walking, Treadmill Run, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine as duration-based exercises, and you can add your own the same way."
+        ),
+        GuideSection(
             heading: "Rest Timer",
             intro: "After you log a set, the rest timer starts automatically.\n\nIf you close the rest timer overlay while the timer is still running, you can show it again by:",
             items: [
@@ -235,7 +247,7 @@ extension UserGuideView {
         ),
     ]
 
-    fileprivate static let koreanGuide: [GuideSection] = [
+    static let koreanGuide: [GuideSection] = [
         GuideSection(
             heading: "사용자 가이드"
         ),
@@ -248,6 +260,7 @@ extension UserGuideView {
                 "세트: 운동을 한 번 수행하는 단위",
                 "반복 횟수: 한 세트 당 동작 반복 횟수",
                 "중량: 해당 세트에서 사용한 무게",
+                "시간: 반복 횟수와 중량 대신 시간으로 기록하는 방식",
                 "RIR/RPE: 세트가 얼마나 힘들었는지 기록하는 운동 강도 지표",
                 "기록: 운동을 완료한 뒤 저장된 운동 기록",
             ]
@@ -313,6 +326,17 @@ extension UserGuideView {
                 "종료를 누른 뒤 확인하면 운동이 기록에 저장됩니다.",
             ],
             outro: "운동 중 다른 운동으로 교체할 때, 앱은 호환되는 계획 정보는 유지하고 새 운동의 이전 기록을 입력 칸에 미리 채울 수 있습니다. 하지만 실제 운동 계획은 사용자가 선택한 교체 옵션에 따라 결정됩니다."
+        ),
+        GuideSection(
+            heading: "시간 기반 운동과 유산소 운동",
+            intro: "플랭크, 월 싯, 유산소 운동처럼 반복 횟수 대신 시간으로 기록하는 운동이 있습니다.\n\n시간이나 휴식 시간을 설정하려면 해당 항목을 누릅니다. 그 다음 미리 설정된 값을 누르거나, 시간 / 분 / 초 휠을 돌려 설정할 수 있습니다.\n\n제한과 동작 방식:",
+            items: [
+                "운동 시간은 최대 6시간까지 설정할 수 있습니다.",
+                "휴식 시간은 최대 60분까지 설정할 수 있습니다.",
+                "시간 기반 운동에서는 반복 횟수, 중량, 템포가 표시되지 않습니다.",
+                "값을 비워 두면 설정되지 않은 상태로 처리됩니다.",
+            ],
+            outro: "유산소 운동은 시간 기반 운동으로 기록할 수 있습니다. 현재는 거리, 속도, 경사, 저항 단계, 심박 구간 같은 세부 정보는 메모에 기록할 수 있습니다.\n\n유산소 운동은 유산소 부위로 묶여 있습니다. 앱에는 걷기, 트레드밀 러닝, 트레드밀 걷기, 실내 자전거, 일립티컬, 스텝밀, 로잉 머신이 시간 기반 운동으로 포함되어 있으며, 같은 방식으로 직접 추가할 수도 있습니다."
         ),
         GuideSection(
             heading: "휴식 타이머",
