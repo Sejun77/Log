@@ -148,6 +148,30 @@ entry unit, matching the existing `weightIsKg` pattern.
 be grouped and charted. It is independent of `avgHeartRate` — users have one or
 the other depending on what their equipment shows.
 
+#### Implementation notes (settled in Slice 1)
+
+**Out-of-range cardio metrics are rejected to `nil`, not clamped.** This is a
+deliberate divergence from `DurationLimits`, which clamps. A duration arrives
+from a *bounded picker* or from imported/legacy rows, so clamping repairs a
+value that is known to be well-intentioned. Cardio metrics are typed free-hand
+and have no legacy rows at all, so an out-of-range entry is a typo — and
+clamping "1500 bpm" to "300 bpm" would store a fabricated vital sign that looks
+entirely legitimate in a chart. Rejecting leaves the field visibly empty so the
+user retypes it. Bounds: distance `(0, 1000 km]`, heart rate `[20, 300]`,
+calories `(0, 100000]`, incline `[0, 100]`, resistance `(0, 100]`.
+
+**Zero means "not recorded" everywhere except incline.** A set explicitly logged
+as flat (0%) is meaningful and distinct from a set with no incline recorded;
+a zero distance, calorie, heart-rate, or resistance value is not.
+
+**A distance unit is dropped when there is no distance**, so the two fields can
+never disagree about whether a distance was recorded.
+
+**`HRZone` labels are not localized yet.** Slice 1 ships `number` and a
+language-neutral `shortLabel` ("Z3"). The UI slice that first renders a zone
+adds a localized display name with its own string-catalog entries, rather than
+seeding the catalog with strings nothing displays.
+
 ### 2.3 Prescription (target) fields
 
 The routine side gets exactly **one** new pair:
@@ -592,3 +616,9 @@ Resolve before Slice 1, not during:
    Phase 2 itself, since distance and duration series carry the value alone.
 4. **Should `hrZone` and `avgHeartRate` both exist?** They serve different
    equipment. If beta testers only ever use one, drop the other in Slice 3.
+5. **Should decline (negative incline) be supported?** Slice 1 accepts
+   `inclinePercent` in `0...100` only, so a treadmill run at −3% cannot be
+   recorded structurally and falls back to notes. Machines with decline are
+   uncommon enough that this was not worth widening the range on day one, but it
+   is a real gap. Widening to `-30...100` later is additive and needs no
+   migration — decide before Slice 4 builds the entry field.
