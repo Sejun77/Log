@@ -284,6 +284,9 @@ Feedback that is real but intentionally not addressed in this phase, such as P2/
   - incline
   - resistance / machine level
 
+A proper cardio system is designed in `docs/CARDIO_SYSTEM_DESIGN.md` (design
+only — no implementation yet).
+
 Full cardio tracking is **deferred, not forgotten**. Each of those metrics needs
 its own model field, its own unit handling (km vs. mi, min/km vs. min/mi), its
 own History and analytics treatment, and a migration — that is a phase of its
