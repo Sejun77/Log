@@ -129,7 +129,12 @@ enum CardioLimits {
 
     static let maxCalories: Int = 100_000
 
-    /// Treadmill / stepper grade, in percent.
+    /// Treadmill / stepper grade, in percent. The range is signed because some
+    /// treadmills support **decline** — typically to about −3%, with −6% at the
+    /// extreme end of consumer equipment. −30 leaves generous headroom for
+    /// unusual machines while still rejecting a value typed into the wrong
+    /// field.
+    static let minInclinePercent: Double = -30
     static let maxInclinePercent: Double = 100
 
     /// Machine resistance setting. Unitless — equipment numbers its own levels.
@@ -166,9 +171,9 @@ struct CardioMetrics: Equatable, Codable {
     private(set) var avgHeartRate: Int?
     private(set) var calories: Int?
 
-    /// Grade in percent. Unlike the other metrics, **0 is kept**: a treadmill
-    /// set explicitly recorded as flat is meaningful, and distinct from "not
-    /// recorded".
+    /// Grade in percent, signed — negative values are treadmill decline.
+    /// Unlike the other metrics, **0 is kept**: a set explicitly recorded as
+    /// flat is meaningful, and distinct from "not recorded".
     private(set) var inclinePercent: Double?
 
     private(set) var resistanceLevel: Double?
@@ -230,13 +235,16 @@ struct CardioMetrics: Equatable, Codable {
         return kcal
     }
 
-    /// Incline: finite, in `0...max`. Zero is preserved (see `inclinePercent`).
+    /// Incline: finite, in `min...max`. Zero is preserved (see
+    /// `inclinePercent`), and so are negative grades — a treadmill decline run
+    /// at −3% is a real setting, not bad input.
     ///
-    /// Decline (a negative grade) is not accepted in this phase; treadmills that
-    /// support it are rare enough that recording it in notes is acceptable for
-    /// now. Tracked as an open question in `docs/CARDIO_SYSTEM_DESIGN.md`.
+    /// This is why incline cannot use the "0 means unset" shortcut the other
+    /// metrics use: for a signed field, 0 is an ordinary interior value, so
+    /// "not recorded" has to be `nil` and nothing else.
     static func normalizedInclinePercent(_ percent: Double?) -> Double? {
-        guard let percent, percent.isFinite, percent >= 0,
+        guard let percent, percent.isFinite,
+            percent >= CardioLimits.minInclinePercent,
             percent <= CardioLimits.maxInclinePercent
         else { return nil }
         return percent

@@ -158,11 +158,20 @@ and have no legacy rows at all, so an out-of-range entry is a typo — and
 clamping "1500 bpm" to "300 bpm" would store a fabricated vital sign that looks
 entirely legitimate in a chart. Rejecting leaves the field visibly empty so the
 user retypes it. Bounds: distance `(0, 1000 km]`, heart rate `[20, 300]`,
-calories `(0, 100000]`, incline `[0, 100]`, resistance `(0, 100]`.
+calories `(0, 100000]`, incline `[-30, 100]`, resistance `(0, 100]`.
+
+**Incline is signed, to support treadmill decline.** Consumer treadmills that
+support decline typically reach about −3%, with −6% at the extreme; −30 leaves
+headroom for unusual equipment while still rejecting a number typed into the
+wrong field. Decided while the cardio UI was still unbuilt, which is the
+cheapest point to widen a range — the entry field in Slice 4 is built signed
+from the start rather than retrofitted.
 
 **Zero means "not recorded" everywhere except incline.** A set explicitly logged
 as flat (0%) is meaningful and distinct from a set with no incline recorded;
-a zero distance, calorie, heart-rate, or resistance value is not.
+a zero distance, calorie, heart-rate, or resistance value is not. Incline could
+not use the "0 means unset" shortcut in any case: for a signed field, 0 is an
+ordinary interior value, so "not recorded" has to be `nil` and nothing else.
 
 **A distance unit is dropped when there is no distance**, so the two fields can
 never disagree about whether a distance was recorded.
@@ -616,9 +625,6 @@ Resolve before Slice 1, not during:
    Phase 2 itself, since distance and duration series carry the value alone.
 4. **Should `hrZone` and `avgHeartRate` both exist?** They serve different
    equipment. If beta testers only ever use one, drop the other in Slice 3.
-5. **Should decline (negative incline) be supported?** Slice 1 accepts
-   `inclinePercent` in `0...100` only, so a treadmill run at −3% cannot be
-   recorded structurally and falls back to notes. Machines with decline are
-   uncommon enough that this was not worth widening the range on day one, but it
-   is a real gap. Widening to `-30...100` later is additive and needs no
-   migration — decide before Slice 4 builds the entry field.
+5. ~~**Should decline (negative incline) be supported?**~~ **Resolved: yes.**
+   `inclinePercent` accepts `[-30, 100]`. Settled during Slice 1, before any
+   cardio UI existed, so the entry field is built signed rather than retrofitted.

@@ -171,8 +171,9 @@ final class CardioMetricsTests: XCTestCase {
     }
 
     /// Incline is the one metric where 0 is kept: a set explicitly recorded as
-    /// flat is different from a set with no incline recorded.
-    func testInclineNormalizationKeepsZero() {
+    /// flat is different from a set with no incline recorded. It is also the
+    /// only **signed** metric — see the decline tests below.
+    func testInclineNormalizationKeepsZeroAndPositiveGrades() {
         XCTAssertEqual(CardioMetrics.normalizedInclinePercent(0), 0)
         XCTAssertEqual(CardioMetrics.normalizedInclinePercent(3.5), 3.5)
         XCTAssertEqual(
@@ -180,12 +181,58 @@ final class CardioMetricsTests: XCTestCase {
             CardioLimits.maxInclinePercent)
 
         XCTAssertNil(CardioMetrics.normalizedInclinePercent(nil))
-        XCTAssertNil(CardioMetrics.normalizedInclinePercent(-1))
         XCTAssertNil(CardioMetrics.normalizedInclinePercent(.nan))
         XCTAssertNil(CardioMetrics.normalizedInclinePercent(.infinity))
+        XCTAssertNil(CardioMetrics.normalizedInclinePercent(-.infinity))
+    }
+
+    /// Decline is a real treadmill setting, so a negative grade is valid input
+    /// rather than something to reject.
+    func testInclineNormalizationAcceptsDecline() {
+        XCTAssertEqual(CardioMetrics.normalizedInclinePercent(-3), -3)
+        XCTAssertEqual(CardioMetrics.normalizedInclinePercent(-0.5), -0.5)
+        XCTAssertEqual(CardioMetrics.normalizedInclinePercent(-6), -6)
+        XCTAssertEqual(
+            CardioMetrics.normalizedInclinePercent(CardioLimits.minInclinePercent),
+            CardioLimits.minInclinePercent,
+            "the lower bound itself is inclusive")
+    }
+
+    func testInclineRejectsValuesOutsideTheSignedRange() {
         XCTAssertNil(
             CardioMetrics.normalizedInclinePercent(
-                CardioLimits.maxInclinePercent + 1))
+                CardioLimits.minInclinePercent - 0.1))
+        XCTAssertNil(CardioMetrics.normalizedInclinePercent(-31))
+        XCTAssertNil(CardioMetrics.normalizedInclinePercent(-1_000))
+        XCTAssertNil(
+            CardioMetrics.normalizedInclinePercent(
+                CardioLimits.maxInclinePercent + 0.1))
+        XCTAssertNil(CardioMetrics.normalizedInclinePercent(101))
+        XCTAssertNil(CardioMetrics.normalizedInclinePercent(1_000))
+    }
+
+    func testInclineRangeBounds() {
+        XCTAssertEqual(CardioLimits.minInclinePercent, -30)
+        XCTAssertEqual(CardioLimits.maxInclinePercent, 100)
+    }
+
+    /// A decline value has to survive construction, not just the normalizer —
+    /// the initializer is the only way the field is ever populated.
+    func testDeclineSurvivesMetricsConstruction() {
+        let m = CardioMetrics(inclinePercent: -3)
+        XCTAssertEqual(m.inclinePercent, -3)
+        XCTAssertFalse(
+            m.isEmpty, "a recorded decline counts as recorded metrics")
+
+        XCTAssertNil(CardioMetrics(inclinePercent: -31).inclinePercent)
+    }
+
+    func testDeclineParsesFromFreeText() {
+        XCTAssertEqual(CardioMetrics.parseInclinePercent("-3"), -3)
+        XCTAssertEqual(CardioMetrics.parseInclinePercent(" -0.5 "), -0.5)
+        XCTAssertEqual(CardioMetrics.parseInclinePercent("-30"), -30)
+        XCTAssertNil(CardioMetrics.parseInclinePercent("-31"))
+        XCTAssertNil(CardioMetrics.parseInclinePercent("-"))
     }
 
     func testResistanceNormalization() {
@@ -292,12 +339,18 @@ final class CardioMetricsTests: XCTestCase {
         XCTAssertEqual(CardioMetrics.parseInclinePercent("0"), 0)
         XCTAssertEqual(CardioMetrics.parseResistanceLevel("8.5"), 8.5)
 
-        for text in ["", " ", "abc", "-1"] {
+        for text in ["", " ", "abc"] {
             XCTAssertNil(CardioMetrics.parseHeartRate(text))
             XCTAssertNil(CardioMetrics.parseCalories(text))
             XCTAssertNil(CardioMetrics.parseInclinePercent(text))
             XCTAssertNil(CardioMetrics.parseResistanceLevel(text))
         }
+
+        // Incline is signed, so "-1" is valid there and only there.
+        XCTAssertNil(CardioMetrics.parseHeartRate("-1"))
+        XCTAssertNil(CardioMetrics.parseCalories("-1"))
+        XCTAssertNil(CardioMetrics.parseResistanceLevel("-1"))
+        XCTAssertEqual(CardioMetrics.parseInclinePercent("-1"), -1)
     }
 
     // MARK: - 7. Derived pace
