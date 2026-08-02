@@ -13,6 +13,7 @@ enum AutoregMode: String {
 enum AppSettings {
     enum Keys {
         static let weightIsKg             = "settings.weightIsKg"
+        static let distanceIsMetric       = "settings.distanceIsMetric"
         static let autoregMode            = "settings.autoregMode"
         static let defaultSets            = "settings.defaultSets"
         static let defaultRepMin          = "settings.defaultRepMin"
@@ -32,6 +33,39 @@ enum AppSettings {
             UserDefaults.standard.object(forKey: Keys.weightIsKg) as? Bool ?? true
         }
         set { UserDefaults.standard.set(newValue, forKey: Keys.weightIsKg) }
+    }
+
+    /// Whether cardio distance is entered and displayed in kilometers (true) or
+    /// miles (false).
+    ///
+    /// Unlike `weightIsKg`, this is a **display/entry preference only** —
+    /// distance is stored canonically in meters (`CardioMetrics`), so changing
+    /// this never reinterprets existing data.
+    ///
+    /// Unset reads the device locale rather than hard-defaulting, so a US tester
+    /// starts in miles without touching Settings. The resolution is factored
+    /// into `defaultDistanceIsMetric(locale:)` so it is testable without
+    /// mutating the process locale.
+    static var distanceIsMetric: Bool {
+        get {
+            UserDefaults.standard.object(forKey: Keys.distanceIsMetric) as? Bool
+                ?? defaultDistanceIsMetric()
+        }
+        set { UserDefaults.standard.set(newValue, forKey: Keys.distanceIsMetric) }
+    }
+
+    /// Locale-derived default for `distanceIsMetric`. Only the US measurement
+    /// system implies miles; the UK system is metric for everything except road
+    /// distance, and UK runners commonly train in km, so it resolves to metric.
+    static func defaultDistanceIsMetric(locale: Locale = .current) -> Bool {
+        locale.measurementSystem != .us
+    }
+
+    /// The distance unit implied by `distanceIsMetric`. Read this rather than
+    /// the `Bool` wherever a unit is needed, so call sites never re-derive the
+    /// mapping.
+    static var distanceUnit: DistanceUnit {
+        distanceIsMetric ? .kilometers : .miles
     }
 
     // MARK: Autoregulation
