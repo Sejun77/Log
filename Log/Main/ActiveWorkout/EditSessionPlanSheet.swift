@@ -27,10 +27,13 @@ struct EditSessionPlanSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Duration/rest use `DurationFieldRow` (preset strip + h/m/s
+                // wheels) to match the routine prescription editor; the 6h /
+                // 60m bounds are far past what a fixed-step stepper can reach.
                 if plan.usesDuration {
                     Section("Duration") {
-                        intStepperRow("Min", keyPath: \.durationMinSeconds, range: 0...600, step: 15, unit: "s")
-                        intStepperRow("Max", keyPath: \.durationMaxSeconds, range: 0...600, step: 15, unit: "s")
+                        durationRow("Min", keyPath: \.durationMinSeconds)
+                        durationRow("Max", keyPath: \.durationMaxSeconds)
                     }
                 } else {
                     Section("Reps") {
@@ -41,8 +44,8 @@ struct EditSessionPlanSheet: View {
 
                 Section("Sets & Rest") {
                     intStepperRow("Sets", keyPath: \.sets, range: 0...20)
-                    intStepperRow("Rest between sets", keyPath: \.restSecondsBetweenSets, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
-                    intStepperRow("Rest after exercise", keyPath: \.restSecondsAfterExercise, range: 0...600, step: 15, unit: "s", zeroLabel: "none")
+                    restRow("Rest between sets", keyPath: \.restSecondsBetweenSets)
+                    restRow("Rest after exercise", keyPath: \.restSecondsAfterExercise)
                 }
 
                 Section("Intensity") {
@@ -132,6 +135,41 @@ struct EditSessionPlanSheet: View {
     }
 
     // MARK: - Field Rows
+
+    /// Exercise-duration field (6h bound), normalized by the row.
+    private func durationRow(
+        _ label: String, keyPath: WritableKeyPath<SessionPlan, Int?>
+    ) -> some View {
+        DurationFieldRow(
+            title: label,
+            seconds: secondsBinding(keyPath),
+            maxSeconds: DurationLimits.maxExerciseSeconds,
+            presets: DurationPresets.exerciseDuration
+        )
+    }
+
+    /// Rest field (60m bound). `zeroLabel` keeps the stepper's "no rest"
+    /// wording for an unset value.
+    private func restRow(
+        _ label: String, keyPath: WritableKeyPath<SessionPlan, Int?>
+    ) -> some View {
+        DurationFieldRow(
+            title: label,
+            seconds: secondsBinding(keyPath),
+            maxSeconds: DurationLimits.maxRestSeconds,
+            zeroLabel: "None",
+            presets: DurationPresets.rest
+        )
+    }
+
+    private func secondsBinding(_ keyPath: WritableKeyPath<SessionPlan, Int?>)
+        -> Binding<Int?>
+    {
+        Binding(
+            get: { plan[keyPath: keyPath] },
+            set: { plan[keyPath: keyPath] = $0 }
+        )
+    }
 
     /// Stepper for a bounded optional-Int field on SessionPlan.
     /// 0 maps to nil (unset); stepping up from 0 begins at `range.lowerBound` + `step`.

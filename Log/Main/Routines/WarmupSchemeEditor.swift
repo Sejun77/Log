@@ -337,11 +337,15 @@ private struct WarmupStepEditSheet: View {
                 }
 
                 Section {
-                    Stepper(
-                        rest == 0 ? LocalizedStringKey("No rest") : "\(rest)s rest",
-                        value: $rest,
-                        in: 0...300,
-                        step: 15
+                    // Same 60m bound and picker as every other rest field, so
+                    // a warm-up rest is not capped lower than the working-set
+                    // rest it precedes.
+                    DurationFieldRowInt(
+                        title: "Rest",
+                        seconds: $rest,
+                        maxSeconds: DurationLimits.maxRestSeconds,
+                        zeroLabel: "No rest",
+                        presets: DurationPresets.rest
                     )
                 } header: {
                     Text("Rest After (optional)")

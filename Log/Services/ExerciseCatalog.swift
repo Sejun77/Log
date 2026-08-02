@@ -38,12 +38,19 @@ enum ExerciseCatalog {
     /// Bump when adding a new versioned list (e.g. introduce `v2` and route
     /// `seedIfNeeded` against it). The seed-version key persisted in
     /// UserDefaults is compared against this constant.
-    static let currentVersion: Int = 1
+    /// v2 (2026-08-02) added the Cardio block below. Bumping this re-runs the
+    /// seed pass on existing installs; the per-name dedupe means only the new
+    /// names are inserted.
+    static let currentVersion: Int = 2
 
-    /// Initial 25-entry starter set covering every canonical body part with
-    /// common gym setups. Two time-based entries (Plank, Treadmill Run)
-    /// exercise `isTimeBased = true` so the seeded catalogue covers both
-    /// prescription modes the rest of the app supports.
+    /// Starter set covering every canonical body part with common gym setups.
+    ///
+    /// Time-based entries (`isTimeBased = true`) cover both prescription modes
+    /// the rest of the app supports: Plank for a short hold, and the Cardio
+    /// block for long work. Cardio is deliberately modelled as ordinary
+    /// duration-based exercises — there is no cardio-specific data model in
+    /// this beta, so distance, speed, incline, resistance / machine level, and
+    /// heart-rate zone are recorded in the exercise or setup notes.
     static let v1: [ExerciseSeed] = [
         ExerciseSeed(name: "Barbell Bench Press", bodyPart: "Chest", equipmentType: "Barbell"),
         ExerciseSeed(name: "Incline Dumbbell Press", bodyPart: "Chest", equipmentType: "Dumbbell"),
@@ -70,5 +77,14 @@ enum ExerciseCatalog {
         ExerciseSeed(name: "Plank", bodyPart: "Core", equipmentType: "Bodyweight", isTimeBased: true),
         ExerciseSeed(name: "Hanging Leg Raise", bodyPart: "Core", equipmentType: "Bodyweight"),
         ExerciseSeed(name: "Treadmill Run", bodyPart: "Cardio", equipmentType: "Machine", isTimeBased: true),
+
+        // Cardio (catalogue v2). All duration-based: the beta logs cardio as
+        // "how long", with the machine-specific detail in notes.
+        ExerciseSeed(name: "Walking", bodyPart: "Cardio", equipmentType: "Bodyweight", isTimeBased: true),
+        ExerciseSeed(name: "Treadmill Walk", bodyPart: "Cardio", equipmentType: "Machine", isTimeBased: true),
+        ExerciseSeed(name: "Stationary Bike", bodyPart: "Cardio", equipmentType: "Machine", isTimeBased: true),
+        ExerciseSeed(name: "Elliptical", bodyPart: "Cardio", equipmentType: "Machine", isTimeBased: true),
+        ExerciseSeed(name: "Stair Climber", bodyPart: "Cardio", equipmentType: "Machine", isTimeBased: true),
+        ExerciseSeed(name: "Rowing Machine", bodyPart: "Cardio", equipmentType: "Machine", isTimeBased: true),
     ]
 }

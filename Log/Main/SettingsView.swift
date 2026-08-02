@@ -178,16 +178,20 @@ struct SettingsView: View {
                     if new < defaultRepMin { defaultRepMin = new }
                 }
 
-            Stepper(
-                "Rest between sets: \(defaultRestBetweenSets)s",
-                value: $defaultRestBetweenSets, in: 0...300, step: 15
+            // These seed every new slot's rest, so they share the prescription
+            // editor's 60m bound and picker rather than the old 0…300s stepper.
+            DurationFieldRowInt(
+                title: "Rest between sets",
+                seconds: $defaultRestBetweenSets,
+                maxSeconds: DurationLimits.maxRestSeconds,
+                presets: DurationPresets.rest
             )
 
-            Stepper(
-                defaultRestAfterExercise == 0
-                    ? "Rest after exercise: none"
-                    : "Rest after exercise: \(defaultRestAfterExercise)s",
-                value: $defaultRestAfterExercise, in: 0...300, step: 15
+            DurationFieldRowInt(
+                title: "Rest after exercise",
+                seconds: $defaultRestAfterExercise,
+                maxSeconds: DurationLimits.maxRestSeconds,
+                presets: DurationPresets.rest
             )
         }
     }

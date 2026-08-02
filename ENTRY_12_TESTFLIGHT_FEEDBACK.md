@@ -107,6 +107,7 @@ The checklist testers are asked to walk through (full version in
 - Check History
 - Check the progress charts
 - _(optional)_ Switch an exercise during a workout
+- _(optional)_ Log a cardio exercise (duration-based), with the details in notes
 - _(optional)_ Try the Korean UI
 - _(optional)_ Try an uneven superset, if comfortable
 
@@ -195,6 +196,20 @@ Severity:
 - **Feedback:** Switching an exercise during an active workout produced an inconsistent plan, especially between duration-based and normal exercises. Switching a duration exercise for a normal one could leave **mixed duration/reps prescription state** — a reps/weight exercise still showing duration fields. Choosing "Keep Current Plan" also made the **set count inconsistent** (2 sets became 3). And leaving the workout and coming back showed that **the two resume paths restored different plans**: the routine's Start screen showed the original set count again but still rendered duration fields, while Resume Workout showed something else.
 - **Status:** Fixed. "Keep Current Plan" and "Reset Plan" now resolve through **one compatibility adapter**, so duration and normal exercises no longer leave mixed prescription state. Incompatible tempo, Tempo Override, warm-ups, techniques, and routine-specific notes are handled safely — preserved where they remain valid, cleared or adapted where they do not. **All resume paths now restore the same active session plan.** Switching may still prefill the input fields from the switched-in exercise's previous performance, but that is draft-only and never changes the workout plan.
 
+### 2026-08-02 — Peer/family tester usability feedback
+
+- **Group:** Friends & Family Beta
+- **Severity:** P2
+- **Feedback:** Duration and rest-period inputs were too limited. The duration maximum was about 10 minutes, which is too low for long duration exercises or cardio, and the steppers moved in fixed 15-second increments, so reaching 30+ minutes would have taken an unreasonable number of taps.
+- **Status:** Fixed. Exercise duration now goes up to 6 hours and rest up to 60 minutes, and both are entered with a preset strip plus hour/minute/second wheels instead of a stepper.
+
+### 2026-08-02 — Peer/family tester feature request
+
+- **Group:** Friends & Family Beta
+- **Severity:** P2
+- **Feedback:** A tester asked for cardio support, which the app had no obvious answer for.
+- **Status:** Fixed for the beta, in the same slice as the duration/rest limits above (lightweight cardio depends on usable long-duration input). Cardio can be logged as a duration-based exercise. For now, details like distance, speed, incline, resistance, or heart-rate zone can be written in notes. In Korean: 유산소 운동은 시간 기반 운동으로 기록할 수 있습니다. 현재는 거리, 속도, 경사, 저항 단계, 심박 구간 같은 세부 정보는 메모에 기록할 수 있습니다. Structured cardio metrics are deferred (see Deferred Feedback).
+
 ### TBD — Peer/family tester
 
 - **Group:** Friends & Family Beta
@@ -223,6 +238,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 - Cleaned up tempo for duration-based exercises: hidden in the routine prescription editor and the in-workout Edit Plan sheet, dropped from the plan summary, cleared when a slot flips to duration, and suppressed at read time so stale saved values (including on old History rows) never render. Tempo behavior for normal exercises is unchanged, and stored History values are not rewritten.
 - Made the Tempo Override technique incompatible with duration-based exercises, matching the prescription tempo field. It can no longer be added to a duration slot; a stale one (imported routine, or a slot switched to duration later) is removed when the prescription editor opens and suppressed everywhere it would otherwise render — routine technique list and count, active-workout set chips, and the orphan-technique summary row. Techniques are also filtered when the session plan is captured, so nothing incompatible reaches a workout or the History snapshot frozen from it. Tempo Override is unchanged for normal exercises, and the pairwise technique conflict rules are untouched.
 - Kept last-performance prefill on exercise switching, as **draft-only** behavior. Switching to a new exercise clears the replaced exercise's stale suggestions for that slot, then loads the switched-in exercise's own latest performance and uses it to prefill the editable reps/weight (or duration) input fields. It runs only after the chosen plan option has already been adapted to the new exercise type, and it writes nothing but draft text — the plan, prescription snapshot, set count, rest, RIR/RPE, tempo, warm-ups, techniques, prescription notes, routine template, and History are all decided elsewhere and unaffected. If the new exercise has no history the slot falls back to its prescription defaults.
+- Raised the duration and rest ceilings and replaced their steppers. Every seconds-valued editor previously capped at 600s (routine prescription duration/rest, in-workout Edit Plan) or 300s (Settings rest defaults, warm-up step rest, superset round rest), stepping 15s at a time. Exercise duration now allows up to 6 hours and rest up to 60 minutes, and both are entered through a shared row offering one-tap presets plus hour/minute/second wheels. Storage is unchanged — still `Int` seconds — and one shared normalizer clamps every write, so no editor can produce a negative or out-of-range value. The active workout's free-text duration field parses through the same normalizer and echoes the compact form ("45m") next to the raw seconds so a long cardio entry is readable before it is logged. Short holds like Plank, Hollow Hold, and Wall Sit are unaffected, and duration slots still hide reps/weight, tempo, and Tempo Override.
+- Added lightweight cardio support without a cardio data model. Cardio already existed as a canonical body part with the Korean translation 유산소; the built-in catalogue now seeds Walking, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine alongside the existing Treadmill Run, all duration-based. The catalogue version was bumped so existing installs pick the new names up, and the per-name dedupe means nothing is duplicated or overwritten. Distance, speed, incline, resistance / machine level, and heart-rate zone go in exercise or setup notes for now.
 - Added regression tests for routine startability, routine deletion, finish confirmation behavior, warm-up step insertion, and exercise-switch compatibility / resume consistency / draft-only prefill.
 
 Current validation status:
@@ -238,14 +255,19 @@ Current validation status:
 - Resume consistency: tested with 15 SwiftData tests covering plan-source routing, cold-restart rebuild from session snapshots, session-plan persistence, switched-session History, the frozen-History invariant, and a switch-with-prefill case proving the restored plan follows the switch rather than the switched-in exercise's history.
 - Tempo / Tempo Override cleanup: tested so duration exercises do not keep prescription tempo or Tempo Override, while non-duration technique behavior and the pairwise conflict rules remain unchanged.
 - Switch-time draft prefill: tested so switching prefills reps/weight (or duration) input fields from the switched-in exercise's own latest history, clears the replaced exercise's stale suggestions first, falls back to prescription defaults when the new exercise has no history, and leaves the plan and prescription snapshot byte-identical.
+- Duration/rest limits: tested with bound, clamp, negative, empty, and parse cases at both ceilings, plus 30+ minute cardio durations and the existing short-hold values.
+- Beta cardio: tested so the seeded cardio exercises are all duration-based, the Cardio body part stays canonical, and it localizes to 유산소.
+- User guide sync: tested so the English and Korean guides stay structurally aligned and both carry the cardio-in-notes wording that `USER_GUIDE.md` uses.
 - Manual switch/restart/History re-check on device: completed.
-- Latest full test suite result: 1035 tests, 0 failures.
+- Latest full test suite result: 1072 tests, 0 failures.
 
 ---
 
 ## Planned Fixes From Feedback
 
-- None currently. The setup-notes editing request was implemented (see Fixes above).
+- None currently. The setup-notes editing request was implemented, and the cardio
+  request is answered for the beta by duration-based cardio logging (see Fixes
+  above). Structured cardio metrics are tracked under Deferred Feedback.
 
 ---
 
@@ -253,9 +275,21 @@ Current validation status:
 
 Feedback that is real but intentionally not addressed in this phase, such as P2/P3 polish, larger redesigns, or out-of-scope ideas.
 
-- `[TBD]`
+- **Structured cardio metrics.** The cardio request is answered for the beta by
+  duration-based logging plus notes. Dedicated fields are deferred:
+  - distance
+  - pace
+  - calories
+  - heart-rate zone
+  - incline
+  - resistance / machine level
 
-No peer/family feedback has been deferred yet.
+Full cardio tracking is **deferred, not forgotten**. Each of those metrics needs
+its own model field, its own unit handling (km vs. mi, min/km vs. min/mi), its
+own History and analytics treatment, and a migration — that is a phase of its
+own, not a beta patch. Logging cardio as duration + notes keeps the data
+capturable now without freezing a schema that a proper cardio phase would want
+to change.
 
 ---
 
@@ -272,6 +306,8 @@ Reflections from running the beta.
 - Tester feedback can reveal documentation and usability gaps that are easy for the developer to miss.
 - Active workout state needs one clear source of truth; otherwise different resume paths can appear to restore different versions of the same workout.
 - Compatibility rules should be explicit when switching between different exercise types, because preserving everything can create invalid mixed state.
+- An input's **range** and its **control** are one decision. Raising a limit without replacing the stepper would have made 6-hour durations technically possible and practically unusable.
+- A feature request can often be answered with the primitives already in the app. Cardio did not need a cardio model to become usable in the beta; it needed duration input that was not capped at ten minutes.
 
 Themes to continue watching as peer/family testing expands:
 

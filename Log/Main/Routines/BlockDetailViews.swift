@@ -251,26 +251,29 @@ struct SupersetDetailNoRest: View {
     var body: some View {
         List {
             Section {
-                Stepper(
-                    (block.supersetRoundRestSeconds.map { "Rest after round: \($0)s" })
-                        ?? "Rest after round: none",
-                    value: Binding(
-                        get: { block.supersetRoundRestSeconds ?? 0 },
-                        set: { block.supersetRoundRestSeconds = $0 > 0 ? $0 : nil }
+                // Block-level rest shares the 60m bound and picker used by the
+                // per-slot rest fields; these are ordinary rest periods, not
+                // the short intra-set pauses configured under Techniques.
+                DurationFieldRow(
+                    title: "Rest after round",
+                    seconds: Binding(
+                        get: { block.supersetRoundRestSeconds },
+                        set: { block.supersetRoundRestSeconds = $0 }
                     ),
-                    in: 0...300,
-                    step: 15
+                    maxSeconds: DurationLimits.maxRestSeconds,
+                    zeroLabel: "None",
+                    presets: DurationPresets.rest
                 )
                 .disabled(isRoutineLocked)
-                Stepper(
-                    (block.restAfterSeconds.map { "Rest before next block: \($0)s" })
-                        ?? "Rest before next block: none",
-                    value: Binding(
-                        get: { block.restAfterSeconds ?? 0 },
-                        set: { block.restAfterSeconds = $0 > 0 ? $0 : nil }
+                DurationFieldRow(
+                    title: "Rest before next block",
+                    seconds: Binding(
+                        get: { block.restAfterSeconds },
+                        set: { block.restAfterSeconds = $0 }
                     ),
-                    in: 0...600,
-                    step: 15
+                    maxSeconds: DurationLimits.maxRestSeconds,
+                    zeroLabel: "None",
+                    presets: DurationPresets.rest
                 )
                 .disabled(isRoutineLocked)
             } header: {

@@ -96,6 +96,7 @@ the end.
 - [ ] Check History
 - [ ] Check the progress charts
 - [ ] *(optional)* Switch an exercise during a workout
+- [ ] *(optional)* Log a cardio exercise (duration-based), with the details in notes
 - [ ] *(optional)* Try the Korean UI
 - [ ] *(optional)* Try an uneven superset (different set counts per exercise), if comfortable
 
@@ -142,6 +143,8 @@ Fill this in as feedback arrives.
 | 2026-07-15 | Peer/family tester | Friends & Family Beta | P2 | Setup notes are useful during workouts, but could not be edited from the active workout screen like exercise notes. | fixed |
 | 2026-07-15 | Peer/family tester | Friends & Family Beta | P1 | The Finish Workout confirmation sometimes required a second tap before the workout actually finished. | fixed |
 | 2026-07-30 | Peer/family tester | Friends & Family Beta | P1 | Switching an exercise mid-workout gave an inconsistent plan between duration-based and normal exercises: switching could leave mixed duration/reps prescription state (duration fields on a reps/weight exercise), the set count was inconsistent after switching ("Keep Current Plan" changed 2 → 3), and the two resume paths restored different plans. Fixed: "Keep Current Plan" and "Reset Plan" now use one compatibility adapter so neither leaves mixed prescription state; incompatible tempo, Tempo Override, warm-ups, techniques, and prescription notes are handled safely; and all resume paths restore the same active session plan. Switching may still prefill input fields from the new exercise's previous performance, but that is draft-only and does not change the workout plan. | fixed |
+| 2026-08-02 | Peer/family tester | Friends & Family Beta | P2 | Duration and rest inputs were too limited: duration maxed out around 10 minutes, which is too low for long duration exercises or cardio, and the 15-second steppers would have taken far too many taps to reach 30+ minutes. Fixed: exercise duration now goes up to 6 hours and rest up to 60 minutes, both entered with one-tap presets plus hour/minute/second wheels instead of a stepper. Values are stored as seconds as before, and every write is clamped so negative or out-of-range values cannot be entered. | fixed |
+| 2026-08-02 | Peer/family tester | Friends & Family Beta | P2 | Asked for cardio support. Fixed in the same slice as the duration/rest limits above, because lightweight cardio depends on usable long-duration input: cardio can be logged as a duration-based exercise, and the built-in catalogue now seeds Walking, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine as duration-based exercises under the existing Cardio body part (Korean: 유산소). For now, details like distance, speed, incline, resistance, or heart-rate zone can be written in notes. Structured cardio metrics (distance, pace, calories, heart-rate zone, incline, resistance / machine level) are deferred, not forgotten. | fixed |
 | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] |
 
 Status values: `new`, `investigating`, `fixed`, `deferred`, `won't fix`.
@@ -157,6 +160,9 @@ Testers should know this going in:
 - UI polish may continue during and after this beta.
 - Broader distribution is deferred until this small beta is useful and settled.
 - Korean translations are new and may need refinement.
+- Cardio is supported as duration-based logging only. Details like distance,
+  speed, incline, resistance, or heart-rate zone go in notes; there are no
+  dedicated cardio fields yet.
 
 ---
 
