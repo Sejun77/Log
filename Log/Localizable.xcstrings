@@ -858,7 +858,6 @@
       }
     },
     "Cardio" : {
-      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -4234,6 +4233,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "다음 자동 입력에 사용"
+          }
+        }
+      }
+    },
+    "Use for running, cycling, rowing, walking, or machine cardio." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "달리기, 사이클, 로잉, 걷기 또는 유산소 머신에 사용하세요."
           }
         }
       }

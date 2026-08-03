@@ -814,8 +814,42 @@ struct ExerciseDetailView: View {
                 // makeSwapDefaultTemplates, SlotPrescriptionSection,
                 // ActiveWorkoutView row rendering) continue to read
                 // exercise.isTimeBased as the single source of truth.
-                Toggle("Time-based", isOn: $exercise.isTimeBased)
+                //
+                // Cardio Slice 2: the binding routes writes through
+                // `setTimeBased` so turning Time-based off also clears
+                // `isCardio` — the `isCardio ⇒ isTimeBased` invariant is
+                // enforced here rather than left to a downstream reader.
+                Toggle(
+                    "Time-based",
+                    isOn: Binding(
+                        get: { exercise.isTimeBased },
+                        set: { exercise.setTimeBased($0) }
+                    )
+                )
+                .disabled(isLocked)
+
+                // Cardio is a facet of duration, so the row only exists while
+                // Time-based is on — there is no such thing as a cardio
+                // exercise logged in reps. Hiding (rather than disabling) it
+                // keeps the strength case, the overwhelming majority, free of
+                // a control that can never apply.
+                if exercise.isTimeBased {
+                    Toggle(
+                        isOn: Binding(
+                            get: { exercise.isCardio },
+                            set: { exercise.setCardio($0) }
+                        )
+                    ) {
+                        HStack(spacing: DSSpacing.xs) {
+                            Text("Cardio")
+                            InfoButton(
+                                "Cardio",
+                                message: "Use for running, cycling, rowing, walking, or machine cardio."
+                            )
+                        }
+                    }
                     .disabled(isLocked)
+                }
 
                 // Independent of equipment type: a weighted pull-up keeps a
                 // non-"Bodyweight" equipment (so the active-workout weight field

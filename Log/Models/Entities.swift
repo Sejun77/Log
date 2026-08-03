@@ -20,6 +20,18 @@ final class Exercise {
     var setupDefaults: String?
     var isCustom: Bool
     var isTimeBased: Bool = false
+
+    /// Cardio is a *facet* of duration, not a sibling of it: an exercise is
+    /// cardio only when it is also time-based. `isCardio == true` therefore
+    /// implies `isTimeBased == true` — an invariant enforced at the write
+    /// sites (`setTimeBased` / `setCardio`) rather than by the store, and read
+    /// through the derived `trackingMode` which checks `isTimeBased` first so
+    /// an impossible row degrades to `.strength` instead of crashing.
+    ///
+    /// Additive (default false) so existing rows migrate cleanly with no
+    /// backfill: every exercise that exists today stays exactly what it is,
+    /// and Plank stays a timed hold until the user opts it into cardio.
+    var isCardio: Bool = false
     /// User-controlled display order on the Exercises tab. Additive (default 0)
     /// so existing rows migrate cleanly; backfill normalizes legacy data on
     /// first appear via `ExercisesView.backfillOrderIfNeeded`.
