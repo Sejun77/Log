@@ -201,4 +201,37 @@ final class KoreanLocalizationTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Exercise Detail cardio toggle (Cardio Slice 2)
+
+    /// Exact keys introduced by the Exercise Detail **Cardio** toggle. "Cardio"
+    /// itself is shared with the canonical body part (already asserted above),
+    /// and is included here so a future rename of either use site fails loudly.
+    private static let cardioToggleKeys = [
+        "Cardio",
+        "Use for running, cycling, rowing, walking, or machine cardio.",
+    ]
+
+    func testCardioToggleStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.cardioToggleKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Cardio toggle string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testCardioToggleStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.cardioToggleKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
 }

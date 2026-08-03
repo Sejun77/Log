@@ -61,6 +61,27 @@ Which gives three states:
 the two write sites (the Exercise Detail toggle and the CSV importer) and
 asserted in tests; nothing else needs to know.
 
+#### Implementation notes (settled in Slice 2)
+
+**The invariant lives in two model methods, not in the views.** Slice 2 ships
+`Exercise.setTimeBased(_:)` and `Exercise.setCardio(_:)` alongside the derived
+`trackingMode`. `setTimeBased(false)` also clears `isCardio`; `setCardio(true)`
+is refused (and any stale `true` cleared) when the exercise is not time-based.
+The Exercise Detail toggles bind through these rather than to the stored
+properties, so a second write site — the CSV importer in Slice 7 — inherits the
+enforcement instead of restating it. Direct assignment to `isTimeBased` stays
+valid at construction time (seeding, CSV import, routine transfer), where
+`isCardio` is already `false`.
+
+Because the project has no view models for Exercise Detail and the single
+`LogUITests` flow does not reach that screen, these two methods are also where
+the toggle's *behavior* is tested.
+
+**The Cardio row is hidden, not disabled, when Time-based is off.** Strength is
+the overwhelming majority case and a permanently greyed-out control there is
+noise; the row appearing when Time-based flips on is also the clearest possible
+statement that cardio is a facet of duration.
+
 **Why this and not an enum.** Cardio inherits every duration invariant for free
 and at zero cost:
 
@@ -595,8 +616,8 @@ independently committable, additive-first.
 
 | # | Slice | Why here |
 |---|---|---|
-| 1 | `CardioMetrics` / `HRZone` / `DistanceUnit` value types + `AppSettings.distanceIsMetric` | Pure, fully testable, zero UI risk — same shape as the `DurationInput` slice |
-| 2 | `Exercise.isCardio` + derived `trackingMode` + Exercise Detail toggle | Smallest possible model change; establishes the invariant before anything depends on it |
+| 1 | ✅ `CardioMetrics` / `HRZone` / `DistanceUnit` value types + `AppSettings.distanceIsMetric` | Pure, fully testable, zero UI risk — same shape as the `DurationInput` slice |
+| 2 | ✅ `Exercise.isCardio` + derived `trackingMode` + Exercise Detail toggle | Smallest possible model change; establishes the invariant before anything depends on it |
 | 3 | `SetLog` metric fields + History summary line | Storage and read-back, no logging-path change yet; proves old rows are untouched |
 | 4 | Active-workout cardio row (Details disclosure, post-log edit) | The risky slice, entered with the model already proven |
 | 5 | Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques) | Programming surface, once logging works |
