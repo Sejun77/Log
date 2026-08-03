@@ -147,6 +147,125 @@ struct ActiveWorkoutView: View {
     @State private var dropPrefillBySlotID:
         [UUID: [Int: [Int: LastPerformancePrefillService.LastPerformanceDropSuggestion]]] = [:]
 
+    // Cardio Slice 4 — per-set optional metric drafts, keyed by routineSlotID →
+    // setIndex, in the same shape as `inputsByExerciseID`. Holds raw entry text
+    // (not `CardioMetrics`) so a half-typed "6." survives navigation; it is
+    // normalized once, at log time.
+    @State private var cardioDraftsBySlotID: [UUID: [Int: CardioEntryDraft]] = [:]
+
+    // Slots whose current exercise is `.cardio`. Cached rather than fetched
+    // per row: the row builder runs inside `body` for every visible set, and a
+    // SwiftData fetch there would be exactly the kind of work CLAUDE.md rules
+    // out. Recomputed at session start and after an exercise switch — the two
+    // moments a slot's tracking mode can change.
+    //
+    // Drives two things: whether the row offers the cardio Details section,
+    // and — via `showsEffortUI` — whether the combined RIR/RPE control is
+    // shown at all.
+    @State private var cardioSlotIDs: Set<UUID> = []
+
+    /// Whether this slot shows the combined RIR/RPE effort control. Delegates
+    /// to `WorkoutEffortTargetResolver.isEffortApplicable`, which owns the
+    /// product rule, so the three display sites (per-set row labels, Plan card
+    /// summary, Edit Plan sheet) cannot drift apart.
+    private func showsEffortUI(forSlot slotID: UUID) -> Bool {
+        WorkoutEffortTargetResolver.isEffortApplicable(
+            to: cardioSlotIDs.contains(slotID) ? .cardio : .timedHold)
+    }
+
+    /// Rebuilds `cardioSlotIDs` from the live `Exercise` rows behind the plan's
+    /// current exercise ids. Reading the model (rather than a denormalized flag
+    /// on `PlanExercise`) means a slot swapped to or from a cardio exercise is
+    /// picked up for free, without touching the exercise-switch adapter.
+    private func refreshCardioSlots() {
+        var ids: Set<UUID> = []
+        for block in plan.blocks {
+            for ex in block.exercises {
+                guard let live = fetchExercise(by: ex.currentExerciseID) else {
+                    continue
+                }
+                if live.trackingMode == .cardio {
+                    ids.insert(ex.routineSlotID)
+                }
+            }
+        }
+        cardioSlotIDs = ids
+    }
+
+    /// Binding for one set's cardio draft. Writes straight through to
+    /// `ParentDraftStore`, mirroring how `durationBinding` persists on every
+    /// keystroke so an in-flight entry survives Save & Exit or a force-quit.
+    private func cardioDraftBinding(
+        slotID: UUID, setIndex: Int
+    ) -> Binding<CardioEntryDraft> {
+        Binding(
+            get: {
+                cardioDraftsBySlotID[slotID]?[setIndex]
+                    ?? CardioEntryDraft(unit: AppSettings.distanceUnit)
+            },
+            set: { newValue in
+                cardioDraftsBySlotID[slotID, default: [:]][setIndex] = newValue
+                parentDraftStore?.persist(
+                    slotID: slotID, setIndex: setIndex, cardio: newValue)
+            }
+        )
+    }
+
+    /// The metrics a cardio set would log right now; empty for every
+    /// non-cardio slot, which is what keeps strength and timed-hold logging
+    /// byte-identical.
+    private func cardioMetricsForLog(slotID: UUID, setIndex: Int) -> CardioMetrics {
+        guard cardioSlotIDs.contains(slotID),
+            let draft = cardioDraftsBySlotID[slotID]?[setIndex]
+        else { return CardioMetrics() }
+        return draft.metrics
+    }
+
+    /// Restores cardio drafts on resume, with the same precedence the
+    /// reps/weight/duration rehydrate uses: a persisted `SetLog` wins (the set
+    /// is logged and its fields are read-only), else the persisted draft, else
+    /// nothing. Runs after `rehydrateFromWorkoutIfPresent` so `itemsByExerciseID`
+    /// is populated.
+    private func rehydrateCardioDrafts() {
+        let defaultUnit = AppSettings.distanceUnit
+        var drafts = cardioDraftsBySlotID
+
+        for block in plan.blocks {
+            for ex in block.exercises where cardioSlotIDs.contains(ex.routineSlotID) {
+                let slotID = ex.routineSlotID
+                // A slot swapped mid-session carries logs belonging to a
+                // different exercise; skip it exactly as the parent rehydrate
+                // does.
+                if ex.originalExerciseID != ex.currentExerciseID { continue }
+
+                let item = itemsByExerciseID[slotID]
+                    ?? workout?.items.first(where: { $0.routineSlotID == slotID })
+                var perSet = drafts[slotID] ?? [:]
+
+                let setCount = effectiveSetCount(
+                    for: ex, resolvedTemplates: ex.templates)
+                for i in 0..<setCount {
+                    let loggedSet = item?.setLogs.last(where: {
+                        $0.indexInExercise == i && $0.subIndex == nil
+                    })
+                    if let loggedSet, loggedSet.hasCardioMetrics {
+                        perSet[i] = CardioEntryDraft(
+                            logged: loggedSet, defaultUnit: defaultUnit)
+                    } else if loggedSet == nil,
+                        let snapshot = parentDraftStore?.load(
+                            slotID: slotID, setIndex: i),
+                        let restored = CardioEntryDraft(
+                            snapshot: snapshot, defaultUnit: defaultUnit)
+                    {
+                        perSet[i] = restored
+                    }
+                }
+                drafts[slotID] = perSet
+            }
+        }
+        cardioDraftsBySlotID = drafts
+    }
+
     private func ensureInputsInitializedFromPlan() {
         guard inputsByExerciseID.isEmpty else { return }
         for block in plan.blocks {
@@ -667,6 +786,15 @@ struct ActiveWorkoutView: View {
         for exercise: PlanExercise, setCount: Int
     ) -> [String?] {
         guard setCount > 0 else { return [] }
+        // Cardio Slice 4 patch: RIR is "reps in reserve", which has no meaning
+        // for a 30-minute run — there are no reps to hold back. The app's
+        // effort UI is a single combined RIR/RPE control, so it is hidden
+        // wholesale for cardio rather than split. The snapshot and session
+        // values are left untouched: nothing is erased, only not shown, so a
+        // slot switched back to a strength exercise still has its targets.
+        guard showsEffortUI(forSlot: exercise.routineSlotID) else {
+            return Array(repeating: nil, count: setCount)
+        }
         guard let payload = exercise.prescriptionSnapshot else {
             return Array(repeating: nil, count: setCount)
         }
@@ -709,6 +837,10 @@ struct ActiveWorkoutView: View {
                     isLogged: isLogged,
                     canLog: allowed,
                     effortTarget: effortTarget,
+                    // nil for a timed hold, so Plank's row is untouched.
+                    cardioDraft: cardioSlotIDs.contains(slotID)
+                        ? cardioDraftBinding(slotID: slotID, setIndex: idx)
+                        : nil,
                     duration: durB,
                     onStart: { durationSeconds in
                         setTimer.start(seconds: durationSeconds, mode: .set)
@@ -731,7 +863,11 @@ struct ActiveWorkoutView: View {
                             slotID: slotID,
                             setIndex: idx,
                             durationSeconds: durationSeconds,
-                            kind: template.kind
+                            kind: template.kind,
+                            // Empty for a timed hold; every metric nil for a
+                            // cardio set the user never expanded Details on.
+                            cardio: cardioMetricsForLog(
+                                slotID: slotID, setIndex: idx)
                         )
                         var s = loggedByExercise[slotID, default: []]
                         s.insert(idx)
@@ -1240,6 +1376,11 @@ struct ActiveWorkoutView: View {
     private func planEffortSummary(
         for exercise: PlanExercise, sp: SessionPlan
     ) -> String? {
+        // Cardio Slice 4 patch: same rule as the per-set labels — the combined
+        // RIR/RPE control is not shown for cardio, so the Plan card must not
+        // advertise a target the row no longer displays. Values are preserved,
+        // just not surfaced.
+        guard showsEffortUI(forSlot: exercise.routineSlotID) else { return nil }
         guard let snap = exercise.prescriptionSnapshot else { return nil }
         let snapFields = WorkoutEffortTargetResolver.Fields(payload: snap)
         switch WorkoutEffortTargetResolver.effortMode(for: snapFields) {
@@ -2007,6 +2148,12 @@ struct ActiveWorkoutView: View {
                 ensureInputsInitializedFromPlan()
                 // 3) now rehydrate from existing workout logs (so logged checkmarks & fields match reality)
                 rehydrateFromWorkoutIfPresent()
+                // 3a) Cardio Slice 4 — identify cardio slots, then restore
+                //     their optional metric drafts. Must run after (3) so
+                //     `itemsByExerciseID` is populated and a logged set's
+                //     stored metrics win over any stale draft.
+                refreshCardioSlots()
+                rehydrateCardioDrafts()
 
                 // Persist active state for cold-restart resume
                 markAppStateActive()
@@ -2110,7 +2257,9 @@ struct ActiveWorkoutView: View {
                             for: exercise.routineSlotID),
                         snapshotEffort: exercise.prescriptionSnapshot.map {
                             WorkoutEffortTargetResolver.Fields(payload: $0)
-                        })
+                        },
+                        isCardio: !showsEffortUI(
+                            forSlot: exercise.routineSlotID))
                 }
             }
             .sheet(
@@ -2534,6 +2683,15 @@ struct ActiveWorkoutView: View {
         plan.blocks[blockIndex].exercises[exIndex].isTimeBased =
             newEx.isTimeBased
 
+        // 3a) Cardio Slice 4 — the slot's tracking mode may have changed in
+        // either direction. Re-derive which slots are cardio, and drop this
+        // slot's metric drafts: the slot is being rebuilt fresh (every set
+        // unlogged, inputs reseeded below), so carrying a distance typed for
+        // Exercise A onto Exercise B would attach data to the wrong exercise.
+        // The switch adapter itself is untouched — this reads the live model.
+        cardioDraftsBySlotID[slotID] = nil
+        refreshCardioSlots()
+
         // 4) Build fresh per-set inputs for this slot from newTemplates
         // Phase 5.2 — slotID is the per-slot key (routineSlotID); already
         // bound above in step (2) for the template-build priority chain.
@@ -2822,11 +2980,16 @@ struct ActiveWorkoutView: View {
         try? ctx.save()
     }
 
+    /// - Parameter cardio: optional metrics for a cardio set. Defaults to an
+    ///   empty `CardioMetrics`, which **clears** every cardio column — so
+    ///   re-logging a set after Undo never leaves a previous attempt's distance
+    ///   or heart rate attached, and a timed hold can never acquire one.
     private func appendTimeSetLog(
         slotID: UUID,
         setIndex: Int,
         durationSeconds: Int,
-        kind: SetKind
+        kind: SetKind,
+        cardio: CardioMetrics = CardioMetrics()
     ) {
         guard let workout else { return }
 
@@ -2853,18 +3016,19 @@ struct ActiveWorkoutView: View {
             wi.setLogs[j].weight = nil
             wi.setLogs[j].durationSeconds = durationSeconds
             wi.setLogs[j].timestamp = .now
+            wi.setLogs[j].applyCardioMetrics(cardio)
         } else {
-            wi.setLogs.append(
-                SetLog(
-                    indexInExercise: setIndex,
-                    kind: kind,
-                    reps: 0,
-                    weight: nil,
-                    restSeconds: nil,
-                    timestamp: .now,
-                    durationSeconds: durationSeconds
-                )
+            let log = SetLog(
+                indexInExercise: setIndex,
+                kind: kind,
+                reps: 0,
+                weight: nil,
+                restSeconds: nil,
+                timestamp: .now,
+                durationSeconds: durationSeconds
             )
+            log.applyCardioMetrics(cardio)
+            wi.setLogs.append(log)
         }
         try? ctx.save()
     }

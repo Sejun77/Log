@@ -65,27 +65,44 @@ final class UserGuideContentTests: XCTestCase {
             section(heading: "시간 기반 운동과 유산소 운동", in: korean))
     }
 
-    /// The exact beta wording agreed for the cardio answer. It appears in
-    /// `USER_GUIDE.md`, `ENTRY_12_TESTFLIGHT_FEEDBACK.md`, and here; if the
-    /// in-app copy is reworded the docs have to be rewritten with it.
+    /// The exact wording agreed for the cardio answer. It appears in
+    /// `USER_GUIDE.md` and here; if the in-app copy is reworded the guide has
+    /// to be rewritten with it.
+    ///
+    /// > **Superseded by Cardio Slice 4.** The beta answer — "details like
+    /// > distance, speed, incline, resistance, or heart-rate zone can be
+    /// > written in notes" — was true only while there was nowhere else to put
+    /// > them. Slice 4 shipped the Details section on the active-workout cardio
+    /// > row, so the guide now describes that instead. The historical sentence
+    /// > is preserved in `ENTRY_12_TESTFLIGHT_FEEDBACK.md` as the record of what
+    /// > beta testers were told at the time, and is deliberately not rewritten
+    /// > there.
     func testCardioWordingMatchesTheDocumentedSentence() throws {
         let en = try XCTUnwrap(
             section(heading: "Duration Exercises and Cardio", in: english)?.outro)
         XCTAssertTrue(
             en.contains(
-                "Cardio can be logged as a duration-based exercise. For now, "
-                    + "details like distance, speed, incline, resistance, or "
-                    + "heart-rate zone can be written in notes."),
+                "To track an exercise as cardio, open it in Exercises, turn on "
+                    + "Time-based, then turn on Cardio."),
             "English cardio wording drifted from USER_GUIDE.md")
+        XCTAssertTrue(
+            en.contains(
+                "Every one of these is optional, and pace and speed are worked "
+                    + "out for you once a distance and a duration are entered."),
+            "English cardio detail wording drifted from USER_GUIDE.md")
 
         let ko = try XCTUnwrap(
             section(heading: "시간 기반 운동과 유산소 운동", in: korean)?.outro)
         XCTAssertTrue(
             ko.contains(
-                "유산소 운동은 시간 기반 운동으로 기록할 수 있습니다. 현재는 거리, "
-                    + "속도, 경사, 저항 단계, 심박 구간 같은 세부 정보는 메모에 "
-                    + "기록할 수 있습니다."),
+                "운동을 유산소로 기록하려면 운동 탭에서 해당 운동을 열고 시간 "
+                    + "기반을 켠 다음 유산소를 켜세요."),
             "Korean cardio wording drifted from USER_GUIDE.md")
+        XCTAssertTrue(
+            ko.contains(
+                "모두 선택 사항이며, 거리와 시간을 입력하면 페이스와 속도는 "
+                    + "자동으로 계산됩니다."),
+            "Korean cardio detail wording drifted from USER_GUIDE.md")
     }
 
     /// The limits the guide quotes must be the limits the app enforces.

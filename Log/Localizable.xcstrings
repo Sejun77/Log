@@ -50,6 +50,9 @@
     "#%lld" : {
 
     },
+    "%" : {
+
+    },
     "% of Working" : {
       "localizations" : {
         "ko" : {
@@ -254,9 +257,6 @@
         }
       }
     },
-    "%llds" : {
-
-    },
     "%llds rest" : {
       "localizations" : {
         "ko" : {
@@ -291,6 +291,9 @@
 
     },
     "×%lld" : {
+
+    },
+    "0" : {
 
     },
     "0 sets" : {
@@ -653,6 +656,17 @@
         }
       }
     },
+    "Average Heart Rate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "평균 심박수"
+          }
+        }
+      }
+    },
     "Back" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -777,6 +791,9 @@
         }
       }
     },
+    "bpm" : {
+
+    },
     "Cable" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -801,6 +818,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "달력"
+          }
+        }
+      }
+    },
+    "Calories" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "칼로리"
           }
         }
       }
@@ -1224,6 +1252,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 삭제"
+          }
+        }
+      }
+    },
+    "Distance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "거리"
           }
         }
       }
@@ -1910,6 +1949,17 @@
         }
       }
     },
+    "Heart-Rate Zone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "심박 존"
+          }
+        }
+      }
+    },
     "Help" : {
 
     },
@@ -2024,6 +2074,17 @@
         }
       }
     },
+    "Incline / Decline" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "경사 / 내리막"
+          }
+        }
+      }
+    },
     "Intensity" : {
       "localizations" : {
         "ko" : {
@@ -2075,6 +2136,9 @@
           }
         }
       }
+    },
+    "kcal" : {
+
     },
     "Keep current plan" : {
       "extractionState" : "manual",
@@ -2695,6 +2759,17 @@
         }
       }
     },
+    "Pace" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "페이스"
+          }
+        }
+      }
+    },
     "Partial Range" : {
       "localizations" : {
         "ko" : {
@@ -3091,6 +3166,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이 슬롯의 플랜 초기화"
+          }
+        }
+      }
+    },
+    "Resistance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "저항"
           }
         }
       }
@@ -3831,6 +3917,17 @@
         }
       }
     },
+    "Speed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "속도"
+          }
+        }
+      }
+    },
     "Squeeze pause: %@" : {
       "localizations" : {
         "ko" : {
@@ -4236,6 +4333,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "실행 취소"
+          }
+        }
+      }
+    },
+    "Unit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "단위"
           }
         }
       }

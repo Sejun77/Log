@@ -273,6 +273,113 @@ which is where they already are and where they work fine. Adding them would
 double the routine editor's cardio section to serve a case the beta has not
 reported.
 
+#### Implementation notes (settled in Slice 4)
+
+**`TimeSetEntryRow.cardioDraft` is an optional `Binding`, and nil means "not
+cardio".** A timed hold passes nil and renders the row it always has — no
+disclosure, no extra height, no behavior change — so Plank's immunity is
+structural rather than something every future edit has to remember to preserve.
+This is the same nil-means-unchanged shape Slice 3 used for the History row.
+
+**Entry text lives in `CardioEntryDraft`, not `CardioMetrics`.** A user mid-typing
+has "6." in the distance field and "-" in the incline field; round-tripping
+through a normalizing type on every keystroke would delete both. The draft holds
+raw strings, sanitizes keystrokes (digits, one separator, a leading minus for
+decline), and normalizes exactly once — at log time, via `metrics`. An invalid
+optional field is therefore dropped silently and **never blocks the Log button**,
+whose gate remains `duration > 0`.
+
+**Which slots are cardio is cached, not fetched per row.** `cardioSlotIDs` is
+rebuilt at session start and after an exercise switch, reading `trackingMode`
+from the live `Exercise` behind `PlanExercise.currentExerciseID`. Reading the
+model rather than denormalizing a flag onto `PlanExercise` means a slot swapped
+to or from a cardio exercise is picked up for free, **without touching the
+exercise-switch adapter** (still Slice 6). A per-row fetch inside `body` would
+violate the CLAUDE.md performance rule.
+
+**Drafts persist through `ParentDraftStore`, which gained cases rather than a new
+layout.** New `Field` cases mint new `<slotID>_<setIndex>_<field>` keys; every
+pre-existing `reps` / `weight` / `duration` key keeps its exact spelling, and the
+prefix-matching `clear` sweeps old and new alike. An in-flight draft written by a
+previous build reads back unchanged with the cardio fields simply absent. On
+resume the precedence mirrors the existing rehydrate: a persisted `SetLog` wins,
+else the persisted draft, else nothing.
+
+**Metrics are applied unconditionally at log time**, including when empty. That
+is what makes Undo → re-log clear a previous attempt's distance instead of
+leaving it attached to a set the user has since changed.
+
+**Post-log editing is deferred, deliberately.** The row has never supported
+editing a logged value — reps, weight, and duration are all `.disabled(isLogged)`
+with Undo as the only route — so making cardio metrics the one editable
+post-log field would be both inconsistent and a new editing system this slice
+does not need. Details fields follow the same rule. Undo restores the in-memory
+draft intact, so correcting a set costs two taps.
+
+**Pace and speed appear only when derivable.** No placeholder row, no dash: with
+no distance, no duration, or a zero duration, the preview simply does not exist.
+Speed reads "8.3 km/h", pace "7:15 /km", both derived at render time and neither
+stored.
+
+#### Pre-merge patch (manual review of Slice 4)
+
+Four UX problems found on review, all fixed before merge.
+
+**The Details section is a button + conditional block, not a `DisclosureGroup`.**
+`DisclosureGroup` animates its own expansion, and inside a List row that
+animation re-laid out the whole row — the set label, duration field, Start and
+Log buttons all slid vertically while the section opened. It now toggles inside
+a `Transaction` with `disablesAnimations = true`, so the section appears in one
+frame and the primary logging controls never move. No animation beats an awkward
+one on a data-entry surface.
+
+**The collapsed summary is capped at three segments**, prioritized distance →
+average heart rate → calories, with incline / resistance / zone filling only the
+slots those three leave empty. Pace and speed never appear — pace has its own
+preview row in the expanded section, duration is already the row's primary
+field. Showing every metric overflowed the label and ellipsized it, which is
+strictly worse than showing fewer things legibly when the full set is one tap
+away.
+
+**History groups metrics onto secondary lines** instead of packing up to eight
+segments onto the row's trailing edge, where they wrapped into an unreadable
+block. Duration stays the primary trailing value so the eye lands in the same
+place on every row:
+
+```
+2. Working                                            2700s
+6.2 km · 7:15 /km
+3% incline · level 8
+142 bpm · Z3 · 410 kcal
+```
+
+Line 1 is what was covered, line 2 how the machine was set, line 3 the body's
+response. An empty group produces no line, so a duration-only row is still a
+single unchanged line.
+
+**RIR/RPE is not shown for cardio.** RIR is "reps in reserve", meaningless for a
+30-minute run. The app exposes RIR and RPE through *one* control governed by a
+single `AppSettings.autoregMode` preference, so they cannot be separated at the
+UI without splitting that preference — hiding the whole control for cardio is
+the honest reading of today's architecture. The rule lives in
+`WorkoutEffortTargetResolver.isEffortApplicable(to:)`; all three display sites
+(per-set row labels, Plan card summary, Edit Plan sheet) route through it.
+
+> Suppression is **display-only**. `SlotPrescription`,
+> `PlannedPrescriptionSnapshot` and `SessionPlan` keep whatever effort values
+> they hold, so a slot switched back to a strength exercise still has its
+> targets, and the resolver itself is untouched.
+
+**Cardio-specific RPE is deliberately deferred, not rejected.** Perceived
+exertion *does* make sense for cardio — a rower reporting "RPE 7" is meaningful
+in a way that "RIR 2" is not. Re-enabling it requires decoupling RPE from RIR in
+the autoreg preference so a cardio slot can offer RPE while a strength slot in
+the same session offers RIR. That is a change to the effort system, not to
+cardio, and it should be taken on its own terms. Until then cardio shows no
+effort field. Timed holds keep the control: "two seconds in reserve" is a
+stretch, but it is what the app has always offered for a plank, and this patch
+does not change unrelated behavior.
+
 ### 2.4 Deferring HealthKit
 
 **Answer to design question 5. Yes — explicitly deferred, and not to Phase 3
@@ -670,7 +777,7 @@ independently committable, additive-first.
 | 1 | ✅ `CardioMetrics` / `HRZone` / `DistanceUnit` value types + `AppSettings.distanceIsMetric` | Pure, fully testable, zero UI risk — same shape as the `DurationInput` slice |
 | 2 | ✅ `Exercise.isCardio` + derived `trackingMode` + Exercise Detail toggle | Smallest possible model change; establishes the invariant before anything depends on it |
 | 3 | ✅ `SetLog` metric fields + History summary line | Storage and read-back, no logging-path change yet; proves old rows are untouched |
-| 4 | Active-workout cardio row (Details disclosure, post-log edit) | The risky slice, entered with the model already proven |
+| 4 | ✅ Active-workout cardio row (Details disclosure) — post-log edit deferred, see §2.4 | The risky slice, entered with the model already proven |
 | 5 | Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques) | Programming surface, once logging works |
 | 6 | Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
 | 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |

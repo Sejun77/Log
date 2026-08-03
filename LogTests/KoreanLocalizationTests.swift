@@ -234,4 +234,47 @@ final class KoreanLocalizationTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Active-workout cardio Details section (Cardio Slice 4)
+
+    /// Every label in the active-workout cardio Details disclosure. Unit
+    /// symbols (`km`, `mi`, `bpm`, `kcal`, `%`, `Z3`) are deliberately absent —
+    /// they render identically in every language the app ships, matching how
+    /// `kg` / `lb` / `s` are already handled.
+    private static let cardioDetailsKeys = [
+        "Details",
+        "Distance",
+        "Unit",
+        "Average Heart Rate",
+        "Heart-Rate Zone",
+        "Calories",
+        "Incline / Decline",
+        "Resistance",
+        "Pace",
+        "Speed",
+        "None",
+    ]
+
+    func testCardioDetailsStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.cardioDetailsKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Cardio Details string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testCardioDetailsStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.cardioDetailsKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
 }
