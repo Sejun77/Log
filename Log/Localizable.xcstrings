@@ -2012,6 +2012,18 @@
         }
       }
     },
+    "incline" : {
+      "comment" : "History cardio summary: treadmill grade",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "경사"
+          }
+        }
+      }
+    },
     "Intensity" : {
       "localizations" : {
         "ko" : {
@@ -2139,6 +2151,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "늘린 구간"
+          }
+        }
+      }
+    },
+    "level" : {
+      "comment" : "History cardio summary: machine resistance level",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "레벨"
           }
         }
       }

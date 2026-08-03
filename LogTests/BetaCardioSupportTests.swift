@@ -5,11 +5,16 @@ import XCTest
 
 /// Beta cardio support (Friends & Family Beta, 2026-08-02).
 ///
-/// The product decision for this phase is deliberately narrow: **cardio is a
-/// duration-based exercise**. There is no cardio data model, and no structured
-/// distance / pace / calorie / heart-rate / incline / resistance fields — those
-/// are recorded in exercise or setup notes for now and tracked under Deferred
-/// Feedback.
+/// The product decision for this phase was deliberately narrow: **cardio is a
+/// duration-based exercise**, with no structured distance / pace / calorie /
+/// heart-rate / incline / resistance fields.
+///
+/// > **Superseded in part.** Cardio Slice 3 (`SetLogCardioMetricsTests`) added
+/// > those fields to `SetLog`, all optional and nil by default. What survives
+/// > unchanged — and is what these tests actually guard — is that the *seeded
+/// > catalogue* stays duration-based and that a cardio slot is still governed
+/// > by the duration rules. Structured metrics are opt-in per set; a beta
+/// > cardio log carrying only a duration renders exactly as it always has.
 ///
 /// These tests pin the parts of that decision that are easy to break later:
 /// the seeded cardio catalogue stays duration-based, the Cardio body part stays

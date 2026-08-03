@@ -717,10 +717,22 @@ private struct WorkoutDetailView: View {
                     .font(.dsBody)
                     Spacer()
 
-                    if let dur = log.durationSeconds, dur > 0 {
-                        Text("\(dur)s")
+                    // Cardio Slice 3: the duration branch now renders through
+                    // `CardioHistorySummary`, which returns the literal
+                    // "\(dur)s" for a duration-only set — so timed holds and
+                    // pre-Slice-3 cardio logs are unchanged — and appends the
+                    // recorded cardio metrics when a set has any. It returns
+                    // nil for a strength set, which falls through to the
+                    // untouched weight/reps rendering below. Passed as a
+                    // `String` (not an interpolated literal), so the text is
+                    // rendered verbatim; the formatter localizes its own words.
+                    if let summary = CardioHistorySummary.text(
+                        for: log, fallbackUnit: AppSettings.distanceUnit)
+                    {
+                        Text(summary)
                             .font(.dsBodySecondary.monospacedDigit())
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
                     } else {
                         if let w = log.weight, w > 0 {
                             let unit =
