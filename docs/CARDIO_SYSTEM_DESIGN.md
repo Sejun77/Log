@@ -202,6 +202,57 @@ language-neutral `shortLabel` ("Z3"). The UI slice that first renders a zone
 adds a localized display name with its own string-catalog entries, rather than
 seeding the catalog with strings nothing displays.
 
+#### Implementation notes (settled in Slice 3)
+
+**The columns are read through one accessor, never individually.**
+`SetLog.cardioMetrics` runs every stored value back through `CardioMetrics`'
+normalizing initializer and the tolerant `DistanceUnit.from(raw:)` /
+`HRZone.from(raw:)` lookups, and `SetLog.applyCardioMetrics(_:)` is the matching
+write site. A row holding a negative distance, a 900 bpm heart rate, or a
+`hrZoneRaw` of `"z9"` therefore yields nil for that field instead of reaching a
+formatter or a chart. Direct column access is for persistence tests only.
+
+**`SetLog.init` is deliberately unchanged.** The columns are declared with nil
+defaults and no initializer parameters, so every existing construction site —
+active workout, resume, prefill, fixtures — keeps producing metric-free sets
+with no edits, and no call site can accidentally populate cardio data before the
+Slice 4 entry UI exists.
+
+**History's duration segment is the literal `"\(seconds)s"`.**
+`CardioHistorySummary.text(for:fallbackUnit:)` returns exactly that string for a
+duration-only set, so every timed hold and every pre-Slice-3 beta cardio log
+renders byte-identically to before — structurally, not by coincidence. It
+returns nil for a strength set, which falls through to `HistoryView`'s untouched
+weight/reps path. This is the guarantee `CardioHistorySummaryTests` pins first.
+
+**Summary format.** Segments joined by `" · "` in a fixed order, absent values
+omitted entirely — never a placeholder dash, which would imply the user failed
+to record something rather than that the field does not apply:
+
+```
+2700s · 6.2 km · 7:15 /km · 3% incline · level 8 · 142 bpm · Z3 · 410 kcal
+```
+
+The order runs: what was done (duration, distance, pace), how the machine was
+set (incline, resistance), then the body's response (heart rate, zone, energy).
+Numbers reuse `CardioDerived.formatDistance`, so trailing zeros are trimmed
+("6.2 km", not "6.20 km") and distance reads consistently with weight.
+
+**Two localized words, `incline` and `level`.** Everything else is a
+language-neutral abbreviation (`km`, `mi`, `bpm`, `kcal`, `%`, `Z3`, `/km`). A
+bare "3%" next to the other numeric segments is ambiguous, and a machine level
+is unitless, so those two need a word; decline reuses the same key with a sign
+("-3% incline") rather than adding a second one.
+
+**Fallback for an invalid raw unit.** When `distanceUnitRaw` is missing or
+unparseable the summary falls back to `AppSettings.distanceUnit` and still shows
+the distance, rather than dropping it — the value is stored canonically in
+meters, so the number is correct in whichever unit it is rendered. An invalid
+`hrZoneRaw` has no such fallback and is simply omitted: there is no correct
+value to recover, and inventing a zone would be worse than showing none. The
+fallback unit is a parameter, not a global read, so the formatter stays pure and
+its tests do not depend on the tester's locale.
+
 ### 2.3 Prescription (target) fields
 
 The routine side gets exactly **one** new pair:
@@ -618,7 +669,7 @@ independently committable, additive-first.
 |---|---|---|
 | 1 | ✅ `CardioMetrics` / `HRZone` / `DistanceUnit` value types + `AppSettings.distanceIsMetric` | Pure, fully testable, zero UI risk — same shape as the `DurationInput` slice |
 | 2 | ✅ `Exercise.isCardio` + derived `trackingMode` + Exercise Detail toggle | Smallest possible model change; establishes the invariant before anything depends on it |
-| 3 | `SetLog` metric fields + History summary line | Storage and read-back, no logging-path change yet; proves old rows are untouched |
+| 3 | ✅ `SetLog` metric fields + History summary line | Storage and read-back, no logging-path change yet; proves old rows are untouched |
 | 4 | Active-workout cardio row (Details disclosure, post-log edit) | The risky slice, entered with the model already proven |
 | 5 | Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques) | Programming surface, once logging works |
 | 6 | Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |

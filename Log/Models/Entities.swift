@@ -841,6 +841,44 @@ final class SetLog {
     /// nil = main set (working / warmup / legacy template-based dropset).
     var subIndex: Int? = nil
 
+    // Cardio Slice 3: the optional metrics describing one performed cardio
+    // bout. They live here, next to `durationSeconds`, because they describe a
+    // *performed* set — not a prescription and not a definition.
+    //
+    // All optional with nil defaults, so every existing `SetLog` row migrates
+    // lightweightly and keeps rendering exactly as it does today. Strength and
+    // timed-hold sets simply leave them nil; nothing requires them, and a
+    // cardio bout carrying only a duration is still a complete, valid set.
+    //
+    // Read them through `cardioMetrics` rather than individually — that
+    // accessor runs every value through `CardioMetrics`' normalizing
+    // initializer, so an out-of-range or unparseable stored value resolves to
+    // nil instead of reaching the UI.
+    //
+    // Pace and speed are deliberately absent: both are distance ÷ duration and
+    // are derived at render time by `CardioDerived`. A stored pace that
+    // disagreed with the stored distance and duration would be unresolvable.
+
+    /// Canonical distance in **meters**, always, regardless of entry unit.
+    var distanceMeters: Double? = nil
+
+    /// The `DistanceUnit` symbol the distance was entered in ("km" / "mi"),
+    /// preserved so History reads back the way the user typed it rather than
+    /// shifting when the global preference changes.
+    var distanceUnitRaw: String? = nil
+
+    var avgHeartRate: Int? = nil
+    var calories: Int? = nil
+
+    /// Grade in percent, signed — negative values are treadmill decline.
+    var inclinePercent: Double? = nil
+
+    /// Machine resistance setting. Unitless — equipment numbers its own levels.
+    var resistanceLevel: Double? = nil
+
+    /// `HRZone` raw value ("z1"…"z5").
+    var hrZoneRaw: String? = nil
+
     var kind: SetKind {
         get { SetKind(rawValue: kindRaw) ?? .working }
         set { kindRaw = newValue.rawValue }
