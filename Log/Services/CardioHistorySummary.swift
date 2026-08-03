@@ -64,17 +64,33 @@ enum CardioHistorySummary {
         // A set with neither a duration nor a single metric is a strength set.
         guard duration != nil || !metrics.isEmpty else { return [] }
 
+        let leading = duration.map { [durationSegment($0)] } ?? []
+        return leading
+            + metricSegments(
+                metrics, durationSeconds: duration, fallbackUnit: fallbackUnit)
+    }
+
+    /// The metric segments alone, without the leading duration.
+    ///
+    /// Split out for the active-workout Details disclosure (Slice 4), whose
+    /// collapsed label shows what has been entered — "5.2 km · 142 bpm · 410
+    /// kcal" — but not the duration, which is already the row's primary field.
+    /// Passing a nil `durationSeconds` also omits pace, which has its own
+    /// preview row there.
+    static func metricSegments(
+        _ metrics: CardioMetrics,
+        durationSeconds: Int?,
+        fallbackUnit: DistanceUnit
+    ) -> [String] {
         // The row's own recorded unit wins, so History reads back the way the
         // user typed it. A missing or unparseable value falls back to the
         // current preference — the number is still correct either way, because
         // the distance itself is stored canonically in meters.
         let unit = metrics.distanceUnit ?? fallbackUnit
+        let duration = positiveDuration(durationSeconds)
 
         var parts: [String] = []
 
-        if let duration {
-            parts.append(durationSegment(duration))
-        }
         if let distance = distanceSegment(metrics, unit: unit) {
             parts.append(distance)
         }

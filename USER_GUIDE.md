@@ -81,8 +81,22 @@ Limits and behavior:
 - duration exercises do not show reps, weight, or tempo
 - leaving a field empty means it is not set
 
-Cardio can be logged as a duration-based exercise. For now, details like
-distance, speed, incline, resistance, or heart-rate zone can be written in notes.
+To track an exercise as cardio, open it in Exercises, turn on Time-based, then
+turn on Cardio.
+
+During a workout, a cardio set still logs with duration alone. Tap Details on
+the set row to also record:
+
+- distance, in km or mi
+- average heart rate
+- heart-rate zone
+- calories
+- incline or decline
+- resistance
+
+Every one of these is optional, and pace and speed are worked out for you once a
+distance and a duration are entered. Enter the details before tapping Log — to
+change them afterwards, tap Undo and log the set again.
 
 Cardio exercises are grouped under the Cardio body part. The app includes
 Walking, Treadmill Run, Treadmill Walk, Stationary Bike, Elliptical, Stair
@@ -220,8 +234,22 @@ You can:
 - 시간 기반 운동에서는 반복 횟수, 중량, 템포가 표시되지 않습니다.
 - 값을 비워 두면 설정되지 않은 상태로 처리됩니다.
 
-유산소 운동은 시간 기반 운동으로 기록할 수 있습니다. 현재는 거리, 속도, 경사, 저항
-단계, 심박 구간 같은 세부 정보는 메모에 기록할 수 있습니다.
+운동을 유산소로 기록하려면 운동 탭에서 해당 운동을 열고 시간 기반을 켠 다음 유산소를
+켜세요.
+
+운동 중에도 유산소 세트는 시간만으로 기록할 수 있습니다. 세트 행의 세부 정보를 누르면
+아래 항목도 함께 기록할 수 있습니다.
+
+- 거리 (km 또는 mi)
+- 평균 심박수
+- 심박 존
+- 칼로리
+- 경사 / 내리막
+- 저항
+
+모두 선택 사항이며, 거리와 시간을 입력하면 페이스와 속도는 자동으로 계산됩니다. 세부
+정보는 기록을 누르기 전에 입력하세요. 기록한 뒤에 값을 바꾸려면 취소를 누르고 세트를
+다시 기록하면 됩니다.
 
 유산소 운동은 유산소 부위로 묶여 있습니다. 앱에는 걷기, 트레드밀 러닝, 트레드밀
 걷기, 실내 자전거, 일립티컬, 스텝밀, 로잉 머신이 시간 기반 운동으로 포함되어 있으며,

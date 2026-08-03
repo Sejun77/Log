@@ -133,6 +133,14 @@ struct TimeSetEntryRow: View {
     let canLog: Bool
     /// Resolved per-set effort target label (e.g. "RIR 2"); nil = none shown.
     var effortTarget: String? = nil
+    /// Cardio Slice 4 — the optional metrics draft for this set.
+    ///
+    /// **nil means "not a cardio exercise"**, and the row then renders exactly
+    /// as it did before Slice 4: no Details disclosure, no extra height, no
+    /// behavior change. Timed holds (Plank) pass nil, so the guarantee that
+    /// they are untouched is structural rather than a matter of testing every
+    /// path. Non-nil adds the collapsed Details section below the duration row.
+    var cardioDraft: Binding<CardioEntryDraft>? = nil
     @Binding var duration: String
     var onStart: (Int) -> Void
     var onLog: (Int) -> Void
@@ -218,6 +226,17 @@ struct TimeSetEntryRow: View {
                 }
             }
             .frame(minWidth: 80)
+
+            // Cardio only. Placed below the primary row so the duration field
+            // and Log button keep their exact position and tap targets, and so
+            // the Log gate stays `d > 0` — metrics never block logging.
+            if let cardioDraft {
+                CardioDetailsSection(
+                    draft: cardioDraft,
+                    durationSeconds: resolvedDuration,
+                    isLogged: isLogged
+                )
+            }
         }
     }
 }
