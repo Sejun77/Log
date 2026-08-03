@@ -84,14 +84,12 @@ struct CardioEntryDraft: Equatable {
     /// disclosure label — "5.2 km · 142 bpm · 410 kcal". Nil when nothing valid
     /// has been entered, so the label shows just "Details".
     ///
-    /// Deliberately omits duration and pace: duration is already the row's
-    /// primary field, and pace has its own preview row inside the expanded
-    /// section, so repeating either in the collapsed label is noise.
+    /// Capped at three segments by `CardioHistorySummary.collapsedSummary`.
+    /// Showing every recorded metric here overflowed the label and ellipsized
+    /// it, which is strictly worse than showing fewer things legibly: the
+    /// expanded section is one tap away and shows everything.
     var summaryText: String? {
-        let parts = CardioHistorySummary.metricSegments(
-            metrics, durationSeconds: nil, fallbackUnit: unit)
-        return parts.isEmpty ? nil : parts.joined(
-            separator: CardioHistorySummary.separator)
+        CardioHistorySummary.collapsedSummary(metrics, fallbackUnit: unit)
     }
 
     // MARK: - Derived preview

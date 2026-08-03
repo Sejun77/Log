@@ -158,7 +158,20 @@ struct ActiveWorkoutView: View {
     // SwiftData fetch there would be exactly the kind of work CLAUDE.md rules
     // out. Recomputed at session start and after an exercise switch — the two
     // moments a slot's tracking mode can change.
+    //
+    // Drives two things: whether the row offers the cardio Details section,
+    // and — via `showsEffortUI` — whether the combined RIR/RPE control is
+    // shown at all.
     @State private var cardioSlotIDs: Set<UUID> = []
+
+    /// Whether this slot shows the combined RIR/RPE effort control. Delegates
+    /// to `WorkoutEffortTargetResolver.isEffortApplicable`, which owns the
+    /// product rule, so the three display sites (per-set row labels, Plan card
+    /// summary, Edit Plan sheet) cannot drift apart.
+    private func showsEffortUI(forSlot slotID: UUID) -> Bool {
+        WorkoutEffortTargetResolver.isEffortApplicable(
+            to: cardioSlotIDs.contains(slotID) ? .cardio : .timedHold)
+    }
 
     /// Rebuilds `cardioSlotIDs` from the live `Exercise` rows behind the plan's
     /// current exercise ids. Reading the model (rather than a denormalized flag
@@ -773,6 +786,15 @@ struct ActiveWorkoutView: View {
         for exercise: PlanExercise, setCount: Int
     ) -> [String?] {
         guard setCount > 0 else { return [] }
+        // Cardio Slice 4 patch: RIR is "reps in reserve", which has no meaning
+        // for a 30-minute run — there are no reps to hold back. The app's
+        // effort UI is a single combined RIR/RPE control, so it is hidden
+        // wholesale for cardio rather than split. The snapshot and session
+        // values are left untouched: nothing is erased, only not shown, so a
+        // slot switched back to a strength exercise still has its targets.
+        guard showsEffortUI(forSlot: exercise.routineSlotID) else {
+            return Array(repeating: nil, count: setCount)
+        }
         guard let payload = exercise.prescriptionSnapshot else {
             return Array(repeating: nil, count: setCount)
         }
@@ -1354,6 +1376,11 @@ struct ActiveWorkoutView: View {
     private func planEffortSummary(
         for exercise: PlanExercise, sp: SessionPlan
     ) -> String? {
+        // Cardio Slice 4 patch: same rule as the per-set labels — the combined
+        // RIR/RPE control is not shown for cardio, so the Plan card must not
+        // advertise a target the row no longer displays. Values are preserved,
+        // just not surfaced.
+        guard showsEffortUI(forSlot: exercise.routineSlotID) else { return nil }
         guard let snap = exercise.prescriptionSnapshot else { return nil }
         let snapFields = WorkoutEffortTargetResolver.Fields(payload: snap)
         switch WorkoutEffortTargetResolver.effortMode(for: snapFields) {
@@ -2230,7 +2257,9 @@ struct ActiveWorkoutView: View {
                             for: exercise.routineSlotID),
                         snapshotEffort: exercise.prescriptionSnapshot.map {
                             WorkoutEffortTargetResolver.Fields(payload: $0)
-                        })
+                        },
+                        isCardio: !showsEffortUI(
+                            forSlot: exercise.routineSlotID))
                 }
             }
             .sheet(

@@ -4,9 +4,10 @@ import Foundation
 // MARK: - Cardio history summary
 // ======================================================
 
-/// Builds the trailing text of a History set row.
+/// Builds the text of a History set row, and the collapsed summary of the
+/// active-workout cardio Details section.
 ///
-/// Pure and view-free so the exact rendered string is testable without a
+/// Pure and view-free so the exact rendered strings are testable without a
 /// SwiftUI host — History's row layout is otherwise deeply nested inside
 /// `HistoryView`, where the one behavior that most needs pinning (an old
 /// duration-only row rendering *byte-identically* to how it renders today) is
@@ -14,108 +15,130 @@ import Foundation
 ///
 /// ### The compatibility guarantee
 ///
-/// `text(for:fallbackUnit:)` returns nil unless the set has a positive duration
-/// or at least one cardio metric, and when a set has a duration but no metrics
-/// it returns exactly `"\(seconds)s"` — the literal string `HistoryView` has
-/// always produced. Every pre-Slice-3 row, every timed hold, and every beta
-/// cardio log therefore renders unchanged, structurally rather than by
-/// coincidence. Strength rows return nil and fall through to the untouched
-/// weight/reps path.
+/// `primaryText(for:)` returns nil unless the set has a positive duration, and
+/// otherwise returns exactly `"\(seconds)s"` — the literal string `HistoryView`
+/// has always produced. `secondaryLines` is empty unless the set carries
+/// metrics. So every pre-Slice-3 row, every timed hold, and every beta cardio
+/// log renders unchanged, structurally rather than by coincidence, and strength
+/// rows fall through to the untouched weight/reps path.
 ///
-/// ### Format
+/// ### Layout
 ///
-/// Segments joined by `" · "`, in a fixed order, with **absent values omitted
-/// entirely** — never a placeholder dash, which would imply the user failed to
-/// record something rather than that the field does not apply:
+/// The original single-line form packed up to eight segments onto the row's
+/// trailing edge, where it wrapped into an unreadable block. Metrics are now
+/// **grouped onto secondary lines** under the row, each line one coherent idea:
 ///
-///     2700s · 6.2 km · 7:15 /km · 3% incline · level 8 · 142 bpm · Z3 · 410 kcal
+///     2. Working                                            2700s
+///     6.2 km · 7:15 /km
+///     3% incline · level 8
+///     142 bpm · Z3 · 410 kcal
 ///
-/// The order runs: what was done (duration, distance, pace), how the machine
-/// was set (incline, resistance), then the body's response (heart rate, zone,
-/// energy).
+/// Line 1 is what was covered, line 2 how the machine was set, line 3 the
+/// body's response. Absent values are omitted entirely — never a placeholder
+/// dash, which would imply the user failed to record something rather than that
+/// the field does not apply — and a line with nothing in it does not exist.
 enum CardioHistorySummary {
 
-    /// Separator between segments. A middle dot with hair-thin spacing, the
-    /// same separator the History header rows already use.
+    /// Separator between segments on one line. A middle dot with hair-thin
+    /// spacing, the same separator the History header rows already use.
     static let separator = " · "
 
-    // MARK: - Entry point
+    /// How many segments the collapsed active-workout summary shows before it
+    /// stops. Three fits one line at accessibility text sizes without
+    /// truncating; more did not, which is what made the label ellipsize.
+    static let collapsedSegmentLimit = 3
 
-    /// The full trailing text for one set row, or nil when the set has nothing
-    /// duration- or cardio-shaped to show (i.e. a strength set, whose existing
-    /// weight/reps rendering is left entirely alone).
+    // MARK: - History row
+
+    /// The primary trailing value: the duration, or nil when there is none.
+    ///
+    /// Deliberately independent of the metrics — a cardio set's duration is the
+    /// one required value and stays in the row's primary position whatever else
+    /// was recorded, so the eye lands in the same place on every row.
+    static func primaryText(for log: SetLog) -> String? {
+        positiveDuration(log.durationSeconds).map(durationSegment)
+    }
+
+    /// The grouped metric lines rendered under the primary row. Empty for
+    /// strength sets, timed holds, and duration-only cardio sets.
     ///
     /// - Parameter fallbackUnit: the unit used to render distance and pace when
     ///   the row's own `distanceUnitRaw` is missing or unparseable. Passed in
     ///   rather than read from `AppSettings` so the formatter stays pure and
     ///   testable; the view passes `AppSettings.distanceUnit`.
-    static func text(for log: SetLog, fallbackUnit: DistanceUnit) -> String? {
-        let parts = segments(for: log, fallbackUnit: fallbackUnit)
-        guard !parts.isEmpty else { return nil }
-        return parts.joined(separator: separator)
-    }
-
-    /// The individual segments, in display order. Exposed for tests that assert
-    /// on presence/absence without depending on the separator.
-    static func segments(for log: SetLog, fallbackUnit: DistanceUnit) -> [String] {
+    static func secondaryLines(
+        for log: SetLog, fallbackUnit: DistanceUnit
+    ) -> [String] {
         let metrics = log.cardioMetrics
+        guard !metrics.isEmpty else { return [] }
+
+        let unit = metrics.distanceUnit ?? fallbackUnit
         let duration = positiveDuration(log.durationSeconds)
 
-        // A set with neither a duration nor a single metric is a strength set.
-        guard duration != nil || !metrics.isEmpty else { return [] }
+        let groups: [[String]] = [
+            // Covered: distance and the pace it implies.
+            [
+                distanceSegment(metrics, unit: unit),
+                paceSegment(metrics, durationSeconds: duration, unit: unit),
+            ].compactMap { $0 },
+            // Machine setup.
+            [
+                inclineSegment(metrics),
+                resistanceSegment(metrics),
+            ].compactMap { $0 },
+            // Physiological response, then energy.
+            [
+                metrics.avgHeartRate.map { "\($0) bpm" },
+                metrics.hrZone?.shortLabel,
+                metrics.calories.map { "\($0) kcal" },
+            ].compactMap { $0 },
+        ]
 
-        let leading = duration.map { [durationSegment($0)] } ?? []
-        return leading
-            + metricSegments(
-                metrics, durationSeconds: duration, fallbackUnit: fallbackUnit)
+        return groups
+            .filter { !$0.isEmpty }
+            .map { $0.joined(separator: separator) }
     }
 
-    /// The metric segments alone, without the leading duration.
+    // MARK: - Collapsed active-workout summary
+
+    /// One-line summary for the collapsed Details disclosure, capped at
+    /// `collapsedSegmentLimit` segments.
     ///
-    /// Split out for the active-workout Details disclosure (Slice 4), whose
-    /// collapsed label shows what has been entered — "5.2 km · 142 bpm · 410
-    /// kcal" — but not the duration, which is already the row's primary field.
-    /// Passing a nil `durationSeconds` also omits pace, which has its own
-    /// preview row there.
-    static func metricSegments(
-        _ metrics: CardioMetrics,
-        durationSeconds: Int?,
-        fallbackUnit: DistanceUnit
+    /// Priority is **distance, average heart rate, calories** — the three
+    /// numbers people actually glance at to confirm they are logging the right
+    /// bout. Incline, resistance and zone only appear to fill a slot none of
+    /// those three claimed; pace and speed never appear, because pace has its
+    /// own preview row inside the expanded section and duration is already the
+    /// row's primary field.
+    ///
+    /// Returns nil when nothing valid has been entered, so the label shows just
+    /// "Details".
+    static func collapsedSummary(
+        _ metrics: CardioMetrics, fallbackUnit: DistanceUnit
+    ) -> String? {
+        let parts = collapsedSegments(metrics, fallbackUnit: fallbackUnit)
+        return parts.isEmpty ? nil : parts.joined(separator: separator)
+    }
+
+    /// The collapsed summary's segments. Exposed so tests can assert the cap
+    /// and the priority order without parsing a joined string.
+    static func collapsedSegments(
+        _ metrics: CardioMetrics, fallbackUnit: DistanceUnit
     ) -> [String] {
-        // The row's own recorded unit wins, so History reads back the way the
-        // user typed it. A missing or unparseable value falls back to the
-        // current preference — the number is still correct either way, because
-        // the distance itself is stored canonically in meters.
         let unit = metrics.distanceUnit ?? fallbackUnit
-        let duration = positiveDuration(durationSeconds)
-
-        var parts: [String] = []
-
-        if let distance = distanceSegment(metrics, unit: unit) {
-            parts.append(distance)
-        }
-        // Pace needs both operands; `CardioDerived` returns nil for a missing
-        // or non-positive duration, so a distance-only row shows the distance
-        // and simply omits the pace.
-        if let pace = paceSegment(metrics, durationSeconds: duration, unit: unit) {
-            parts.append(pace)
-        }
-        if let incline = inclineSegment(metrics) {
-            parts.append(incline)
-        }
-        if let resistance = resistanceSegment(metrics) {
-            parts.append(resistance)
-        }
-        if let bpm = metrics.avgHeartRate {
-            parts.append("\(bpm) bpm")
-        }
-        if let zone = metrics.hrZone {
-            parts.append(zone.shortLabel)
-        }
-        if let kcal = metrics.calories {
-            parts.append("\(kcal) kcal")
-        }
-        return parts
+        let preferred: [String?] = [
+            distanceSegment(metrics, unit: unit),
+            metrics.avgHeartRate.map { "\($0) bpm" },
+            metrics.calories.map { "\($0) kcal" },
+        ]
+        let fallback: [String?] = [
+            inclineSegment(metrics),
+            resistanceSegment(metrics),
+            metrics.hrZone?.shortLabel,
+        ]
+        return Array(
+            (preferred + fallback).compactMap { $0 }
+                .prefix(collapsedSegmentLimit))
     }
 
     // MARK: - Segments

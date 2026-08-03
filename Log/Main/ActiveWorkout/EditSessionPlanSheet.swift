@@ -9,6 +9,14 @@ struct EditSessionPlanSheet: View {
     /// an editable single override or a read-only progression/none summary —
     /// never read from the live routine template.
     var snapshotEffort: WorkoutEffortTargetResolver.Fields? = nil
+    /// Cardio Slice 4 patch: hides the Intensity section. RIR is "reps in
+    /// reserve" and the app's effort control is a single combined RIR/RPE
+    /// field, so there is nothing in that section a cardio bout can answer —
+    /// tempo is already hidden for duration slots. The underlying
+    /// `plan.rir` / `plan.rpe` values are left untouched, so a slot switched
+    /// back to a strength exercise still has its targets. Defaults to false,
+    /// so every existing construction site is unaffected.
+    var isCardio: Bool = false
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(AppSettings.Keys.autoregMode)
@@ -48,13 +56,18 @@ struct EditSessionPlanSheet: View {
                     restRow("Rest after exercise", keyPath: \.restSecondsAfterExercise)
                 }
 
-                Section("Intensity") {
-                    effortContent
-                    // Tempo describes rep phases, so it is neither shown nor
-                    // editable for a duration-based slot. Effort (RIR/RPE)
-                    // stays — it applies to both tracking types.
-                    if !plan.usesDuration {
-                        TempoEditorView(tempo: $plan.tempo)
+                // Cardio has neither an effort control nor a tempo, so the
+                // whole section is omitted rather than left as an empty header.
+                if !isCardio {
+                    Section("Intensity") {
+                        effortContent
+                        // Tempo describes rep phases, so it is neither shown
+                        // nor editable for a duration-based slot. Effort
+                        // (RIR/RPE) stays for strength and timed holds — it
+                        // applies to both of those tracking types.
+                        if !plan.usesDuration {
+                            TempoEditorView(tempo: $plan.tempo)
+                        }
                     }
                 }
 

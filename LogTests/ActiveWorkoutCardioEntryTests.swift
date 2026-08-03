@@ -11,7 +11,7 @@ import XCTest
 /// reproduce step for step:
 ///
 ///   draft → `CardioEntryDraft.metrics` → `SetLog.applyCardioMetrics`
-///         → `CardioHistorySummary.text`
+///         → `CardioHistorySummary.primaryText` / `.secondaryLines`
 ///
 /// If the view's wiring is ever changed to skip a step, the compile-time types
 /// here still match but the behavioral assertions below are the specification
@@ -169,8 +169,10 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
         XCTAssertNil(log.durationSeconds)
         XCTAssertFalse(log.hasCardioMetrics)
         XCTAssertNil(
-            CardioHistorySummary.text(for: log, fallbackUnit: km),
+            CardioHistorySummary.primaryText(for: log),
             "A strength set must fall through to the weight/reps rendering")
+        XCTAssertTrue(
+            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km).isEmpty)
     }
 
     // MARK: - 3. Re-logging clears a previous attempt
@@ -203,9 +205,10 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
 
         let log = logTimeSet(into: item, durationSeconds: 2_700, cardio: draft.metrics)
 
+        XCTAssertEqual(CardioHistorySummary.primaryText(for: log), "2700s")
         XCTAssertEqual(
-            CardioHistorySummary.text(for: log, fallbackUnit: km),
-            "2700s · 6.2 km · 7:15 /km · 142 bpm · 410 kcal")
+            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km),
+            ["6.2 km · 7:15 /km", "142 bpm · 410 kcal"])
     }
 
     func testDurationOnlyCardioSetRendersLikeBefore() {
@@ -215,8 +218,9 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
             into: item, durationSeconds: 1_800,
             cardio: CardioEntryDraft(unit: km).metrics)
 
-        XCTAssertEqual(
-            CardioHistorySummary.text(for: log, fallbackUnit: km), "1800s")
+        XCTAssertEqual(CardioHistorySummary.primaryText(for: log), "1800s")
+        XCTAssertTrue(
+            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km).isEmpty)
     }
 
     func testTimedHoldRendersLikeBefore() {
@@ -224,8 +228,9 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
 
         let log = logTimeSet(into: item, durationSeconds: 60)
 
-        XCTAssertEqual(
-            CardioHistorySummary.text(for: log, fallbackUnit: km), "60s")
+        XCTAssertEqual(CardioHistorySummary.primaryText(for: log), "60s")
+        XCTAssertTrue(
+            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km).isEmpty)
     }
 
     /// A workout finished with a mix of set types renders each row correctly —
@@ -254,15 +259,29 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
         try context.save()
 
         let cardioLogs = cardioItem.setLogs.sorted { $0.indexInExercise < $1.indexInExercise }
+        // Duration-only cardio: one line, unchanged.
+        XCTAssertEqual(CardioHistorySummary.primaryText(for: cardioLogs[0]), "1800s")
+        XCTAssertTrue(
+            CardioHistorySummary.secondaryLines(
+                for: cardioLogs[0], fallbackUnit: km).isEmpty)
+
+        // Fully recorded cardio: duration stays primary, metrics grouped below.
+        XCTAssertEqual(CardioHistorySummary.primaryText(for: cardioLogs[1]), "2700s")
         XCTAssertEqual(
-            CardioHistorySummary.text(for: cardioLogs[0], fallbackUnit: km),
-            "1800s")
+            CardioHistorySummary.secondaryLines(
+                for: cardioLogs[1], fallbackUnit: km),
+            [
+                "6.2 km · 7:15 /km",
+                "-3% incline · level 8",
+                "142 bpm · 410 kcal",
+            ])
+
+        // Plank: untouched.
         XCTAssertEqual(
-            CardioHistorySummary.text(for: cardioLogs[1], fallbackUnit: km),
-            "2700s · 6.2 km · 7:15 /km · -3% incline · level 8 · 142 bpm · 410 kcal")
-        XCTAssertEqual(
-            CardioHistorySummary.text(for: plankItem.setLogs[0], fallbackUnit: km),
-            "60s")
+            CardioHistorySummary.primaryText(for: plankItem.setLogs[0]), "60s")
+        XCTAssertTrue(
+            CardioHistorySummary.secondaryLines(
+                for: plankItem.setLogs[0], fallbackUnit: km).isEmpty)
     }
 
     // MARK: - 5. Cardio slot gating

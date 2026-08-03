@@ -29,39 +29,79 @@ struct CardioDetailsSection: View {
 
     @State private var isExpanded = false
 
+    /// Every value control is the same width and every row ends with a
+    /// fixed-width unit suffix, so the fields line up in one column instead of
+    /// stepping left and right as the suffix ("bpm" / "kcal" / "%" / none)
+    /// changes width.
+    private static let controlWidth: CGFloat = 96
+    fileprivate static let suffixWidth: CGFloat = 34
+
     /// Derived once per render rather than three times inside `body`.
     private var pace: String? { draft.paceText(durationSeconds: durationSeconds) }
     private var speed: String? { draft.speedText(durationSeconds: durationSeconds) }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: DSSpacing.sm) {
-                distanceRow
-                heartRateRow
-                zoneRow
-                caloriesRow
-                inclineRow
-                resistanceRow
-                derivedRow
+        // A plain button + conditional section rather than `DisclosureGroup`.
+        // `DisclosureGroup` animates its own expansion, and inside a List row
+        // that animation re-lays out the whole row: the set label, duration
+        // field, Start and Log buttons all slid vertically while the section
+        // opened. Toggling inside a transaction with animations disabled makes
+        // the section appear and disappear in one frame, which keeps the
+        // primary logging controls perfectly still. No animation beats an
+        // awkward one here — the row is a data-entry surface, not a showcase.
+        VStack(alignment: .leading, spacing: DSSpacing.sm) {
+            Button {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { isExpanded.toggle() }
+            } label: {
+                header
             }
-            .padding(.top, DSSpacing.xs)
-        } label: {
-            HStack(spacing: DSSpacing.sm) {
-                Text("Details")
-                    .font(.dsBodySecondary)
-                // Collapsed summary of what has been entered, so a user who
-                // filled the fields on a previous set can confirm this one at a
-                // glance without expanding.
-                if let summary = draft.summaryText {
-                    Text(summary)
-                        .font(.dsCaption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: DSSpacing.sm) {
+                    distanceRow
+                    heartRateRow
+                    zoneRow
+                    caloriesRow
+                    inclineRow
+                    resistanceRow
+                    derivedRow
                 }
             }
         }
-        .disclosureGroupStyle(.automatic)
+        // Belt and braces: also opt the subtree out of any animation an
+        // enclosing List or navigation transition might try to apply to the
+        // height change.
+        .animation(nil, value: isExpanded)
+    }
+
+    private var header: some View {
+        HStack(spacing: DSSpacing.sm) {
+            Image(systemName: "chevron.right")
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+                // Rotating a fixed-size glyph keeps the header's height
+                // constant, so the chevron cannot nudge the rows around it.
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            Text("Details")
+                .font(.dsBodySecondary)
+            Spacer(minLength: DSSpacing.sm)
+            // Collapsed summary of what has been entered, so a user who filled
+            // the fields on a previous set can confirm this one at a glance
+            // without expanding. Capped at three segments by the formatter, so
+            // it fits on one line instead of ellipsizing.
+            if let summary = draft.summaryText {
+                Text(summary)
+                    .font(.dsCaption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     // MARK: - Field rows
@@ -72,7 +112,7 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.decimalPad)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 90)
+                .frame(width: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .distance)
 
@@ -85,7 +125,7 @@ struct CardioDetailsSection: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 110)
+            .frame(width: Self.suffixWidth + DSSpacing.sm + 76)
             .disabled(isLogged)
         }
     }
@@ -96,25 +136,29 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 90)
+                .frame(width: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .heartRate)
-            Text("bpm")
-                .font(.dsBodySecondary)
-                .foregroundStyle(.secondary)
+            UnitSuffix("bpm")
         }
     }
 
     private var zoneRow: some View {
         LabeledField(label: "Heart-Rate Zone") {
+            // `.labelsHidden()` because `LabeledField` already renders the
+            // label — a `.menu` picker draws its own title otherwise, which
+            // printed "Heart-Rate Zone" twice on the same line.
             Picker("Heart-Rate Zone", selection: $draft.hrZone) {
                 Text("None").tag(HRZone?.none)
                 ForEach(HRZone.allCases, id: \.self) { zone in
                     Text(zone.shortLabel).tag(HRZone?.some(zone))
                 }
             }
+            .labelsHidden()
             .pickerStyle(.menu)
             .disabled(isLogged)
+            .frame(width: Self.controlWidth, alignment: .trailing)
+            UnitSuffix()
         }
     }
 
@@ -124,12 +168,10 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 90)
+                .frame(width: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .calories)
-            Text("kcal")
-                .font(.dsBodySecondary)
-                .foregroundStyle(.secondary)
+            UnitSuffix("kcal")
         }
     }
 
@@ -142,12 +184,10 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.numbersAndPunctuation)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 90)
+                .frame(width: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .incline)
-            Text("%")
-                .font(.dsBodySecondary)
-                .foregroundStyle(.secondary)
+            UnitSuffix("%")
         }
     }
 
@@ -157,9 +197,10 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.decimalPad)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 90)
+                .frame(width: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .resistance)
+            UnitSuffix()
         }
     }
 
@@ -175,6 +216,9 @@ struct CardioDetailsSection: View {
                         Text(pace)
                             .font(.dsBody.monospacedDigit())
                             .foregroundStyle(.secondary)
+                            .frame(
+                                width: Self.controlWidth, alignment: .trailing)
+                        UnitSuffix()
                     }
                 }
                 if let speed {
@@ -182,6 +226,9 @@ struct CardioDetailsSection: View {
                         Text(speed)
                             .font(.dsBody.monospacedDigit())
                             .foregroundStyle(.secondary)
+                            .frame(
+                                width: Self.controlWidth, alignment: .trailing)
+                        UnitSuffix()
                     }
                 }
             }
@@ -232,6 +279,27 @@ struct CardioDetailsSection: View {
                 draft[keyPath: keyPath] = CardioEntryDraft.sanitizeSignedDecimal($0)
             }
         )
+    }
+}
+
+/// Fixed-width trailing unit label. Present even when empty, so a unitless
+/// field (Resistance) keeps its control in the same column as the others.
+private struct UnitSuffix: View {
+    let text: LocalizedStringKey?
+
+    init(_ text: LocalizedStringKey? = nil) { self.text = text }
+
+    var body: some View {
+        Group {
+            if let text {
+                Text(text)
+            } else {
+                Text(verbatim: "")
+            }
+        }
+        .font(.dsBodySecondary)
+        .foregroundStyle(.secondary)
+        .frame(width: CardioDetailsSection.suffixWidth, alignment: .leading)
     }
 }
 

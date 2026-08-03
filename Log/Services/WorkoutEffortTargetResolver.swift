@@ -110,6 +110,30 @@ enum WorkoutEffortTargetResolver {
         derivedMode(fields)
     }
 
+    /// Whether the combined RIR/RPE effort control applies to a tracking mode.
+    ///
+    /// **False for `.cardio`, true for everything else.** RIR is "reps in
+    /// reserve", which is meaningless for a 30-minute run — there are no reps
+    /// to hold back — and the app exposes RIR and RPE through a single control
+    /// governed by one `AppSettings.autoregMode` preference, so the two cannot
+    /// be separated at the UI without splitting that preference. Hiding the
+    /// whole control for cardio is the honest reading of today's architecture.
+    ///
+    /// Timed holds (Plank) keep it: "2 seconds in reserve" is a stretch, but it
+    /// is what the app has always offered for them and this patch is not the
+    /// place to change unrelated behavior.
+    ///
+    /// This is display-only. `SlotPrescription`, `PlannedPrescriptionSnapshot`
+    /// and `SessionPlan` keep whatever effort values they hold, so a slot
+    /// switched back to a strength exercise still has its targets.
+    ///
+    /// Cardio-specific **RPE** — a perceived-exertion rating, which *does* make
+    /// sense for cardio — is a deliberate later decision; see
+    /// `docs/CARDIO_SYSTEM_DESIGN.md`.
+    static func isEffortApplicable(to mode: TrackingMode) -> Bool {
+        mode != .cardio
+    }
+
     /// Convenience over a session snapshot payload.
     static func perSetLabels(
         payload: PrescriptionSnapshotPayload,

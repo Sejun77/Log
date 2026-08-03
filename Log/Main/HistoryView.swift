@@ -708,48 +708,64 @@ private struct WorkoutDetailView: View {
                 .foregroundStyle(.secondary)
         } else {
             ForEach(logs, id: \.id) { log in
-                HStack {
-                    Text(
-                        log.kind == .warmup
-                            ? "Warmup \(-log.indexInExercise)"
-                            : "\(log.indexInExercise + 1). \(log.kindRaw.capitalized)"
-                    )
-                    .font(.dsBody)
-                    Spacer()
+                // Cardio Slice 4 patch: the row is a VStack so recorded cardio
+                // metrics can sit on their own grouped lines beneath it. A set
+                // with no metrics produces no extra lines and no extra spacing,
+                // so strength rows, timed holds, and duration-only cardio logs
+                // occupy exactly the layout they always have.
+                let cardioLines = CardioHistorySummary.secondaryLines(
+                    for: log, fallbackUnit: AppSettings.distanceUnit)
 
-                    // Cardio Slice 3: the duration branch now renders through
-                    // `CardioHistorySummary`, which returns the literal
-                    // "\(dur)s" for a duration-only set — so timed holds and
-                    // pre-Slice-3 cardio logs are unchanged — and appends the
-                    // recorded cardio metrics when a set has any. It returns
-                    // nil for a strength set, which falls through to the
-                    // untouched weight/reps rendering below. Passed as a
-                    // `String` (not an interpolated literal), so the text is
-                    // rendered verbatim; the formatter localizes its own words.
-                    if let summary = CardioHistorySummary.text(
-                        for: log, fallbackUnit: AppSettings.distanceUnit)
-                    {
-                        Text(summary)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(
+                            log.kind == .warmup
+                                ? "Warmup \(-log.indexInExercise)"
+                                : "\(log.indexInExercise + 1). \(log.kindRaw.capitalized)"
+                        )
+                        .font(.dsBody)
+                        Spacer()
+
+                        // The duration stays the row's primary trailing value
+                        // whatever else was recorded, so the eye lands in the
+                        // same place on every row. `primaryText` returns the
+                        // literal "\(dur)s" History has always produced, and
+                        // nil for a strength set — which falls through to the
+                        // untouched weight/reps rendering. Passed as a `String`
+                        // (not an interpolated literal) so it renders verbatim.
+                        if let duration = CardioHistorySummary.primaryText(for: log) {
+                            Text(duration)
+                                .font(.dsBodySecondary.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        } else {
+                            if let w = log.weight, w > 0 {
+                                let unit =
+                                    Units.weightIsKg ? "kg" : "lb"
+                                Text(
+                                    "\(Units.formatWeight(w)) \(unit)"
+                                )
+                                .font(
+                                    .dsBodySecondary.monospacedDigit()
+                                )
+                                .foregroundStyle(.secondary)
+                            }
+                            Text(
+                                "\(log.reps) rep\(log.reps == 1 ? "" : "s")"
+                            )
                             .font(.dsBodySecondary.monospacedDigit())
                             .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.trailing)
-                    } else {
-                        if let w = log.weight, w > 0 {
-                            let unit =
-                                Units.weightIsKg ? "kg" : "lb"
-                            Text(
-                                "\(Units.formatWeight(w)) \(unit)"
-                            )
-                            .font(
-                                .dsBodySecondary.monospacedDigit()
-                            )
-                            .foregroundStyle(.secondary)
                         }
-                        Text(
-                            "\(log.reps) rep\(log.reps == 1 ? "" : "s")"
-                        )
-                        .font(.dsBodySecondary.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    }
+
+                    // One line per coherent group: what was covered, how the
+                    // machine was set, how the body responded. The formatter
+                    // localizes its own words; `id: \.self` is safe because the
+                    // three lines are distinct by construction.
+                    ForEach(cardioLines, id: \.self) { line in
+                        Text(line)
+                            .font(.dsCaption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
