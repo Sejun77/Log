@@ -693,11 +693,48 @@ extension SlotPrescription {
     }
 
     /// True when the prescription carries enough info to generate working sets.
+    ///
+    /// A cardio distance target is deliberately **not** counted here, even
+    /// though a distance-only cardio slot is a perfectly valid prescription.
+    /// This property answers one narrow question — "can `generateTemplates()`
+    /// produce meaningful `SetTemplate`s?" — and for a distance-only slot the
+    /// answer is no: `SetTemplate` has no distance field, so the generator
+    /// would fall through to its hardcoded `?? 60` and manufacture a 60-second
+    /// duration target the user never programmed, which would then prefill the
+    /// active-workout row. An empty template list is the honest answer; the
+    /// row still renders, because `SessionPlanResolver.effectiveSetCount`
+    /// reads `sets` from the snapshot rather than counting templates.
+    ///
+    /// The one place that must *not* treat a distance-only slot as empty is
+    /// `BackfillService.hydrateEmptySlotPrescriptions`, which uses
+    /// `hasHydratableContent` below instead.
     var hasContent: Bool {
         if usesDuration {
             return (durationMinSeconds ?? durationMaxSeconds) != nil
         }
         return sets != nil
+    }
+
+    /// True when the slot has been **authored** — the question
+    /// `BackfillService.hydrateEmptySlotPrescriptions` actually needs answered
+    /// before it overwrites a prescription with `AppSettings` defaults.
+    ///
+    /// Wider than `hasContent` by exactly one case: a cardio slot programmed
+    /// with a distance target and no duration ("run 5k, however long it
+    /// takes"). Such a slot generates no templates, so `hasContent` is false —
+    /// but it is emphatically not empty, and hydrating it would silently
+    /// rewrite the user's routine on the next launch, replacing the cardio
+    /// defaults with three sets, 90 seconds of rest, and an invented 60-second
+    /// duration target.
+    ///
+    /// Kept separate from `hasContent` on purpose. Widening `hasContent`
+    /// instead would route the same slot into `generateTemplates()`, whose
+    /// `?? 60` fallback is the very duration this guard exists to prevent, and
+    /// would change `resolvedTemplates()` and the routine editor's
+    /// template-vs-prescription comparison as collateral. Backfill is the only
+    /// caller that wants the wider reading.
+    var hasHydratableContent: Bool {
+        hasContent || targetDistanceMeters != nil
     }
 
     /// Deterministic generator: produces [SetTemplate] from prescription fields.

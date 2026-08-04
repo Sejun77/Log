@@ -324,6 +324,30 @@ decodes them as nil and nothing about it became invalid. Import **re-normalizes*
 rather than trusting the document — an imported file is outside data — and drops
 the unit with the distance when the distance does not survive.
 
+**A distance-only cardio slot keeps `hasContent == false`, on purpose.** "Run
+5k, however long it takes" is a valid prescription, but `hasContent` answers a
+narrower question — *can `generateTemplates()` produce meaningful
+`SetTemplate`s?* — and `SetTemplate` has no distance field. Widening it would
+route the slot into the generator's `durationMaxSeconds ?? durationMinSeconds
+?? 60` fallback and manufacture a **60-second duration target the user never
+programmed**, which would then prefill the active-workout row; it would also
+change `resolvedTemplates()` and the routine editor's
+template-vs-prescription comparison as collateral. An empty template list is the
+honest answer, and the row still renders because
+`SessionPlanResolver.effectiveSetCount` reads `sets` from the snapshot rather
+than counting templates.
+
+> The one caller that needed the wider reading is
+> `BackfillService.hydrateEmptySlotPrescriptions`, which runs on **every
+> launch** and skipped only `hasContent == true`. It therefore read a
+> distance-only cardio slot as empty and rewrote it — three sets, default rest,
+> and that invented 60-second duration — silently, on the next launch. Found in
+> pre-merge review of Slice 5 and fixed with a second, deliberately narrow
+> predicate, `SlotPrescription.hasHydratableContent` (`hasContent ||
+> targetDistanceMeters != nil`), used by the backfill guard and nowhere else.
+> `CardioDistanceOnlyTargetTests` walks the shape end to end; nine of its
+> assertions fail if the guard is reverted.
+
 #### Implementation notes (settled in Slice 4)
 
 **`TimeSetEntryRow.cardioDraft` is an optional `Binding`, and nil means "not
