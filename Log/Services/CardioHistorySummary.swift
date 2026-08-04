@@ -28,7 +28,7 @@ import Foundation
 /// trailing edge, where it wrapped into an unreadable block. Metrics are now
 /// **grouped onto secondary lines** under the row, each line one coherent idea:
 ///
-///     2. Set                                                2700s
+///     2. Working Set                                        2700s
 ///     6.2 km · 7:15 /km
 ///     3% incline · level 8
 ///     142 bpm · Z3 · 410 kcal

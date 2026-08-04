@@ -255,17 +255,19 @@ final class KoreanLocalizationTests: XCTestCase {
         "None",
     ]
 
-    /// Strings introduced by the Slice 4 polish patch.
+    /// Strings introduced by the Slice 4 polish patches.
     ///
     /// The pace labels name their unit ("Pace (min/km)") because "/km" on the
     /// value alone did not explain itself; the unit inside the parentheses is
     /// language-neutral, like `kg` / `lb` / `s`, so only the word around it is
-    /// translated. "Set" is the neutral History label that replaced the
-    /// strength-centric "Working" on cardio rows.
+    /// translated. The two set labels are the History row vocabulary — "Drop
+    /// Set" is deliberately absent because it reuses the key the active-workout
+    /// row already ships (asserted separately below).
     private static let cardioPolishKeys = [
         "Pace (min/km)",
         "Pace (min/mi)",
-        "Set",
+        "Working Set",
+        "Warm-up Set",
     ]
 
     func testCardioPolishStringsLocalizeToKorean() throws {
@@ -291,11 +293,20 @@ final class KoreanLocalizationTests: XCTestCase {
         }
     }
 
-    /// The two labels the History row and the pace field must never use again.
-    func testCardioRowLabelIsNotTheStrengthWord() throws {
+    /// Every History row label, in Korean. `SetKind.historyRowLabel` is the one
+    /// place these are produced, so its keys and the catalog must agree.
+    func testHistorySetLabelsLocalizeToKorean() throws {
         let ko = try XCTUnwrap(localizationBundle("ko"))
-        XCTAssertEqual(HistorySetRowLabel.neutralCardioLabel, "Set")
-        XCTAssertEqual(localized("Set", in: ko), "세트")
+        let expected: [SetKind: (String, String)] = [
+            .working: ("Working Set", "메인 세트"),
+            .warmup: ("Warm-up Set", "워밍업 세트"),
+            .dropset: ("Drop Set", "드롭 세트"),
+        ]
+        for kind in SetKind.allCases {
+            let (key, korean) = try XCTUnwrap(expected[kind])
+            XCTAssertEqual(kind.historyRowLabel, key)
+            XCTAssertEqual(localized(key, in: ko), korean)
+        }
     }
 
     func testCardioDetailsStringsLocalizeToKorean() throws {

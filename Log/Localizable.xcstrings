@@ -2613,7 +2613,6 @@
       }
     },
     "Note" : {
-      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3670,18 +3669,6 @@
         }
       }
     },
-    "Set" : {
-      "comment" : "History row label for one cardio set",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "세트"
-          }
-        }
-      }
-    },
     "Set %lld" : {
       "localizations" : {
         "ko" : {
@@ -4472,6 +4459,18 @@
     "W%lld" : {
 
     },
+    "Warm-up Set" : {
+      "comment" : "History row label for a warm-up set",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워밍업 세트"
+          }
+        }
+      }
+    },
     "Warmup" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4484,6 +4483,7 @@
       }
     },
     "Warmup %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -4564,6 +4564,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "중량 단위"
+          }
+        }
+      }
+    },
+    "Working Set" : {
+      "comment" : "History row label for an ordinary working set",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메인 세트"
           }
         }
       }
