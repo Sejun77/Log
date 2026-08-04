@@ -75,8 +75,8 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan,
             current: durationPlan(),
-            oldIsTimeBased: true,
-            newIsTimeBased: false,
+            oldMode: .timedHold,
+            newMode: .strength,
             resetSource: repsResetSource()
         )
         let plan = outcome.sessionPlan
@@ -113,8 +113,8 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan,
             current: repsPlan(),
-            oldIsTimeBased: false,
-            newIsTimeBased: true,
+            oldMode: .strength,
+            newMode: .timedHold,
             resetSource: durationResetSource()
         )
         let plan = outcome.sessionPlan
@@ -145,8 +145,8 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
             let outcome = Adapter.outcome(
                 choice: .keepCurrentPlan,
                 current: old ? durationPlan() : repsPlan(),
-                oldIsTimeBased: old,
-                newIsTimeBased: new,
+                oldMode: old ? .timedHold : .strength,
+                newMode: new ? .timedHold : .strength,
                 resetSource: repsResetSource()
             )
             let p = outcome.sessionPlan
@@ -167,8 +167,8 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan,
             current: repsPlan(),
-            oldIsTimeBased: false,
-            newIsTimeBased: false,
+            oldMode: .strength,
+            newMode: .strength,
             resetSource: repsResetSource()
         )
         let plan = outcome.sessionPlan
@@ -196,8 +196,8 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan,
             current: durationPlan(),
-            oldIsTimeBased: true,
-            newIsTimeBased: true,
+            oldMode: .timedHold,
+            newMode: .timedHold,
             resetSource: durationResetSource()
         )
         let plan = outcome.sessionPlan
@@ -219,8 +219,8 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         let outcome = Adapter.outcome(
             choice: .resetPlan,
             current: durationPlan(),
-            oldIsTimeBased: true,
-            newIsTimeBased: false,
+            oldMode: .timedHold,
+            newMode: .strength,
             resetSource: repsResetSource()
         )
         let plan = outcome.sessionPlan
@@ -251,8 +251,8 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         let outcome = Adapter.outcome(
             choice: .resetPlan,
             current: repsPlan(),
-            oldIsTimeBased: false,
-            newIsTimeBased: true,
+            oldMode: .strength,
+            newMode: .timedHold,
             resetSource: durationResetSource()
         )
         let plan = outcome.sessionPlan
@@ -278,14 +278,14 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
 
         let withNote = Adapter.outcome(
             choice: .resetPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false, resetSource: source
+            oldMode: .timedHold, newMode: .strength, resetSource: source
         )
         XCTAssertEqual(
             withNote.sessionPlan.slotNotes, "Default cue for the new lift")
 
         let withoutNote = Adapter.outcome(
             choice: .resetPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false,
+            oldMode: .timedHold, newMode: .strength,
             resetSource: repsResetSource()
         )
         XCTAssertNil(withoutNote.sessionPlan.slotNotes)
@@ -300,7 +300,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         source.slotNotes = "   \n "
         let outcome = Adapter.outcome(
             choice: .resetPlan, current: repsPlan(),
-            oldIsTimeBased: false, newIsTimeBased: false, resetSource: source
+            oldMode: .strength, newMode: .strength, resetSource: source
         )
         XCTAssertNil(outcome.sessionPlan.slotNotes)
     }
@@ -317,7 +317,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
 
         let outcome = Adapter.outcome(
             choice: .resetPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false, resetSource: source
+            oldMode: .timedHold, newMode: .strength, resetSource: source
         )
         XCTAssertEqual(outcome.sessionPlan.rir, 2)
         XCTAssertEqual(outcome.sessionPlan.rpe, 8)
@@ -329,7 +329,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         source.rir = 3
         let outcome = Adapter.outcome(
             choice: .resetPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false, resetSource: source
+            oldMode: .timedHold, newMode: .strength, resetSource: source
         )
         XCTAssertEqual(outcome.sessionPlan.rir, 3)
         XCTAssertNil(outcome.sessionPlan.rpe)
@@ -342,7 +342,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
             let outcome = Adapter.outcome(
                 choice: .keepCurrentPlan,
                 current: old ? durationPlan() : repsPlan(),
-                oldIsTimeBased: old, newIsTimeBased: new,
+                oldMode: old ? .timedHold : .strength, newMode: new ? .timedHold : .strength,
                 resetSource: repsResetSource()
             )
             XCTAssertFalse(
@@ -360,7 +360,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
             Adapter.outcome(
                 choice: choice,
                 current: old ? durationPlan() : repsPlan(),
-                oldIsTimeBased: old, newIsTimeBased: new,
+                oldMode: old ? .timedHold : .strength, newMode: new ? .timedHold : .strength,
                 resetSource: repsResetSource()
             ).keepWarmupSteps
         }
@@ -398,7 +398,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
             Adapter.outcome(
                 choice: c,
                 current: old ? durationPlan() : repsPlan(),
-                oldIsTimeBased: old, newIsTimeBased: new,
+                oldMode: old ? .timedHold : .strength, newMode: new ? .timedHold : .strength,
                 resetSource: repsResetSource()
             ).keepTechniques
         }
@@ -474,8 +474,8 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan,
             current: repsPlan(),
-            oldIsTimeBased: false,
-            newIsTimeBased: true,
+            oldMode: .strength,
+            newMode: .timedHold,
             resetSource: durationResetSource()
         )
         let base = PrescriptionSnapshotPayload(
@@ -503,7 +503,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
     func test_adaptedSnapshot_clearsProgressionFieldsOnReset() {
         let outcome = Adapter.outcome(
             choice: .resetPlan, current: repsPlan(),
-            oldIsTimeBased: false, newIsTimeBased: false,
+            oldMode: .strength, newMode: .strength,
             resetSource: repsResetSource()
         )
         let base = PrescriptionSnapshotPayload(
@@ -533,7 +533,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
             let current = old ? durationPlan() : repsPlan()
             let outcome = Adapter.outcome(
                 choice: choice, current: current,
-                oldIsTimeBased: old, newIsTimeBased: new,
+                oldMode: old ? .timedHold : .strength, newMode: new ? .timedHold : .strength,
                 resetSource: repsResetSource()
             )
             XCTAssertNotEqual(
@@ -549,7 +549,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
     func test_keep_withNoCurrentPlan_producesEmptyPlanOfNewType() {
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan, current: nil,
-            oldIsTimeBased: false, newIsTimeBased: true,
+            oldMode: .strength, newMode: .timedHold,
             resetSource: durationResetSource()
         )
         XCTAssertTrue(outcome.sessionPlan.usesDuration)
@@ -561,7 +561,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
     // MARK: - appDefaults reflects AppSettings (no history prefill)
 
     func test_appDefaults_matchesAppSettingsAndCarriesNoWarmupsOrNote() {
-        let reps = Adapter.ResetSource.appDefaults(isTimeBased: false)
+        let reps = Adapter.ResetSource.appDefaults(for: .strength)
         XCTAssertEqual(reps.sets, AppSettings.defaultSets)
         XCTAssertEqual(reps.repMin, AppSettings.defaultRepMin)
         XCTAssertEqual(reps.repMax, AppSettings.defaultRepMax)
@@ -570,7 +570,7 @@ final class ExerciseSwitchPlanAdapterTests: XCTestCase {
         XCTAssertNil(reps.tempo)
         XCTAssertNil(reps.slotNotes)
 
-        let duration = Adapter.ResetSource.appDefaults(isTimeBased: true)
+        let duration = Adapter.ResetSource.appDefaults(for: .timedHold)
         XCTAssertEqual(duration.sets, AppSettings.defaultSets)
         // A duration reset source never carries reps.
         XCTAssertNil(duration.repMin)

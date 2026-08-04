@@ -160,8 +160,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
         // Plank → Bench Press, Keep Current Plan.
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false,
-            resetSource: .appDefaults(isTimeBased: false))
+            oldMode: .timedHold, newMode: .strength,
+            resetSource: .appDefaults(for: .strength))
 
         let draft = seedDraft(
             plan: outcome.sessionPlan, suggestion: suggestion,
@@ -187,8 +187,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
 
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan, current: repsPlan(),
-            oldIsTimeBased: false, newIsTimeBased: false,
-            resetSource: .appDefaults(isTimeBased: false))
+            oldMode: .strength, newMode: .strength,
+            resetSource: .appDefaults(for: .strength))
 
         let draft = seedDraft(
             plan: outcome.sessionPlan, suggestion: suggestion,
@@ -214,8 +214,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
         // Bench Press → Plank, Keep Current Plan.
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan, current: repsPlan(),
-            oldIsTimeBased: false, newIsTimeBased: true,
-            resetSource: .appDefaults(isTimeBased: true))
+            oldMode: .strength, newMode: .timedHold,
+            resetSource: .appDefaults(for: .timedHold))
         XCTAssertTrue(outcome.sessionPlan.usesDuration)
 
         let draft = seedDraft(
@@ -236,8 +236,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
             setIndex: 0, reps: 12, weight: 95, durationSeconds: nil)
         let toDuration = Adapter.outcome(
             choice: .keepCurrentPlan, current: repsPlan(),
-            oldIsTimeBased: false, newIsTimeBased: true,
-            resetSource: .appDefaults(isTimeBased: true))
+            oldMode: .strength, newMode: .timedHold,
+            resetSource: .appDefaults(for: .timedHold))
         let durationDraft = seedDraft(
             plan: toDuration.sessionPlan, suggestion: repsSuggestion,
             isTimeBased: true)
@@ -249,8 +249,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
             setIndex: 0, reps: nil, weight: nil, durationSeconds: 75)
         let toReps = Adapter.outcome(
             choice: .keepCurrentPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false,
-            resetSource: .appDefaults(isTimeBased: false))
+            oldMode: .timedHold, newMode: .strength,
+            resetSource: .appDefaults(for: .strength))
         let repsDraft = seedDraft(
             plan: toReps.sessionPlan, suggestion: durationSuggestion,
             isTimeBased: false)
@@ -275,8 +275,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
             let current = old ? durationPlan() : repsPlan()
             let outcome = Adapter.outcome(
                 choice: choice, current: current,
-                oldIsTimeBased: old, newIsTimeBased: new,
-                resetSource: .appDefaults(isTimeBased: new))
+                oldMode: old ? .timedHold : .strength, newMode: new ? .timedHold : .strength,
+                resetSource: .appDefaults(for: new ? .timedHold : .strength))
             let planBefore = outcome.sessionPlan
 
             // Seed drafts with a rich suggestion — the operation switching
@@ -318,8 +318,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
 
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false,
-            resetSource: .appDefaults(isTimeBased: false))
+            oldMode: .timedHold, newMode: .strength,
+            resetSource: .appDefaults(for: .strength))
 
         // Programmed structure survives verbatim.
         XCTAssertEqual(outcome.sessionPlan.sets, 2)
@@ -342,8 +342,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
     func test_prefillDoesNotChangePrescriptionSnapshot() {
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false,
-            resetSource: .appDefaults(isTimeBased: false))
+            oldMode: .timedHold, newMode: .strength,
+            resetSource: .appDefaults(for: .strength))
         let base = PrescriptionSnapshotPayload(
             sets: 2, tempo: "3-1-3-0", effortModeRaw: "single",
             usesDuration: true, equipment: "Bodyweight")
@@ -425,7 +425,7 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
         // Reset Plan into a reps/weight exercise with no history at all.
         let outcome = Adapter.outcome(
             choice: .resetPlan, current: durationPlan(),
-            oldIsTimeBased: true, newIsTimeBased: false,
+            oldMode: .timedHold, newMode: .strength,
             resetSource: Adapter.ResetSource(
                 sets: 3, repMin: 8, repMax: 12, restSecondsBetweenSets: 120))
 
@@ -446,8 +446,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
 
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan, current: current,
-            oldIsTimeBased: true, newIsTimeBased: true,
-            resetSource: .appDefaults(isTimeBased: true))
+            oldMode: .timedHold, newMode: .timedHold,
+            resetSource: .appDefaults(for: .timedHold))
 
         let draft = seedDraft(
             plan: outcome.sessionPlan, suggestion: nil, isTimeBased: true)
@@ -571,8 +571,8 @@ final class SwitchExerciseTempoAndPrefillTests: SwiftDataTestHarness {
     func test_switchIntoDuration_dropsTempoOverride() {
         let outcome = Adapter.outcome(
             choice: .keepCurrentPlan, current: repsPlan(),
-            oldIsTimeBased: false, newIsTimeBased: true,
-            resetSource: .appDefaults(isTimeBased: true))
+            oldMode: .strength, newMode: .timedHold,
+            resetSource: .appDefaults(for: .timedHold))
         XCTAssertFalse(outcome.keepTechniques)
         XCTAssertTrue(
             Adapter.retainedTechniques(

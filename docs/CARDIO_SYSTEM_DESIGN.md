@@ -369,7 +369,8 @@ rebuilt at session start and after an exercise switch, reading `trackingMode`
 from the live `Exercise` behind `PlanExercise.currentExerciseID`. Reading the
 model rather than denormalizing a flag onto `PlanExercise` means a slot swapped
 to or from a cardio exercise is picked up for free, **without touching the
-exercise-switch adapter** (still Slice 6). A per-row fetch inside `body` would
+exercise-switch adapter** (extended for cardio in Slice 6, §2.35). A per-row
+fetch inside `body` would
 violate the CLAUDE.md performance rule.
 
 **Drafts persist through `ParentDraftStore`, which gained cases rather than a new
@@ -555,6 +556,153 @@ choose again.
 > was started from — the same source as the sets, the duration and the rest
 > already showing on that row. History-based cardio prefill remains deferred,
 > and the table above still governs it.
+
+### 2.35 Exercise-switch compatibility (settled in Slice 6)
+
+The mid-workout switch is where the Entry #12 P1 bug lived: the row changed
+type, the *old* exercise's type-specific state stayed attached, and the resume
+path then disagreed with the live view. Cardio adds two new ways for that to
+happen — a target distance on the plan, and typed metric drafts on the row — so
+both get the treatment duration and reps already had.
+
+**The adapter takes `TrackingMode`, not `isTimeBased`.** A boolean cannot tell a
+treadmill from a plank, which is precisely the distinction that decides whether
+cardio-only state has anywhere to land. The old two-boolean signature is gone
+rather than kept as a convenience overload: a caller holding only a `Bool` would
+silently get timed-hold semantics for a cardio slot, which is the bug.
+
+> The two axes are genuinely different, and conflating them would be its own
+> bug. `TrackingMode.usesDuration` is the **field-shape** question, and
+> cardio → timedHold changes mode while *keeping* its duration target, because
+> both are logged by time. Only the cardio-specific state keys off mode
+> equality.
+
+| Switch | Keep current plan | Reset plan |
+|---|---|---|
+| cardio → cardio | sets, duration, rest, **target distance + unit**, typed metric drafts | from the reset source: its target if it has one, else cleared; drafts cleared |
+| cardio → timedHold | sets, duration, rest; **target + drafts cleared** | from source; target nil; drafts cleared |
+| cardio → strength | sets, rest; duration/**target**/drafts cleared | from source; target nil; drafts cleared |
+| timedHold → cardio | sets, duration, rest; target nil | from source (its target, else nil) |
+| strength → cardio | sets, rest; reps/tempo cleared; target nil | from source (its target, else nil) |
+| non-cardio ↔ non-cardio | unchanged from Slice 0 | unchanged |
+
+**One rule underneath it: cardio-only state survives cardio → cardio, and
+nothing else.** Typed metrics survive only the *Keep* half of that — an explicit
+Reset is the user asking to start over, and "5 km, 142 bpm" carried onto a
+different machine describes a bout that never happened.
+
+**`adaptedSnapshot` writes the target unconditionally from the adapted plan**,
+including when the plan has none. This is the fix that matters most: the
+snapshot is built from the **replaced** exercise's payload, so leaving those two
+columns alone is exactly how a cardio target used to ride along onto a bench
+press and then reappear through tier-2 resolution on the next resume.
+
+**Persisted drafts are cleared, not just in-memory ones.** Slice 4 dropped
+`cardioDraftsBySlotID[slotID]` on every swap but left the `ParentDraftStore`
+keys in `UserDefaults`, so the typed values were still on disk and could be
+restored if the slot later became cardio again.
+`ParentDraftStore.clearCardio(slotID:)` sweeps every set index of the slot and
+takes **only** the cardio fields — a blanket `clear` would take the duration
+with them, which a cardio → timed-hold switch still needs. The cardio subset is
+derived by exclusion from `Field.allCases`, so a future cardio field joins it
+automatically.
+
+**Target seeding survives a switch, and live and resume agree about it.**
+`seedCardioDraftsFromTarget(slotID:)` is called from both the swap path and
+`rehydrateCardioDrafts`, and only ever fills entries that are absent. The resume
+path still refuses to restore a switched slot's *logs and persisted drafts*
+(they belong to the replaced exercise) but now still seeds from the **adapted**
+plan — skipping that too was what would have made a resume show an empty
+distance where the live view showed the target. Precedence is unchanged and
+still three-tier: logged set → persisted draft → routine target.
+
+**Effort ~~is deliberately not cleared~~ *is* cleared when switching into
+cardio.** Reversed by the pre-merge patch below, on evidence from manual smoke
+testing: "suppression is display-only" is the right rule for a slot that was
+*authored* with an effort target, but it is the wrong rule for one that
+*acquired* it by switching. The carried-over value was invisible, uneditable,
+and would resurface the moment the slot was switched back or the plan applied to
+the routine. A new cardio slot seeds no effort (Slice 5); a switched one now
+matches it.
+
+#### Pre-merge patch (manual smoke of Slice 6)
+
+Four findings. Three were real; one was not.
+
+**The active Edit Plan sheet had no target-distance row** (real). Slice 5 made
+the target editable in the *routine* editor and propagated it into the session,
+but never gave the session a way to edit it. `SessionTargetDistanceRow` is the
+sheet-side sibling of the routine editor's row — same draft-then-normalize
+shape, same `CardioTargetDistance` commit, cardio only. It sits inside the
+Duration section rather than one of its own, because duration and distance are
+the same kind of thing: independent targets for the same bout.
+
+> Two consequences had to follow it, or the edit would have been a dead end:
+> `isSessionPlanDirty` now compares the target pair (otherwise a
+> target-only edit never offered "Update slot prescription"), and
+> `applySessionPlansToSlotPrescriptions` now copies it (otherwise the edit was
+> silently session-only).
+
+**Stale intensity survived a switch into cardio** (real) — see the reversal
+above. Both the plan's `rir`/`rpe` and the snapshot's effort-*progression*
+fields are cleared, the latter because they live only on the snapshot and would
+otherwise still derive `.progression` and summarize a target the cardio row does
+not display. `Outcome` gained `newMode` so `adaptedSnapshot` can apply that
+without the caller passing the mode twice.
+
+**There was no way to set intensity after switching cardio → strength** (real,
+and the subtlest of the four). The Intensity section already existed, but it was
+gated on the *snapshot's* derived effort mode, and rendered a **read-only**
+"None" row when that mode was `.none` — which is exactly the state a slot lands
+in after a switch out of cardio, since the adapted snapshot carries no effort at
+all. The `.none` case now shares the editable single stepper with `.single`. An
+unset stepper reads "—", which states the absence just as honestly as the
+read-only row did while actually being usable. `.progression` stays read-only:
+in-session progression editing is still deferred.
+
+**Two live-update bugs followed** (found by smoke-testing the patch above), and
+both had the same shape: Edit Plan wrote the `SessionPlan` correctly, but a
+piece of visible state was derived from something *else* and only caught up on
+the next resume.
+
+*The cardio row's distance draft was seeded once and never re-seeded.* Reps and
+duration already refresh on sheet dismissal via `applySessionPlanToInputs`;
+distance had no counterpart, so a target edit was invisible until a resume
+happened to re-run seeding. `resyncCardioDraftsToTarget` is that counterpart.
+
+> The precedence question it raises — *which* drafts may be refreshed — is
+> answered by a rule that already existed: **a seeded draft is never persisted,
+> a typed one always is.** `ParentDraftStore` writes on every keystroke,
+> including an empty string when the field is cleared, so a persisted cardio
+> snapshot means "the user touched this" and its absence means "this is ours to
+> refresh". A typed value is never overwritten, a cleared field is never
+> refilled, and a logged set is never rewritten. That is the same discriminator
+> the resume path uses, which is why live and resume land in the same state.
+
+*The Plan card and the per-set row labels both derived effort from the immutable
+snapshot.* So a freshly set intensity never appeared — and for a slot switched
+out of cardio, whose adapted snapshot carries no effort at all, it could never
+appear no matter what the user set. Worse, the two sites already disagreed: the
+card summarized `sessionPlan.rir` while the rows resolved from the snapshot, so
+even an ordinary `.single` slot updated the card and not the rows.
+`WorkoutEffortTargetResolver.effectiveFields(snapshot:sessionRIR:sessionRPE:)`
+is now the single answer both read — the snapshot with the session's single
+override laid over it. A `.progression` snapshot is deliberately **not**
+overlaid: in-session progression editing is still deferred, and overlaying would
+silently flatten the ramp.
+
+**"cardio → cardio Keep clears the target distance"** — *not reproducible*, and
+the adapter rule was already correct. `testCardioToCardioKeepPreservesTargetThroughTheWholePipeline`
+now walks every hop the app actually runs (routine prescription → snapshot
+payload → session plan → switch → adapted snapshot → frozen `@Model` snapshot →
+resume) and the target survives all of them. The one path that genuinely loses
+it is a `SessionPlan` **persisted by a build older than Slice 5**: it decodes
+with a nil target and then overwrites the freshly-initialized plan on resume.
+That is a one-time migration artifact of an already-in-flight workout, not a
+rule of the switch, and it is pinned by
+`testLegacyPersistedSessionPlanHasNoTargetToPreserve`. The most likely thing the
+smoke tester actually saw is the missing Edit Plan row above — opening Edit Plan
+to check the target and finding nothing there.
 
 ### 2.4 Deferring HealthKit
 
@@ -977,7 +1125,7 @@ independently committable, additive-first.
 | 3 | ✅ `SetLog` metric fields + History summary line | Storage and read-back, no logging-path change yet; proves old rows are untouched |
 | 4 | ✅ Active-workout cardio row (Details disclosure) — post-log edit deferred, see §2.4 | The risky slice, entered with the model already proven |
 | 5 | ✅ Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques/tempo/effort) | Programming surface, once logging works |
-| 6 | Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
+| 6 | ✅ Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
 | 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |
 | 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | Phase 2 charts | After real cardio data exists |

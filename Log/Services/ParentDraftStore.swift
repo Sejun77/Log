@@ -30,6 +30,13 @@ struct ParentDraftStore {
         // `CardioMetrics` happens at log time, not here.
         case distance, distanceUnit, avgHeartRate, calories
         case incline, resistance, hrZone
+
+        /// The cardio subset, derived by exclusion so a future cardio field
+        /// added to this enum joins it automatically and cannot be forgotten by
+        /// `clearCardio(slotID:)`.
+        static var cardioFields: [Field] {
+            allCases.filter { $0 != .reps && $0 != .weight && $0 != .duration }
+        }
     }
 
     /// Independently-nilable fields. The store returns `nil` (not a snapshot
@@ -116,6 +123,31 @@ struct ParentDraftStore {
         var dict = readDict()
         let prefix = "\(slotID)_\(setIndex)_"
         let toRemove = dict.keys.filter { $0.hasPrefix(prefix) }
+        guard !toRemove.isEmpty else { return }
+        for key in toRemove { dict.removeValue(forKey: key) }
+        defaults.set(dict, forKey: udKey)
+    }
+
+    /// Removes only the **cardio** fields for every set of `slotID`, leaving
+    /// reps / weight / duration intact.
+    ///
+    /// Cardio Slice 6: when a slot is switched away from a cardio exercise its
+    /// typed metrics stop describing anything real, but its duration may still
+    /// be valid (cardio → timed hold is a duration slot either way). A blanket
+    /// `clear` would take the duration with it; this takes exactly the fields
+    /// that lost their meaning.
+    ///
+    /// Prefix-matched across set indices rather than per-set, so a slot whose
+    /// set count shrank in the same switch cannot strand orphan keys behind the
+    /// new count. No-op (and no write) when nothing matches.
+    func clearCardio(slotID: UUID) {
+        var dict = readDict()
+        let prefix = "\(slotID)_"
+        let cardioSuffixes = Field.cardioFields.map { "_\($0.rawValue)" }
+        let toRemove = dict.keys.filter { key in
+            key.hasPrefix(prefix)
+                && cardioSuffixes.contains(where: { key.hasSuffix($0) })
+        }
         guard !toRemove.isEmpty else { return }
         for key in toRemove { dict.removeValue(forKey: key) }
         defaults.set(dict, forKey: udKey)

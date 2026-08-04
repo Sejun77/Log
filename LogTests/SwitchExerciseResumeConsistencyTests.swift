@@ -310,9 +310,9 @@ final class SwitchExerciseResumeConsistencyTests: SwiftDataTestHarness {
                 p.slotNotes = "Elbows under shoulders"
                 return p
             }(),
-            oldIsTimeBased: true,
-            newIsTimeBased: false,
-            resetSource: .appDefaults(isTimeBased: false)
+            oldMode: .timedHold,
+            newMode: .strength,
+            resetSource: .appDefaults(for: .strength)
         )
 
         // Encode exactly as `persistSessionPlans` does.
