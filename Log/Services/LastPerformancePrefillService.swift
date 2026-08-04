@@ -73,16 +73,8 @@ enum LastPerformancePrefillService {
         in workouts: [Workout],
         excluding currentWorkoutID: UUID? = nil
     ) -> [Int: LastPerformanceSetSuggestion] {
-        let candidates = workouts
-            .filter { $0.completedAt != nil }
-            .filter { $0.id != currentWorkoutID }
-            .filter { !$0.excludedFromPrefill }
-            .sorted { lhs, rhs in
-                let l = lhs.completedAt ?? lhs.date
-                let r = rhs.completedAt ?? rhs.date
-                if l != r { return l > r }
-                return lhs.date > rhs.date
-            }
+        let candidates = prefillCandidates(
+            in: workouts, excluding: currentWorkoutID)
 
         for workout in candidates {
             let map = workingSetSuggestions(forExerciseID: exerciseID, in: workout)
@@ -132,16 +124,8 @@ enum LastPerformancePrefillService {
         in workouts: [Workout],
         excluding currentWorkoutID: UUID? = nil
     ) -> [Int: [Int: LastPerformanceDropSuggestion]] {
-        let candidates = workouts
-            .filter { $0.completedAt != nil }
-            .filter { $0.id != currentWorkoutID }
-            .filter { !$0.excludedFromPrefill }
-            .sorted { lhs, rhs in
-                let l = lhs.completedAt ?? lhs.date
-                let r = rhs.completedAt ?? rhs.date
-                if l != r { return l > r }
-                return lhs.date > rhs.date
-            }
+        let candidates = prefillCandidates(
+            in: workouts, excluding: currentWorkoutID)
 
         for workout in candidates {
             let map = dropSubRowSuggestions(forExerciseID: exerciseID, in: workout)
@@ -174,6 +158,34 @@ enum LastPerformancePrefillService {
         if subIndex > maxSub { return drops[maxSub] }
         let lower = drops.keys.filter { $0 < subIndex }.max()
         return lower.flatMap { drops[$0] }
+    }
+
+    // MARK: - Shared eligibility
+
+    /// Workouts eligible to source a prefill, newest first.
+    ///
+    /// The single definition of "eligible": completed, not the session in
+    /// progress, and not one the user excluded from prefill. Sorted by
+    /// `completedAt` descending with `date` as the deterministic tie-break.
+    ///
+    /// Extracted so `CardioPrefillService` reuses this rule rather than
+    /// restating it — a second copy would be free to drift, and the one that
+    /// matters most (`excludedFromPrefill`) is a promise the user made a
+    /// deliberate choice about.
+    static func prefillCandidates(
+        in workouts: [Workout],
+        excluding currentWorkoutID: UUID? = nil
+    ) -> [Workout] {
+        workouts
+            .filter { $0.completedAt != nil }
+            .filter { $0.id != currentWorkoutID }
+            .filter { !$0.excludedFromPrefill }
+            .sorted { lhs, rhs in
+                let l = lhs.completedAt ?? lhs.date
+                let r = rhs.completedAt ?? rhs.date
+                if l != r { return l > r }
+                return lhs.date > rhs.date
+            }
     }
 
     // MARK: - Per-workout extraction

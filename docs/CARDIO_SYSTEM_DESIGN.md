@@ -527,20 +527,16 @@ weight is added in one place.
 > the weight-based options they have always had, because a weighted plank is a
 > real thing. The rule keys off cardio, never off duration.
 
-**Prefill of cardio metrics is deferred to a later slice.** Cardio sets do not
-prefill from the previous session today, and this patch does not change that —
-prefill is a behavior change to the entry path, not a polish fix, and it belongs
-with the Slice 5 prescription work where target distance is decided.
-
-When it is taken on, the split should be along one line: **setup metrics prefill,
-outcome metrics do not.**
+**Prefill of cardio metrics** was deferred through Slices 4–6 and **shipped in
+the prefill slice** (§2.36). The split predicted here held exactly:
+**setup metrics prefill, outcome metrics do not.**
 
 | Field | Prefill? | Why |
 |---|---|---|
-| Distance | likely yes | usually the thing being repeated |
-| Distance unit | likely yes | a per-set choice the user makes once |
-| Incline | likely yes | a machine setting, not a result |
-| Resistance | likely yes | a machine setting, not a result |
+| Distance | ✅ yes | usually the thing being repeated |
+| Distance unit | ✅ yes | a per-set choice the user makes once |
+| Incline / decline | ✅ yes | a machine setting, not a result |
+| Resistance | ✅ yes | a machine setting, not a result |
 | Average heart rate | **no** | an outcome — the body's response to *this* bout |
 | Calories | **no** | an outcome, and one the machine reports |
 | HR zone | **no** | an outcome, derived from heart rate |
@@ -703,6 +699,65 @@ rule of the switch, and it is pinned by
 `testLegacyPersistedSessionPlanHasNoTargetToPreserve`. The most likely thing the
 smoke tester actually saw is the missing Edit Plan row above — opening Edit Plan
 to check the target and finding nothing there.
+
+### 2.36 Previous-performance prefill (settled in the prefill slice)
+
+> Numbering note: the implementation-order table below lists Slice 7 as CSV v2.
+> Prefill was pulled forward ahead of it and is tracked as **6b** there; it is
+> the work that table's §2.3 note deferred, not a renumbering of CSV.
+
+**A target is a plan; a previous distance is evidence.** The routine's target
+says what you meant to do, the last bout says what you actually did, and for the
+field that records what you are *about to* do, evidence wins. The target does
+not disappear — it stays on the plan card and in Edit Plan, which is where a
+plan belongs. This is the one product decision the whole slice turns on.
+
+One precedence chain, stated once in `CardioDraftResolver`:
+
+    logged set → user-typed draft → previous performance → routine target
+
+**Only setup metrics prefill.** Distance, its unit, incline/decline and
+resistance are decisions the user makes again; average heart rate, HR zone and
+calories are what their body did during one specific bout. The split is enforced
+by the **type**: `CardioPrefillSuggestion` has no field for an outcome metric, so
+no future call site can reintroduce one by forgetting to filter.
+
+**Eligibility is shared, not restated.** `CardioPrefillService` and
+`LastPerformancePrefillService` both select through
+`LastPerformancePrefillService.prefillCandidates` — completed workouts, current
+session excluded, `excludedFromPrefill` honored, newest first. A second copy of
+that rule would be free to drift, and the promise that matters most (a deload
+the user marked "don't use for prefill") is one they made a deliberate choice
+about. Carry-down mirrors the strength resolver exactly, so the two prefills can
+never disagree about which previous set a row corresponds to.
+
+**`CardioDraftSource` is derived, never stored.** Slices 5 and 6 needed only
+"did the user touch this?", and got it free from persistence: a seeded draft is
+never written to `ParentDraftStore`, a typed one always is. Prefill adds a
+*second unseeded* source, so that two-state answer stopped being enough — a
+target edit may refresh what the target itself put there, but must not overwrite
+evidence of what the user actually did. All four inputs (logged? persisted?
+prefill? target?) survive a resume already, so the source is a pure function of
+existing state; persisting it would add a second source of truth free to drift
+from the drafts it describes.
+
+| Draft source | Target edit may rewrite it? |
+|---|---|
+| `logged` | no — it is history |
+| `userTyped` | no — including a field they cleared |
+| `previousPerformance` | no — evidence, not a plan |
+| `targetSeeded` | **yes** |
+| `empty` | yes — nothing to protect |
+
+**Ordering bug found and fixed in the swap path.** `swapExercise` seeded cardio
+drafts at step 3a but re-pointed the slot's prefill at step 4, so switching into
+cardio would have seeded from the **replaced** exercise's history — precisely
+the stale-state class Slice 6 exists to prevent. Seeding now runs at step 4a,
+immediately after `refreshLastPerformancePrefill`.
+
+**Prefill writes nothing but drafts.** It never touches the routine, the
+prescription snapshot, `SessionPlan.targetDistanceMeters`, or History; it is
+read-only against SwiftData; and it does not parse notes.
 
 ### 2.4 Deferring HealthKit
 
@@ -1126,6 +1181,7 @@ independently committable, additive-first.
 | 4 | ✅ Active-workout cardio row (Details disclosure) — post-log edit deferred, see §2.4 | The risky slice, entered with the model already proven |
 | 5 | ✅ Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques/tempo/effort) | Programming surface, once logging works |
 | 6 | ✅ Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
+| 6b | ✅ Cardio previous-performance prefill (§2.36) | Needs the target-vs-actual distinction Slice 5 established, and Slice 6's draft rules |
 | 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |
 | 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | Phase 2 charts | After real cardio data exists |
