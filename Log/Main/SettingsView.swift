@@ -7,6 +7,14 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Keys.weightIsKg)
     private var weightIsKg: Bool = true
 
+    /// Cardio Slice 8. The default is **resolved from the locale**, not
+    /// hardcoded, so it matches what `AppSettings.distanceIsMetric` returns
+    /// while the key is still unset. A literal `true` here would show "km" to a
+    /// US tester whose entry fields were already defaulting to miles — the
+    /// control would be describing a preference the app was not using.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
     @AppStorage(AppSettings.Keys.autoregMode)
     private var autoregModeRaw: String = AutoregMode.rir.rawValue
 
@@ -75,12 +83,30 @@ struct SettingsView: View {
     // MARK: - Sections
 
     private var unitsSection: some View {
-        Section("Units") {
+        Section {
             Picker("Weight unit", selection: $weightIsKg) {
                 Text("kg").tag(true)
                 Text("lb").tag(false)
             }
             .pickerStyle(.segmented)
+
+            // Cardio distance. Unit symbols stay untranslated, matching how
+            // kg / lb / s are already rendered in every language.
+            Picker("Distance unit", selection: $distanceIsMetric) {
+                Text("km").tag(true)
+                Text("mi").tag(false)
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("Units")
+        } footer: {
+            // Worth saying plainly: distance is stored in meters, so this
+            // changes what new fields start in and nothing else. A run logged
+            // in miles keeps reading in miles forever.
+            Text(
+                "Distance unit applies to new cardio entries. Workouts and "
+                + "routines keep the unit they were saved in."
+            )
         }
     }
 

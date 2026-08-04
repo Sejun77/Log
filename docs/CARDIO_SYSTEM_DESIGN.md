@@ -759,6 +759,42 @@ immediately after `refreshLastPerformancePrefill`.
 prescription snapshot, `SessionPlan.targetDistanceMeters`, or History; it is
 read-only against SwiftData; and it does not parse notes.
 
+### 2.37 The distance-unit preference (settled in the Settings slice)
+
+Slice 1 built `AppSettings.distanceIsMetric` and every entry path has defaulted
+from it since; what was missing was a way for the user to see or change it. The
+Settings → Units section now offers **Distance unit: km / mi** beside the
+existing weight picker.
+
+**The picker's `@AppStorage` default is locale-resolved, not `true`.** While the
+key is unset, `AppSettings.distanceIsMetric` falls back to
+`defaultDistanceIsMetric()`, so a hardcoded `true` would have shown "km" to a US
+tester whose entry fields were already defaulting to miles — a control
+describing a preference the app was not using.
+
+**It is a default for new entries, never a reinterpretation of old ones.**
+Distance is stored canonically in meters with the authored unit beside it, so
+the preference cannot reach existing data even in principle:
+
+| Read path | Unit used |
+|---|---|
+| History row | the `SetLog`'s own `distanceUnitRaw` |
+| Block / plan summary | the slot's own `targetDistanceUnitRaw` |
+| Previous-performance prefill | the unit that bout was performed in |
+| Target-distance seeding | the unit the target was authored in |
+| An empty new field | **the preference** |
+| Any of the above, unparseable | the preference, as a fallback — the number is still right, because it is meters |
+
+That ordering is why there is no migration prompt and no conversion pass: a run
+logged in miles reads in miles forever, and switching the preference changes
+what the *next* empty field starts in and nothing else. The Settings footer says
+so in as many words, because it is the obvious question a user would otherwise
+have to discover by experiment.
+
+Deliberately not offered: meters, yards, a custom unit system, and separate pace
+units. Pace already follows the unit of the row it belongs to
+(`DistanceUnit.paceFieldLabel`), which is the only sensible answer.
+
 ### 2.4 Deferring HealthKit
 
 **Answer to design question 5. Yes — explicitly deferred, and not to Phase 3
@@ -1182,6 +1218,7 @@ independently committable, additive-first.
 | 5 | ✅ Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques/tempo/effort) | Programming surface, once logging works |
 | 6 | ✅ Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
 | 6b | ✅ Cardio previous-performance prefill (§2.36) | Needs the target-vs-actual distinction Slice 5 established, and Slice 6's draft rules |
+| 6c | ✅ Distance-unit Settings control (§2.37) | The Slice 1 preference had no UI; exposing it is independent of everything below |
 | 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |
 | 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | Phase 2 charts | After real cardio data exists |

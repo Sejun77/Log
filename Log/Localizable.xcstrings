@@ -1267,6 +1267,30 @@
         }
       }
     },
+    "Distance unit" : {
+      "comment" : "Settings: cardio distance entry unit",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "거리 단위"
+          }
+        }
+      }
+    },
+    "Distance unit applies to new cardio entries. Workouts and routines keep the unit they were saved in." : {
+      "comment" : "Settings footer: the distance unit is an entry default, not a conversion",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "거리 단위는 새로 입력하는 유산소 기록에 적용됩니다. 이미 저장된 운동과 루틴은 저장 당시의 단위를 유지합니다."
+          }
+        }
+      }
+    },
     "Done" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -271,6 +271,11 @@ final class KoreanLocalizationTests: XCTestCase {
         // Slice 5 — the routine editor's cardio distance target. The km/mi
         // picker beside it is language-neutral, like every other unit symbol.
         "Target distance",
+        // Slice 8 — the Settings control and its footer. The picker's own
+        // "km" / "mi" segments stay untranslated, matching kg / lb / s.
+        "Distance unit",
+        "Distance unit applies to new cardio entries. Workouts and routines "
+            + "keep the unit they were saved in.",
     ]
 
     func testCardioPolishStringsLocalizeToKorean() throws {

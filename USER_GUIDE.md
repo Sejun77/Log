@@ -159,12 +159,17 @@ Use Settings to adjust app defaults and manage data.
 You can:
 
 - choose weight unit: lb or kg
+- choose distance unit for cardio: km or mi
 - choose effort type: RIR or RPE
 - set your bodyweight
 - set default sets, rep ranges, and rest times
 - import or export exercises
 - import routines
 - export workout history
+
+Distance unit applies to new cardio entries only. Workouts and routines keep
+the unit they were saved in, so a run logged in miles keeps reading in miles
+even if you later switch to km.
 
 ---
 
@@ -311,8 +316,12 @@ You can:
 설정할 수 있는 내용:
 
 - 중량 단위 선택: lb 또는 kg
+- 유산소 거리 단위 선택: km 또는 mi
 - 운동 강도 방식 선택: RIR 또는 RPE -체중 설정
 - 기본 세트 수, 반복 범위, 휴식 시간 설정
 - 운동 가져오기 / 내보내기
 - 루틴 가져오기
 - 운동 기록 내보내기
+
+거리 단위는 새로 입력하는 유산소 기록에만 적용됩니다. 이미 저장된 운동과 루틴은 저장
+당시의 단위를 유지하므로, mi로 기록한 러닝은 나중에 km로 바꾸어도 계속 mi로 표시됩니다.
