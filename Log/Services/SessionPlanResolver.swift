@@ -118,6 +118,28 @@ enum SessionPlanResolver {
         return nil
     }
 
+    /// Resolve the planned cardio **target** distance. Walks
+    /// `sessionPlan` → `snapshot` → `nil`, matching every other helper here.
+    ///
+    /// There is no tier-3 template fallback: `PlanSetTemplate` carries reps and
+    /// duration, not distance, and inventing one would mean guessing. Nil means
+    /// "no distance target anywhere", which is the normal case for every
+    /// strength and timed-hold slot and for cardio slots programmed by duration
+    /// alone.
+    static func plannedTargetDistance(
+        sessionPlan: SessionPlan?,
+        snapshot: PrescriptionSnapshotPayload?,
+        fallbackUnit: DistanceUnit
+    ) -> CardioTargetDistance? {
+        if let target = sessionPlan?.targetDistance(fallbackUnit: fallbackUnit) {
+            return target
+        }
+        return CardioTargetDistance(
+            meters: snapshot?.targetDistanceMeters,
+            unitRaw: snapshot?.targetDistanceUnitRaw,
+            fallbackUnit: fallbackUnit)
+    }
+
     /// Resolve the planned rest-after-exercise. Walks
     /// `sessionPlan.restSecondsAfterExercise > 0` →
     /// `snapshot.restSecondsAfterExercise > 0` → `nil`. Used only on

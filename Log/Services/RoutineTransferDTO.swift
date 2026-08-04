@@ -134,6 +134,13 @@ struct RoutineTransferSlotPrescriptionDTO: Codable, Equatable {
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool
+    // Cardio target distance (Slice 5). Optional with nil defaults, exactly
+    // like the effort keys above: a document exported before these keys
+    // existed decodes them as nil via synthesized `decodeIfPresent`, and the
+    // memberwise-init call sites that do not pass them keep compiling. No
+    // `schemaVersion` bump — nothing about an older document became invalid.
+    var targetDistanceMeters: Double? = nil
+    var targetDistanceUnitRaw: String? = nil
     var techniquePlans: [RoutineTransferTechniquePlanDTO]
     var warmupScheme: RoutineTransferWarmupSchemeDTO?
 }

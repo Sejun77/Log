@@ -589,6 +589,25 @@ final class SlotPrescription {
     var durationMaxSeconds: Int?
     var usesDuration: Bool = false
 
+    // Cardio Slice 5 — optional **target** distance for a cardio slot.
+    //
+    // A target, never a result: the distance actually covered is recorded on
+    // `SetLog.distanceMeters`, and the two are deliberately separate fields on
+    // separate types so a 5 km target logged as 4.2 km stays honest.
+    //
+    // Stored canonically in meters with the entry unit alongside it, exactly as
+    // the performed metrics are (`SetLog.distanceMeters` / `distanceUnitRaw`),
+    // so a routine authored in miles still aggregates correctly and still reads
+    // back in the unit it was written in. Both optional / nil-default: every
+    // existing prescription migrates lightweightly and a cardio slot with no
+    // distance target is the normal case, not a degraded one.
+    //
+    // Pace and speed are deliberately absent here for the same reason they are
+    // absent from `CardioMetrics`: both are distance ÷ duration and are derived
+    // at render time.
+    var targetDistanceMeters: Double? = nil
+    var targetDistanceUnitRaw: String? = nil
+
     /// The tempo this prescription may actually display.
     ///
     /// Tempo describes eccentric/concentric rep phases and is meaningless for a
@@ -632,7 +651,9 @@ final class SlotPrescription {
         rpeEnd: Double? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
-        usesDuration: Bool = false
+        usesDuration: Bool = false,
+        targetDistanceMeters: Double? = nil,
+        targetDistanceUnitRaw: String? = nil
     ) {
         self.sets = sets
         self.repMin = repMin
@@ -650,6 +671,8 @@ final class SlotPrescription {
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
+        self.targetDistanceMeters = targetDistanceMeters
+        self.targetDistanceUnitRaw = targetDistanceUnitRaw
         self.techniquePlans = []
     }
 }
@@ -670,11 +693,48 @@ extension SlotPrescription {
     }
 
     /// True when the prescription carries enough info to generate working sets.
+    ///
+    /// A cardio distance target is deliberately **not** counted here, even
+    /// though a distance-only cardio slot is a perfectly valid prescription.
+    /// This property answers one narrow question — "can `generateTemplates()`
+    /// produce meaningful `SetTemplate`s?" — and for a distance-only slot the
+    /// answer is no: `SetTemplate` has no distance field, so the generator
+    /// would fall through to its hardcoded `?? 60` and manufacture a 60-second
+    /// duration target the user never programmed, which would then prefill the
+    /// active-workout row. An empty template list is the honest answer; the
+    /// row still renders, because `SessionPlanResolver.effectiveSetCount`
+    /// reads `sets` from the snapshot rather than counting templates.
+    ///
+    /// The one place that must *not* treat a distance-only slot as empty is
+    /// `BackfillService.hydrateEmptySlotPrescriptions`, which uses
+    /// `hasHydratableContent` below instead.
     var hasContent: Bool {
         if usesDuration {
             return (durationMinSeconds ?? durationMaxSeconds) != nil
         }
         return sets != nil
+    }
+
+    /// True when the slot has been **authored** — the question
+    /// `BackfillService.hydrateEmptySlotPrescriptions` actually needs answered
+    /// before it overwrites a prescription with `AppSettings` defaults.
+    ///
+    /// Wider than `hasContent` by exactly one case: a cardio slot programmed
+    /// with a distance target and no duration ("run 5k, however long it
+    /// takes"). Such a slot generates no templates, so `hasContent` is false —
+    /// but it is emphatically not empty, and hydrating it would silently
+    /// rewrite the user's routine on the next launch, replacing the cardio
+    /// defaults with three sets, 90 seconds of rest, and an invented 60-second
+    /// duration target.
+    ///
+    /// Kept separate from `hasContent` on purpose. Widening `hasContent`
+    /// instead would route the same slot into `generateTemplates()`, whose
+    /// `?? 60` fallback is the very duration this guard exists to prevent, and
+    /// would change `resolvedTemplates()` and the routine editor's
+    /// template-vs-prescription comparison as collateral. Backfill is the only
+    /// caller that wants the wider reading.
+    var hasHydratableContent: Bool {
+        hasContent || targetDistanceMeters != nil
     }
 
     /// Deterministic generator: produces [SetTemplate] from prescription fields.
@@ -763,6 +823,13 @@ final class PlannedPrescriptionSnapshot {
     var durationMaxSeconds: Int?
     var usesDuration: Bool = false
 
+    // Cardio Slice 5 — frozen copy of the slot's target distance, so a running
+    // or completed workout renders the target it was started with even after
+    // the routine is edited. Optional / nil-default: existing snapshot rows
+    // migrate lightweightly and read as "no distance target".
+    var targetDistanceMeters: Double? = nil
+    var targetDistanceUnitRaw: String? = nil
+
     /// The tempo History / session detail may display for this frozen snapshot.
     /// Nil for a duration-based row, so an already-completed workout that
     /// captured a stale tempo never renders one. Mirrors
@@ -795,6 +862,8 @@ final class PlannedPrescriptionSnapshot {
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false,
+        targetDistanceMeters: Double? = nil,
+        targetDistanceUnitRaw: String? = nil,
         equipment: String? = nil,
         setupNotes: String? = nil
     ) {
@@ -814,6 +883,8 @@ final class PlannedPrescriptionSnapshot {
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
+        self.targetDistanceMeters = targetDistanceMeters
+        self.targetDistanceUnitRaw = targetDistanceUnitRaw
         self.equipment = equipment
         self.setupNotes = setupNotes
     }
@@ -841,6 +912,8 @@ final class PlannedPrescriptionSnapshot {
             durationMinSeconds: source.durationMinSeconds,
             durationMaxSeconds: source.durationMaxSeconds,
             usesDuration: source.usesDuration,
+            targetDistanceMeters: source.targetDistanceMeters,
+            targetDistanceUnitRaw: source.targetDistanceUnitRaw,
             equipment: exercise?.equipmentType,
             setupNotes: exercise?.setupDefaults
         )

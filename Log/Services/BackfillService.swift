@@ -81,9 +81,9 @@ enum BackfillService {
     }
 
     /// Phase 9-A backfill: hydrate every `RoutineExercise` whose
-    /// `prescription` is missing or has `hasContent == false` so the slot
-    /// becomes self-sufficient. Additive only — never deletes Tier-1
-    /// overrides, and never overwrites a content-bearing prescription.
+    /// `prescription` is missing or has `hasHydratableContent == false` so the
+    /// slot becomes self-sufficient. Additive only — never deletes Tier-1
+    /// overrides, and never overwrites an authored prescription.
     ///
     /// Hydration source priority (post Phase 9-E2 — Tier 3
     /// `Exercise.defaultTemplates` source removed alongside the model
@@ -107,15 +107,20 @@ enum BackfillService {
     /// 9-A.5 audit), `rir` / `rpe` / `tempo` (templates carry no autoreg).
     ///
     /// Idempotent: re-running on an already-hydrated store is a no-op
-    /// (the `hasContent` guard at the top short-circuits every slot).
+    /// (the `hasHydratableContent` guard at the top short-circuits every slot).
     static func hydrateEmptySlotPrescriptions(in ctx: ModelContext) {
         guard let slots = try? ctx.fetch(FetchDescriptor<RoutineExercise>())
         else { return }
 
         var dirty = false
         for re in slots {
-            // Skip content-bearing prescriptions (idempotency guard).
-            if let p = re.prescription, p.hasContent { continue }
+            // Skip prescriptions the user has already authored (idempotency
+            // guard). Reads `hasHydratableContent`, not `hasContent`: a cardio
+            // slot programmed with a distance target and no duration generates
+            // no templates, but hydrating it would overwrite its sets, rest and
+            // duration with defaults — a silent rewrite of a real routine on
+            // every launch. See the note on `SlotPrescription.hasContent`.
+            if let p = re.prescription, p.hasHydratableContent { continue }
 
             // Defensive: create prescription if missing. Phase 3.1 backfill
             // should have created one already; pinned by the create-if-nil test.

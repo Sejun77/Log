@@ -4117,6 +4117,18 @@
         }
       }
     },
+    "Target distance" : {
+      "comment" : "Routine editor: optional distance target for a cardio slot",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "목표 거리"
+          }
+        }
+      }
+    },
     "Techniques" : {
       "extractionState" : "manual",
       "localizations" : {

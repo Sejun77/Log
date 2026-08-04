@@ -29,7 +29,8 @@ enum RoutineBlockBuilder {
             let re = RoutineExercise(exercise: ex, order: 0, setTemplates: [])
             ctx.insert(re)
             re.prescription = makeDefaultPrescription(
-                isTimeBased: ex.isTimeBased, in: ctx)
+                isTimeBased: ex.isTimeBased,
+                isCardio: ex.trackingMode == .cardio, in: ctx)
             let block = RoutineBlock(
                 isSuperset: false,
                 order: nextOrder,
@@ -69,7 +70,9 @@ enum RoutineBlockBuilder {
             let nextOrder = (block.exercises.map(\.order).max() ?? -1) + 1
             let re = RoutineExercise(exercise: ex, order: nextOrder, setTemplates: [])
             ctx.insert(re)
-            let p = makeDefaultPrescription(isTimeBased: ex.isTimeBased, in: ctx)
+            let p = makeDefaultPrescription(
+                isTimeBased: ex.isTimeBased,
+                isCardio: ex.trackingMode == .cardio, in: ctx)
             p.sets = sharedSets > 0 ? sharedSets : AppSettings.defaultSets
             re.prescription = p
             block.exercises.append(re)

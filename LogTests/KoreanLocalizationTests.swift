@@ -268,6 +268,9 @@ final class KoreanLocalizationTests: XCTestCase {
         "Pace (min/mi)",
         "Working Set",
         "Warm-up Set",
+        // Slice 5 — the routine editor's cardio distance target. The km/mi
+        // picker beside it is language-neutral, like every other unit symbol.
+        "Target distance",
     ]
 
     func testCardioPolishStringsLocalizeToKorean() throws {

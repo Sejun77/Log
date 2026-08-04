@@ -283,7 +283,18 @@ extension RoutineTransfer {
             rpeEnd: dto.rpeEnd,
             durationMinSeconds: dto.durationMinSeconds,
             durationMaxSeconds: dto.durationMaxSeconds,
-            usesDuration: dto.usesDuration)
+            usesDuration: dto.usesDuration,
+            // Re-normalized rather than trusted: an imported document is
+            // outside data, and a hand-edited or corrupt distance must land as
+            // "no target" rather than reaching a formatter. An unparseable unit
+            // is dropped with the distance it belonged to, so the two columns
+            // cannot disagree.
+            targetDistanceMeters: CardioMetrics.normalizedDistanceMeters(
+                dto.targetDistanceMeters),
+            targetDistanceUnitRaw: CardioMetrics.normalizedDistanceMeters(
+                dto.targetDistanceMeters) == nil
+                ? nil
+                : DistanceUnit.from(raw: dto.targetDistanceUnitRaw)?.rawValue)
         ctx.insert(p)
         p.techniquePlans = dto.techniquePlans
             .sorted { $0.order < $1.order }
