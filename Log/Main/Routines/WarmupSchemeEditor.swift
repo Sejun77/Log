@@ -11,6 +11,11 @@ struct WarmupSchemeEditor: View {
     /// "% of Working" and the per-step weight field is hidden (steps save a
     /// nil weight). Defaults false so non-bodyweight behavior is unchanged.
     var isBodyweight: Bool = false
+    /// True when the parent exercise is tracked as cardio, which hides the same
+    /// weight-based options for the same reason — there is no working weight to
+    /// base them on. Defaults false, so strength and timed-hold slots are
+    /// unaffected.
+    var isCardio: Bool = false
     @State private var showAddStep = false
     /// Non-nil drives the edit sheet (`.sheet(item:)`). Set by a row tap; the
     /// same `WarmupStepEditSheet` is reused in edit mode and writes changes
@@ -47,12 +52,12 @@ struct WarmupSchemeEditor: View {
             }
         }
         .sheet(isPresented: $showAddStep) {
-            WarmupStepEditSheet(isBodyweight: isBodyweight, onSave: { kind, reps, pct, rest, note, weight in
+            WarmupStepEditSheet(isBodyweight: isBodyweight, isCardio: isCardio, onSave: { kind, reps, pct, rest, note, weight in
                 addStep(kind: kind, reps: reps, pct: pct, rest: rest, note: note, weight: weight)
             })
         }
         .sheet(item: $editingStep) { step in
-            WarmupStepEditSheet(existing: step, isBodyweight: isBodyweight, onSave: { kind, reps, pct, rest, note, weight in
+            WarmupStepEditSheet(existing: step, isBodyweight: isBodyweight, isCardio: isCardio, onSave: { kind, reps, pct, rest, note, weight in
                 updateStep(step, kind: kind, reps: reps, pct: pct, rest: rest, note: note, weight: weight)
             })
         }
@@ -97,7 +102,10 @@ struct WarmupSchemeEditor: View {
                 Button {
                     editingStep = step
                 } label: {
-                    WarmupStepRow(step: step)
+                    WarmupStepRow(
+                        step: step,
+                        isBodyweight: isBodyweight,
+                        isCardio: isCardio)
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -189,12 +197,23 @@ struct WarmupSchemeEditor: View {
 // Row displaying a single warmup step in the WarmupSchemeEditor list.
 private struct WarmupStepRow: View {
     @Bindable var step: WarmupStep
+    /// Same two flags the edit sheet takes, so the row's kind caption is
+    /// resolved by `warmupKindLabel` and cannot contradict the picker the row
+    /// opens — a cardio step must never be captioned "Fixed Weight".
+    var isBodyweight: Bool = false
+    var isCardio: Bool = false
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(LocalizedStringKey(
-                    step.kind == .percentage ? "% of Working" :
-                    step.kind == .fixedReps  ? "Fixed Weight" : "Note"))
+                // `.noteOnly` keeps its shorter row caption ("Note"); only the
+                // weight-dependent `.fixedReps` / `.percentage` wording is
+                // taken from the shared label rule.
+                Text(step.kind == .noteOnly
+                    ? NSLocalizedString("Note", comment: "")
+                    : warmupKindLabel(
+                        step.kind,
+                        isBodyweight: isBodyweight,
+                        isCardio: isCardio))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -240,6 +259,7 @@ private struct WarmupStepRow: View {
 private struct WarmupStepEditSheet: View {
     var existing: WarmupStep? = nil
     var isBodyweight: Bool = false
+    var isCardio: Bool = false
     var onSave: (WarmupStepKind, Int?, Double?, Int?, String?, Double?) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -255,29 +275,33 @@ private struct WarmupStepEditSheet: View {
     /// Kinds offered in the picker, narrowed for bodyweight but always
     /// including the existing step's kind so an edit never orphans the selection.
     private var availableKinds: [WarmupStepKind] {
-        warmupKinds(isBodyweight: isBodyweight, currentKind: existing?.kind)
+        warmupKinds(
+            isBodyweight: isBodyweight,
+            isCardio: isCardio,
+            currentKind: existing?.kind)
     }
 
-    /// Picker label: `.fixedReps` reads "Reps" for bodyweight (weight hidden),
-    /// "Fixed Weight" otherwise.
+    /// Picker label: `.fixedReps` reads "Reps" when the weight field is hidden
+    /// (bodyweight or cardio), "Fixed Weight" otherwise.
     private func kindLabel(_ k: WarmupStepKind) -> String {
-        switch k {
-        case .fixedReps:  return isBodyweight ? NSLocalizedString("Reps", comment: "") : NSLocalizedString("Fixed Weight", comment: "")
-        case .percentage: return NSLocalizedString("% of Working", comment: "")
-        case .noteOnly:   return NSLocalizedString("Note Only", comment: "")
-        }
+        warmupKindLabel(k, isBodyweight: isBodyweight, isCardio: isCardio)
     }
 
-    /// Weight is only entered for non-bodyweight `.fixedReps` steps.
-    private var showsWeightField: Bool { kind == .fixedReps && !isBodyweight }
+    /// Weight is only entered for weight-bearing `.fixedReps` steps.
+    private var showsWeightField: Bool {
+        kind == .fixedReps
+            && !warmupHidesWeight(isBodyweight: isBodyweight, isCardio: isCardio)
+    }
 
     init(
         existing: WarmupStep? = nil,
         isBodyweight: Bool = false,
+        isCardio: Bool = false,
         onSave: @escaping (WarmupStepKind, Int?, Double?, Int?, String?, Double?) -> Void
     ) {
         self.existing = existing
         self.isBodyweight = isBodyweight
+        self.isCardio = isCardio
         self.onSave = onSave
         _kind = State(initialValue: existing?.kind ?? .fixedReps)
         _reps = State(initialValue: existing?.reps ?? 5)
@@ -375,7 +399,8 @@ private struct WarmupStepEditSheet: View {
                         let pctVal: Double?  = kind == .percentage ? Double(pct) / 100.0 : nil
                         let restVal: Int?    = rest > 0 ? rest : nil
                         let weightVal: Double? = warmupSavedWeight(
-                            kind: kind, isBodyweight: isBodyweight, weightText: weightText)
+                            kind: kind, isBodyweight: isBodyweight,
+                            isCardio: isCardio, weightText: weightText)
                         let noteVal = note.trimmingCharacters(in: .whitespacesAndNewlines)
                         onSave(kind, repsVal, pctVal, restVal, noteVal.isEmpty ? nil : noteVal, weightVal)
                         dismiss()
@@ -386,22 +411,42 @@ private struct WarmupStepEditSheet: View {
     }
 }
 
-// MARK: - Bodyweight warm-up rules (pure helpers)
+// MARK: - Weightless warm-up rules (pure helpers)
+
+/// Whether the exercise has no working weight for a warm-up step to be based
+/// on, so the two weight-based options are meaningless for it.
+///
+/// Two unrelated reasons land on the same rule:
+/// - **bodyweight** — there is no external load to take a percentage of, and no
+///   number to enter (Slice 1);
+/// - **cardio** — "50% of working weight" and "60 kg × 5" describe nothing a
+///   treadmill or a rower can do (Slice 4 polish).
+///
+/// Basic duration exercises (timed holds such as Plank) are deliberately *not*
+/// included: their warm-up options are unchanged by this rule and still include
+/// the weight-based kinds, exactly as before.
+func warmupHidesWeight(isBodyweight: Bool, isCardio: Bool) -> Bool {
+    isBodyweight || isCardio
+}
 
 /// Warm-up step kinds offered in the kind picker.
 ///
-/// - Non-bodyweight: all kinds (`.fixedReps` = "Fixed Weight", `.percentage`,
-///   `.noteOnly`).
-/// - Bodyweight: `.percentage` is dropped (% of working weight is meaningless
-///   without a working weight), leaving `.fixedReps` (shown as "Reps") and
-///   `.noteOnly`.
+/// - Weight-bearing (the default): all kinds (`.fixedReps` = "Fixed Weight",
+///   `.percentage` = "% of Working", `.noteOnly`).
+/// - Weightless (bodyweight or cardio, see `warmupHidesWeight`): `.percentage`
+///   is dropped entirely and `.fixedReps` loses its weight field and reads
+///   "Reps", so neither "Fixed Weight" nor "% of Working" is offered.
 /// - Edit safety: when editing a legacy step whose `currentKind` would
-///   otherwise be hidden (e.g. a bodyweight exercise with an old `.percentage`
+///   otherwise be hidden (e.g. a cardio exercise carrying an old `.percentage`
 ///   step), that kind is appended so the `Picker` selection never orphans.
 ///
 /// Order is stable and there are never duplicates.
-func warmupKinds(isBodyweight: Bool, currentKind: WarmupStepKind? = nil) -> [WarmupStepKind] {
-    guard isBodyweight else {
+func warmupKinds(
+    isBodyweight: Bool,
+    isCardio: Bool = false,
+    currentKind: WarmupStepKind? = nil
+) -> [WarmupStepKind] {
+    guard warmupHidesWeight(isBodyweight: isBodyweight, isCardio: isCardio) else {
         return [.fixedReps, .percentage, .noteOnly]
     }
     var kinds: [WarmupStepKind] = [.fixedReps, .noteOnly]
@@ -411,11 +456,38 @@ func warmupKinds(isBodyweight: Bool, currentKind: WarmupStepKind? = nil) -> [War
     return kinds
 }
 
-/// Resolved weight to persist for a warm-up step. Only non-bodyweight
+/// Localized picker / row label for a warm-up step kind.
+///
+/// `.fixedReps` is the one kind whose meaning depends on the exercise: with a
+/// weight field it is "Fixed Weight", without one it is just "Reps". Shared by
+/// the edit sheet's picker and the step row so the two can never disagree —
+/// a cardio step must not be listed as "Reps" in one place and "Fixed Weight"
+/// in the other.
+func warmupKindLabel(
+    _ kind: WarmupStepKind, isBodyweight: Bool, isCardio: Bool = false
+) -> String {
+    switch kind {
+    case .fixedReps:
+        return warmupHidesWeight(isBodyweight: isBodyweight, isCardio: isCardio)
+            ? NSLocalizedString("Reps", comment: "")
+            : NSLocalizedString("Fixed Weight", comment: "")
+    case .percentage: return NSLocalizedString("% of Working", comment: "")
+    case .noteOnly:   return NSLocalizedString("Note Only", comment: "")
+    }
+}
+
+/// Resolved weight to persist for a warm-up step. Only weight-bearing
 /// `.fixedReps` steps carry a weight; percentage, note-only, and **all**
-/// bodyweight steps save nil (so editing a legacy weighted `.fixedReps` step on
-/// a bodyweight exercise clears its weight on save).
-func warmupSavedWeight(kind: WarmupStepKind, isBodyweight: Bool, weightText: String) -> Double? {
-    guard kind == .fixedReps, !isBodyweight else { return nil }
+/// bodyweight / cardio steps save nil (so editing a legacy weighted
+/// `.fixedReps` step on such an exercise clears its weight on save).
+func warmupSavedWeight(
+    kind: WarmupStepKind,
+    isBodyweight: Bool,
+    isCardio: Bool = false,
+    weightText: String
+) -> Double? {
+    guard kind == .fixedReps,
+        !warmupHidesWeight(isBodyweight: isBodyweight, isCardio: isCardio)
+    else { return nil }
     return Double(weightText)
 }

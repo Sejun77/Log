@@ -24,6 +24,34 @@ enum DistanceUnit: String, CaseIterable, Codable, Equatable {
     /// rendering bare unit letters (`kg` / `lb` / `s`) in every language.
     var symbol: String { rawValue }
 
+    /// The unit a pace is expressed in — "min/km" or "min/mi".
+    ///
+    /// Pace *values* render as "5:00 /km": short, and unambiguous once you know
+    /// what it is. The field **label** is where that has to be established, so
+    /// it spells the unit out. Never "time/km", which reads like a column
+    /// heading rather than a quantity.
+    var paceUnitSymbol: String { "min/\(symbol)" }
+
+    /// Localized label for a pace field in this unit — "Pace (min/km)" /
+    /// "Pace (min/mi)".
+    ///
+    /// Two whole keys rather than one interpolated format: a translator needs
+    /// to see the finished phrase, and both variants are closed sets known at
+    /// compile time. The parenthesised unit is not translated, matching how
+    /// `kg` / `lb` / `s` are already rendered in every language.
+    var paceFieldLabel: String {
+        switch self {
+        case .kilometers:
+            return NSLocalizedString(
+                "Pace (min/km)",
+                comment: "Cardio field label: pace in minutes per kilometer")
+        case .miles:
+            return NSLocalizedString(
+                "Pace (min/mi)",
+                comment: "Cardio field label: pace in minutes per mile")
+        }
+    }
+
     /// Exact conversion factor. The mile is defined as exactly 1609.344 m.
     var metersPerUnit: Double {
         switch self {

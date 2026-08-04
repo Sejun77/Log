@@ -212,7 +212,10 @@ struct CardioDetailsSection: View {
         if pace != nil || speed != nil {
             VStack(alignment: .leading, spacing: DSSpacing.xs) {
                 if let pace {
-                    LabeledField(label: "Pace") {
+                    // The label carries the unit ("Pace (min/km)") because the
+                    // value's "/km" suffix alone does not tell a first-time
+                    // user what the number in front of it measures.
+                    LabeledField(resolvedLabel: draft.unit.paceFieldLabel) {
                         Text(pace)
                             .font(.dsBody.monospacedDigit())
                             .foregroundStyle(.secondary)
@@ -308,12 +311,26 @@ private struct UnitSuffix: View {
 /// One label + control line. Keeps the seven rows above visually identical
 /// without repeating the same `HStack` and font modifiers seven times.
 private struct LabeledField<Content: View>: View {
-    let label: LocalizedStringKey
-    @ViewBuilder let content: Content
+    private let label: Text
+    private let content: Content
+
+    /// Static label, localized at render time by `Text` as everywhere else.
+    init(label: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.label = Text(label)
+        self.content = content()
+    }
+
+    /// Label that was already resolved through `NSLocalizedString` — used by
+    /// the pace row, whose key depends on the row's distance unit and so
+    /// cannot be a compile-time `LocalizedStringKey`.
+    init(resolvedLabel: String, @ViewBuilder content: () -> Content) {
+        self.label = Text(resolvedLabel)
+        self.content = content()
+    }
 
     var body: some View {
         HStack(spacing: DSSpacing.sm) {
-            Text(label)
+            label
                 .font(.dsBodySecondary)
                 .foregroundStyle(.secondary)
             Spacer(minLength: DSSpacing.sm)

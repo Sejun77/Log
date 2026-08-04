@@ -347,11 +347,14 @@ block. Duration stays the primary trailing value so the eye lands in the same
 place on every row:
 
 ```
-2. Working                                            2700s
+2. Set                                                2700s
 6.2 km · 7:15 /km
 3% incline · level 8
 142 bpm · Z3 · 410 kcal
 ```
+
+(The row label read "2. Working" when this patch shipped; the post-merge polish
+below replaced it.)
 
 Line 1 is what was covered, line 2 how the machine was set, line 3 the body's
 response. An empty group produces no line, so a duration-only row is still a
@@ -379,6 +382,79 @@ cardio, and it should be taken on its own terms. Until then cardio shows no
 effort field. Timed holds keep the control: "two seconds in reserve" is a
 stretch, but it is what the app has always offered for a plank, and this patch
 does not change unrelated behavior.
+
+#### Post-merge polish (manual review of merged Slice 4)
+
+Three more issues found after the merge, fixed before Slice 5 starts.
+
+**History cardio rows read "1. Set", not "1. Working".** "Working" is strength
+vocabulary — it exists to distinguish a working set from a warm-up set and a
+dropset. A cardio bout may itself be a warm-up jog, the main effort, or a
+cooldown, and the log does not know which, so the label was actively misleading.
+The neutral "Set" claims only what is certainly true. The rule lives in
+`HistorySetRowLabel`, pulled out of `HistoryView` so it is assertable without a
+SwiftUI host:
+
+```
+1. Set                                                2700s
+6.2 km · 7:15 /km
+```
+
+Scope is deliberately narrow. Strength rows still read "1. Working", dropsets
+"1. Dropset", warm-ups "Warmup 1", and timed holds are unchanged (a Plank is not
+cardio). **The active-workout row labels are untouched** — `SetKind.activeRowLabel`
+returns nil for `.working`, so no "Working" text has ever existed there to fix.
+Whether an item is cardio is resolved once per `WorkoutItem` from the live
+`Exercise.trackingMode`, never per set, so two sets of the same run cannot
+disagree; when the exercise has since been deleted the fallback is whether any
+of the item's sets carries cardio metrics.
+
+**The pace field names its unit: "Pace (min/km)" / "Pace (min/mi)".** The value
+format is unchanged ("5:00 /km"), and so is the arithmetic — pace is still
+`durationSeconds ÷ distance`, derived at render time and never stored. What
+changed is only that the label now says what the number is. `DistanceUnit`
+owns both the label and the `min/km` symbol, so the two cannot drift, and both
+labels are localized. "time/km" is explicitly rejected as user-facing wording:
+it reads like a spreadsheet column heading rather than a quantity.
+
+**Cardio hides the weight-based warm-up options.** "Fixed Weight" and "% of
+Working" describe nothing a treadmill or a rower can do. Cardio now takes the
+same path bodyweight has taken since Slice 1: `.percentage` is dropped from the
+kind picker, `.fixedReps` loses its weight field and reads "Reps", and any
+weight on a saved step is cleared. The shared predicate is
+`warmupHidesWeight(isBodyweight:isCardio:)`, so a future third reason to hide
+weight is added in one place.
+
+> This is **not** a cardio warm-up/cooldown system and not structured intervals;
+> it only removes options that could never have worked. Note also that basic
+> duration exercises (timed holds) are *not* covered by this rule — they keep
+> the weight-based options they have always had, because a weighted plank is a
+> real thing. The rule keys off cardio, never off duration.
+
+**Prefill of cardio metrics is deferred to a later slice.** Cardio sets do not
+prefill from the previous session today, and this patch does not change that —
+prefill is a behavior change to the entry path, not a polish fix, and it belongs
+with the Slice 5 prescription work where target distance is decided.
+
+When it is taken on, the split should be along one line: **setup metrics prefill,
+outcome metrics do not.**
+
+| Field | Prefill? | Why |
+|---|---|---|
+| Distance | likely yes | usually the thing being repeated |
+| Distance unit | likely yes | a per-set choice the user makes once |
+| Incline | likely yes | a machine setting, not a result |
+| Resistance | likely yes | a machine setting, not a result |
+| Average heart rate | **no** | an outcome — the body's response to *this* bout |
+| Calories | **no** | an outcome, and one the machine reports |
+| HR zone | **no** | an outcome, derived from heart rate |
+
+Prefilling an outcome metric would put a number the user did not measure into a
+field that reads as measured, which is worse than an empty field. The same
+argument does not apply to a setting they chose last time and will probably
+choose again. Whether target distance (Slice 5) should also seed the entry
+distance is an open question for that slice — a *target* and a *result* are not
+the same value, even when they usually match.
 
 ### 2.4 Deferring HealthKit
 

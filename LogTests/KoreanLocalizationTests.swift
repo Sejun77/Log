@@ -255,6 +255,49 @@ final class KoreanLocalizationTests: XCTestCase {
         "None",
     ]
 
+    /// Strings introduced by the Slice 4 polish patch.
+    ///
+    /// The pace labels name their unit ("Pace (min/km)") because "/km" on the
+    /// value alone did not explain itself; the unit inside the parentheses is
+    /// language-neutral, like `kg` / `lb` / `s`, so only the word around it is
+    /// translated. "Set" is the neutral History label that replaced the
+    /// strength-centric "Working" on cardio rows.
+    private static let cardioPolishKeys = [
+        "Pace (min/km)",
+        "Pace (min/mi)",
+        "Set",
+    ]
+
+    func testCardioPolishStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.cardioPolishKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Slice 4 polish string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testCardioPolishStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.cardioPolishKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// The two labels the History row and the pace field must never use again.
+    func testCardioRowLabelIsNotTheStrengthWord() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        XCTAssertEqual(HistorySetRowLabel.neutralCardioLabel, "Set")
+        XCTAssertEqual(localized("Set", in: ko), "세트")
+    }
+
     func testCardioDetailsStringsLocalizeToKorean() throws {
         let ko = try XCTUnwrap(localizationBundle("ko"))
         for key in Self.cardioDetailsKeys {
