@@ -2770,6 +2770,28 @@
         }
       }
     },
+    "Pace (min/km)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "페이스 (분/km)"
+          }
+        }
+      }
+    },
+    "Pace (min/mi)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "페이스 (분/mi)"
+          }
+        }
+      }
+    },
     "Partial Range" : {
       "localizations" : {
         "ko" : {
@@ -3644,6 +3666,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이 슬롯의 세션 플랜"
+          }
+        }
+      }
+    },
+    "Set" : {
+      "comment" : "History row label for one cardio set",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트"
           }
         }
       }

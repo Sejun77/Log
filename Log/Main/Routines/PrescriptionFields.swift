@@ -70,7 +70,11 @@ struct SlotPrescriptionSection: View {
                 NavigationLink {
                     WarmupSchemeEditor(
                         prescription: prescription,
-                        isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType)
+                        isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType),
+                        // Cardio hides the weight-based warm-up kinds for the
+                        // same reason bodyweight does: no working weight to
+                        // base them on. Timed holds are unaffected.
+                        isCardio: re.exercise?.trackingMode == .cardio
                     )
                 } label: {
                     HStack {
