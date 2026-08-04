@@ -193,6 +193,11 @@ enum ExerciseSwitchPlanAdapter {
         /// cardio machine after an explicit Reset, attaches measurements to an
         /// exercise that did not produce them.
         var keepCardioDrafts: Bool = false
+        /// The tracking mode of the switched-in exercise. Carried on the
+        /// outcome so `adaptedSnapshot` can apply mode-specific rules — chiefly
+        /// that a cardio slot's snapshot must not retain effort-progression
+        /// fields — without the caller having to pass the mode twice.
+        var newMode: TrackingMode = .strength
     }
 
     // MARK: - Adaptation
@@ -267,8 +272,18 @@ enum ExerciseSwitchPlanAdapter {
         plan.sets = current?.sets
         plan.restSecondsBetweenSets = current?.restSecondsBetweenSets
         plan.restSecondsAfterExercise = current?.restSecondsAfterExercise
-        plan.rir = current?.rir
-        plan.rpe = current?.rpe
+
+        // …except effort, which stops at cardio. RIR is "reps in reserve", and
+        // the app offers RIR and RPE through one control, so a cardio slot has
+        // nothing to show and nothing to edit. Carrying the replaced exercise's
+        // "RIR 2" onto a treadmill leaves a value the user can neither see nor
+        // remove, and which would resurface the moment the slot was switched
+        // back or the plan applied to the routine. Cleared at the boundary
+        // instead — the same treatment reps and tempo already get.
+        if newMode != .cardio {
+            plan.rir = current?.rir
+            plan.rpe = current?.rpe
+        }
 
         // The prescription / routine-specific note described the exercise that
         // was just replaced, so it never blindly carries over. "Keep" has no
@@ -284,7 +299,8 @@ enum ExerciseSwitchPlanAdapter {
             plan.tempo = nil
             return Outcome(
                 sessionPlan: plan, keepWarmupSteps: false,
-                keepTechniques: false, keepCardioDrafts: staysCardio
+                keepTechniques: false, keepCardioDrafts: staysCardio,
+                newMode: newMode
             )
         }
 
@@ -303,7 +319,7 @@ enum ExerciseSwitchPlanAdapter {
 
         return Outcome(
             sessionPlan: plan, keepWarmupSteps: true, keepTechniques: true,
-            keepCardioDrafts: staysCardio
+            keepCardioDrafts: staysCardio, newMode: newMode
         )
     }
 
@@ -340,9 +356,14 @@ enum ExerciseSwitchPlanAdapter {
             plan.tempo = normalizedTempo(resetSource.tempo)
         }
 
-        // Effort applies to both tracking types, so it is preserved when the
-        // reset source has no opinion of its own (autoreg mode `.none`).
-        if resetSource.providesEffortTarget {
+        // Effort applies to both *non-cardio* tracking types, so it is
+        // preserved when the reset source has no opinion of its own (autoreg
+        // mode `.none`). A cardio reset source never provides one and must not
+        // inherit one either — see the note in `keepCurrentPlan`.
+        if newMode == .cardio {
+            plan.rir = nil
+            plan.rpe = nil
+        } else if resetSource.providesEffortTarget {
             plan.rir = resetSource.rir
             plan.rpe = resetSource.rpe
         } else {
@@ -366,7 +387,8 @@ enum ExerciseSwitchPlanAdapter {
             clearsEffortProgression: resetSource.providesEffortTarget,
             // An explicit Reset discards typed cardio metrics along with
             // everything else the user is asking to start over from.
-            keepCardioDrafts: false
+            keepCardioDrafts: false,
+            newMode: newMode
         )
     }
 
@@ -418,7 +440,11 @@ enum ExerciseSwitchPlanAdapter {
     ) -> PrescriptionSnapshotPayload {
         let plan = outcome.sessionPlan
         var payload = base ?? .empty
-        if outcome.clearsEffortProgression {
+        // A cardio slot shows no effort control, so its snapshot must carry no
+        // effort state either — otherwise `WorkoutEffortTargetResolver` still
+        // derives `.progression` from the replaced exercise's start/end pair
+        // and the Plan card summarizes a target the row does not display.
+        if outcome.newMode == .cardio || outcome.clearsEffortProgression {
             payload.effortModeRaw = nil
             payload.rirStart = nil
             payload.rirEnd = nil

@@ -2311,8 +2311,12 @@ struct ActiveWorkoutView: View {
                         snapshotEffort: exercise.prescriptionSnapshot.map {
                             WorkoutEffortTargetResolver.Fields(payload: $0)
                         },
-                        isCardio: !showsEffortUI(
-                            forSlot: exercise.routineSlotID))
+                        // Read the slot's cardio-ness directly rather than
+                        // inferring it from effort applicability: the sheet now
+                        // uses this to decide the *target distance* row too,
+                        // and those two questions only happen to coincide.
+                        isCardio: cardioSlotIDs.contains(
+                            exercise.routineSlotID))
                 }
             }
             .sheet(
@@ -2466,6 +2470,16 @@ struct ActiveWorkoutView: View {
         if sp.usesDuration != original.usesDuration { return true }
         if sp.rir != original.rir { return true }
         if sp.rpe != original.rpe { return true }
+        // Cardio Slice 6 patch: the target distance became editable in the
+        // active Edit Plan sheet, so an edit that touches only it must still
+        // count as dirty — otherwise "Update slot prescription" would not be
+        // offered and the change would silently stay session-only.
+        if sp.targetDistanceMeters != original.targetDistanceMeters {
+            return true
+        }
+        if sp.targetDistanceUnitRaw != original.targetDistanceUnitRaw {
+            return true
+        }
         if norm(sp.tempo) != norm(original.tempo) { return true }
         if norm(sp.slotNotes) != norm(original.slotNotes) { return true }
 
@@ -2535,6 +2549,11 @@ struct ActiveWorkoutView: View {
                 rx.usesDuration = sp.usesDuration
                 rx.rir = sp.rir
                 rx.rpe = sp.rpe
+                // Written as a pair so the routine's two columns can never
+                // disagree about whether a target exists, matching
+                // `SlotPrescription.applyTargetDistance`.
+                rx.targetDistanceMeters = sp.targetDistanceMeters
+                rx.targetDistanceUnitRaw = sp.targetDistanceUnitRaw
                 rx.tempo = sp.tempo?.isEmpty == true ? nil : sp.tempo
 
                 // Copy slotNotes → templateNotes

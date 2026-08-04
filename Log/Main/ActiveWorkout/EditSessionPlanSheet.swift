@@ -42,6 +42,16 @@ struct EditSessionPlanSheet: View {
                     Section("Duration") {
                         durationRow("Min", keyPath: \.durationMinSeconds)
                         durationRow("Max", keyPath: \.durationMaxSeconds)
+                        // Cardio only. Duration and distance are independent
+                        // targets — either, both, or neither is a valid cardio
+                        // prescription — so the row sits with the duration it
+                        // belongs beside rather than in a section of its own.
+                        // A timed hold never sees it: "how far did you plank"
+                        // has no answer.
+                        if isCardio {
+                            SessionTargetDistanceRow(
+                                plan: $plan, fallbackUnit: AppSettings.distanceUnit)
+                        }
                     }
                 } else {
                     Section("Reps") {
@@ -113,7 +123,15 @@ struct EditSessionPlanSheet: View {
             EmptyView()
         case .rir, .rpe:
             switch snapshotEffortMode {
-            case .single:
+            // `.none` joins `.single` here as of the Slice 6 patch. It used to
+            // render a read-only "None", on the reasoning that a stepper would
+            // imply a target the slot never had — but that left a real hole:
+            // after switching cardio → strength the adapted snapshot carries no
+            // effort at all, so the mode derives `.none` and the user had no
+            // way to set an intensity for the exercise they just switched to.
+            // An unset stepper reads "—", which states the absence honestly
+            // while still being editable.
+            case .single, .none:
                 if autoregMode == .rir {
                     doubleStepperRow("RIR", active: $plan.rir, paired: $plan.rpe,
                                      range: 0...5, step: 0.5) { 10 - $0 }
@@ -126,8 +144,6 @@ struct EditSessionPlanSheet: View {
                 Text("Progression editing during workout is not available yet.")
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
-            case .none:
-                effortReadOnlyRow("None")
             }
         }
     }
@@ -253,5 +269,96 @@ struct EditSessionPlanSheet: View {
             get: { plan[keyPath: kp] ?? "" },
             set: { plan[keyPath: kp] = $0.isEmpty ? nil : $0 }
         )
+    }
+}
+
+// MARK: - Cardio target distance (active session)
+
+/// The cardio distance-target row inside the active-workout Edit Plan sheet.
+///
+/// The session-side counterpart of the routine editor's target-distance row,
+/// and deliberately the same shape: entry text is local `@State`, sanitized per
+/// keystroke, and committed through `CardioTargetDistance` — the stored value
+/// is canonical meters, but a user mid-typing has "6." in the field and
+/// normalizing every keystroke would delete the dot.
+///
+/// Empty, non-numeric, zero, negative and out-of-range input all commit **nil**
+/// on both columns, so the field and the plan can never disagree about whether
+/// a target exists.
+///
+/// Editing here changes the **session** plan only. The routine's own target is
+/// untouched unless the user explicitly chooses "Update slot prescription" at
+/// finish, which is the same gate every other session-plan edit passes through.
+struct SessionTargetDistanceRow: View {
+    @Binding var plan: SessionPlan
+    /// Entry unit for a target that does not yet carry one of its own.
+    let fallbackUnit: DistanceUnit
+
+    @State private var text: String = ""
+    @State private var unit: DistanceUnit = .kilometers
+    /// Guards the one-time seed, so a re-render cannot overwrite in-progress
+    /// text with the committed value.
+    @State private var didSeed = false
+
+    private static let fieldWidth: CGFloat = 96
+
+    var body: some View {
+        HStack(spacing: DSSpacing.sm) {
+            Text("Target distance")
+            Spacer(minLength: DSSpacing.sm)
+            TextField("0.0", text: distanceBinding)
+                .font(.dsBody.monospacedDigit())
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: Self.fieldWidth)
+                .multilineTextAlignment(.trailing)
+            // Storage is canonical meters either way, so switching the unit
+            // re-reads the same target rather than converting the typed number.
+            Picker("Unit", selection: unitBinding) {
+                ForEach(DistanceUnit.allCases, id: \.self) { u in
+                    Text(u.symbol).tag(u)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 88)
+        }
+        .onAppear(perform: seedFromPlan)
+    }
+
+    private var distanceBinding: Binding<String> {
+        Binding(
+            get: { text },
+            set: {
+                text = CardioEntryDraft.sanitizeDecimal($0)
+                commit()
+            }
+        )
+    }
+
+    private var unitBinding: Binding<DistanceUnit> {
+        Binding(
+            get: { unit },
+            set: {
+                unit = $0
+                commit()
+            }
+        )
+    }
+
+    private func seedFromPlan() {
+        guard !didSeed else { return }
+        didSeed = true
+        let target = plan.targetDistance(fallbackUnit: fallbackUnit)
+        unit = target?.unit ?? fallbackUnit
+        text = target?.valueText ?? ""
+    }
+
+    /// Normalize and write both columns together, so an unusable value clears
+    /// the target rather than leaving a stale one behind.
+    private func commit() {
+        let target = CardioTargetDistance(text: text, unit: unit)
+        plan.targetDistanceMeters = target?.meters
+        plan.targetDistanceUnitRaw = target?.unit.rawValue
     }
 }

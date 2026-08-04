@@ -616,11 +616,62 @@ plan — skipping that too was what would have made a resume show an empty
 distance where the live view showed the target. Precedence is unchanged and
 still three-tier: logged set → persisted draft → routine target.
 
-**Effort is deliberately not cleared when switching into cardio.** The control
-is hidden for cardio, but suppression has been display-only since Slice 4, and a
-switch is not the place to start deleting stored values. A *new* cardio slot
-still seeds no effort (Slice 5), so the only way a cardio slot carries one is
-that it genuinely had one before the switch.
+**Effort ~~is deliberately not cleared~~ *is* cleared when switching into
+cardio.** Reversed by the pre-merge patch below, on evidence from manual smoke
+testing: "suppression is display-only" is the right rule for a slot that was
+*authored* with an effort target, but it is the wrong rule for one that
+*acquired* it by switching. The carried-over value was invisible, uneditable,
+and would resurface the moment the slot was switched back or the plan applied to
+the routine. A new cardio slot seeds no effort (Slice 5); a switched one now
+matches it.
+
+#### Pre-merge patch (manual smoke of Slice 6)
+
+Four findings. Three were real; one was not.
+
+**The active Edit Plan sheet had no target-distance row** (real). Slice 5 made
+the target editable in the *routine* editor and propagated it into the session,
+but never gave the session a way to edit it. `SessionTargetDistanceRow` is the
+sheet-side sibling of the routine editor's row — same draft-then-normalize
+shape, same `CardioTargetDistance` commit, cardio only. It sits inside the
+Duration section rather than one of its own, because duration and distance are
+the same kind of thing: independent targets for the same bout.
+
+> Two consequences had to follow it, or the edit would have been a dead end:
+> `isSessionPlanDirty` now compares the target pair (otherwise a
+> target-only edit never offered "Update slot prescription"), and
+> `applySessionPlansToSlotPrescriptions` now copies it (otherwise the edit was
+> silently session-only).
+
+**Stale intensity survived a switch into cardio** (real) — see the reversal
+above. Both the plan's `rir`/`rpe` and the snapshot's effort-*progression*
+fields are cleared, the latter because they live only on the snapshot and would
+otherwise still derive `.progression` and summarize a target the cardio row does
+not display. `Outcome` gained `newMode` so `adaptedSnapshot` can apply that
+without the caller passing the mode twice.
+
+**There was no way to set intensity after switching cardio → strength** (real,
+and the subtlest of the four). The Intensity section already existed, but it was
+gated on the *snapshot's* derived effort mode, and rendered a **read-only**
+"None" row when that mode was `.none` — which is exactly the state a slot lands
+in after a switch out of cardio, since the adapted snapshot carries no effort at
+all. The `.none` case now shares the editable single stepper with `.single`. An
+unset stepper reads "—", which states the absence just as honestly as the
+read-only row did while actually being usable. `.progression` stays read-only:
+in-session progression editing is still deferred.
+
+**"cardio → cardio Keep clears the target distance"** — *not reproducible*, and
+the adapter rule was already correct. `testCardioToCardioKeepPreservesTargetThroughTheWholePipeline`
+now walks every hop the app actually runs (routine prescription → snapshot
+payload → session plan → switch → adapted snapshot → frozen `@Model` snapshot →
+resume) and the target survives all of them. The one path that genuinely loses
+it is a `SessionPlan` **persisted by a build older than Slice 5**: it decodes
+with a nil target and then overwrites the freshly-initialized plan on resume.
+That is a one-time migration artifact of an already-in-flight workout, not a
+rule of the switch, and it is pinned by
+`testLegacyPersistedSessionPlanHasNoTargetToPreserve`. The most likely thing the
+smoke tester actually saw is the missing Edit Plan row above — opening Edit Plan
+to check the target and finding nothing there.
 
 ### 2.4 Deferring HealthKit
 
