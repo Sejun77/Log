@@ -229,13 +229,21 @@ struct ActiveWorkoutView: View {
     private func rehydrateCardioDrafts() {
         let defaultUnit = AppSettings.distanceUnit
         var drafts = cardioDraftsBySlotID
+        var cardioSlots: [UUID] = []
 
         for block in plan.blocks {
             for ex in block.exercises where cardioSlotIDs.contains(ex.routineSlotID) {
                 let slotID = ex.routineSlotID
-                // A slot swapped mid-session carries logs belonging to a
-                // different exercise; skip it exactly as the parent rehydrate
-                // does.
+                cardioSlots.append(slotID)
+
+                // A slot swapped mid-session carries logs and persisted drafts
+                // belonging to a *different* exercise, so neither may be
+                // restored onto it — exactly as the parent rehydrate skips it.
+                // Target seeding still applies afterwards: that reads the
+                // slot's **adapted** plan, which already describes the
+                // switched-in exercise. Skipping seeding too would make a
+                // resume disagree with the live view, which is the class of bug
+                // Slice 6 is about.
                 if ex.originalExerciseID != ex.currentExerciseID { continue }
 
                 let item = itemsByExerciseID[slotID]
@@ -244,12 +252,6 @@ struct ActiveWorkoutView: View {
 
                 let setCount = effectiveSetCount(
                     for: ex, resolvedTemplates: ex.templates)
-                // Cardio Slice 5 — the slot's programmed distance target, if
-                // any. Only ever used to seed an untouched field (below).
-                let target = SessionPlanResolver.plannedTargetDistance(
-                    sessionPlan: sessionPlans[slotID],
-                    snapshot: ex.prescriptionSnapshot,
-                    fallbackUnit: defaultUnit)
 
                 for i in 0..<setCount {
                     let loggedSet = item?.setLogs.last(where: {
@@ -265,31 +267,56 @@ struct ActiveWorkoutView: View {
                             snapshot: snapshot, defaultUnit: defaultUnit)
                     {
                         perSet[i] = restored
-                    } else if perSet[i] == nil, let target {
-                        // Last resort, and deliberately so. A logged set wins,
-                        // then a persisted draft — which exists the moment the
-                        // user types in *any* cardio field, including when they
-                        // clear the distance back to empty. So the target only
-                        // ever fills a field nobody has touched, and Save &
-                        // Exit → Resume can never overwrite an edit with it.
-                        //
-                        // This is prescription initialization, not prefill:
-                        // it reads the routine the session was started from,
-                        // never previous performance. History-based cardio
-                        // prefill is a later slice.
-                        //
-                        // Not written through `parentDraftStore`: leaving the
-                        // seed unpersisted is exactly what keeps "seeded" and
-                        // "user-touched" distinguishable on the next resume.
-                        perSet[i] = CardioEntryDraft(
-                            unit: target.unit,
-                            distance: target.valueText ?? "")
                     }
                 }
                 drafts[slotID] = perSet
             }
         }
         cardioDraftsBySlotID = drafts
+
+        // Tier 3, applied last and only to entries the two tiers above left
+        // absent. A logged set wins, then a persisted draft — which exists the
+        // moment the user types in *any* cardio field, including when they
+        // clear the distance back to empty. So the target only ever fills a
+        // field nobody has touched, and Save & Exit → Resume can never
+        // overwrite an edit with it.
+        for slotID in cardioSlots { seedCardioDraftsFromTarget(slotID: slotID) }
+    }
+
+    /// Seed a cardio slot's untouched metric drafts from its resolved routine
+    /// target distance.
+    ///
+    /// This is **prescription initialization, not prefill**: it reads the plan
+    /// the session was started with (or the plan a switch just adapted), never
+    /// previous performance. History-based cardio prefill remains a later
+    /// slice.
+    ///
+    /// Only fills `perSet[i]` entries that are absent, so it can be called
+    /// freely — after a resume, or after a switch — without ever overwriting a
+    /// restored or in-progress draft. Deliberately not written through
+    /// `parentDraftStore`: leaving the seed unpersisted is what keeps "seeded"
+    /// and "user-touched" distinguishable on the next resume.
+    private func seedCardioDraftsFromTarget(slotID: UUID) {
+        guard cardioSlotIDs.contains(slotID),
+            let (bi, ei) = findSlotIndex(in: plan, routineSlotID: slotID)
+        else { return }
+
+        let ex = plan.blocks[bi].exercises[ei]
+        guard
+            let target = SessionPlanResolver.plannedTargetDistance(
+                sessionPlan: sessionPlans[slotID],
+                snapshot: ex.prescriptionSnapshot,
+                fallbackUnit: AppSettings.distanceUnit)
+        else { return }
+
+        let setCount = effectiveSetCount(
+            for: ex, resolvedTemplates: ex.templates)
+        var perSet = cardioDraftsBySlotID[slotID] ?? [:]
+        for i in 0..<setCount where perSet[i] == nil {
+            perSet[i] = CardioEntryDraft(
+                unit: target.unit, distance: target.valueText ?? "")
+        }
+        cardioDraftsBySlotID[slotID] = perSet
     }
 
     private func ensureInputsInitializedFromPlan() {
@@ -2541,16 +2568,31 @@ struct ActiveWorkoutView: View {
         // snapshot first and only then derived the set-count hint, so a
         // tracking-type change silently fell back to `AppSettings.defaultSets`
         // (the reported "2 sets became 3 sets" bug).
+        //
+        // Cardio Slice 6: the adapter is told both **tracking modes**, not two
+        // booleans. `isTimeBased` cannot distinguish a treadmill from a plank,
+        // and the cardio-only state (target distance, typed metrics) has to be
+        // cleared on exactly the switches where the new exercise has no field
+        // for it. The old mode comes from `cardioSlotIDs`, the same cached
+        // truth that decides whether the row shows the Details section.
+        let oldMode: TrackingMode =
+            cardioSlotIDs.contains(slotID)
+            ? .cardio
+            : (planEx.isTimeBased ? .timedHold : .strength)
+        let newMode = newEx.trackingMode
+
         let outcome = ExerciseSwitchPlanAdapter.outcome(
             choice: resetPlan ? .resetPlan : .keepCurrentPlan,
             current: sessionPlans[slotID],
-            oldIsTimeBased: planEx.isTimeBased,
-            newIsTimeBased: newEx.isTimeBased,
-            resetSource: .appDefaults(isTimeBased: newEx.isTimeBased)
+            oldMode: oldMode,
+            newMode: newMode,
+            resetSource: .appDefaults(for: newMode)
         )
         applySwitchOutcome(outcome, slotID: slotID, newExercise: newEx)
 
-        swapExercise(planExercise: planEx, with: newEx)
+        swapExercise(
+            planExercise: planEx, with: newEx,
+            keepCardioDrafts: outcome.keepCardioDrafts)
 
         // A) After reset+swap, if the new exercise has no templates and the
         //    (now-empty) session plan has no sets, auto-open the Edit Plan
@@ -2632,8 +2674,13 @@ struct ActiveWorkoutView: View {
         persistSessionPlans()
     }
 
-    private func swapExercise(planExercise: PlanExercise, with newEx: Exercise)
-    {
+    /// - Parameter keepCardioDrafts: `ExerciseSwitchPlanAdapter.Outcome`'s
+    ///   verdict on the slot's typed cardio metrics — true only for
+    ///   cardio → cardio "Keep current plan".
+    private func swapExercise(
+        planExercise: PlanExercise, with newEx: Exercise,
+        keepCardioDrafts: Bool
+    ) {
         // 1) Locate slot by `routineSlotID` — the slot-unique identifier.
         // Phase 6.C1 follow-up — must NOT key on `planExercise.id`, which is
         // `Exercise.id` and collides when a superset has duplicate Exercise
@@ -2709,14 +2756,27 @@ struct ActiveWorkoutView: View {
         plan.blocks[blockIndex].exercises[exIndex].isTimeBased =
             newEx.isTimeBased
 
-        // 3a) Cardio Slice 4 — the slot's tracking mode may have changed in
-        // either direction. Re-derive which slots are cardio, and drop this
-        // slot's metric drafts: the slot is being rebuilt fresh (every set
-        // unlogged, inputs reseeded below), so carrying a distance typed for
-        // Exercise A onto Exercise B would attach data to the wrong exercise.
-        // The switch adapter itself is untouched — this reads the live model.
-        cardioDraftsBySlotID[slotID] = nil
+        // 3a) Cardio Slice 4/6 — the slot's tracking mode may have changed in
+        // either direction. Re-derive which slots are cardio, then reconcile
+        // this slot's metric drafts with the adapter's verdict.
+        //
+        // Slice 4 cleared them unconditionally. Slice 6 narrows that to
+        // everything *except* cardio → cardio "Keep current plan", where the
+        // numbers still describe the same kind of bout and the user explicitly
+        // asked to keep what they had. On every other switch they are dropped
+        // from memory **and from the persisted store** — the Slice 4 version
+        // only cleared memory, so the typed values sat in `UserDefaults` and
+        // could be restored onto the slot if it later became cardio again.
+        if !keepCardioDrafts {
+            cardioDraftsBySlotID[slotID] = nil
+            parentDraftStore?.clearCardio(slotID: slotID)
+        }
         refreshCardioSlots()
+        // Seed the (now possibly cardio) slot from its adapted target distance,
+        // the same routine-prescription initialization a fresh session does.
+        // Runs after `refreshCardioSlots` so the slot's new mode is known, and
+        // it only ever fills entries that are absent — a kept draft wins.
+        seedCardioDraftsFromTarget(slotID: slotID)
 
         // 4) Build fresh per-set inputs for this slot from newTemplates
         // Phase 5.2 — slotID is the per-slot key (routineSlotID); already

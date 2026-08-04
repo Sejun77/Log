@@ -79,6 +79,11 @@ enum ExerciseSwitchPlanAdapter {
         var rpe: Double?
         var tempo: String?
         var slotNotes: String?
+        /// Cardio Slice 6 — the reset source's own distance target. Only ever
+        /// applied when the switched-in exercise is `.cardio`; for any other
+        /// mode the field has no landing place and the target is cleared.
+        var targetDistanceMeters: Double?
+        var targetDistanceUnitRaw: String?
 
         /// True when the reset source carries its own effort target. When
         /// false, the pre-switch RIR/RPE is preserved instead — effort applies
@@ -96,7 +101,9 @@ enum ExerciseSwitchPlanAdapter {
             rir: Double? = nil,
             rpe: Double? = nil,
             tempo: String? = nil,
-            slotNotes: String? = nil
+            slotNotes: String? = nil,
+            targetDistanceMeters: Double? = nil,
+            targetDistanceUnitRaw: String? = nil
         ) {
             self.sets = sets
             self.repMin = repMin
@@ -109,33 +116,44 @@ enum ExerciseSwitchPlanAdapter {
             self.rpe = rpe
             self.tempo = tempo
             self.slotNotes = slotNotes
+            self.targetDistanceMeters = targetDistanceMeters
+            self.targetDistanceUnitRaw = targetDistanceUnitRaw
         }
 
-        /// The app-default reset source for a slot of the given tracking type,
+        /// The app-default reset source for a slot of the given tracking mode,
         /// read from `AppSettings`. Field-for-field equivalent to
-        /// `makeDefaultPrescription(isTimeBased:in:)` except that it never
-        /// fabricates a duration: a duration slot with no configured target
-        /// falls through to the same 60s floor `makeSwapDefaultTemplates`
-        /// applies, keeping the two helpers in agreement.
-        static func appDefaults(isTimeBased: Bool) -> ResetSource {
+        /// `makeDefaultPrescription(isTimeBased:isCardio:in:)` — including the
+        /// Slice 5 cardio rules, so resetting onto a treadmill lands on the
+        /// same one set / no rest / no effort a freshly-authored cardio slot
+        /// gets — except that it never fabricates a duration: a duration slot
+        /// with no configured target falls through to the same 60s floor
+        /// `makeSwapDefaultTemplates` applies, keeping the two helpers in
+        /// agreement.
+        ///
+        /// Carries **no** target distance. App defaults have no notion of one,
+        /// and inventing a distance for an exercise the user just picked would
+        /// be prescribing on their behalf. A caller with a real reset source
+        /// (a routine slot) may supply one through the initializer.
+        static func appDefaults(for mode: TrackingMode) -> ResetSource {
             var source = ResetSource()
-            source.sets = AppSettings.defaultSets
-            if isTimeBased {
+            source.sets = CardioRoutineRules.defaultSets(mode)
+            if mode.usesDuration {
                 source.durationMinSeconds = nil
                 source.durationMaxSeconds = nil
             } else {
                 source.repMin = AppSettings.defaultRepMin
                 source.repMax = AppSettings.defaultRepMax
             }
-            source.restSecondsBetweenSets = AppSettings.defaultRestBetweenSets
-            if AppSettings.defaultRestAfterExercise > 0 {
-                source.restSecondsAfterExercise =
-                    AppSettings.defaultRestAfterExercise
-            }
-            switch AppSettings.autoregMode {
-            case .rir: source.rir = AppSettings.defaultRIR
-            case .rpe: source.rpe = AppSettings.defaultRPE
-            case .none: break
+            source.restSecondsBetweenSets =
+                CardioRoutineRules.defaultRestBetweenSets(mode)
+            source.restSecondsAfterExercise =
+                CardioRoutineRules.defaultRestAfterExercise(mode)
+            if CardioRoutineRules.seedsEffortTarget(mode) {
+                switch AppSettings.autoregMode {
+                case .rir: source.rir = AppSettings.defaultRIR
+                case .rpe: source.rpe = AppSettings.defaultRPE
+                case .none: break
+                }
             }
             // Tempo and the prescription note are intentionally left nil: the
             // reset source provides neither, so neither may be inherited from
@@ -165,6 +183,16 @@ enum ExerciseSwitchPlanAdapter {
         /// Keeping them would let a stale `"progression"` mode outrank the
         /// freshly reset single value in `WorkoutEffortTargetResolver`.
         var clearsEffortProgression: Bool = false
+        /// Cardio Slice 6 — whether the slot's typed cardio metric drafts
+        /// (distance, heart rate, calories, incline, resistance, zone) survive.
+        ///
+        /// True for exactly one case: **cardio → cardio, Keep current plan.**
+        /// There the numbers still describe the same kind of bout, and the user
+        /// asked to keep what they had. Everywhere else they are cleared —
+        /// carrying "5 km, 142 bpm" onto a bench press, or onto a *different*
+        /// cardio machine after an explicit Reset, attaches measurements to an
+        /// exercise that did not produce them.
+        var keepCardioDrafts: Bool = false
     }
 
     // MARK: - Adaptation
@@ -174,30 +202,39 @@ enum ExerciseSwitchPlanAdapter {
     /// - Parameters:
     ///   - choice: which dialog button the user tapped.
     ///   - current: the slot's live pre-switch `SessionPlan`, if any.
-    ///   - oldIsTimeBased: tracking type of the exercise being replaced.
-    ///   - newIsTimeBased: tracking type of the exercise being switched in.
+    ///   - oldMode: tracking mode of the exercise being replaced.
+    ///   - newMode: tracking mode of the exercise being switched in.
     ///   - resetSource: the default/reset prescription source, used only for
     ///     `.resetPlan`.
+    ///
+    /// Takes `TrackingMode`, not `isTimeBased`: a boolean cannot tell a
+    /// treadmill from a plank, and the whole point of Slice 6 is that
+    /// cardio-only state must not survive a switch onto an exercise that has
+    /// nowhere to put it. Note that the two axes are genuinely different —
+    /// cardio → timedHold *changes mode* but **keeps** the duration target,
+    /// because both are logged by time. `trackingTypeChanged` below is the
+    /// field-shape question (`usesDuration`), never mode equality.
     static func outcome(
         choice: Choice,
         current: SessionPlan?,
-        oldIsTimeBased: Bool,
-        newIsTimeBased: Bool,
+        oldMode: TrackingMode,
+        newMode: TrackingMode,
         resetSource: ResetSource
     ) -> Outcome {
-        let trackingTypeChanged = oldIsTimeBased != newIsTimeBased
+        let trackingTypeChanged = oldMode.usesDuration != newMode.usesDuration
 
         switch choice {
         case .keepCurrentPlan:
             return keepCurrentPlan(
                 current: current,
                 trackingTypeChanged: trackingTypeChanged,
-                newIsTimeBased: newIsTimeBased
+                oldMode: oldMode,
+                newMode: newMode
             )
         case .resetPlan:
             return resetPlan(
                 current: current,
-                newIsTimeBased: newIsTimeBased,
+                newMode: newMode,
                 resetSource: resetSource
             )
         }
@@ -208,10 +245,23 @@ enum ExerciseSwitchPlanAdapter {
     private static func keepCurrentPlan(
         current: SessionPlan?,
         trackingTypeChanged: Bool,
-        newIsTimeBased: Bool
+        oldMode: TrackingMode,
+        newMode: TrackingMode
     ) -> Outcome {
+        let newIsTimeBased = newMode.usesDuration
+        // Cardio → cardio is the only switch where a distance target, and the
+        // typed metrics under it, still describe the thing being done. Every
+        // other combination clears both: no other mode has a field to put them
+        // in, and a target silently riding along on a bench press is exactly
+        // the stale-state class of bug this slice exists to close.
+        let staysCardio = oldMode == .cardio && newMode == .cardio
+
         var plan = SessionPlan()
         plan.usesDuration = newIsTimeBased
+        if staysCardio {
+            plan.targetDistanceMeters = current?.targetDistanceMeters
+            plan.targetDistanceUnitRaw = current?.targetDistanceUnitRaw
+        }
 
         // Always preserved — valid under either tracking type.
         plan.sets = current?.sets
@@ -233,7 +283,8 @@ enum ExerciseSwitchPlanAdapter {
             // and techniques are all mode-coupled and are cleared with them.
             plan.tempo = nil
             return Outcome(
-                sessionPlan: plan, keepWarmupSteps: false, keepTechniques: false
+                sessionPlan: plan, keepWarmupSteps: false,
+                keepTechniques: false, keepCardioDrafts: staysCardio
             )
         }
 
@@ -251,7 +302,8 @@ enum ExerciseSwitchPlanAdapter {
         }
 
         return Outcome(
-            sessionPlan: plan, keepWarmupSteps: true, keepTechniques: true
+            sessionPlan: plan, keepWarmupSteps: true, keepTechniques: true,
+            keepCardioDrafts: staysCardio
         )
     }
 
@@ -259,11 +311,20 @@ enum ExerciseSwitchPlanAdapter {
     /// adapted to the new exercise's tracking type.
     private static func resetPlan(
         current: SessionPlan?,
-        newIsTimeBased: Bool,
+        newMode: TrackingMode,
         resetSource: ResetSource
     ) -> Outcome {
+        let newIsTimeBased = newMode.usesDuration
+
         var plan = SessionPlan()
         plan.usesDuration = newIsTimeBased
+        // Reset follows the source, never the replaced slot. A cardio reset
+        // source may carry its own target; a non-cardio one has nowhere to put
+        // it, so the target is cleared either way rather than inherited.
+        if newMode == .cardio {
+            plan.targetDistanceMeters = resetSource.targetDistanceMeters
+            plan.targetDistanceUnitRaw = resetSource.targetDistanceUnitRaw
+        }
 
         plan.sets = resetSource.sets
         plan.restSecondsBetweenSets = resetSource.restSecondsBetweenSets
@@ -302,7 +363,10 @@ enum ExerciseSwitchPlanAdapter {
             // Only when the reset source actually replaced the effort target;
             // when it had none the pre-switch effort (including a progression)
             // was preserved above and must stay intact.
-            clearsEffortProgression: resetSource.providesEffortTarget
+            clearsEffortProgression: resetSource.providesEffortTarget,
+            // An explicit Reset discards typed cardio metrics along with
+            // everything else the user is asking to start over from.
+            keepCardioDrafts: false
         )
     }
 
@@ -372,6 +436,13 @@ enum ExerciseSwitchPlanAdapter {
         payload.durationMinSeconds = plan.durationMinSeconds
         payload.durationMaxSeconds = plan.durationMaxSeconds
         payload.usesDuration = plan.usesDuration
+        // Written unconditionally from the adapted plan — including when the
+        // plan has none. `base` is the *replaced* exercise's snapshot, so
+        // leaving these alone is precisely how a cardio target used to survive
+        // onto a bench press and then reappear (via tier-2 resolution) on the
+        // next resume.
+        payload.targetDistanceMeters = plan.targetDistanceMeters
+        payload.targetDistanceUnitRaw = plan.targetDistanceUnitRaw
         payload.equipment = equipment
         payload.setupNotes = setupNotes
         return payload

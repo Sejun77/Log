@@ -135,10 +135,14 @@ enum WorkoutResumeService {
                                         SessionPlan(
                                             from: $0, notes: re.templateNotes)
                                     },
-                                    oldIsTimeBased: ex.isTimeBased,
-                                    newIsTimeBased: swappedEx.isTimeBased,
+                                    // Real tracking modes, so the heal clears a
+                                    // cardio target the replaced exercise's
+                                    // template payload may carry when the
+                                    // switched-in exercise is not cardio.
+                                    oldMode: ex.trackingMode,
+                                    newMode: swappedEx.trackingMode,
                                     resetSource: .appDefaults(
-                                        isTimeBased: swappedEx.isTimeBased)
+                                        for: swappedEx.trackingMode)
                                 )
                                 return ExerciseSwitchPlanAdapter.adaptedSnapshot(
                                     from: outcome,

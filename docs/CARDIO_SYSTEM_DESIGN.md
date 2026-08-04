@@ -369,7 +369,8 @@ rebuilt at session start and after an exercise switch, reading `trackingMode`
 from the live `Exercise` behind `PlanExercise.currentExerciseID`. Reading the
 model rather than denormalizing a flag onto `PlanExercise` means a slot swapped
 to or from a cardio exercise is picked up for free, **without touching the
-exercise-switch adapter** (still Slice 6). A per-row fetch inside `body` would
+exercise-switch adapter** (extended for cardio in Slice 6, §2.35). A per-row
+fetch inside `body` would
 violate the CLAUDE.md performance rule.
 
 **Drafts persist through `ParentDraftStore`, which gained cases rather than a new
@@ -555,6 +556,71 @@ choose again.
 > was started from — the same source as the sets, the duration and the rest
 > already showing on that row. History-based cardio prefill remains deferred,
 > and the table above still governs it.
+
+### 2.35 Exercise-switch compatibility (settled in Slice 6)
+
+The mid-workout switch is where the Entry #12 P1 bug lived: the row changed
+type, the *old* exercise's type-specific state stayed attached, and the resume
+path then disagreed with the live view. Cardio adds two new ways for that to
+happen — a target distance on the plan, and typed metric drafts on the row — so
+both get the treatment duration and reps already had.
+
+**The adapter takes `TrackingMode`, not `isTimeBased`.** A boolean cannot tell a
+treadmill from a plank, which is precisely the distinction that decides whether
+cardio-only state has anywhere to land. The old two-boolean signature is gone
+rather than kept as a convenience overload: a caller holding only a `Bool` would
+silently get timed-hold semantics for a cardio slot, which is the bug.
+
+> The two axes are genuinely different, and conflating them would be its own
+> bug. `TrackingMode.usesDuration` is the **field-shape** question, and
+> cardio → timedHold changes mode while *keeping* its duration target, because
+> both are logged by time. Only the cardio-specific state keys off mode
+> equality.
+
+| Switch | Keep current plan | Reset plan |
+|---|---|---|
+| cardio → cardio | sets, duration, rest, **target distance + unit**, typed metric drafts | from the reset source: its target if it has one, else cleared; drafts cleared |
+| cardio → timedHold | sets, duration, rest; **target + drafts cleared** | from source; target nil; drafts cleared |
+| cardio → strength | sets, rest; duration/**target**/drafts cleared | from source; target nil; drafts cleared |
+| timedHold → cardio | sets, duration, rest; target nil | from source (its target, else nil) |
+| strength → cardio | sets, rest; reps/tempo cleared; target nil | from source (its target, else nil) |
+| non-cardio ↔ non-cardio | unchanged from Slice 0 | unchanged |
+
+**One rule underneath it: cardio-only state survives cardio → cardio, and
+nothing else.** Typed metrics survive only the *Keep* half of that — an explicit
+Reset is the user asking to start over, and "5 km, 142 bpm" carried onto a
+different machine describes a bout that never happened.
+
+**`adaptedSnapshot` writes the target unconditionally from the adapted plan**,
+including when the plan has none. This is the fix that matters most: the
+snapshot is built from the **replaced** exercise's payload, so leaving those two
+columns alone is exactly how a cardio target used to ride along onto a bench
+press and then reappear through tier-2 resolution on the next resume.
+
+**Persisted drafts are cleared, not just in-memory ones.** Slice 4 dropped
+`cardioDraftsBySlotID[slotID]` on every swap but left the `ParentDraftStore`
+keys in `UserDefaults`, so the typed values were still on disk and could be
+restored if the slot later became cardio again.
+`ParentDraftStore.clearCardio(slotID:)` sweeps every set index of the slot and
+takes **only** the cardio fields — a blanket `clear` would take the duration
+with them, which a cardio → timed-hold switch still needs. The cardio subset is
+derived by exclusion from `Field.allCases`, so a future cardio field joins it
+automatically.
+
+**Target seeding survives a switch, and live and resume agree about it.**
+`seedCardioDraftsFromTarget(slotID:)` is called from both the swap path and
+`rehydrateCardioDrafts`, and only ever fills entries that are absent. The resume
+path still refuses to restore a switched slot's *logs and persisted drafts*
+(they belong to the replaced exercise) but now still seeds from the **adapted**
+plan — skipping that too was what would have made a resume show an empty
+distance where the live view showed the target. Precedence is unchanged and
+still three-tier: logged set → persisted draft → routine target.
+
+**Effort is deliberately not cleared when switching into cardio.** The control
+is hidden for cardio, but suppression has been display-only since Slice 4, and a
+switch is not the place to start deleting stored values. A *new* cardio slot
+still seeds no effort (Slice 5), so the only way a cardio slot carries one is
+that it genuinely had one before the switch.
 
 ### 2.4 Deferring HealthKit
 
@@ -977,7 +1043,7 @@ independently committable, additive-first.
 | 3 | ✅ `SetLog` metric fields + History summary line | Storage and read-back, no logging-path change yet; proves old rows are untouched |
 | 4 | ✅ Active-workout cardio row (Details disclosure) — post-log edit deferred, see §2.4 | The risky slice, entered with the model already proven |
 | 5 | ✅ Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques/tempo/effort) | Programming surface, once logging works |
-| 6 | Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
+| 6 | ✅ Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
 | 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |
 | 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | Phase 2 charts | After real cardio data exists |

@@ -19,6 +19,14 @@ enum TrackingMode: Equatable {
     case timedHold
     /// Duration + cardio metrics — treadmill, bike, rower, walking.
     case cardio
+
+    /// Whether the mode is logged by time rather than by reps.
+    ///
+    /// The **field-shape** axis, and deliberately not the same question as
+    /// "which mode is this": `.timedHold` and `.cardio` both use duration, so a
+    /// switch between them keeps its duration target even though the mode
+    /// changed. Every rule that used to read `Exercise.isTimeBased` means this.
+    var usesDuration: Bool { self != .strength }
 }
 
 extension Exercise {
