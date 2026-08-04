@@ -144,6 +144,15 @@ struct ActiveWorkoutView: View {
     // `loadLastPerformancePrefill`, then consulted as a read-time fallback in
     // `buildDropSection` (never seeded into dropRepsInput/dropWeightInput, so
     // it cannot mark a weight as user-overridden). Empty when no prior drops.
+    // Cardio Slice 7 — previous-performance prefill for the cardio metric
+    // fields, keyed by routineSlotID. Loaded from the same completed-workout
+    // fetch as `prefillBySlotID` and re-pointed by the same switch hook, so
+    // cardio prefill can never disagree with strength prefill about which
+    // workouts are eligible. Holds only the prefillable subset — distance,
+    // unit, incline, resistance — never the outcome metrics.
+    @State private var cardioPrefillBySlotID:
+        [UUID: [Int: CardioPrefillSuggestion]] = [:]
+
     @State private var dropPrefillBySlotID:
         [UUID: [Int: [Int: LastPerformancePrefillService.LastPerformanceDropSuggestion]]] = [:]
 
@@ -297,7 +306,7 @@ struct ActiveWorkoutView: View {
     /// `parentDraftStore`: leaving the seed unpersisted is what keeps "seeded"
     /// and "user-touched" distinguishable on the next resume.
     private func seedCardioDraftsFromTarget(slotID: UUID) {
-        applyCardioTargetSeeding(slotID: slotID, replacingUnedited: false)
+        applyCardioDraftSeeding(slotID: slotID, replacingTargetSeeded: false)
     }
 
     /// Re-seed a cardio slot after the target distance was changed in Edit
@@ -312,62 +321,88 @@ struct ActiveWorkoutView: View {
     /// resume prefer a typed draft over the target, which is why the live view
     /// and the resume path land in the same place.
     private func resyncCardioDraftsToTarget(slotID: UUID) {
-        applyCardioTargetSeeding(slotID: slotID, replacingUnedited: true)
+        applyCardioDraftSeeding(slotID: slotID, replacingTargetSeeded: true)
     }
 
-    /// - Parameter replacingUnedited: when false, only entries with no draft at
-    ///   all are filled (start / resume / post-switch). When true, an existing
-    ///   draft the user has not typed into is **replaced** by the current
-    ///   target — and cleared when the target was removed, which is what makes
-    ///   deleting a target in Edit Plan visibly empty the row.
-    private func applyCardioTargetSeeding(
-        slotID: UUID, replacingUnedited: Bool
+    /// This slot's cardio draft source for one set, resolved from the four
+    /// inputs that decide it. Derived rather than stored, so it survives a
+    /// resume for free and cannot drift out of step with the drafts.
+    private func cardioDraftSource(
+        slotID: UUID, setIndex: Int, hasPrefillDistance: Bool, hasTarget: Bool
+    ) -> CardioDraftSource {
+        CardioDraftResolver.source(
+            isLogged: loggedByExercise[slotID]?.contains(setIndex) ?? false,
+            hasUserDraft: parentDraftStore?
+                .load(slotID: slotID, setIndex: setIndex)?.hasCardio ?? false,
+            hasPrefillDistance: hasPrefillDistance,
+            hasTarget: hasTarget)
+    }
+
+    /// Seed a cardio slot's entry fields from the one precedence chain:
+    /// **logged set → user-typed draft → previous performance → routine
+    /// target** (`CardioDraftResolver`).
+    ///
+    /// - Parameter replacingTargetSeeded: when false, only sets with no draft
+    ///   at all are filled (session start, resume, post-switch). When true — the
+    ///   Edit Plan path — a draft the **target itself** put there is refreshed
+    ///   or cleared to match the new target, while a typed or
+    ///   previous-performance draft is left alone. That distinction is the
+    ///   whole reason `CardioDraftSource` exists: before Slice 7 "not
+    ///   persisted" meant "target seeded", and now it can also mean "prefilled
+    ///   from what you actually did last time", which a target edit has no
+    ///   business overwriting.
+    private func applyCardioDraftSeeding(
+        slotID: UUID, replacingTargetSeeded: Bool
     ) {
         guard cardioSlotIDs.contains(slotID),
             let (bi, ei) = findSlotIndex(in: plan, routineSlotID: slotID)
         else { return }
 
         let ex = plan.blocks[bi].exercises[ei]
+        let fallbackUnit = AppSettings.distanceUnit
         let target = SessionPlanResolver.plannedTargetDistance(
             sessionPlan: sessionPlans[slotID],
             snapshot: ex.prescriptionSnapshot,
-            fallbackUnit: AppSettings.distanceUnit)
-
-        // Filling absent entries with nothing is a no-op; clearing them is not,
-        // so only the resync path continues without a target.
-        guard target != nil || replacingUnedited else { return }
+            fallbackUnit: fallbackUnit)
+        let prefillMap = cardioPrefillBySlotID[slotID] ?? [:]
 
         let setCount = effectiveSetCount(
             for: ex, resolvedTemplates: ex.templates)
-        let loggedSets = loggedByExercise[slotID] ?? []
         var perSet = cardioDraftsBySlotID[slotID] ?? [:]
 
         for i in 0..<setCount {
-            // A logged set's fields are read-only until Undo, and its draft
-            // mirrors what was actually recorded. Never rewrite it.
-            if loggedSets.contains(i) { continue }
+            let prefill = CardioPrefillService.suggestion(
+                forCurrentSetIndex: i, from: prefillMap)
+            let source = cardioDraftSource(
+                slotID: slotID, setIndex: i,
+                hasPrefillDistance: prefill?.distanceMeters != nil,
+                hasTarget: target != nil)
+
+            // A logged set mirrors what was recorded and is read-only until
+            // Undo; a typed draft is the user's. Neither is ours to write.
+            if source == .logged || source == .userTyped { continue }
+
+            let seeded = CardioDraftResolver.seededDraft(
+                prefill: prefill, target: target, fallbackUnit: fallbackUnit)
 
             if perSet[i] == nil {
-                guard let target else { continue }
-                perSet[i] = CardioEntryDraft(
-                    unit: target.unit, distance: target.valueText ?? "")
+                guard let seeded else { continue }
+                perSet[i] = seeded
                 continue
             }
 
-            guard replacingUnedited else { continue }
-            // Typed drafts win, always — a target edit must not overwrite a
-            // number the user entered, and must not resurrect one they cleared.
-            let userTyped =
-                parentDraftStore?.load(slotID: slotID, setIndex: i)?.hasCardio
-                ?? false
-            if userTyped { continue }
-
-            // Preserve the rest of the seeded draft (it is only ever the
-            // target's distance and unit today, but that keeps this honest if
-            // seeding ever widens) and update just the target-derived fields.
-            var draft = perSet[i] ?? CardioEntryDraft(unit: defaultDistanceUnit)
-            draft.unit = target?.unit ?? defaultDistanceUnit
-            draft.distance = target?.valueText ?? ""
+            guard replacingTargetSeeded else { continue }
+            // Only the target's own seed may be rewritten by a target edit.
+            guard CardioDraftResolver.targetEditMayReplace(source) else {
+                continue
+            }
+            // Preserve anything else on the row (there is nothing today, but
+            // that keeps this honest if seeding ever widens) and move only the
+            // target-derived fields — clearing them when the target is gone,
+            // which is what makes deleting a target visibly empty the row.
+            var draft = perSet[i] ?? CardioEntryDraft(unit: fallbackUnit)
+            draft.unit = seeded?.unit ?? target?.unit ?? fallbackUnit
+            draft.distance = seeded?.distance ?? ""
             perSet[i] = draft
         }
         cardioDraftsBySlotID[slotID] = perSet
@@ -467,6 +502,8 @@ struct ActiveWorkoutView: View {
         var dropMap:
             [UUID: [Int: [Int: LastPerformancePrefillService.LastPerformanceDropSuggestion]]] =
                 [:]
+        // Slice 7 — cardio metric prefill, reusing the same fetch.
+        var cardioMap: [UUID: [Int: CardioPrefillSuggestion]] = [:]
         for block in plan.blocks {
             for ex in block.exercises {
                 let suggestions = LastPerformancePrefillService.suggestions(
@@ -485,10 +522,19 @@ struct ActiveWorkoutView: View {
                 if !drops.isEmpty {
                     dropMap[ex.routineSlotID] = drops
                 }
+                let cardio = CardioPrefillService.suggestions(
+                    forExerciseID: ex.currentExerciseID,
+                    in: completed,
+                    excluding: currentID
+                )
+                if !cardio.isEmpty {
+                    cardioMap[ex.routineSlotID] = cardio
+                }
             }
         }
         prefillBySlotID = map
         dropPrefillBySlotID = dropMap
+        cardioPrefillBySlotID = cardioMap
     }
 
     /// Re-points a slot's last-performance prefill at the exercise that was
@@ -532,6 +578,7 @@ struct ActiveWorkoutView: View {
         // 1) Clear the replaced exercise's stale suggestions for this slot.
         prefillBySlotID[slotID] = nil
         dropPrefillBySlotID[slotID] = nil
+        cardioPrefillBySlotID[slotID] = nil
 
         // 2) Load the switched-in exercise's own history, if any. A nil/empty
         //    result leaves the slot cleared, so seeding falls back to the
@@ -550,6 +597,10 @@ struct ActiveWorkoutView: View {
         let drops = LastPerformancePrefillService.dropSuggestions(
             forExerciseID: exerciseID, in: completed, excluding: currentID)
         dropPrefillBySlotID[slotID] = drops.isEmpty ? nil : drops
+
+        let cardio = CardioPrefillService.suggestions(
+            forExerciseID: exerciseID, in: completed, excluding: currentID)
+        cardioPrefillBySlotID[slotID] = cardio.isEmpty ? nil : cardio
     }
 
     private func rehydrateFromWorkoutIfPresent() {
@@ -2863,11 +2914,12 @@ struct ActiveWorkoutView: View {
             parentDraftStore?.clearCardio(slotID: slotID)
         }
         refreshCardioSlots()
-        // Seed the (now possibly cardio) slot from its adapted target distance,
-        // the same routine-prescription initialization a fresh session does.
-        // Runs after `refreshCardioSlots` so the slot's new mode is known, and
-        // it only ever fills entries that are absent — a kept draft wins.
-        seedCardioDraftsFromTarget(slotID: slotID)
+        // Seeding deliberately does NOT happen here. It needs this slot's
+        // cardio prefill to have been re-pointed at the switched-in exercise
+        // first — otherwise it would seed from the *replaced* exercise's
+        // history, which is the exact stale-state bug Slice 6 exists to
+        // prevent. It runs at step 4a below, straight after
+        // `refreshLastPerformancePrefill`.
 
         // 4) Build fresh per-set inputs for this slot from newTemplates
         // Phase 5.2 — slotID is the per-slot key (routineSlotID); already
@@ -2893,6 +2945,13 @@ struct ActiveWorkoutView: View {
         // history the maps stay cleared and seeding falls back to prescription.
         refreshLastPerformancePrefill(
             forSlotID: slotID, exerciseID: newEx.id)
+
+        // 4a) Cardio Slice 7 — now that the slot's prefill points at the
+        // switched-in exercise, seed its cardio fields from the same
+        // precedence chain a fresh session uses: previous performance first,
+        // then the adapted routine target. Only fills entries that are absent,
+        // so a draft kept by a cardio → cardio "Keep current plan" wins.
+        seedCardioDraftsFromTarget(slotID: slotID)
 
         let swappedCount = effectiveSetCount(
             for: swappedPlanEx, resolvedTemplates: newTemplates)

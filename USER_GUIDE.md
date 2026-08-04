@@ -104,9 +104,16 @@ with the target, so a routine written in miles keeps reading in miles. A cardio
 slot starts at one set with no rest, and does not show warm-up steps,
 techniques, tempo, or the effort target, because those describe reps and weight.
 
-When you start the workout, the target distance fills in the distance field on
-the cardio set row. Change it freely: what gets logged is the distance you
-actually covered, and your edit is kept if you Save & Exit and come back.
+When you start the workout, the cardio set row fills in what you did last time:
+distance, incline or decline, and resistance. Average heart rate, heart-rate
+zone, and calories are never filled in, because those are results of that
+session rather than settings you chose. If you have not done the exercise
+before, the routine's target distance fills in the distance instead — either
+way, the target stays visible in the plan.
+
+Change any of it freely: what gets logged is what you actually did, and your
+edits are kept if you Save & Exit and come back. If you clear a field, it stays
+cleared.
 
 Cardio exercises are grouped under the Cardio body part. The app includes
 Walking, Treadmill Run, Treadmill Walk, Stationary Bike, Elliptical, Stair
