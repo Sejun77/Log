@@ -177,6 +177,48 @@ enum WorkoutEffortTargetResolver {
         }
     }
 
+    /// The effort fields actually **in force** for a slot right now: the
+    /// immutable session snapshot, with the live `SessionPlan`'s single
+    /// RIR/RPE override laid over it.
+    ///
+    /// This exists because the two display sites used to disagree. The Plan
+    /// card summarized `sessionPlan.rir`, while the per-set row labels resolved
+    /// straight from the snapshot — so an Edit Plan change to a `.single` slot
+    /// updated the card and not the rows, and a slot whose snapshot carried no
+    /// effort at all (which is every slot switched out of cardio) resolved
+    /// `.none` and showed nothing anywhere no matter what the user set. Both
+    /// sites now read this, so "what the plan says" and "what the rows say" are
+    /// the same question with one answer.
+    ///
+    /// **Progression is not overlaid.** In-session progression editing is still
+    /// deferred, so a `.progression` snapshot keeps its start/end pair verbatim
+    /// and the session's single value — which the sheet does not let the user
+    /// set in that mode — is ignored rather than silently downgrading the ramp
+    /// to a flat single target.
+    static func effectiveFields(
+        snapshot: Fields?,
+        sessionRIR: Double?,
+        sessionRPE: Double?
+    ) -> Fields {
+        let base = snapshot ?? Fields()
+        guard derivedMode(base) != .progression else { return base }
+
+        // `.single` when the session carries a value, `.none` when it does not
+        // — stated explicitly rather than left to derivation, so clearing the
+        // value in Edit Plan cannot leave a stale `"single"` raw behind.
+        var fields = base
+        fields.rir = sessionRIR
+        fields.rpe = sessionRPE
+        fields.effortModeRaw =
+            (sessionRIR != nil || sessionRPE != nil)
+            ? EffortMode.single.rawValue : nil
+        fields.rirStart = nil
+        fields.rirEnd = nil
+        fields.rpeStart = nil
+        fields.rpeEnd = nil
+        return fields
+    }
+
     /// Convenience over a session snapshot payload.
     static func perRowLabels(
         setKinds: [SetKind],

@@ -297,27 +297,83 @@ struct ActiveWorkoutView: View {
     /// `parentDraftStore`: leaving the seed unpersisted is what keeps "seeded"
     /// and "user-touched" distinguishable on the next resume.
     private func seedCardioDraftsFromTarget(slotID: UUID) {
+        applyCardioTargetSeeding(slotID: slotID, replacingUnedited: false)
+    }
+
+    /// Re-seed a cardio slot after the target distance was changed in Edit
+    /// Plan, replacing the drafts the user has not typed into.
+    ///
+    /// The discriminator is the one the seeding contract has always relied on:
+    /// **a seeded draft is never persisted, a typed one always is.**
+    /// `ParentDraftStore` writes on every keystroke — including writing an
+    /// empty string when the user clears the field — so the presence of a
+    /// persisted cardio snapshot means "the user touched this", and its absence
+    /// means "this is ours to refresh". That is the same rule that makes a
+    /// resume prefer a typed draft over the target, which is why the live view
+    /// and the resume path land in the same place.
+    private func resyncCardioDraftsToTarget(slotID: UUID) {
+        applyCardioTargetSeeding(slotID: slotID, replacingUnedited: true)
+    }
+
+    /// - Parameter replacingUnedited: when false, only entries with no draft at
+    ///   all are filled (start / resume / post-switch). When true, an existing
+    ///   draft the user has not typed into is **replaced** by the current
+    ///   target — and cleared when the target was removed, which is what makes
+    ///   deleting a target in Edit Plan visibly empty the row.
+    private func applyCardioTargetSeeding(
+        slotID: UUID, replacingUnedited: Bool
+    ) {
         guard cardioSlotIDs.contains(slotID),
             let (bi, ei) = findSlotIndex(in: plan, routineSlotID: slotID)
         else { return }
 
         let ex = plan.blocks[bi].exercises[ei]
-        guard
-            let target = SessionPlanResolver.plannedTargetDistance(
-                sessionPlan: sessionPlans[slotID],
-                snapshot: ex.prescriptionSnapshot,
-                fallbackUnit: AppSettings.distanceUnit)
-        else { return }
+        let target = SessionPlanResolver.plannedTargetDistance(
+            sessionPlan: sessionPlans[slotID],
+            snapshot: ex.prescriptionSnapshot,
+            fallbackUnit: AppSettings.distanceUnit)
+
+        // Filling absent entries with nothing is a no-op; clearing them is not,
+        // so only the resync path continues without a target.
+        guard target != nil || replacingUnedited else { return }
 
         let setCount = effectiveSetCount(
             for: ex, resolvedTemplates: ex.templates)
+        let loggedSets = loggedByExercise[slotID] ?? []
         var perSet = cardioDraftsBySlotID[slotID] ?? [:]
-        for i in 0..<setCount where perSet[i] == nil {
-            perSet[i] = CardioEntryDraft(
-                unit: target.unit, distance: target.valueText ?? "")
+
+        for i in 0..<setCount {
+            // A logged set's fields are read-only until Undo, and its draft
+            // mirrors what was actually recorded. Never rewrite it.
+            if loggedSets.contains(i) { continue }
+
+            if perSet[i] == nil {
+                guard let target else { continue }
+                perSet[i] = CardioEntryDraft(
+                    unit: target.unit, distance: target.valueText ?? "")
+                continue
+            }
+
+            guard replacingUnedited else { continue }
+            // Typed drafts win, always — a target edit must not overwrite a
+            // number the user entered, and must not resurrect one they cleared.
+            let userTyped =
+                parentDraftStore?.load(slotID: slotID, setIndex: i)?.hasCardio
+                ?? false
+            if userTyped { continue }
+
+            // Preserve the rest of the seeded draft (it is only ever the
+            // target's distance and unit today, but that keeps this honest if
+            // seeding ever widens) and update just the target-derived fields.
+            var draft = perSet[i] ?? CardioEntryDraft(unit: defaultDistanceUnit)
+            draft.unit = target?.unit ?? defaultDistanceUnit
+            draft.distance = target?.valueText ?? ""
+            perSet[i] = draft
         }
         cardioDraftsBySlotID[slotID] = perSet
     }
+
+    private var defaultDistanceUnit: DistanceUnit { AppSettings.distanceUnit }
 
     private func ensureInputsInitializedFromPlan() {
         guard inputsByExerciseID.isEmpty else { return }
@@ -848,14 +904,22 @@ struct ActiveWorkoutView: View {
         guard showsEffortUI(forSlot: exercise.routineSlotID) else {
             return Array(repeating: nil, count: setCount)
         }
-        guard let payload = exercise.prescriptionSnapshot else {
-            return Array(repeating: nil, count: setCount)
-        }
         let kinds: [SetKind] = (0..<setCount).map {
             exercise.templates[safe: $0]?.kind ?? .working
         }
+        // Resolved from the snapshot **plus** the live session override, so an
+        // Edit Plan change shows on the rows immediately. Reading the snapshot
+        // alone is what made a freshly set intensity invisible until a resume —
+        // and, for a slot switched out of cardio, invisible entirely, since its
+        // adapted snapshot carries no effort at all.
+        let fields = WorkoutEffortTargetResolver.effectiveFields(
+            snapshot: exercise.prescriptionSnapshot.map {
+                WorkoutEffortTargetResolver.Fields(payload: $0)
+            },
+            sessionRIR: sessionPlans[exercise.routineSlotID]?.rir,
+            sessionRPE: sessionPlans[exercise.routineSlotID]?.rpe)
         return WorkoutEffortTargetResolver.perRowLabels(
-            setKinds: kinds, payload: payload, autoregMode: autoregMode)
+            setKinds: kinds, fields: fields, autoregMode: autoregMode)
     }
 
     private func buildSetRow(
@@ -1434,19 +1498,19 @@ struct ActiveWorkoutView: View {
         // advertise a target the row no longer displays. Values are preserved,
         // just not surfaced.
         guard showsEffortUI(forSlot: exercise.routineSlotID) else { return nil }
-        guard let snap = exercise.prescriptionSnapshot else { return nil }
-        let snapFields = WorkoutEffortTargetResolver.Fields(payload: snap)
-        switch WorkoutEffortTargetResolver.effortMode(for: snapFields) {
-        case .single:
-            return WorkoutEffortTargetResolver.summary(
-                fields: .init(rir: sp.rir, rpe: sp.rpe),
-                autoregMode: autoregMode)
-        case .progression:
-            return WorkoutEffortTargetResolver.summary(
-                fields: snapFields, autoregMode: autoregMode)
-        case .none:
-            return nil
-        }
+        // Same effective fields the per-set rows resolve from, so the card and
+        // the rows can no longer disagree. `effectiveFields` keeps a
+        // progression snapshot intact and overlays the session's single value
+        // otherwise — including when the snapshot had no effort at all, which
+        // is the case that previously returned nil forever.
+        let fields = WorkoutEffortTargetResolver.effectiveFields(
+            snapshot: exercise.prescriptionSnapshot.map {
+                WorkoutEffortTargetResolver.Fields(payload: $0)
+            },
+            sessionRIR: sp.rir,
+            sessionRPE: sp.rpe)
+        return WorkoutEffortTargetResolver.summary(
+            fields: fields, autoregMode: autoregMode)
     }
 
     /// Compact plan summary row with "Edit Plan" sheet trigger.
@@ -2301,6 +2365,14 @@ struct ActiveWorkoutView: View {
                 isPresented: $showEditPlanSheet,
                 onDismiss: {
                     applySessionPlanToInputs()
+                    // The cardio counterpart of `applySessionPlanToInputs`:
+                    // reps and duration already refreshed here from the edited
+                    // plan, and the target distance now does too. Without it
+                    // the row kept showing the distance it was seeded with at
+                    // session start until a resume happened to re-seed it.
+                    if let slotID = currentExercise?.routineSlotID {
+                        resyncCardioDraftsToTarget(slotID: slotID)
+                    }
                     persistSessionPlans()
                 }
             ) {

@@ -660,6 +660,37 @@ unset stepper reads "—", which states the absence just as honestly as the
 read-only row did while actually being usable. `.progression` stays read-only:
 in-session progression editing is still deferred.
 
+**Two live-update bugs followed** (found by smoke-testing the patch above), and
+both had the same shape: Edit Plan wrote the `SessionPlan` correctly, but a
+piece of visible state was derived from something *else* and only caught up on
+the next resume.
+
+*The cardio row's distance draft was seeded once and never re-seeded.* Reps and
+duration already refresh on sheet dismissal via `applySessionPlanToInputs`;
+distance had no counterpart, so a target edit was invisible until a resume
+happened to re-run seeding. `resyncCardioDraftsToTarget` is that counterpart.
+
+> The precedence question it raises — *which* drafts may be refreshed — is
+> answered by a rule that already existed: **a seeded draft is never persisted,
+> a typed one always is.** `ParentDraftStore` writes on every keystroke,
+> including an empty string when the field is cleared, so a persisted cardio
+> snapshot means "the user touched this" and its absence means "this is ours to
+> refresh". A typed value is never overwritten, a cleared field is never
+> refilled, and a logged set is never rewritten. That is the same discriminator
+> the resume path uses, which is why live and resume land in the same state.
+
+*The Plan card and the per-set row labels both derived effort from the immutable
+snapshot.* So a freshly set intensity never appeared — and for a slot switched
+out of cardio, whose adapted snapshot carries no effort at all, it could never
+appear no matter what the user set. Worse, the two sites already disagreed: the
+card summarized `sessionPlan.rir` while the rows resolved from the snapshot, so
+even an ordinary `.single` slot updated the card and not the rows.
+`WorkoutEffortTargetResolver.effectiveFields(snapshot:sessionRIR:sessionRPE:)`
+is now the single answer both read — the snapshot with the session's single
+override laid over it. A `.progression` snapshot is deliberately **not**
+overlaid: in-session progression editing is still deferred, and overlaying would
+silently flatten the ramp.
+
 **"cardio → cardio Keep clears the target distance"** — *not reproducible*, and
 the adapter rule was already correct. `testCardioToCardioKeepPreservesTargetThroughTheWholePipeline`
 now walks every hop the app actually runs (routine prescription → snapshot
