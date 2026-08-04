@@ -97,6 +97,27 @@ enum SetKind: String, Codable, CaseIterable {
         case .dropset: return NSLocalizedString("Drop Set", comment: "")
         }
     }
+
+    /// Localized label for a **History** set row. Unlike `activeRowLabel`, every
+    /// kind names itself: a History row is read long after the fact, out of the
+    /// context of the workout that produced it, so the one that says nothing is
+    /// the ambiguous one.
+    ///
+    /// This is the only thing a History row label depends on. It is read from
+    /// the *stored set kind*, never from the exercise — a cardio working set, a
+    /// timed hold's working set and a barbell working set are all working sets,
+    /// and the app has no cardio-specific set kinds to distinguish. If cardio
+    /// ever gains structured warm-up / cooldown sets, they arrive as `SetKind`
+    /// cases here and every row label follows for free.
+    ///
+    /// Display-only — does not affect the persisted `rawValue`.
+    var historyRowLabel: String {
+        switch self {
+        case .working: return NSLocalizedString("Working Set", comment: "")
+        case .warmup:  return NSLocalizedString("Warm-up Set", comment: "")
+        case .dropset: return NSLocalizedString("Drop Set", comment: "")
+        }
+    }
 }
 
 @Model

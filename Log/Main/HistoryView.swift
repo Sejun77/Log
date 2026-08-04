@@ -707,10 +707,6 @@ private struct WorkoutDetailView: View {
                 .font(.dsBodySecondary)
                 .foregroundStyle(.secondary)
         } else {
-            // Resolved once per item, not per row: every set of one exercise
-            // must be labelled the same way (see `HistorySetRowLabel`).
-            let isCardio = HistorySetRowLabel.isCardioItem(item)
-
             ForEach(logs, id: \.id) { log in
                 // Cardio Slice 4 patch: the row is a VStack so recorded cardio
                 // metrics can sit on their own grouped lines beneath it. A set
@@ -724,8 +720,8 @@ private struct WorkoutDetailView: View {
                     HStack {
                         // Passed as a `String` (not an interpolated literal) so
                         // it renders verbatim — the helper has already resolved
-                        // the one localized word it can contain.
-                        Text(HistorySetRowLabel.text(for: log, isCardio: isCardio))
+                        // the localized kind name it contains.
+                        Text(HistorySetRowLabel.text(for: log))
                         .font(.dsBody)
                         Spacer()
 

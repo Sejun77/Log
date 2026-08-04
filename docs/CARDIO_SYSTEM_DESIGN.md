@@ -347,7 +347,7 @@ block. Duration stays the primary trailing value so the eye lands in the same
 place on every row:
 
 ```
-2. Set                                                2700s
+2. Working Set                                        2700s
 6.2 km · 7:15 /km
 3% incline · level 8
 142 bpm · Z3 · 410 kcal
@@ -387,27 +387,47 @@ does not change unrelated behavior.
 
 Three more issues found after the merge, fixed before Slice 5 starts.
 
-**History cardio rows read "1. Set", not "1. Working".** "Working" is strength
-vocabulary — it exists to distinguish a working set from a warm-up set and a
-dropset. A cardio bout may itself be a warm-up jog, the main effort, or a
-cooldown, and the log does not know which, so the label was actively misleading.
-The neutral "Set" claims only what is certainly true. The rule lives in
-`HistorySetRowLabel`, pulled out of `HistoryView` so it is assertable without a
-SwiftUI host:
+**History set rows name their stored set kind.** The row label was
+`kindRaw.capitalized` — "1. Working", "1. Dropset" — with warm-ups on a separate
+"Warmup 1" spelling. Every row now reads *number, then the kind's name*:
 
 ```
-1. Set                                                2700s
+1. Working Set                                        2700s
 6.2 km · 7:15 /km
 ```
 
-Scope is deliberately narrow. Strength rows still read "1. Working", dropsets
-"1. Dropset", warm-ups "Warmup 1", and timed holds are unchanged (a Plank is not
-cardio). **The active-workout row labels are untouched** — `SetKind.activeRowLabel`
-returns nil for `.working`, so no "Working" text has ever existed there to fix.
-Whether an item is cardio is resolved once per `WorkoutItem` from the live
-`Exercise.trackingMode`, never per set, so two sets of the same run cannot
-disagree; when the exercise has since been deleted the fallback is whether any
-of the item's sets carries cardio metrics.
+| Stored `SetKind` | History row | Active-workout row |
+|---|---|---|
+| `.working` | "1. Working Set" | *(no label)* |
+| `.warmup` | "1. Warm-up Set" | "Warmup" |
+| `.dropset` | "1. Drop Set" | "Drop Set" |
+
+The label is a function of `SetLog.kind` and `SetLog.indexInExercise` and of
+**nothing else** — not the exercise, not its tracking mode, not what the set
+recorded. The rule lives in `SetKind.historyRowLabel` (the vocabulary) and
+`HistorySetRowLabel` (the numbering), pulled out of `HistoryView` so it is
+assertable without a SwiftUI host.
+
+> **Cardio is deliberately not special-cased.** An interim patch gave cardio
+> rows a neutral "1. Set", on the reasoning that a cardio bout might be a
+> warm-up jog, the main effort, or a cooldown. That is true, but it is an
+> argument for cardio *set kinds*, not for a label that contradicts the kind the
+> app already stored — and it made two rows holding identical data read
+> differently depending on their exercise. Cardio has no structured warm-up /
+> cooldown kinds yet; when it gets them they arrive as `SetKind` cases and every
+> row label follows for free. Until then a cardio `.working` set is a working
+> set, exactly like a plank's and a bench press's.
+
+**The active-workout row labels are untouched.** `SetKind.activeRowLabel` is a
+separate, intentionally different vocabulary: mid-workout the surrounding row
+already establishes the context, so `.working` draws no label at all there.
+History is read long after the fact, out of that context, which is why there the
+unlabelled row is the ambiguous one. `.dropset` is the one case where both
+surfaces want the same words, and it reuses the same string key.
+
+Because the label reads only the set, it is unaffected by exercise deletion —
+History rows survive it (`exerciseNameSnapshot`), and so does their numbering
+and wording.
 
 **The pace field names its unit: "Pace (min/km)" / "Pace (min/mi)".** The value
 format is unchanged ("5:00 /km"), and so is the arithmetic — pace is still
