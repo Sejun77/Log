@@ -25,9 +25,29 @@ struct SessionPlan: Codable, Equatable {
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool = false
+    // Cardio Slice 5 — the session's editable copy of the slot's target
+    // distance. Optional, and `Codable` synthesis decodes an `Optional` with
+    // `decodeIfPresent`, so a `SessionPlan` persisted by an earlier build
+    // restores with nil rather than failing to decode.
+    var targetDistanceMeters: Double? = nil
+    var targetDistanceUnitRaw: String? = nil
     var slotNotes: String?
 
-    /// Line 1: sets + rep range (or duration range)
+    /// The plan's target distance, validated, or nil when none is set.
+    func targetDistance(fallbackUnit: DistanceUnit) -> CardioTargetDistance? {
+        CardioTargetDistance(
+            meters: targetDistanceMeters,
+            unitRaw: targetDistanceUnitRaw,
+            fallbackUnit: fallbackUnit)
+    }
+
+    /// Line 1: sets + rep range (or duration range), plus the cardio distance
+    /// target when one is set.
+    ///
+    /// The distance is appended rather than substituted: duration and distance
+    /// are independent targets, so "1 sets · 1800s · 5 km" says both, and a
+    /// cardio slot with only a distance target reads "1 sets · 5 km". Absent
+    /// values contribute no segment — never a placeholder.
     var primarySummary: String {
         var parts: [String] = []
         if let s = sets { parts.append("\(s) sets") }
@@ -45,6 +65,12 @@ struct SessionPlan: Codable, Equatable {
             } else if let r = repMax ?? repMin {
                 parts.append("\(r) reps")
             }
+        }
+        // Fall back to km for an unparseable stored unit: the value is
+        // canonical meters, so the number is right whichever unit renders it.
+        if let distance = targetDistance(fallbackUnit: .kilometers)?.displayText
+        {
+            parts.append(distance)
         }
         return parts.joined(separator: " · ")
     }
@@ -95,6 +121,8 @@ struct SessionPlan: Codable, Equatable {
         self.durationMinSeconds = snapshot.durationMinSeconds
         self.durationMaxSeconds = snapshot.durationMaxSeconds
         self.usesDuration = snapshot.usesDuration
+        self.targetDistanceMeters = snapshot.targetDistanceMeters
+        self.targetDistanceUnitRaw = snapshot.targetDistanceUnitRaw
         self.slotNotes = notes
     }
 }

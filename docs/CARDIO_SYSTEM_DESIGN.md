@@ -273,6 +273,57 @@ which is where they already are and where they work fine. Adding them would
 double the routine editor's cardio section to serve a case the beta has not
 reported.
 
+#### Implementation notes (settled in Slice 5)
+
+**The pair is carried on four types, not two.** `SlotPrescription` (the
+template), `PlannedPrescriptionSnapshot` (frozen at session start),
+`PrescriptionSnapshotPayload` (the value-type copy in the plan) and
+`SessionPlan` (the session-scoped editable copy). All four nil-default, so every
+existing routine, snapshot and persisted session plan migrates untouched, and a
+`SessionPlan` written by an earlier build decodes with nil through synthesized
+`decodeIfPresent`.
+
+**`CardioTargetDistance` is the read path**, the programming-side mirror of
+`CardioMetrics`. Every read runs the stored meters back through
+`CardioMetrics.normalizedDistanceMeters` and the unit raw through the tolerant
+`DistanceUnit.from(raw:)`, so a negative, absurd or hand-edited value degrades
+to nil-or-fallback instead of reaching a formatter.
+`SlotPrescription.applyTargetDistance` is the matching write site and always
+writes **both** columns, so a unit can never be orphaned from its distance.
+
+**Target and performed distance are different fields on different models.** A
+5 km target logged as 4.2 km has to stay visibly different from a 4.2 km target,
+and nothing about logging a set may rewrite the routine that prescribed it —
+the same silent-mutation invariant the rest of the app is built on.
+
+**`CardioRoutineRules` owns the visibility policy.** The prescription editor is
+a `View` and cannot be instantiated in a unit test, so every rule it applies is
+a pure function on `TrackingMode` instead: which controls show, what a new slot
+defaults to. `.strength` and `.timedHold` cases are not placeholders — they are
+the assertion that this type changed nothing for them.
+
+**Suppression never deletes.** Cardio hides warm-up schemes, techniques, tempo
+and the combined RIR/RPE control, but a slot that already carries any of them
+keeps it, hidden and intact, so switching the slot back to a strength exercise
+restores the programming. There is deliberately **no** "heal" pass for cardio,
+unlike the duration heal that clears stale tempo: silently deleting a user's
+warm-up because they ticked the Cardio box would be a far worse bargain than a
+hidden field.
+
+**A new cardio slot does not seed an effort value.** The control is hidden, but
+`BlockPrescriptionSummary` reads the stored `rir`/`rpe` directly and never
+dereferences `re.exercise`, so a seeded value would make a fresh cardio block
+sprout an "RIR 2" that cannot be seen or removed in the editor. Not seeding is
+the difference between hidden and hidden-but-leaking. Cardio slots created
+*before* this slice may still carry one; they are left alone, per "nothing
+converts silently".
+
+**Routine transfer is additive, with no `schemaVersion` bump.** The two keys
+join `RoutineTransferSlotPrescriptionDTO` with nil defaults, so an older export
+decodes them as nil and nothing about it became invalid. Import **re-normalizes**
+rather than trusting the document — an imported file is outside data — and drops
+the unit with the distance when the distance does not survive.
+
 #### Implementation notes (settled in Slice 4)
 
 **`TimeSetEntryRow.cardioDraft` is an optional `Binding`, and nil means "not
@@ -472,9 +523,14 @@ outcome metrics do not.**
 Prefilling an outcome metric would put a number the user did not measure into a
 field that reads as measured, which is worse than an empty field. The same
 argument does not apply to a setting they chose last time and will probably
-choose again. Whether target distance (Slice 5) should also seed the entry
-distance is an open question for that slice — a *target* and a *result* are not
-the same value, even when they usually match.
+choose again.
+
+> **Resolved in Slice 5** for the one open question here: the routine's *target*
+> distance **does** seed the entry field, and this is not prefill. Prefill reads
+> previous performance; target-distance seeding reads the routine the session
+> was started from — the same source as the sets, the duration and the rest
+> already showing on that row. History-based cardio prefill remains deferred,
+> and the table above still governs it.
 
 ### 2.4 Deferring HealthKit
 
@@ -507,15 +563,37 @@ distance:
 - **Distance target** — new optional field, shown only for `.cardio`.
 - **Rest** — defaults to none for cardio slots. There is usually no
   between-set rest on a single continuous bout.
-- **Effort (RIR/RPE)** — **kept.** RPE is meaningful for cardio ("RPE 6 easy
-  run") and the field already works.
+- **Effort (RIR/RPE)** — ~~kept~~ **suppressed.** Revised by the Slice 4 polish:
+  RPE genuinely is meaningful for cardio, but the app exposes RPE only through
+  the *same* control as RIR, governed by one `AppSettings.autoregMode`
+  preference. Offering it would mean offering "reps in reserve" for a 30-minute
+  run. Cardio-specific RPE needs that preference split first and is deferred on
+  its own terms, not rejected.
 - **Warm-up scheme** — **suppressed** for cardio. "50% of working weight" has no
   cardio meaning. (Timed holds keep it; only `.cardio` suppresses.)
 - **Techniques** — **suppressed** for cardio. Every technique type is
   rep-structured; the duration filter already removes most, and the rest are
   noise on a treadmill.
+- **Tempo** — suppressed, as it already was for every duration slot.
 
-Block summary line for a cardio slot: `30m` or `5.0 km` or `30m · 5.0 km`.
+All four suppressions are display-only; see the Slice 5 implementation notes.
+
+**Block summary line.** The distance target joins the existing block subtitle
+rather than replacing it, so the segment order stays sets → duration → distance
+→ rest → effort and nothing about a strength or timed-hold block moves:
+
+| Cardio slot | Subtitle |
+|---|---|
+| 1 set, 30 min | `1 × 1800s` |
+| 1 set, 5 km | `1 × 1800s · 5 km` |
+| 1 set, distance only | `1 set · 5 km` |
+| 1 set, neither | `1 set` |
+
+An absent value contributes no segment — never a placeholder dash. The duration
+still renders in seconds (`1800s`), which is the pre-existing format for every
+duration block and is deliberately not changed here. The same distance segment
+is appended to `SessionPlan.primarySummary`, so the target is visible on the
+Plan card during the workout too.
 
 ### 3.2 Active workout logging
 
@@ -874,7 +952,7 @@ independently committable, additive-first.
 | 2 | ✅ `Exercise.isCardio` + derived `trackingMode` + Exercise Detail toggle | Smallest possible model change; establishes the invariant before anything depends on it |
 | 3 | ✅ `SetLog` metric fields + History summary line | Storage and read-back, no logging-path change yet; proves old rows are untouched |
 | 4 | ✅ Active-workout cardio row (Details disclosure) — post-log edit deferred, see §2.4 | The risky slice, entered with the model already proven |
-| 5 | Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques) | Programming surface, once logging works |
+| 5 | ✅ Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques/tempo/effort) | Programming surface, once logging works |
 | 6 | Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
 | 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |
 | 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |

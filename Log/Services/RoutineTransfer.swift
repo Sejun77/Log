@@ -157,6 +157,8 @@ enum RoutineTransfer {
             durationMinSeconds: p.durationMinSeconds,
             durationMaxSeconds: p.durationMaxSeconds,
             usesDuration: p.usesDuration,
+            targetDistanceMeters: p.targetDistanceMeters,
+            targetDistanceUnitRaw: p.targetDistanceUnitRaw,
             techniquePlans: p.techniquePlans
                 .sorted { $0.order < $1.order }
                 .map(techniqueDTO),

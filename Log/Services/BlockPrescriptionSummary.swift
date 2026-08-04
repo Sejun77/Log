@@ -41,6 +41,7 @@ struct BlockPrescriptionSummary: Equatable {
             repMax: Int?,
             durationSeconds: Int?,
             usesDuration: Bool,
+            targetDistance: String?,
             restSeconds: Int?,
             effort: String?
         )
@@ -57,6 +58,7 @@ struct BlockPrescriptionSummary: Equatable {
         repMax: Int? = nil,
         durationSeconds: Int? = nil,
         usesDuration: Bool = false,
+        targetDistance: String? = nil,
         restSeconds: Int? = nil,
         effort: String? = nil
     ) {
@@ -66,6 +68,7 @@ struct BlockPrescriptionSummary: Equatable {
             repMax: repMax,
             durationSeconds: durationSeconds,
             usesDuration: usesDuration,
+            targetDistance: targetDistance,
             restSeconds: restSeconds,
             effort: effort
         )
@@ -84,7 +87,16 @@ struct BlockPrescriptionSummary: Equatable {
     /// `effortMetric` is the app-wide autoreg metric (RIR/RPE) supplied by the
     /// caller; `nil` (autoreg disabled) omits any effort suffix. Effort is only
     /// summarized for **normal** blocks.
-    init(block: RoutineBlock, effortMetric: EffortMetric? = nil) {
+    /// - Parameter fallbackUnit: unit used only when a slot's stored
+    ///   `targetDistanceUnitRaw` is missing or unparseable. Defaults to
+    ///   kilometers so the value type stays pure and its tests do not depend on
+    ///   the tester's preferences; the routine editor passes
+    ///   `AppSettings.distanceUnit`.
+    init(
+        block: RoutineBlock,
+        effortMetric: EffortMetric? = nil,
+        fallbackUnit: DistanceUnit = .kilometers
+    ) {
         if block.isSuperset {
             let maxSets = block.exercises
                 .compactMap { $0.prescription?.sets }
@@ -105,6 +117,12 @@ struct BlockPrescriptionSummary: Equatable {
                     $0.durationMaxSeconds ?? $0.durationMinSeconds
                 },
                 usesDuration: p?.usesDuration ?? false,
+                // Rendered from the slot's own stored unit, never the current
+                // global preference, so a block programmed in miles keeps
+                // reading in miles. `fallbackUnit` only covers a raw unit
+                // string that will not parse.
+                targetDistance: p?.targetDistance(fallbackUnit: fallbackUnit)?
+                    .displayText,
                 restSeconds: p?.restSecondsBetweenSets,
                 effort: Self.effortSummary(for: p, metric: effortMetric)
             )
@@ -162,7 +180,9 @@ struct BlockPrescriptionSummary: Equatable {
                 : String(localized: "\(m) sets")
             return "\(superset) · \(exercises) · \(setsText)"
 
-        case let .normal(sets, repMin, repMax, duration, usesDuration, rest, effort):
+        case let .normal(
+            sets, repMin, repMax, duration, usesDuration, targetDistance, rest,
+            effort):
             guard let s = sets, s > 0 else { return String(localized: "Not set") }
             let core: String
             if usesDuration {
@@ -177,6 +197,10 @@ struct BlockPrescriptionSummary: Equatable {
                 core = s == 1 ? String(localized: "\(s) set") : String(localized: "\(s) sets")
             }
             var parts = [core]
+            // A cardio slot's distance target sits next to the duration it
+            // belongs with, before the rest and effort suffixes. Absent, it
+            // contributes nothing — no placeholder.
+            if let targetDistance { parts.append(targetDistance) }
             if let r = rest, r > 0 { parts.append(String(localized: "\(r)s rest")) }
             if let effort { parts.append(effort) }
             return parts.joined(separator: " · ")
@@ -204,13 +228,15 @@ struct BlockPrescriptionSummary: Equatable {
     /// `block.exercises` / prescriptions inside each row's `body`.
     static func map(
         for blocks: [RoutineBlock],
-        effortMetric: EffortMetric? = nil
+        effortMetric: EffortMetric? = nil,
+        fallbackUnit: DistanceUnit = .kilometers
     ) -> [UUID: BlockPrescriptionSummary] {
         var result: [UUID: BlockPrescriptionSummary] = [:]
         result.reserveCapacity(blocks.count)
         for block in blocks {
             result[block.slotID] = BlockPrescriptionSummary(
-                block: block, effortMetric: effortMetric
+                block: block, effortMetric: effortMetric,
+                fallbackUnit: fallbackUnit
             )
         }
         return result

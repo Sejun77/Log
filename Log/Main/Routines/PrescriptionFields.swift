@@ -3,26 +3,41 @@ import SwiftUI
 
 // MARK: - Default Prescription Factory
 
+/// Defaults for a newly created routine slot.
+///
+/// `isCardio` defaults to false, so every pre-Slice-5 call site keeps producing
+/// exactly the prescription it produced before. When it is true the slot takes
+/// the cardio defaults from `CardioRoutineRules`: one set, no rest, no seeded
+/// effort target. Nothing here ever touches an existing prescription — this is
+/// the *creation* path only.
 @discardableResult
 func makeDefaultPrescription(
     isTimeBased: Bool,
+    isCardio: Bool = false,
     in ctx: ModelContext
 ) -> SlotPrescription {
+    // Cardio implies time-based (`Exercise.trackingMode` guarantees it), but
+    // resolve defensively so a caller passing the pair inconsistently gets the
+    // safe reading rather than a distance target on a reps slot.
+    let mode: TrackingMode =
+        isTimeBased ? (isCardio ? .cardio : .timedHold) : .strength
+
     let p = SlotPrescription()
     p.usesDuration = isTimeBased
-    p.sets = AppSettings.defaultSets
+    p.sets = CardioRoutineRules.defaultSets(mode)
     if !isTimeBased {
         p.repMin = AppSettings.defaultRepMin
         p.repMax = AppSettings.defaultRepMax
     }
-    p.restSecondsBetweenSets = AppSettings.defaultRestBetweenSets
-    if AppSettings.defaultRestAfterExercise > 0 {
-        p.restSecondsAfterExercise = AppSettings.defaultRestAfterExercise
-    }
-    switch AppSettings.autoregMode {
-    case .rir: p.rir = AppSettings.defaultRIR
-    case .rpe: p.rpe = AppSettings.defaultRPE
-    case .none: break
+    p.restSecondsBetweenSets = CardioRoutineRules.defaultRestBetweenSets(mode)
+    p.restSecondsAfterExercise =
+        CardioRoutineRules.defaultRestAfterExercise(mode)
+    if CardioRoutineRules.seedsEffortTarget(mode) {
+        switch AppSettings.autoregMode {
+        case .rir: p.rir = AppSettings.defaultRIR
+        case .rpe: p.rpe = AppSettings.defaultRPE
+        case .none: break
+        }
     }
     ctx.insert(p)
     return p
@@ -47,6 +62,18 @@ struct SlotPrescriptionSection: View {
     /// share one detail screen only the focused one shows the accessory.
     @FocusState private var slotNotesFocused: Bool
 
+    /// The slot's tracking mode, which decides which controls this section
+    /// offers (see `CardioRoutineRules`).
+    ///
+    /// Falls back to the caller's `isTimeBased` when the exercise reference is
+    /// nil — an orphan slot mid-normalization — so the section degrades to its
+    /// pre-cardio behavior rather than guessing.
+    private var trackingMode: TrackingMode {
+        re.exercise?.trackingMode ?? (isTimeBased ? .timedHold : .strength)
+    }
+
+    private var isCardio: Bool { trackingMode == .cardio }
+
     var body: some View {
         Section {
             if !re.setTemplates.isEmpty {
@@ -61,62 +88,68 @@ struct SlotPrescriptionSection: View {
             if let prescription = re.prescription {
                 PrescriptionFields(
                     prescription: prescription,
-                    isTimeBased: isTimeBased,
+                    trackingMode: trackingMode,
                     hideRestFields: hideRestFields,
                     hideSetsField: hideSetsField
                 )
 
-                // Phase 3.5: Warmup scheme navigation
-                NavigationLink {
-                    WarmupSchemeEditor(
-                        prescription: prescription,
-                        isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType),
-                        // Cardio hides the weight-based warm-up kinds for the
-                        // same reason bodyweight does: no working weight to
-                        // base them on. Timed holds are unaffected.
-                        isCardio: re.exercise?.trackingMode == .cardio
-                    )
-                } label: {
-                    HStack {
-                        Text("Warmup")
-                        Spacer()
-                        let count = prescription.warmupScheme?.steps.count ?? 0
-                        if count > 0 {
-                            Text("\(count) step\(count == 1 ? "" : "s")")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("None")
-                                .foregroundStyle(.secondary)
+                // Phase 3.5: Warmup scheme navigation. Hidden for cardio: the
+                // remaining kinds after the Slice 4 polish are "Reps" and
+                // "Note Only", and programming reps for a treadmill is not a
+                // warm-up. Any stored scheme is left untouched — hidden, not
+                // deleted — so a slot switched back to strength still has it.
+                if CardioRoutineRules.showsWarmupScheme(trackingMode) {
+                    NavigationLink {
+                        WarmupSchemeEditor(
+                            prescription: prescription,
+                            isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType)
+                        )
+                    } label: {
+                        HStack {
+                            Text("Warmup")
+                            Spacer()
+                            let count = prescription.warmupScheme?.steps.count ?? 0
+                            if count > 0 {
+                                Text("\(count) step\(count == 1 ? "" : "s")")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("None")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
 
-                // Phase 3.5: Technique plans navigation
-                NavigationLink {
-                    TechniquePlanEditor(
-                        prescription: prescription,
-                        isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType)
-                    )
-                } label: {
-                    HStack {
-                        Text("Techniques")
-                        Spacer()
-                        // Count only the techniques the slot can actually use,
-                        // matching what `TechniquePlanEditor` will list — the
-                        // on-appear heal deletes the rest, but this renders
-                        // before it runs.
-                        let count = compatibleTechniquePlans(
-                            prescription.techniquePlans,
-                            isBodyweight: isBodyweightEquipment(
-                                re.exercise?.equipmentType),
-                            usesDuration: prescription.usesDuration
-                        ).count
-                        if count > 0 {
-                            Text("\(count) technique\(count == 1 ? "" : "s")")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("None")
-                                .foregroundStyle(.secondary)
+                // Phase 3.5: Technique plans navigation. Hidden for cardio —
+                // every technique the app models is defined in reps or load.
+                // Stored plans are likewise left intact.
+                if CardioRoutineRules.showsTechniques(trackingMode) {
+                    NavigationLink {
+                        TechniquePlanEditor(
+                            prescription: prescription,
+                            isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType)
+                        )
+                    } label: {
+                        HStack {
+                            Text("Techniques")
+                            Spacer()
+                            // Count only the techniques the slot can actually use,
+                            // matching what `TechniquePlanEditor` will list — the
+                            // on-appear heal deletes the rest, but this renders
+                            // before it runs.
+                            let count = compatibleTechniquePlans(
+                                prescription.techniquePlans,
+                                isBodyweight: isBodyweightEquipment(
+                                    re.exercise?.equipmentType),
+                                usesDuration: prescription.usesDuration
+                            ).count
+                            if count > 0 {
+                                Text("\(count) technique\(count == 1 ? "" : "s")")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("None")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -157,7 +190,8 @@ struct SlotPrescriptionSection: View {
 
     private func ensurePrescription() {
         if re.prescription == nil {
-            re.prescription = makeDefaultPrescription(isTimeBased: isTimeBased, in: ctx)
+            re.prescription = makeDefaultPrescription(
+                isTimeBased: isTimeBased, isCardio: isCardio, in: ctx)
             try? ctx.save()
             return
         }
@@ -209,7 +243,10 @@ struct SlotPrescriptionSection: View {
 
 private struct PrescriptionFields: View {
     @Bindable var prescription: SlotPrescription
-    let isTimeBased: Bool
+    /// Drives every visibility decision in this section via
+    /// `CardioRoutineRules`. Replaced the previous `isTimeBased` flag, which
+    /// could not distinguish a treadmill from a plank.
+    let trackingMode: TrackingMode
     var hideRestFields: Bool = false
     var hideSetsField: Bool = false
 
@@ -219,6 +256,8 @@ private struct PrescriptionFields: View {
     private var autoregMode: AutoregMode {
         AutoregMode(rawValue: autoregModeRaw) ?? .rir
     }
+
+    private var isTimeBased: Bool { trackingMode != .strength }
 
     var body: some View {
         if !hideSetsField {
@@ -237,20 +276,40 @@ private struct PrescriptionFields: View {
             optionalIntStepper("Rep max", keyPath: \.repMax, range: 0...50)
         }
 
+        // Cardio only. A duration target and a distance target are independent:
+        // either, both, or neither is a valid cardio prescription, and the row
+        // simply does not exist for the modes that cannot use it.
+        if CardioRoutineRules.showsTargetDistance(trackingMode) {
+            TargetDistanceRow(
+                prescription: prescription, fallbackUnit: entryUnit)
+        }
+
         if !hideRestFields {
             restRow("Rest between sets", keyPath: \.restSecondsBetweenSets)
             restRow("Rest after exercise", keyPath: \.restSecondsAfterExercise)
         }
 
-        effortSection
+        // Hidden for cardio: RIR is "reps in reserve", and the app exposes RIR
+        // and RPE through one control governed by a single preference, so the
+        // two cannot be separated without splitting that preference. Stored
+        // values are untouched — this is display-only.
+        if CardioRoutineRules.showsEffortControl(trackingMode) {
+            effortSection
+        }
 
         // Tempo describes rep phases — hidden and uneditable for a
         // duration-based slot. `ensurePrescription` clears any stored value
         // when a slot becomes duration-based, so nothing stale hides here.
-        if !isTimeBased {
+        if CardioRoutineRules.showsTempo(trackingMode) {
             TempoEditorView(tempo: $prescription.tempo)
         }
     }
+
+    /// Default entry unit for the distance field: the user's Settings
+    /// preference. Only a *default* — a target already authored in the other
+    /// unit keeps the unit it was written in, so switching the global
+    /// preference never reinterprets a number someone already typed.
+    private var entryUnit: DistanceUnit { AppSettings.distanceUnit }
 
     // MARK: - Effort target mode (Slice D)
 
@@ -534,5 +593,104 @@ struct TempoEditorView: View {
         let vals = [eccentric, stretchPause, concentric, squeezePause]
         tempo = vals.allSatisfy({ $0 == 0 }) ? nil
               : vals.map(String.init).joined(separator: "-")
+    }
+}
+
+// MARK: - Cardio target distance (Slice 5)
+
+/// The optional target-distance row for a cardio slot.
+///
+/// Its own view rather than a helper on `PrescriptionFields` because it owns
+/// entry text: the stored value is canonical meters, but a user mid-typing has
+/// "6." in the field, and normalizing on every keystroke would delete the dot.
+/// The text is local `@State`, sanitized per keystroke, and committed to the
+/// model through `CardioTargetDistance` — the same draft-then-normalize shape
+/// `CardioEntryDraft` uses on the logging side.
+///
+/// Empty, non-numeric, zero, negative and out-of-range input all commit **nil**
+/// ("no target"), which is the correct reading of a field the user cleared or
+/// fumbled. Nothing here can fail loudly.
+private struct TargetDistanceRow: View {
+    @Bindable var prescription: SlotPrescription
+    /// Entry unit for a target that does not yet have one of its own.
+    let fallbackUnit: DistanceUnit
+
+    @State private var text: String = ""
+    @State private var unit: DistanceUnit = .kilometers
+    /// Guards the one-time seed. Without it, `onAppear` firing again (a
+    /// re-render, a navigation return) would overwrite in-progress text with
+    /// the committed value.
+    @State private var didSeed = false
+
+    private static let fieldWidth: CGFloat = 96
+
+    var body: some View {
+        HStack(spacing: DSSpacing.sm) {
+            Text("Target distance")
+            Spacer(minLength: DSSpacing.sm)
+            TextField("0.0", text: distanceBinding)
+                .font(.dsBody.monospacedDigit())
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: Self.fieldWidth)
+                .multilineTextAlignment(.trailing)
+            // Storage is canonical meters either way, so switching the unit
+            // re-reads the same target rather than converting the typed number
+            // — matching the active-workout Unit picker exactly.
+            Picker("Unit", selection: unitBinding) {
+                ForEach(DistanceUnit.allCases, id: \.self) { u in
+                    Text(u.symbol).tag(u)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 88)
+        }
+        .toolbar {
+            // `.decimalPad` has no Return key, so the field needs a
+            // keyboard-integrated dismiss like every other decimal entry.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                KeyboardDismissButton()
+            }
+        }
+        .onAppear(perform: seedFromModel)
+    }
+
+    private var distanceBinding: Binding<String> {
+        Binding(
+            get: { text },
+            set: {
+                text = CardioEntryDraft.sanitizeDecimal($0)
+                commit()
+            }
+        )
+    }
+
+    private var unitBinding: Binding<DistanceUnit> {
+        Binding(
+            get: { unit },
+            set: {
+                unit = $0
+                commit()
+            }
+        )
+    }
+
+    /// Read the committed target back into entry text, once.
+    private func seedFromModel() {
+        guard !didSeed else { return }
+        didSeed = true
+        let target = prescription.targetDistance(fallbackUnit: fallbackUnit)
+        unit = target?.unit ?? fallbackUnit
+        text = target?.valueText ?? ""
+    }
+
+    /// Normalize and write both columns together. An unusable value clears the
+    /// target rather than leaving a stale one behind, so what the field shows
+    /// and what the routine stores never disagree.
+    private func commit() {
+        prescription.applyTargetDistance(
+            CardioTargetDistance(text: text, unit: unit))
     }
 }

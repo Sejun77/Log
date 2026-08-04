@@ -296,7 +296,8 @@ struct RoutineEditor: View {
         // propagating grandchild `SlotPrescription` edits to `@Bindable routine`.
         _ = blockSummaryRefresh
         let summaries = BlockPrescriptionSummary.map(
-            for: sortedBlocks, effortMetric: effortMetric
+            for: sortedBlocks, effortMetric: effortMetric,
+            fallbackUnit: AppSettings.distanceUnit
         )
         return Section("Blocks") {
             ForEach(sortedBlocks, id: \.id) { block in
@@ -712,7 +713,9 @@ struct RoutineEditor: View {
         let res: [RoutineExercise] = exercises.enumerated().map { idx, ex in
             let re = RoutineExercise(exercise: ex, order: idx, setTemplates: [])
             ctx.insert(re)
-            re.prescription = makeDefaultPrescription(isTimeBased: ex.isTimeBased, in: ctx)
+            re.prescription = makeDefaultPrescription(
+                isTimeBased: ex.isTimeBased,
+                isCardio: ex.trackingMode == .cardio, in: ctx)
             return re
         }
 

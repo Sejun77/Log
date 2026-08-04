@@ -589,6 +589,25 @@ final class SlotPrescription {
     var durationMaxSeconds: Int?
     var usesDuration: Bool = false
 
+    // Cardio Slice 5 — optional **target** distance for a cardio slot.
+    //
+    // A target, never a result: the distance actually covered is recorded on
+    // `SetLog.distanceMeters`, and the two are deliberately separate fields on
+    // separate types so a 5 km target logged as 4.2 km stays honest.
+    //
+    // Stored canonically in meters with the entry unit alongside it, exactly as
+    // the performed metrics are (`SetLog.distanceMeters` / `distanceUnitRaw`),
+    // so a routine authored in miles still aggregates correctly and still reads
+    // back in the unit it was written in. Both optional / nil-default: every
+    // existing prescription migrates lightweightly and a cardio slot with no
+    // distance target is the normal case, not a degraded one.
+    //
+    // Pace and speed are deliberately absent here for the same reason they are
+    // absent from `CardioMetrics`: both are distance ÷ duration and are derived
+    // at render time.
+    var targetDistanceMeters: Double? = nil
+    var targetDistanceUnitRaw: String? = nil
+
     /// The tempo this prescription may actually display.
     ///
     /// Tempo describes eccentric/concentric rep phases and is meaningless for a
@@ -632,7 +651,9 @@ final class SlotPrescription {
         rpeEnd: Double? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
-        usesDuration: Bool = false
+        usesDuration: Bool = false,
+        targetDistanceMeters: Double? = nil,
+        targetDistanceUnitRaw: String? = nil
     ) {
         self.sets = sets
         self.repMin = repMin
@@ -650,6 +671,8 @@ final class SlotPrescription {
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
+        self.targetDistanceMeters = targetDistanceMeters
+        self.targetDistanceUnitRaw = targetDistanceUnitRaw
         self.techniquePlans = []
     }
 }
@@ -763,6 +786,13 @@ final class PlannedPrescriptionSnapshot {
     var durationMaxSeconds: Int?
     var usesDuration: Bool = false
 
+    // Cardio Slice 5 — frozen copy of the slot's target distance, so a running
+    // or completed workout renders the target it was started with even after
+    // the routine is edited. Optional / nil-default: existing snapshot rows
+    // migrate lightweightly and read as "no distance target".
+    var targetDistanceMeters: Double? = nil
+    var targetDistanceUnitRaw: String? = nil
+
     /// The tempo History / session detail may display for this frozen snapshot.
     /// Nil for a duration-based row, so an already-completed workout that
     /// captured a stale tempo never renders one. Mirrors
@@ -795,6 +825,8 @@ final class PlannedPrescriptionSnapshot {
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false,
+        targetDistanceMeters: Double? = nil,
+        targetDistanceUnitRaw: String? = nil,
         equipment: String? = nil,
         setupNotes: String? = nil
     ) {
@@ -814,6 +846,8 @@ final class PlannedPrescriptionSnapshot {
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
+        self.targetDistanceMeters = targetDistanceMeters
+        self.targetDistanceUnitRaw = targetDistanceUnitRaw
         self.equipment = equipment
         self.setupNotes = setupNotes
     }
@@ -841,6 +875,8 @@ final class PlannedPrescriptionSnapshot {
             durationMinSeconds: source.durationMinSeconds,
             durationMaxSeconds: source.durationMaxSeconds,
             usesDuration: source.usesDuration,
+            targetDistanceMeters: source.targetDistanceMeters,
+            targetDistanceUnitRaw: source.targetDistanceUnitRaw,
             equipment: exercise?.equipmentType,
             setupNotes: exercise?.setupDefaults
         )

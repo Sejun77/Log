@@ -152,6 +152,12 @@ struct PrescriptionSnapshotPayload {
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool
+    // Cardio Slice 5 — the slot's target distance, carried through the plan so
+    // the active workout can show and seed it. Optional / nil-default: every
+    // non-cardio slot, and every cardio slot without a distance target,
+    // carries nil and behaves exactly as before.
+    var targetDistanceMeters: Double? = nil
+    var targetDistanceUnitRaw: String? = nil
     var equipment: String?
     var setupNotes: String?
 
@@ -181,6 +187,8 @@ struct PrescriptionSnapshotPayload {
         self.durationMinSeconds = source.durationMinSeconds
         self.durationMaxSeconds = source.durationMaxSeconds
         self.usesDuration = source.usesDuration
+        self.targetDistanceMeters = source.targetDistanceMeters
+        self.targetDistanceUnitRaw = source.targetDistanceUnitRaw
         self.equipment = exercise?.equipmentType
         self.setupNotes = exercise?.setupDefaults
     }
@@ -203,6 +211,8 @@ struct PrescriptionSnapshotPayload {
             durationMinSeconds: durationMinSeconds,
             durationMaxSeconds: durationMaxSeconds,
             usesDuration: usesDuration,
+            targetDistanceMeters: targetDistanceMeters,
+            targetDistanceUnitRaw: targetDistanceUnitRaw,
             equipment: equipment,
             setupNotes: setupNotes
         )
@@ -237,6 +247,13 @@ extension PrescriptionSnapshotPayload {
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false,
+        // Slice 6 note: the exercise-switch adapter builds payloads through
+        // this init and lets the target distance default to nil, so a switched
+        // slot simply has no distance target. Deciding when a target should be
+        // *preserved* or *cleared* across a switch is Slice 6's job — nil is
+        // the conservative reading until then.
+        targetDistanceMeters: Double? = nil,
+        targetDistanceUnitRaw: String? = nil,
         equipment: String? = nil,
         setupNotes: String? = nil
     ) {
@@ -256,6 +273,8 @@ extension PrescriptionSnapshotPayload {
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
+        self.targetDistanceMeters = targetDistanceMeters
+        self.targetDistanceUnitRaw = targetDistanceUnitRaw
         self.equipment = equipment
         self.setupNotes = setupNotes
     }
@@ -278,6 +297,8 @@ extension PrescriptionSnapshotPayload {
         self.durationMinSeconds = snapshot.durationMinSeconds
         self.durationMaxSeconds = snapshot.durationMaxSeconds
         self.usesDuration = snapshot.usesDuration
+        self.targetDistanceMeters = snapshot.targetDistanceMeters
+        self.targetDistanceUnitRaw = snapshot.targetDistanceUnitRaw
         self.equipment = snapshot.equipment
         self.setupNotes = snapshot.setupNotes
     }

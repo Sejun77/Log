@@ -244,6 +244,13 @@ struct ActiveWorkoutView: View {
 
                 let setCount = effectiveSetCount(
                     for: ex, resolvedTemplates: ex.templates)
+                // Cardio Slice 5 — the slot's programmed distance target, if
+                // any. Only ever used to seed an untouched field (below).
+                let target = SessionPlanResolver.plannedTargetDistance(
+                    sessionPlan: sessionPlans[slotID],
+                    snapshot: ex.prescriptionSnapshot,
+                    fallbackUnit: defaultUnit)
+
                 for i in 0..<setCount {
                     let loggedSet = item?.setLogs.last(where: {
                         $0.indexInExercise == i && $0.subIndex == nil
@@ -258,6 +265,25 @@ struct ActiveWorkoutView: View {
                             snapshot: snapshot, defaultUnit: defaultUnit)
                     {
                         perSet[i] = restored
+                    } else if perSet[i] == nil, let target {
+                        // Last resort, and deliberately so. A logged set wins,
+                        // then a persisted draft — which exists the moment the
+                        // user types in *any* cardio field, including when they
+                        // clear the distance back to empty. So the target only
+                        // ever fills a field nobody has touched, and Save &
+                        // Exit → Resume can never overwrite an edit with it.
+                        //
+                        // This is prescription initialization, not prefill:
+                        // it reads the routine the session was started from,
+                        // never previous performance. History-based cardio
+                        // prefill is a later slice.
+                        //
+                        // Not written through `parentDraftStore`: leaving the
+                        // seed unpersisted is exactly what keeps "seeded" and
+                        // "user-touched" distinguishable on the next resume.
+                        perSet[i] = CardioEntryDraft(
+                            unit: target.unit,
+                            distance: target.valueText ?? "")
                     }
                 }
                 drafts[slotID] = perSet

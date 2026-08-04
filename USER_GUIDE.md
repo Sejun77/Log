@@ -98,6 +98,16 @@ Every one of these is optional, and pace and speed are worked out for you once a
 distance and a duration are entered. Enter the details before tapping Log — to
 change them afterwards, tap Undo and log the set again.
 
+In a routine, a cardio slot can also carry a target distance. Open the slot's
+Prescription section and enter it in km or mi — the unit you choose is saved
+with the target, so a routine written in miles keeps reading in miles. A cardio
+slot starts at one set with no rest, and does not show warm-up steps,
+techniques, tempo, or the effort target, because those describe reps and weight.
+
+When you start the workout, the target distance fills in the distance field on
+the cardio set row. Change it freely: what gets logged is the distance you
+actually covered, and your edit is kept if you Save & Exit and come back.
+
 Cardio exercises are grouped under the Cardio body part. The app includes
 Walking, Treadmill Run, Treadmill Walk, Stationary Bike, Elliptical, Stair
 Climber, and Rowing Machine as duration-based exercises, and you can add your
