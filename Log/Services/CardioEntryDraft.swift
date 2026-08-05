@@ -94,7 +94,7 @@ struct CardioEntryDraft: Equatable {
     /// it, which is strictly worse than showing fewer things legibly: the
     /// expanded section is one tap away and shows everything.
     var summaryText: String? {
-        CardioHistorySummary.collapsedSummary(metrics, fallbackUnit: unit)
+        CardioHistorySummary.collapsedSummary(metrics, displayUnit: unit)
     }
 
     // MARK: - Derived preview

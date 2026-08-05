@@ -714,7 +714,7 @@ private struct WorkoutDetailView: View {
                 // so strength rows, timed holds, and duration-only cardio logs
                 // occupy exactly the layout they always have.
                 let cardioLines = CardioHistorySummary.secondaryLines(
-                    for: log, fallbackUnit: AppSettings.distanceUnit)
+                    for: log, displayUnit: AppSettings.distanceUnit)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {

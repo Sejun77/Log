@@ -325,7 +325,7 @@ final class CardioDistanceOnlyTargetTests: SwiftDataTestHarness {
 
         XCTAssertEqual(CardioHistorySummary.primaryText(for: log), "1650s")
         XCTAssertEqual(
-            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km),
+            CardioHistorySummary.secondaryLines(for: log, displayUnit: km),
             ["5 km · 5:30 /km"])
     }
 

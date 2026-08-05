@@ -245,7 +245,7 @@ extension UserGuideView {
                 "import routines",
                 "export workout history",
             ],
-            outro: "Settings is the only place the cardio distance unit is chosen — no distance field anywhere in the app has a unit picker of its own. Change it here and every target distance, and every distance you enter during a workout, uses the new unit. Workouts you have already finished keep reading in History in the unit you ran them in, because those are a record of what you did rather than a plan."
+            outro: "Settings is the only place the cardio distance unit is chosen — no distance field anywhere in the app has a unit picker of its own. Change it here and every distance in the app follows: routine targets, what you enter during a workout, and your History, pace included. A run you logged in miles shows in km once you switch to km. Only the way distances are shown changes — nothing you have recorded is altered."
         ),
     ]
 
@@ -381,7 +381,7 @@ extension UserGuideView {
                 "루틴 가져오기",
                 "운동 기록 내보내기",
             ],
-            outro: "유산소 거리 단위는 설정에서만 선택할 수 있습니다. 앱의 어떤 거리 입력란에도 단위 선택기가 따로 없습니다. 여기에서 단위를 바꾸면 모든 목표 거리와 운동 중 입력하는 거리에 새 단위가 적용됩니다. 이미 완료한 운동은 기록에서 수행 당시의 단위로 계속 표시됩니다. 계획이 아니라 실제로 수행한 기록이기 때문입니다."
+            outro: "유산소 거리 단위는 설정에서만 선택할 수 있습니다. 앱의 어떤 거리 입력란에도 단위 선택기가 따로 없습니다. 여기에서 단위를 바꾸면 앱의 모든 거리에 새 단위가 적용됩니다. 루틴 목표 거리, 운동 중 입력하는 거리, 그리고 기록의 거리와 페이스까지 모두 포함됩니다. mi로 기록한 러닝도 km로 바꾸면 km로 표시됩니다. 표시 방식만 바뀔 뿐, 저장된 기록은 변하지 않습니다."
         ),
     ]
 }

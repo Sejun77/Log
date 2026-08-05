@@ -175,8 +175,9 @@ You can:
 Settings is the only place the cardio distance unit is chosen — no distance
 field anywhere in the app has a unit picker of its own. Change it here and every
 target distance, and every distance you enter during a workout, uses the new
-unit. Workouts you have already finished keep reading in History in the unit you
-ran them in, because those are a record of what you did rather than a plan.
+unit. History converts too: a run you logged in miles shows in km, pace
+included, once you switch to km. Only the way distances are shown changes —
+nothing you have recorded is altered.
 
 ---
 

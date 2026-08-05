@@ -664,9 +664,11 @@ final class DistanceUnitSettingTests: SwiftDataTestHarness {
         }
     }
 
-    // MARK: - The preference still cannot reach performed data
+    // MARK: - History follows the preference; stored data does not move
     //
-    // Requirements 14 and 16 of the behavior list: History is unchanged.
+    // The third patch: History was the last read path still honouring a stored
+    // unit. It now renders in the preference like everything else, while the
+    // stored columns stay exactly as logged.
 
     func testChangingThePreferenceDoesNotRewriteALoggedSetsUnit() throws {
         let log = SetLog(
@@ -686,10 +688,11 @@ final class DistanceUnitSettingTests: SwiftDataTestHarness {
             accuracy: 0.001)
     }
 
-    /// **Requirement 14 of the test list.** History rows are untouched by this
-    /// patch: a bout logged in miles still renders in miles under a km
-    /// preference.
-    func testHistoryRendersTheStoredSetLogUnit() throws {
+    /// **Requirements 1–4 of the third patch.** A row logged in miles reads in
+    /// miles under a miles preference and converts to km under a km one —
+    /// distance *and* pace together, so the number never disagrees with the
+    /// unit beside it.
+    func testHistoryDisplayFollowsThePreference() throws {
         let log = SetLog(
             indexInExercise: 0, reps: 0, weight: nil, durationSeconds: 1_800)
         context.insert(log)
@@ -697,18 +700,72 @@ final class DistanceUnitSettingTests: SwiftDataTestHarness {
             CardioMetrics(distanceMeters: 1_609.344, distanceUnit: mi))
         try context.save()
 
-        selectUnit(km)
-
+        selectUnit(mi)
         XCTAssertEqual(
             CardioHistorySummary.secondaryLines(
-                for: log, fallbackUnit: AppSettings.distanceUnit),
-            ["1 mi · 30:00 /mi"],
-            "a bout logged in miles reads in miles whatever Settings says")
+                for: log, displayUnit: AppSettings.distanceUnit),
+            ["1 mi · 30:00 /mi"])
+
+        selectUnit(km)
+        XCTAssertEqual(
+            CardioHistorySummary.secondaryLines(
+                for: log, displayUnit: AppSettings.distanceUnit),
+            ["1.61 km · 18:38 /km"],
+            "an old miles row re-reads in km, pace label included")
     }
 
-    /// The pace label follows the unit the row is being read in, so a miles row
-    /// says min/mi even while the preference is km.
-    func testPaceLabelFollowsTheRowUnitNotThePreference() {
+    /// The mirror: a km-logged row read under a miles preference.
+    func testHistoryConvertsAKilometerRowToMiles() throws {
+        let log = SetLog(
+            indexInExercise: 0, reps: 0, weight: nil, durationSeconds: 1_800)
+        context.insert(log)
+        log.applyCardioMetrics(
+            CardioMetrics(distanceMeters: fiveKmInMeters, distanceUnit: km))
+        try context.save()
+
+        selectUnit(km)
+        XCTAssertEqual(
+            CardioHistorySummary.secondaryLines(
+                for: log, displayUnit: AppSettings.distanceUnit),
+            ["5 km · 6:00 /km"])
+
+        selectUnit(mi)
+        XCTAssertEqual(
+            CardioHistorySummary.secondaryLines(
+                for: log, displayUnit: AppSettings.distanceUnit),
+            ["3.11 mi · 9:39 /mi"])
+    }
+
+    /// **Requirements 6 and 7 of the third patch.** Whatever `distanceUnitRaw`
+    /// holds — the other unit, junk, or nothing — History renders in the
+    /// preference, because `distanceMeters` is canonical.
+    func testHistoryIgnoresStoredDistanceUnitRaw() throws {
+        for raw in ["km", "mi", "kilometres", "", nil] as [String?] {
+            let log = SetLog(
+                indexInExercise: 0, reps: 0, weight: nil, durationSeconds: 1_800)
+            context.insert(log)
+            log.distanceMeters = fiveKmInMeters
+            log.distanceUnitRaw = raw
+            try context.save()
+
+            selectUnit(km)
+            XCTAssertEqual(
+                CardioHistorySummary.secondaryLines(
+                    for: log, displayUnit: AppSettings.distanceUnit),
+                ["5 km · 6:00 /km"], "raw \(raw ?? "nil")")
+
+            selectUnit(mi)
+            XCTAssertEqual(
+                CardioHistorySummary.secondaryLines(
+                    for: log, displayUnit: AppSettings.distanceUnit),
+                ["3.11 mi · 9:39 /mi"], "raw \(raw ?? "nil")")
+        }
+    }
+
+    /// The `DistanceUnit` pace label itself is a pure mapping — pinned here
+    /// because History's "/km" and "/mi" suffixes and the entry field's
+    /// "Pace (min/km)" label must agree about which unit is in play.
+    func testPaceLabelFollowsTheUnitItIsAskedFor() {
         selectUnit(km)
         XCTAssertEqual(mi.paceFieldLabel, "Pace (min/mi)")
         XCTAssertEqual(km.paceFieldLabel, "Pace (min/km)")
@@ -717,9 +774,11 @@ final class DistanceUnitSettingTests: SwiftDataTestHarness {
         XCTAssertEqual(km.paceFieldLabel, "Pace (min/km)")
     }
 
-    /// End to end: a miles bout logged under a miles preference still reads in
-    /// miles — value, unit and pace — after the preference flips to km.
-    func testAMilesBoutSurvivesAPreferenceFlipIntact() throws {
+    /// **Requirement 5 of the third patch.** End to end: flipping the
+    /// preference changes what a bout *reads as* and nothing about what is
+    /// stored. This is the test that would fail if display conversion ever
+    /// wrote back.
+    func testAPreferenceFlipConvertsDisplayButMovesNoStoredData() throws {
         selectUnit(mi)
         let log = SetLog(
             indexInExercise: 0, reps: 0, weight: nil, durationSeconds: 1_800)
@@ -730,14 +789,21 @@ final class DistanceUnitSettingTests: SwiftDataTestHarness {
                 inclinePercent: 2))
         try context.save()
         let before = CardioHistorySummary.secondaryLines(
-            for: log, fallbackUnit: AppSettings.distanceUnit)
+            for: log, displayUnit: AppSettings.distanceUnit)
+        XCTAssertEqual(before, ["3.1 mi · 9:41 /mi", "2% incline"])
 
         selectUnit(km)
         let after = CardioHistorySummary.secondaryLines(
-            for: log, fallbackUnit: AppSettings.distanceUnit)
+            for: log, displayUnit: AppSettings.distanceUnit)
 
-        XCTAssertEqual(before, after)
-        XCTAssertTrue(try XCTUnwrap(after.first).contains("mi"))
+        XCTAssertEqual(after, ["4.99 km · 6:01 /km", "2% incline"])
+        XCTAssertNotEqual(before, after, "the display must follow the flip")
+
+        // …and the stored row is byte-for-byte what it was logged as.
+        XCTAssertEqual(
+            try XCTUnwrap(log.distanceMeters), threePointOneMilesInMeters,
+            accuracy: 0.001)
+        XCTAssertEqual(log.distanceUnitRaw, "mi")
     }
 
     // MARK: - The removed Settings footer

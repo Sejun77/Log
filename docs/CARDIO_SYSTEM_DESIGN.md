@@ -159,11 +159,13 @@ alongside. This is deliberately *better* than what weight does today
 in kg is silently reinterpreted). Distance is more unit-ambiguous than weight
 and has no bodyweight-style anchor to sanity-check it, and a weekly-distance
 chart aggregating mixed km/mi rows would be quietly wrong. Canonical meters
-makes aggregation correct by construction; `distanceUnitRaw` preserves what the
-user typed so their own history reads back the way they entered it.
+makes aggregation correct by construction; `distanceUnitRaw` records what the
+user typed, for export and backward compatibility.
 
 A new `AppSettings.distanceIsMetric` (default: follow `Locale`) supplies the
-entry unit, matching the existing `weightIsKg` pattern.
+unit for both entry and display, matching the existing `weightIsKg` pattern.
+Unlike `weightIsKg` it reinterprets nothing when it changes, because the stored
+value is meters rather than a bare number — see §2.37 for the full policy.
 
 **Heart-rate zone** is a small closed enum (`z1`…`z5`), not free text, so it can
 be grouped and charted. It is independent of `avgHeartRate` — users have one or
@@ -244,13 +246,13 @@ bare "3%" next to the other numeric segments is ambiguous, and a machine level
 is unitless, so those two need a word; decline reuses the same key with a sign
 ("-3% incline") rather than adding a second one.
 
-**Fallback for an invalid raw unit.** When `distanceUnitRaw` is missing or
-unparseable the summary falls back to `AppSettings.distanceUnit` and still shows
-the distance, rather than dropping it — the value is stored canonically in
+**An invalid raw unit is a non-event.** `distanceUnitRaw` is never read for
+display (see §2.37): the summary renders in `AppSettings.distanceUnit` and shows
+the distance whatever the raw column holds — the value is stored canonically in
 meters, so the number is correct in whichever unit it is rendered. An invalid
 `hrZoneRaw` has no such fallback and is simply omitted: there is no correct
 value to recover, and inventing a zone would be worse than showing none. The
-fallback unit is a parameter, not a global read, so the formatter stays pure and
+display unit is a parameter, not a global read, so the formatter stays pure and
 its tests do not depend on the tester's locale.
 
 ### 2.3 Prescription (target) fields
@@ -795,10 +797,10 @@ routine follow the preference short of re-editing every slot. Two controls for
 one concept, with the narrower one winning. All three pickers are gone; the unit
 now appears beside each field as a static suffix.
 
-*The rule now.* A **target** is a plan and carries no unit of its own; a
-**performed set** is a record and keeps the unit it was run in. Distance is
-stored canonically in meters throughout, so this is a rendering decision, never
-a data one:
+*The rule now.* **No distance carries a unit of its own — targets, drafts and
+performed sets alike.** Distance is stored canonically in meters throughout and
+rendered in `AppSettings.distanceUnit` wherever it appears, so this is a
+rendering decision, never a data one:
 
 | Read path | Unit used |
 |---|---|
@@ -811,7 +813,7 @@ a data one:
 | A logged set re-read into its own row | **the preference** |
 | A draft restored after Save & Exit | **the preference** |
 | An empty new field | **the preference** |
-| History row (performed `SetLog`) | the `SetLog`'s own `distanceUnitRaw` — the one exception, see below |
+| History row (performed `SetLog`) | **the preference** — distance *and* pace |
 
 `targetDistanceUnitRaw` is **not removed** from `SlotPrescription`,
 `PlannedPrescriptionSnapshot`, `PrescriptionSnapshotPayload` or `SessionPlan`:
@@ -837,28 +839,34 @@ Deliberately not offered: meters, yards, a custom unit system, and separate pace
 units. Pace already follows the unit of the row it belongs to
 (`DistanceUnit.paceFieldLabel`), which is the only sensible answer.
 
-**The one remaining exception: History rows.** A completed `SetLog` still
-renders in its own `distanceUnitRaw`, so a bout run in miles reads `3.1 mi`
-forever. History is a record of what happened, and `distanceUnitRaw` is part of
-that record; rewriting it at read time would be the app claiming you ran a
-number you never saw. Everywhere else — including the active-workout Details
-field, which *looks* like a performed value but is a live entry surface with a
-Settings-driven unit label — the preference wins.
+**There are no exceptions left, including History.** An earlier revision of
+this patch kept History rendering in each row's own `distanceUnitRaw`, on the
+reasoning that a completed set is a record and restating it would be the app
+claiming you ran a number you never saw. That argument does not survive contact
+with the screen: it produced a History list mixing `3.1 mi` and `5 km` rows for
+one user, which cannot be scanned or mentally totalled, and it made the unit a
+user sees depend on which build they happened to log a set under. Nobody logs a
+distance intending to fix its *presentation* forever.
 
-The seam is precise: **`CardioEntryDraft` follows the preference, `SetLog`
-follows its stored unit.** A logged set re-read into its own row during the
-session shows the preference (the row is still an entry surface, and the value
-is canonical meters so the conversion is exact); the same set in History shows
-what it was logged with. `CardioHistorySummary` keeps `fallbackUnit:` for
-exactly this reason — it is a genuine fallback there, used only when a row has
-no usable stored unit.
+The number that was recorded is `distanceMeters`, and that never moves. The unit
+is a lens over it, and the lens belongs to the reader. So History converts, pace
+included — `4.99 km · 6:01 /km` for a bout logged as `3.1 mi` — and a list is
+readable in one unit again.
 
-**Why performed entry follows the preference too.** The alternative — a per-set
-unit picker on the Details row — was what shipped first, and it had the same
-defect as the per-target pickers: a second control for one concept, and a field
-whose number could disagree with the label beside it. Since distance is stored
-canonically in meters, entry unit is purely a question of *how this user types
-numbers*, which is a settings-shaped question, not a per-set one.
+**`distanceUnitRaw` stays on `SetLog`, written and never read for display.** It
+still records what the set was entered in, which CSV export and any future
+importer can use, and it is what an older build would read if a store were
+opened by one. Removing it would be a migration; keeping it costs nothing.
+Nothing on any display path consults it — `CardioHistorySummary.secondaryLines`
+takes a `displayUnit:` and uses it unconditionally, so a row holding `"mi"`,
+`"kilometres"`, `""` or nothing renders identically.
+
+**Why performed entry and display follow the preference too.** The alternative —
+a per-set unit picker on the Details row — was what shipped first, and it had the
+same defect as the per-target pickers: a second control for one concept, and a
+field whose number could disagree with the label beside it. Since distance is
+stored canonically in meters, unit is purely a question of *how this user reads
+and types numbers*, which is settings-shaped, not per-set and not per-row.
 
 ### 2.4 Deferring HealthKit
 

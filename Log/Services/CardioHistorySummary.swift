@@ -62,17 +62,20 @@ enum CardioHistorySummary {
     /// The grouped metric lines rendered under the primary row. Empty for
     /// strength sets, timed holds, and duration-only cardio sets.
     ///
-    /// - Parameter fallbackUnit: the unit used to render distance and pace when
-    ///   the row's own `distanceUnitRaw` is missing or unparseable. Passed in
-    ///   rather than read from `AppSettings` so the formatter stays pure and
-    ///   testable; the view passes `AppSettings.distanceUnit`.
+    /// - Parameter displayUnit: the unit distance and pace render in. The row's
+    ///   own `distanceUnitRaw` is deliberately **not** consulted: distance is
+    ///   stored canonically in meters, so a bout run in miles reads in km the
+    ///   moment the user prefers km, and the two never disagree with the pace
+    ///   label beside them. Passed in rather than read from `AppSettings` so the
+    ///   formatter stays pure and testable; the view passes
+    ///   `AppSettings.distanceUnit`.
     static func secondaryLines(
-        for log: SetLog, fallbackUnit: DistanceUnit
+        for log: SetLog, displayUnit: DistanceUnit
     ) -> [String] {
         let metrics = log.cardioMetrics
         guard !metrics.isEmpty else { return [] }
 
-        let unit = metrics.distanceUnit ?? fallbackUnit
+        let unit = displayUnit
         let duration = positiveDuration(log.durationSeconds)
 
         let groups: [[String]] = [
@@ -114,18 +117,18 @@ enum CardioHistorySummary {
     /// Returns nil when nothing valid has been entered, so the label shows just
     /// "Details".
     static func collapsedSummary(
-        _ metrics: CardioMetrics, fallbackUnit: DistanceUnit
+        _ metrics: CardioMetrics, displayUnit: DistanceUnit
     ) -> String? {
-        let parts = collapsedSegments(metrics, fallbackUnit: fallbackUnit)
+        let parts = collapsedSegments(metrics, displayUnit: displayUnit)
         return parts.isEmpty ? nil : parts.joined(separator: separator)
     }
 
     /// The collapsed summary's segments. Exposed so tests can assert the cap
     /// and the priority order without parsing a joined string.
     static func collapsedSegments(
-        _ metrics: CardioMetrics, fallbackUnit: DistanceUnit
+        _ metrics: CardioMetrics, displayUnit: DistanceUnit
     ) -> [String] {
-        let unit = metrics.distanceUnit ?? fallbackUnit
+        let unit = displayUnit
         let preferred: [String?] = [
             distanceSegment(metrics, unit: unit),
             metrics.avgHeartRate.map { "\($0) bpm" },

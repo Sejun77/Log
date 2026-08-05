@@ -56,7 +56,7 @@ final class CardioPaceLabelTests: SwiftDataTestHarness {
             CardioMetrics(distanceMeters: 5_000, distanceUnit: km))
 
         XCTAssertEqual(
-            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km),
+            CardioHistorySummary.secondaryLines(for: log, displayUnit: km),
             ["5 km · 5:00 /km"])
     }
 
