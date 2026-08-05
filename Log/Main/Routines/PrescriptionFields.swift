@@ -250,6 +250,13 @@ private struct PrescriptionFields: View {
     var hideRestFields: Bool = false
     var hideSetsField: Bool = false
 
+    /// Cardio Slice 8 patch: observable, so a Settings change re-renders this
+    /// view. `AppSettings.distanceUnit` is a plain `UserDefaults` read and
+    /// SwiftUI cannot see it — reading it in a `body` renders the right unit
+    /// once and then never updates. See `AppSettings.distanceUnit`.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
     @AppStorage(AppSettings.Keys.autoregMode)
     private var autoregModeRaw: String = AutoregMode.rir.rawValue
 
@@ -309,7 +316,9 @@ private struct PrescriptionFields: View {
     /// preference, and the only place it can be changed. Distance is stored
     /// canonically in meters, so switching the preference re-expresses an
     /// existing target rather than reinterpreting it.
-    private var entryUnit: DistanceUnit { AppSettings.distanceUnit }
+    private var entryUnit: DistanceUnit {
+        AppSettings.distanceUnit(isMetric: distanceIsMetric)
+    }
 
     // MARK: - Effort target mode (Slice D)
 

@@ -806,6 +806,114 @@ final class DistanceUnitSettingTests: SwiftDataTestHarness {
         XCTAssertEqual(log.distanceUnitRaw, "mi")
     }
 
+    // MARK: - Live refresh: the preference must be observable
+    //
+    // The fourth patch. Conversion was already correct, but an open History
+    // page kept its old unit until it was rebuilt: `AppSettings.distanceUnit`
+    // is a plain `UserDefaults` read, so SwiftUI recorded no dependency on it
+    // and never re-ran the body. The views now hold
+    // `@AppStorage(AppSettings.Keys.distanceIsMetric)` and derive the unit from
+    // it through `AppSettings.distanceUnit(isMetric:)`.
+
+    /// The bridge the fix rests on: the unit a view derives from its
+    /// `@AppStorage` `Bool` must be the same unit the rest of the app resolves
+    /// globally. A view that re-derived the mapping itself — and got it
+    /// backwards — would render confidently wrong text, so the mapping is
+    /// asserted rather than assumed.
+    func testViewDerivedUnitMatchesTheGlobalResolution() {
+        for isMetric in [true, false] {
+            AppSettings.distanceIsMetric = isMetric
+            XCTAssertEqual(
+                AppSettings.distanceUnit(isMetric: isMetric),
+                AppSettings.distanceUnit,
+                "a view deriving its unit from @AppStorage must land on the "
+                    + "same unit as the global accessor")
+        }
+
+        XCTAssertEqual(AppSettings.distanceUnit(isMetric: true), km)
+        XCTAssertEqual(AppSettings.distanceUnit(isMetric: false), mi)
+    }
+
+    /// The `@AppStorage` default each view declares must be the locale-resolved
+    /// expression, not a hardcoded `true`.
+    ///
+    /// Same limitation as `testUnsetPreferenceResolvesFromTheLocale`: a view's
+    /// property default is unreachable from a test, so what is pinned is the
+    /// value it must be. While the key is unset, a view defaulting to `true`
+    /// would render km while the formatter elsewhere resolved miles from the
+    /// locale — the two would disagree on the same screen.
+    func testUnsetPreferenceRendersTheSameUnitInAViewAsEverywhereElse() {
+        UserDefaults.standard.removeObject(
+            forKey: AppSettings.Keys.distanceIsMetric)
+
+        XCTAssertEqual(
+            AppSettings.distanceUnit(
+                isMetric: AppSettings.defaultDistanceIsMetric()),
+            AppSettings.distanceUnit)
+    }
+
+    /// **Requirement 3.** "Rendering uses the current unit rather than cached
+    /// text" is not assertable against `WorkoutDetailView` (a `View`), but the
+    /// property that makes caching impossible *is*: the formatter is a pure
+    /// function of `(log, displayUnit)`, holding no memo and mutating nothing.
+    /// Alternating units on one unchanged `SetLog` must alternate output every
+    /// time — which is exactly what an open page does as the preference flips
+    /// back and forth.
+    func testHistoryFormattingIsPureAndRepeatable() throws {
+        let log = SetLog(
+            indexInExercise: 0, reps: 0, weight: nil, durationSeconds: 1_800)
+        context.insert(log)
+        log.applyCardioMetrics(
+            CardioMetrics(distanceMeters: fiveKmInMeters, distanceUnit: km))
+        try context.save()
+
+        let metric = ["5 km · 6:00 /km"]
+        let imperial = ["3.11 mi · 9:39 /mi"]
+
+        // Three full round trips: a cached first render would show up as the
+        // second reading of a unit disagreeing with the first.
+        for _ in 0..<3 {
+            XCTAssertEqual(
+                CardioHistorySummary.secondaryLines(for: log, displayUnit: km),
+                metric)
+            XCTAssertEqual(
+                CardioHistorySummary.secondaryLines(for: log, displayUnit: mi),
+                imperial)
+        }
+
+        // Reading it repeatedly in either unit changed nothing on the row.
+        XCTAssertEqual(try XCTUnwrap(log.distanceMeters), fiveKmInMeters)
+        XCTAssertEqual(log.distanceUnitRaw, "km")
+    }
+
+    /// The same purity for the routine-target and plan-summary formatters,
+    /// which the routine editor and the active Plan card re-render from the
+    /// same observable preference.
+    func testTargetFormattingIsPureAndRepeatable() throws {
+        let p = cardioPrescription(meters: fiveKmInMeters, unitRaw: "km")
+        let b = try block(with: p)
+
+        var plan = SessionPlan()
+        plan.sets = 1
+        plan.usesDuration = true
+        plan.targetDistanceMeters = fiveKmInMeters
+
+        for _ in 0..<3 {
+            XCTAssertEqual(
+                BlockPrescriptionSummary(block: b, displayUnit: km).subtitle,
+                "1 × 1800s · 5 km")
+            XCTAssertEqual(
+                BlockPrescriptionSummary(block: b, displayUnit: mi).subtitle,
+                "1 × 1800s · 3.11 mi")
+            XCTAssertTrue(
+                plan.primarySummary(distanceUnit: km).contains("5 km"))
+            XCTAssertTrue(
+                plan.primarySummary(distanceUnit: mi).contains("3.11 mi"))
+        }
+
+        XCTAssertEqual(try XCTUnwrap(p.targetDistanceMeters), fiveKmInMeters)
+    }
+
     // MARK: - The removed Settings footer
 
     /// **Requirement 15 of the test list.** The footer explaining the old

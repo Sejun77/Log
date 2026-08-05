@@ -19,6 +19,13 @@ struct EditSessionPlanSheet: View {
     var isCardio: Bool = false
     @Environment(\.dismiss) private var dismiss
 
+    /// Cardio Slice 8 patch: observable, so a Settings change re-renders this
+    /// view. `AppSettings.distanceUnit` is a plain `UserDefaults` read and
+    /// SwiftUI cannot see it — reading it in a `body` renders the right unit
+    /// once and then never updates. See `AppSettings.distanceUnit`.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
     @AppStorage(AppSettings.Keys.autoregMode)
     private var autoregModeRaw: String = AutoregMode.rir.rawValue
 
@@ -51,7 +58,8 @@ struct EditSessionPlanSheet: View {
                         if isCardio {
                             SessionTargetDistanceRow(
                                 plan: $plan,
-                                displayUnit: AppSettings.distanceUnit)
+                                displayUnit: AppSettings.distanceUnit(
+                                    isMetric: distanceIsMetric))
                         }
                     }
                 } else {

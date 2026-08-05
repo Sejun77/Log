@@ -118,6 +118,13 @@ struct ActiveWorkoutView: View {
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
 
+    /// Cardio Slice 8 patch: observable, so a Settings change re-renders this
+    /// view. `AppSettings.distanceUnit` is a plain `UserDefaults` read and
+    /// SwiftUI cannot see it — reading it in a `body` renders the right unit
+    /// once and then never updates. See `AppSettings.distanceUnit`.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
     @AppStorage(AppSettings.Keys.autoregMode)
     private var autoregModeRaw: String = AutoregMode.rir.rawValue
 
@@ -1571,7 +1578,8 @@ struct ActiveWorkoutView: View {
     @ViewBuilder
     private func planSummarySection(for exercise: PlanExercise) -> some View {
         let sp = sessionPlans[exercise.routineSlotID] ?? SessionPlan()
-        let line1 = sp.primarySummary(distanceUnit: AppSettings.distanceUnit)
+        let line1 = sp.primarySummary(
+            distanceUnit: AppSettings.distanceUnit(isMetric: distanceIsMetric))
         let line2 = sp.secondarySummary(effortSummary: planEffortSummary(for: exercise, sp: sp))
         let notes = sp.slotNotes
         let hasContent =
