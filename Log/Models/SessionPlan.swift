@@ -34,11 +34,13 @@ struct SessionPlan: Codable, Equatable {
     var slotNotes: String?
 
     /// The plan's target distance, validated, or nil when none is set.
-    func targetDistance(fallbackUnit: DistanceUnit) -> CardioTargetDistance? {
+    ///
+    /// - Parameter displayUnit: the unit to render in — `AppSettings.distanceUnit`
+    ///   at the call site. `targetDistanceUnitRaw` is stored for compatibility
+    ///   but is not a display override.
+    func targetDistance(displayUnit: DistanceUnit) -> CardioTargetDistance? {
         CardioTargetDistance(
-            meters: targetDistanceMeters,
-            unitRaw: targetDistanceUnitRaw,
-            fallbackUnit: fallbackUnit)
+            meters: targetDistanceMeters, displayUnit: displayUnit)
     }
 
     /// Line 1: sets + rep range (or duration range), plus the cardio distance
@@ -48,7 +50,11 @@ struct SessionPlan: Codable, Equatable {
     /// are independent targets, so "1 sets · 1800s · 5 km" says both, and a
     /// cardio slot with only a distance target reads "1 sets · 5 km". Absent
     /// values contribute no segment — never a placeholder.
-    var primarySummary: String {
+    ///
+    /// - Parameter distanceUnit: the unit the target renders in. Required
+    ///   rather than defaulted so this stays pure — the active-workout view
+    ///   passes `AppSettings.distanceUnit`.
+    func primarySummary(distanceUnit: DistanceUnit) -> String {
         var parts: [String] = []
         if let s = sets { parts.append("\(s) sets") }
         if usesDuration {
@@ -66,9 +72,10 @@ struct SessionPlan: Codable, Equatable {
                 parts.append("\(r) reps")
             }
         }
-        // Fall back to km for an unparseable stored unit: the value is
-        // canonical meters, so the number is right whichever unit renders it.
-        if let distance = targetDistance(fallbackUnit: .kilometers)?.displayText
+        // Rendered in the caller's preferred unit, not the one stored beside
+        // the target: the value is canonical meters, so the number is right
+        // whichever unit renders it.
+        if let distance = targetDistance(displayUnit: distanceUnit)?.displayText
         {
             parts.append(distance)
         }

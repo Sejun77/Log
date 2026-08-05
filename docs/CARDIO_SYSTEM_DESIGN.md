@@ -285,11 +285,14 @@ existing routine, snapshot and persisted session plan migrates untouched, and a
 
 **`CardioTargetDistance` is the read path**, the programming-side mirror of
 `CardioMetrics`. Every read runs the stored meters back through
-`CardioMetrics.normalizedDistanceMeters` and the unit raw through the tolerant
-`DistanceUnit.from(raw:)`, so a negative, absurd or hand-edited value degrades
-to nil-or-fallback instead of reaching a formatter.
+`CardioMetrics.normalizedDistanceMeters`, so a negative, absurd or hand-edited
+value degrades to nil instead of reaching a formatter.
 `SlotPrescription.applyTargetDistance` is the matching write site and always
 writes **both** columns, so a unit can never be orphaned from its distance.
+
+**A target has no unit of its own — see "Unit policy" below.** Every read takes
+a `displayUnit:` and renders in it; `targetDistanceUnitRaw` is written but never
+read on the display path.
 
 **Target and performed distance are different fields on different models.** A
 5 km target logged as 4.2 km has to stay visibly different from a 4.2 km target,
@@ -716,11 +719,17 @@ One precedence chain, stated once in `CardioDraftResolver`:
 
     logged set → user-typed draft → previous performance → routine target
 
-**Only setup metrics prefill.** Distance, its unit, incline/decline and
-resistance are decisions the user makes again; average heart rate, HR zone and
-calories are what their body did during one specific bout. The split is enforced
-by the **type**: `CardioPrefillSuggestion` has no field for an outcome metric, so
-no future call site can reintroduce one by forgetting to filter.
+**Only setup metrics prefill.** Distance, incline/decline and resistance are
+decisions the user makes again; average heart rate, HR zone and calories are what
+their body did during one specific bout. The split is enforced by the **type**:
+`CardioPrefillSuggestion` has no field for an outcome metric, so no future call
+site can reintroduce one by forgetting to filter.
+
+The suggestion still carries the previous bout's `distanceUnit`, but §2.37's
+Settings-only rule means `seededDraft` no longer restates it: the stored meters
+are converted into `AppSettings.distanceUnit`, so a 3.1 mi bout prefills as
+"4.99" for a user who now prefers km. The field being seeded is labelled with the
+preference, so seeding the old unit would mislabel the number.
 
 **Eligibility is shared, not restated.** `CardioPrefillService` and
 `LastPerformancePrefillService` both select through
@@ -759,7 +768,7 @@ immediately after `refreshLastPerformancePrefill`.
 prescription snapshot, `SessionPlan.targetDistanceMeters`, or History; it is
 read-only against SwiftData; and it does not parse notes.
 
-### 2.37 The distance-unit preference (settled in the Settings slice)
+### 2.37 The distance-unit preference (settled in the Settings slice; policy revised before merge)
 
 Slice 1 built `AppSettings.distanceIsMetric` and every entry path has defaulted
 from it since; what was missing was a way for the user to see or change it. The
@@ -772,28 +781,84 @@ key is unset, `AppSettings.distanceIsMetric` falls back to
 tester whose entry fields were already defaulting to miles — a control
 describing a preference the app was not using.
 
-**It is a default for new entries, never a reinterpretation of old ones.**
-Distance is stored canonically in meters with the authored unit beside it, so
-the preference cannot reach existing data even in principle:
+**Settings is the only user-facing distance-unit control.** This is the revised
+policy; the paragraphs below record what it replaced and why.
+
+*What shipped first.* The slice treated the preference as a *default for new
+entries only*, and left three km/mi pickers in place: the ones Slice 5 put in the
+routine prescription editor and the active-workout Edit Plan sheet, and the
+per-set one Slice 4 put on the active-workout Details row. Manual review before
+merge found the consequence: those pickers made a **routine prescription (or a
+single set) override the Settings preference**. A user who set km in Settings
+still saw — and could still author — a target in miles, with no way to make the
+routine follow the preference short of re-editing every slot. Two controls for
+one concept, with the narrower one winning. All three pickers are gone; the unit
+now appears beside each field as a static suffix.
+
+*The rule now.* A **target** is a plan and carries no unit of its own; a
+**performed set** is a record and keeps the unit it was run in. Distance is
+stored canonically in meters throughout, so this is a rendering decision, never
+a data one:
 
 | Read path | Unit used |
 |---|---|
-| History row | the `SetLog`'s own `distanceUnitRaw` |
-| Block / plan summary | the slot's own `targetDistanceUnitRaw` |
-| Previous-performance prefill | the unit that bout was performed in |
-| Target-distance seeding | the unit the target was authored in |
+| Routine target distance (display + edit) | **the preference** |
+| Active Edit Plan target distance (display + edit) | **the preference** |
+| Block / plan summary target | **the preference** |
+| Active-workout Details distance (display + edit) | **the preference** |
+| Target-distance seeding into a draft | **the preference** |
+| Previous-performance prefill | **the preference** — the stored meters are converted into it |
+| A logged set re-read into its own row | **the preference** |
+| A draft restored after Save & Exit | **the preference** |
 | An empty new field | **the preference** |
-| Any of the above, unparseable | the preference, as a fallback — the number is still right, because it is meters |
+| History row (performed `SetLog`) | the `SetLog`'s own `distanceUnitRaw` — the one exception, see below |
 
-That ordering is why there is no migration prompt and no conversion pass: a run
-logged in miles reads in miles forever, and switching the preference changes
-what the *next* empty field starts in and nothing else. The Settings footer says
-so in as many words, because it is the obvious question a user would otherwise
-have to discover by experiment.
+`targetDistanceUnitRaw` is **not removed** from `SlotPrescription`,
+`PlannedPrescriptionSnapshot`, `PrescriptionSnapshotPayload` or `SessionPlan`:
+existing rows keep it, routine transfer/import keeps round-tripping it, and
+`applyTargetDistance` keeps writing it — with the unit the target was entered in,
+i.e. the preference at write time. What changed is that **no display path reads
+it**. Removing the column is a later, separate decision; keeping it costs
+nothing and keeps this patch migration-free.
+
+Switching the preference therefore re-expresses every target distance —
+`5 km` becomes `3.11 mi` — while `targetDistanceMeters` never moves. Nothing is
+rewritten, converted, or migrated; the stored meters are the truth and the unit
+is a lens. The routine and Edit Plan rows show the unit as a static suffix beside
+the field and re-seed from the stored meters when the preference changes, so a
+half-typed "6." can never be reinterpreted as the other unit.
+
+The Settings footer explaining the old "applies to new entries" rule is
+**removed**: it described the superseded policy, and under the new one there is
+nothing surprising left to explain. The Units section is a label and a segmented
+picker.
 
 Deliberately not offered: meters, yards, a custom unit system, and separate pace
 units. Pace already follows the unit of the row it belongs to
 (`DistanceUnit.paceFieldLabel`), which is the only sensible answer.
+
+**The one remaining exception: History rows.** A completed `SetLog` still
+renders in its own `distanceUnitRaw`, so a bout run in miles reads `3.1 mi`
+forever. History is a record of what happened, and `distanceUnitRaw` is part of
+that record; rewriting it at read time would be the app claiming you ran a
+number you never saw. Everywhere else — including the active-workout Details
+field, which *looks* like a performed value but is a live entry surface with a
+Settings-driven unit label — the preference wins.
+
+The seam is precise: **`CardioEntryDraft` follows the preference, `SetLog`
+follows its stored unit.** A logged set re-read into its own row during the
+session shows the preference (the row is still an entry surface, and the value
+is canonical meters so the conversion is exact); the same set in History shows
+what it was logged with. `CardioHistorySummary` keeps `fallbackUnit:` for
+exactly this reason — it is a genuine fallback there, used only when a row has
+no usable stored unit.
+
+**Why performed entry follows the preference too.** The alternative — a per-set
+unit picker on the Details row — was what shipped first, and it had the same
+defect as the per-target pickers: a second control for one concept, and a field
+whose number could disagree with the label beside it. Since distance is stored
+canonically in meters, entry unit is purely a question of *how this user types
+numbers*, which is a settings-shaped question, not a per-set one.
 
 ### 2.4 Deferring HealthKit
 
@@ -1218,7 +1283,7 @@ independently committable, additive-first.
 | 5 | ✅ Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques/tempo/effort) | Programming surface, once logging works |
 | 6 | ✅ Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
 | 6b | ✅ Cardio previous-performance prefill (§2.36) | Needs the target-vs-actual distinction Slice 5 established, and Slice 6's draft rules |
-| 6c | ✅ Distance-unit Settings control (§2.37) | The Slice 1 preference had no UI; exposing it is independent of everything below |
+| 6c | ✅ Distance-unit Settings control, Settings-only policy (§2.37) | The Slice 1 preference had no UI; exposing it is independent of everything below. Patched before merge to remove the per-target unit pickers that overrode it |
 | 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |
 | 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | Phase 2 charts | After real cardio data exists |

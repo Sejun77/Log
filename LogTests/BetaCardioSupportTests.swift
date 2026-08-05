@@ -113,7 +113,7 @@ final class BetaCardioSupportTests: SwiftDataTestHarness {
             DurationLimits.normalizedExerciseDuration(2_700)
 
         XCTAssertEqual(plan.durationMaxSeconds, 2_700)
-        XCTAssertTrue(plan.primarySummary.contains("2700s"))
+        XCTAssertTrue(plan.primarySummary(distanceUnit: .kilometers).contains("2700s"))
     }
 
     /// Tempo describes rep phases, so it stays suppressed for cardio — the same

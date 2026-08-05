@@ -27,7 +27,7 @@ final class CardioTargetDistanceTests: SwiftDataTestHarness {
         let p = makePrescription()
         XCTAssertNil(p.targetDistanceMeters)
         XCTAssertNil(p.targetDistanceUnitRaw)
-        XCTAssertNil(p.targetDistance(fallbackUnit: km))
+        XCTAssertNil(p.targetDistance(displayUnit: km))
     }
 
     func testPlannedSnapshotTargetDistanceDefaultsToNil() {
@@ -35,14 +35,14 @@ final class CardioTargetDistanceTests: SwiftDataTestHarness {
         context.insert(snapshot)
         XCTAssertNil(snapshot.targetDistanceMeters)
         XCTAssertNil(snapshot.targetDistanceUnitRaw)
-        XCTAssertNil(snapshot.targetDistance(fallbackUnit: km))
+        XCTAssertNil(snapshot.targetDistance(displayUnit: km))
     }
 
     func testSessionPlanTargetDistanceDefaultsToNil() {
         let plan = SessionPlan()
         XCTAssertNil(plan.targetDistanceMeters)
         XCTAssertNil(plan.targetDistanceUnitRaw)
-        XCTAssertNil(plan.targetDistance(fallbackUnit: km))
+        XCTAssertNil(plan.targetDistance(displayUnit: km))
     }
 
     func testSnapshotPayloadTargetDistanceDefaultsToNil() {
@@ -72,7 +72,7 @@ final class CardioTargetDistanceTests: SwiftDataTestHarness {
         p.durationMaxSeconds = 1_800
         try context.save()
 
-        XCTAssertNil(p.targetDistance(fallbackUnit: km))
+        XCTAssertNil(p.targetDistance(displayUnit: km))
     }
 
     // MARK: - 6–7. Canonical storage
@@ -82,11 +82,15 @@ final class CardioTargetDistanceTests: SwiftDataTestHarness {
         p.applyTargetDistance(CardioTargetDistance(text: "5", unit: km))
 
         XCTAssertEqual(try XCTUnwrap(p.targetDistanceMeters), 5_000, accuracy: 0.001)
-        XCTAssertEqual(p.targetDistanceUnitRaw, "km")
+        XCTAssertEqual(
+            p.targetDistanceUnitRaw, "km",
+            "the entry unit is still written for compatibility")
 
-        let target = try XCTUnwrap(p.targetDistance(fallbackUnit: mi))
-        XCTAssertEqual(target.unit, km, "stored unit must win over the fallback")
-        XCTAssertEqual(target.displayText, "5 km")
+        let target = try XCTUnwrap(p.targetDistance(displayUnit: mi))
+        XCTAssertEqual(
+            target.unit, mi,
+            "display follows the requested unit, not the stored raw")
+        XCTAssertEqual(target.displayText, "3.11 mi")
     }
 
     func testMileTargetStoresMetersAndUnit() throws {
@@ -98,9 +102,9 @@ final class CardioTargetDistanceTests: SwiftDataTestHarness {
             accuracy: 0.001)
         XCTAssertEqual(p.targetDistanceUnitRaw, "mi")
 
-        let target = try XCTUnwrap(p.targetDistance(fallbackUnit: km))
-        XCTAssertEqual(target.unit, mi)
-        XCTAssertEqual(target.displayText, "3.1 mi")
+        let target = try XCTUnwrap(p.targetDistance(displayUnit: km))
+        XCTAssertEqual(target.unit, km)
+        XCTAssertEqual(target.displayText, "4.99 km")
     }
 
     /// The stored unit is a display choice, not a second source of truth: the
@@ -150,8 +154,7 @@ final class CardioTargetDistanceTests: SwiftDataTestHarness {
             CardioLimits.maxDistanceMeters + 1,
         ] {
             XCTAssertNil(
-                CardioTargetDistance(
-                    meters: meters, unitRaw: "km", fallbackUnit: km),
+                CardioTargetDistance(meters: meters, displayUnit: km),
                 "\(meters) should be no target")
         }
     }
@@ -164,39 +167,44 @@ final class CardioTargetDistanceTests: SwiftDataTestHarness {
         p.targetDistanceUnitRaw = "km"
         try context.save()
 
-        XCTAssertNil(p.targetDistance(fallbackUnit: km))
+        XCTAssertNil(p.targetDistance(displayUnit: km))
     }
 
-    // MARK: - 10. Unit fallback
+    // MARK: - 10. The stored raw unit is not a display override
 
-    func testUnparseableUnitFallsBackWithoutLosingTheDistance() throws {
-        let p = makePrescription()
-        p.targetDistanceMeters = 5_000
-        p.targetDistanceUnitRaw = "kilometres"
+    /// The Settings-only policy in its bluntest form: whatever
+    /// `targetDistanceUnitRaw` holds — a real unit, a junk string, or nothing —
+    /// the target renders in the unit the caller asked for, and the meters are
+    /// untouched.
+    func testStoredRawUnitNeverOverridesTheDisplayUnit() throws {
+        for raw in ["km", "mi", "kilometres", "", nil] as [String?] {
+            let p = makePrescription()
+            p.targetDistanceMeters = 5_000
+            p.targetDistanceUnitRaw = raw
 
-        let target = try XCTUnwrap(p.targetDistance(fallbackUnit: mi))
-        XCTAssertEqual(target.unit, mi, "unparseable raw should use the fallback")
-        XCTAssertEqual(
-            target.meters, 5_000, accuracy: 0.001,
-            "the distance itself must survive an unusable unit")
-        XCTAssertEqual(target.displayText, "3.11 mi")
-    }
+            let metric = try XCTUnwrap(p.targetDistance(displayUnit: km))
+            XCTAssertEqual(metric.unit, km, "raw \(raw ?? "nil")")
+            XCTAssertEqual(metric.displayText, "5 km", "raw \(raw ?? "nil")")
 
-    func testMissingUnitFallsBackWithoutLosingTheDistance() throws {
-        let p = makePrescription()
-        p.targetDistanceMeters = 5_000
-        p.targetDistanceUnitRaw = nil
+            let imperial = try XCTUnwrap(p.targetDistance(displayUnit: mi))
+            XCTAssertEqual(imperial.unit, mi, "raw \(raw ?? "nil")")
+            XCTAssertEqual(imperial.displayText, "3.11 mi", "raw \(raw ?? "nil")")
 
-        let target = try XCTUnwrap(p.targetDistance(fallbackUnit: km))
-        XCTAssertEqual(target.unit, km)
-        XCTAssertEqual(target.displayText, "5 km")
+            XCTAssertEqual(
+                p.targetDistanceMeters, 5_000,
+                "reading in either unit must not move the stored meters")
+        }
     }
 
     /// A unit with no distance carries no information and must never resurrect
     /// a target on its own.
     func testUnitWithoutDistanceIsNotATarget() {
-        XCTAssertNil(
-            CardioTargetDistance(meters: nil, unitRaw: "mi", fallbackUnit: km))
+        let p = makePrescription()
+        p.targetDistanceMeters = nil
+        p.targetDistanceUnitRaw = "mi"
+
+        XCTAssertNil(CardioTargetDistance(meters: nil, displayUnit: km))
+        XCTAssertNil(p.targetDistance(displayUnit: km))
     }
 
     // MARK: - Formatting
@@ -222,7 +230,7 @@ final class CardioTargetDistanceTests: SwiftDataTestHarness {
         for text in ["5", "6.2", "6.25", "0.5", "42"] {
             let p = makePrescription()
             p.applyTargetDistance(CardioTargetDistance(text: text, unit: km))
-            let target = try XCTUnwrap(p.targetDistance(fallbackUnit: km))
+            let target = try XCTUnwrap(p.targetDistance(displayUnit: km))
             XCTAssertEqual(target.valueText, text)
         }
     }

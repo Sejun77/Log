@@ -258,9 +258,26 @@ final class CardioEntryDraftTests: XCTestCase {
         store.persist(slotID: slot, setIndex: 0, cardio: original)
 
         let snapshot = try XCTUnwrap(store.load(slotID: slot, setIndex: 0))
+
+        // Restored in the *current* preference, not the one the draft was
+        // persisted under: the field's label follows Settings, so restoring the
+        // old unit would put a number on screen meaning something other than
+        // its label. Every typed field survives verbatim.
         let restored = try XCTUnwrap(
-            CardioEntryDraft(snapshot: snapshot, defaultUnit: km))
-        XCTAssertEqual(restored, original)
+            CardioEntryDraft(snapshot: snapshot, displayUnit: km))
+        XCTAssertEqual(restored.unit, km)
+        XCTAssertEqual(restored.distance, original.distance)
+        XCTAssertEqual(restored.avgHeartRate, original.avgHeartRate)
+        XCTAssertEqual(restored.calories, original.calories)
+        XCTAssertEqual(restored.incline, original.incline)
+        XCTAssertEqual(restored.resistance, original.resistance)
+        XCTAssertEqual(restored.hrZone, original.hrZone)
+
+        // Under the preference it was written in, it round-trips exactly.
+        XCTAssertEqual(
+            try XCTUnwrap(
+                CardioEntryDraft(snapshot: snapshot, displayUnit: .miles)),
+            original)
     }
 
     /// A strength or timed-hold draft carries no cardio fields, so nothing is
@@ -270,13 +287,13 @@ final class CardioEntryDraftTests: XCTestCase {
             reps: "8", weight: "60", duration: nil)
 
         XCTAssertFalse(snapshot.hasCardio)
-        XCTAssertNil(CardioEntryDraft(snapshot: snapshot, defaultUnit: km))
+        XCTAssertNil(CardioEntryDraft(snapshot: snapshot, displayUnit: km))
     }
 
     func testUnparseablePersistedUnitFallsBackWithoutLosingDistance() {
         let snapshot = ParentDraftStore.Snapshot(
             distance: "5", distanceUnit: "kilometres")
-        let restored = CardioEntryDraft(snapshot: snapshot, defaultUnit: .miles)
+        let restored = CardioEntryDraft(snapshot: snapshot, displayUnit: .miles)
 
         XCTAssertEqual(restored?.unit, .miles)
         XCTAssertEqual(restored?.distance, "5")
@@ -322,10 +339,14 @@ final class CardioEntryDraftTests: XCTestCase {
                 avgHeartRate: 150, calories: 300, inclinePercent: -2.5,
                 resistanceLevel: 6, hrZone: .z4))
 
-        let seeded = CardioEntryDraft(logged: log, defaultUnit: .miles)
+        // The row is a live entry surface, so it re-expresses the logged
+        // distance in the current preference — 5 km reads "3.11" under miles.
+        // The `SetLog` itself is untouched; History still renders it in km.
+        let seeded = CardioEntryDraft(logged: log, displayUnit: .miles)
 
-        XCTAssertEqual(seeded.unit, .kilometers)
-        XCTAssertEqual(seeded.distance, "5")
+        XCTAssertEqual(seeded.unit, .miles)
+        XCTAssertEqual(seeded.distance, "3.11")
+        XCTAssertEqual(log.distanceUnitRaw, "km")
         XCTAssertEqual(seeded.avgHeartRate, "150")
         XCTAssertEqual(seeded.calories, "300")
         XCTAssertEqual(seeded.incline, "-2.5")
@@ -337,7 +358,7 @@ final class CardioEntryDraftTests: XCTestCase {
     func testDraftFromDurationOnlySetIsEmpty() {
         let log = SetLog(indexInExercise: 0, reps: 0, weight: nil, durationSeconds: 1_800)
 
-        let seeded = CardioEntryDraft(logged: log, defaultUnit: km)
+        let seeded = CardioEntryDraft(logged: log, displayUnit: km)
 
         XCTAssertTrue(seeded.isEmpty)
         XCTAssertEqual(seeded.unit, km)

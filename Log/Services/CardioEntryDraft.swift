@@ -16,10 +16,15 @@ import Foundation
 /// it rejects, what reaches the store — is testable without a SwiftUI host.
 struct CardioEntryDraft: Equatable {
 
-    /// Entry unit for `distance`. Seeded from `AppSettings.distanceUnit` when
-    /// the draft is created, then owned by the row's Unit picker, so switching
-    /// the global preference mid-session never reinterprets a number the user
-    /// has already typed.
+    /// The unit `distance` is entered and displayed in — always
+    /// `AppSettings.distanceUnit`, supplied by the caller.
+    ///
+    /// It is stored on the draft rather than read from `AppSettings` here so
+    /// the type stays pure and its tests do not depend on the tester's
+    /// preferences, but it is **not a per-set choice**: the Details row shows
+    /// the symbol as a label, there is no picker, and every construction site
+    /// passes the preference. Distance is stored canonically in meters, so this
+    /// decides how a number is read and written, never what it means.
     var unit: DistanceUnit
 
     var distance: String = ""
@@ -166,12 +171,16 @@ extension CardioEntryDraft {
     /// holds no cardio fields at all — which is every strength draft, every
     /// timed-hold draft, and every draft written before Slice 4.
     ///
-    /// An unrecognized persisted unit falls back to `defaultUnit` rather than
-    /// discarding the distance the user typed.
-    init?(snapshot: ParentDraftStore.Snapshot, defaultUnit: DistanceUnit) {
+    /// The snapshot's own `distanceUnit` is **not** read back: the field it
+    /// restores is labelled with the current preference, so restoring a
+    /// different unit would put a number on screen that meant something other
+    /// than its label. The persisted value is still written (see
+    /// `ParentDraftStore.persist`) so an older build resuming a newer draft
+    /// finds what it expects.
+    init?(snapshot: ParentDraftStore.Snapshot, displayUnit: DistanceUnit) {
         guard snapshot.hasCardio else { return nil }
         self.init(
-            unit: DistanceUnit.from(raw: snapshot.distanceUnit) ?? defaultUnit,
+            unit: displayUnit,
             distance: snapshot.distance ?? "",
             avgHeartRate: snapshot.avgHeartRate ?? "",
             calories: snapshot.calories ?? "",
@@ -185,9 +194,15 @@ extension CardioEntryDraft {
     /// still shows what was recorded when the session is resumed. Values are
     /// rendered back through the same formatters the entry fields use, so the
     /// text round-trips.
-    init(logged: SetLog, defaultUnit: DistanceUnit) {
+    ///
+    /// Rendered in `displayUnit`, not the log's own `distanceUnitRaw`: the row
+    /// is a live entry surface whose label follows the preference, and the
+    /// stored value is canonical meters, so converting is exact. (History rows
+    /// are a different surface and keep the logged unit — see
+    /// `CardioHistorySummary`.)
+    init(logged: SetLog, displayUnit: DistanceUnit) {
         let metrics = logged.cardioMetrics
-        let unit = metrics.distanceUnit ?? defaultUnit
+        let unit = displayUnit
         let distance =
             metrics.distanceValue(in: unit)
             .flatMap { CardioDerived.formatDistance(value: $0) } ?? ""

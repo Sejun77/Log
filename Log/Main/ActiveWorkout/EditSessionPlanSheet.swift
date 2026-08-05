@@ -50,7 +50,8 @@ struct EditSessionPlanSheet: View {
                         // has no answer.
                         if isCardio {
                             SessionTargetDistanceRow(
-                                plan: $plan, fallbackUnit: AppSettings.distanceUnit)
+                                plan: $plan,
+                                displayUnit: AppSettings.distanceUnit)
                         }
                     }
                 } else {
@@ -289,16 +290,19 @@ struct EditSessionPlanSheet: View {
 /// Editing here changes the **session** plan only. The routine's own target is
 /// untouched unless the user explicitly chooses "Update slot prescription" at
 /// finish, which is the same gate every other session-plan edit passes through.
+///
+/// Like the routine row it has **no unit control**: the unit is
+/// `AppSettings.distanceUnit`, shown as a static suffix, and Settings is the
+/// only place it changes.
 struct SessionTargetDistanceRow: View {
     @Binding var plan: SessionPlan
-    /// Entry unit for a target that does not yet carry one of its own.
-    let fallbackUnit: DistanceUnit
+    /// The unit this row displays and edits in — the Settings preference.
+    let displayUnit: DistanceUnit
 
     @State private var text: String = ""
-    @State private var unit: DistanceUnit = .kilometers
-    /// Guards the one-time seed, so a re-render cannot overwrite in-progress
-    /// text with the committed value.
-    @State private var didSeed = false
+    /// The unit the field's text is currently expressed in, so a preference
+    /// change can be told apart from a re-render. Never user-settable.
+    @State private var seededUnit: DistanceUnit?
 
     private static let fieldWidth: CGFloat = 96
 
@@ -312,18 +316,13 @@ struct SessionTargetDistanceRow: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: Self.fieldWidth)
                 .multilineTextAlignment(.trailing)
-            // Storage is canonical meters either way, so switching the unit
-            // re-reads the same target rather than converting the typed number.
-            Picker("Unit", selection: unitBinding) {
-                ForEach(DistanceUnit.allCases, id: \.self) { u in
-                    Text(u.symbol).tag(u)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 88)
+            // Label, not a control: the unit is chosen in Settings.
+            Text(displayUnit.symbol)
+                .font(.dsBody)
+                .foregroundStyle(.secondary)
         }
         .onAppear(perform: seedFromPlan)
+        .onChange(of: displayUnit) { _, _ in reseedForUnitChange() }
     }
 
     private var distanceBinding: Binding<String> {
@@ -336,28 +335,30 @@ struct SessionTargetDistanceRow: View {
         )
     }
 
-    private var unitBinding: Binding<DistanceUnit> {
-        Binding(
-            get: { unit },
-            set: {
-                unit = $0
-                commit()
-            }
-        )
+    /// Seed entry text from the plan, once — the `seededUnit` guard keeps a
+    /// re-render from overwriting in-progress text with the committed value.
+    private func seedFromPlan() {
+        guard seededUnit == nil else { return }
+        seededUnit = displayUnit
+        text = plan.targetDistance(displayUnit: displayUnit)?.valueText ?? ""
     }
 
-    private func seedFromPlan() {
-        guard !didSeed else { return }
-        didSeed = true
-        let target = plan.targetDistance(fallbackUnit: fallbackUnit)
-        unit = target?.unit ?? fallbackUnit
-        text = target?.valueText ?? ""
+    /// Re-express the field when the Settings unit changes underneath it,
+    /// re-reading the stored meters rather than converting half-typed text.
+    ///
+    /// Does not commit, for the same reason the routine row does not: the
+    /// displayed value is rounded, so writing it back would round the plan's
+    /// stored meters on a display-only change. See `TargetDistanceRow`.
+    private func reseedForUnitChange() {
+        guard seededUnit != displayUnit else { return }
+        seededUnit = displayUnit
+        text = plan.targetDistance(displayUnit: displayUnit)?.valueText ?? ""
     }
 
     /// Normalize and write both columns together, so an unusable value clears
     /// the target rather than leaving a stale one behind.
     private func commit() {
-        let target = CardioTargetDistance(text: text, unit: unit)
+        let target = CardioTargetDistance(text: text, unit: displayUnit)
         plan.targetDistanceMeters = target?.meters
         plan.targetDistanceUnitRaw = target?.unit.rawValue
     }

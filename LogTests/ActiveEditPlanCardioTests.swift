@@ -114,7 +114,7 @@ final class ActiveEditPlanCardioTests: SwiftDataTestHarness {
         XCTAssertEqual(try XCTUnwrap(plan.targetDistanceMeters), 5_000, accuracy: 0.001)
         XCTAssertEqual(plan.targetDistanceUnitRaw, "km")
         XCTAssertEqual(
-            plan.targetDistance(fallbackUnit: km)?.displayText, "5 km")
+            plan.targetDistance(displayUnit: km)?.displayText, "5 km")
     }
 
     func testEditingTargetDistanceInMilesStoresCanonicalMeters() throws {
@@ -163,6 +163,12 @@ final class ActiveEditPlanCardioTests: SwiftDataTestHarness {
 
     /// A round trip through the row's seed and commit leaves the plan
     /// unchanged, so merely opening and closing the sheet cannot alter it.
+    ///
+    /// Seeded in the same unit it was authored in — which, under the
+    /// Settings-only policy, is the only case where the row commits on reopen.
+    /// Reopening under the *other* preference re-seeds the text but
+    /// deliberately does not write; see
+    /// `DistanceUnitSettingTests.testChangingThePreferenceDoesNotRewriteStoredMeters`.
     func testSeedAndCommitRoundTripIsLossless() throws {
         for (text, unit) in [("5", km), ("6.25", km), ("3.1", mi)] {
             var plan = cardioPlan(distanceMeters: nil, unitRaw: nil)
@@ -170,7 +176,7 @@ final class ActiveEditPlanCardioTests: SwiftDataTestHarness {
             let before = plan
 
             // Reopen: seed from the plan, commit the seeded text unchanged.
-            let seeded = try XCTUnwrap(plan.targetDistance(fallbackUnit: km))
+            let seeded = try XCTUnwrap(plan.targetDistance(displayUnit: unit))
             commitTargetDistance(
                 &plan, text: try XCTUnwrap(seeded.valueText), unit: seeded.unit)
 
@@ -182,13 +188,13 @@ final class ActiveEditPlanCardioTests: SwiftDataTestHarness {
     /// renders behind the sheet.
     func testEditedTargetAppearsInThePlanSummary() {
         var plan = cardioPlan(distanceMeters: nil, unitRaw: nil)
-        XCTAssertFalse(plan.primarySummary.contains("km"))
+        XCTAssertFalse(plan.primarySummary(distanceUnit: .kilometers).contains("km"))
 
         commitTargetDistance(&plan, text: "5", unit: km)
-        XCTAssertTrue(plan.primarySummary.contains("5 km"))
+        XCTAssertTrue(plan.primarySummary(distanceUnit: .kilometers).contains("5 km"))
 
         commitTargetDistance(&plan, text: "", unit: km)
-        XCTAssertFalse(plan.primarySummary.contains("km"))
+        XCTAssertFalse(plan.primarySummary(distanceUnit: .kilometers).contains("km"))
     }
 
     // MARK: - Issue 2 — the full cardio → cardio Keep pipeline
@@ -230,7 +236,7 @@ final class ActiveEditPlanCardioTests: SwiftDataTestHarness {
         let frozen = adapted.toModel()
         context.insert(frozen)
         XCTAssertEqual(
-            frozen.targetDistance(fallbackUnit: km)?.displayText, "5 km")
+            frozen.targetDistance(displayUnit: km)?.displayText, "5 km")
 
         // Resume rebuilds the payload from the frozen row.
         let restored = PrescriptionSnapshotPayload(from: frozen)
@@ -238,7 +244,7 @@ final class ActiveEditPlanCardioTests: SwiftDataTestHarness {
         XCTAssertEqual(
             SessionPlanResolver.plannedTargetDistance(
                 sessionPlan: switched.sessionPlan, snapshot: restored,
-                fallbackUnit: km)?.displayText,
+                displayUnit: km)?.displayText,
             "5 km")
     }
 
@@ -580,6 +586,6 @@ final class ActiveEditPlanCardioTests: SwiftDataTestHarness {
         try context.save()
 
         XCTAssertEqual(
-            rx.targetDistance(fallbackUnit: km)?.displayText, "5 km")
+            rx.targetDistance(displayUnit: km)?.displayText, "5 km")
     }
 }

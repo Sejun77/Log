@@ -297,7 +297,7 @@ struct RoutineEditor: View {
         _ = blockSummaryRefresh
         let summaries = BlockPrescriptionSummary.map(
             for: sortedBlocks, effortMetric: effortMetric,
-            fallbackUnit: AppSettings.distanceUnit
+            displayUnit: AppSettings.distanceUnit
         )
         return Section("Blocks") {
             ForEach(sortedBlocks, id: \.id) { block in

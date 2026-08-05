@@ -99,14 +99,6 @@ struct SettingsView: View {
             .pickerStyle(.segmented)
         } header: {
             Text("Units")
-        } footer: {
-            // Worth saying plainly: distance is stored in meters, so this
-            // changes what new fields start in and nothing else. A run logged
-            // in miles keeps reading in miles forever.
-            Text(
-                "Distance unit applies to new cardio entries. Workouts and "
-                + "routines keep the unit they were saved in."
-            )
         }
     }
 

@@ -236,7 +236,7 @@ struct ActiveWorkoutView: View {
     /// nothing. Runs after `rehydrateFromWorkoutIfPresent` so `itemsByExerciseID`
     /// is populated.
     private func rehydrateCardioDrafts() {
-        let defaultUnit = AppSettings.distanceUnit
+        let displayUnit = AppSettings.distanceUnit
         var drafts = cardioDraftsBySlotID
         var cardioSlots: [UUID] = []
 
@@ -268,12 +268,12 @@ struct ActiveWorkoutView: View {
                     })
                     if let loggedSet, loggedSet.hasCardioMetrics {
                         perSet[i] = CardioEntryDraft(
-                            logged: loggedSet, defaultUnit: defaultUnit)
+                            logged: loggedSet, displayUnit: displayUnit)
                     } else if loggedSet == nil,
                         let snapshot = parentDraftStore?.load(
                             slotID: slotID, setIndex: i),
                         let restored = CardioEntryDraft(
-                            snapshot: snapshot, defaultUnit: defaultUnit)
+                            snapshot: snapshot, displayUnit: displayUnit)
                     {
                         perSet[i] = restored
                     }
@@ -359,11 +359,14 @@ struct ActiveWorkoutView: View {
         else { return }
 
         let ex = plan.blocks[bi].exercises[ei]
-        let fallbackUnit = AppSettings.distanceUnit
+        // One preference read for the whole slot: targets and previous-bout
+        // prefills alike are expressed in the Settings unit, because both are
+        // being rendered into the same editable field.
+        let displayUnit = AppSettings.distanceUnit
         let target = SessionPlanResolver.plannedTargetDistance(
             sessionPlan: sessionPlans[slotID],
             snapshot: ex.prescriptionSnapshot,
-            fallbackUnit: fallbackUnit)
+            displayUnit: displayUnit)
         let prefillMap = cardioPrefillBySlotID[slotID] ?? [:]
 
         let setCount = effectiveSetCount(
@@ -383,7 +386,7 @@ struct ActiveWorkoutView: View {
             if source == .logged || source == .userTyped { continue }
 
             let seeded = CardioDraftResolver.seededDraft(
-                prefill: prefill, target: target, fallbackUnit: fallbackUnit)
+                prefill: prefill, target: target, displayUnit: displayUnit)
 
             if perSet[i] == nil {
                 guard let seeded else { continue }
@@ -400,8 +403,8 @@ struct ActiveWorkoutView: View {
             // that keeps this honest if seeding ever widens) and move only the
             // target-derived fields — clearing them when the target is gone,
             // which is what makes deleting a target visibly empty the row.
-            var draft = perSet[i] ?? CardioEntryDraft(unit: fallbackUnit)
-            draft.unit = seeded?.unit ?? target?.unit ?? fallbackUnit
+            var draft = perSet[i] ?? CardioEntryDraft(unit: displayUnit)
+            draft.unit = displayUnit
             draft.distance = seeded?.distance ?? ""
             perSet[i] = draft
         }
@@ -1568,7 +1571,7 @@ struct ActiveWorkoutView: View {
     @ViewBuilder
     private func planSummarySection(for exercise: PlanExercise) -> some View {
         let sp = sessionPlans[exercise.routineSlotID] ?? SessionPlan()
-        let line1 = sp.primarySummary
+        let line1 = sp.primarySummary(distanceUnit: AppSettings.distanceUnit)
         let line2 = sp.secondarySummary(effortSummary: planEffortSummary(for: exercise, sp: sp))
         let notes = sp.slotNotes
         let hasContent =

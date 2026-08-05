@@ -76,10 +76,10 @@ final class CardioPrefillTests: SwiftDataTestHarness {
 
     private func seeded(
         prefill: CardioPrefillSuggestion?, target: CardioTargetDistance?,
-        fallbackUnit: DistanceUnit = .kilometers
+        displayUnit: DistanceUnit = .kilometers
     ) -> CardioEntryDraft? {
         CardioDraftResolver.seededDraft(
-            prefill: prefill, target: target, fallbackUnit: fallbackUnit)
+            prefill: prefill, target: target, displayUnit: displayUnit)
     }
 
     private func target(_ text: String, _ unit: DistanceUnit = .kilometers)
@@ -88,7 +88,7 @@ final class CardioPrefillTests: SwiftDataTestHarness {
 
     // MARK: - 1–5. What prefills
 
-    func testPreviousDistancePrefillsWithItsOwnUnit() throws {
+    func testPreviousDistancePrefillsInThePreferredUnit() throws {
         let ex = makeExercise()
         completedWorkout(
             exercise: ex,
@@ -103,7 +103,11 @@ final class CardioPrefillTests: SwiftDataTestHarness {
         XCTAssertEqual(draft.unit, km)
     }
 
-    func testPreviousDistanceInMilesPrefillsInMiles() throws {
+    /// A previous bout logged in miles prefills **converted** into the current
+    /// preference: what is being seeded is an editable field whose unit label
+    /// comes from Settings, so restating the old unit would mislabel it. The
+    /// completed `SetLog` keeps its own unit.
+    func testPreviousDistanceInMilesPrefillsInThePreferredUnit() throws {
         let ex = makeExercise()
         completedWorkout(
             exercise: ex,
@@ -112,10 +116,19 @@ final class CardioPrefillTests: SwiftDataTestHarness {
                  CardioMetrics(distanceMeters: 3.1 * 1_609.344, distanceUnit: mi))
             ])
 
+        // `seeded` defaults to a km display unit.
         let draft = try XCTUnwrap(
             seeded(prefill: suggestions(for: ex)[0], target: nil))
-        XCTAssertEqual(draft.unit, mi)
-        XCTAssertEqual(draft.distance, "3.1")
+        XCTAssertEqual(draft.unit, km)
+        XCTAssertEqual(draft.distance, "4.99")
+
+        // Read under a miles preference, it comes back as authored.
+        let imperial = try XCTUnwrap(
+            seeded(
+                prefill: suggestions(for: ex)[0], target: nil,
+                displayUnit: mi))
+        XCTAssertEqual(imperial.unit, mi)
+        XCTAssertEqual(imperial.distance, "3.1")
     }
 
     func testPreviousInclinePrefills() throws {
@@ -396,10 +409,10 @@ final class CardioPrefillTests: SwiftDataTestHarness {
             logs: [(0, 1_800, CardioMetrics(distanceMeters: 4_200, distanceUnit: km))])
         _ = seeded(
             prefill: suggestions(for: ex)[0],
-            target: plan.targetDistance(fallbackUnit: km))
+            target: plan.targetDistance(displayUnit: km))
 
         XCTAssertEqual(plan, before)
-        XCTAssertTrue(plan.primarySummary.contains("5 km"))
+        XCTAssertTrue(plan.primarySummary(distanceUnit: .kilometers).contains("5 km"))
     }
 
     // MARK: - 12–14. Draft source precedence
@@ -476,7 +489,7 @@ final class CardioPrefillTests: SwiftDataTestHarness {
             return draft
         }
         let seeded = CardioDraftResolver.seededDraft(
-            prefill: prefill, target: newTarget, fallbackUnit: fallbackUnit)
+            prefill: prefill, target: newTarget, displayUnit: fallbackUnit)
         var updated = draft
         updated.unit = seeded?.unit ?? newTarget?.unit ?? fallbackUnit
         updated.distance = seeded?.distance ?? ""
@@ -563,7 +576,7 @@ final class CardioPrefillTests: SwiftDataTestHarness {
                     hasTarget: routineTarget != nil)
                 guard src != .userTyped else { continue }
                 drafts[i] = CardioDraftResolver.seededDraft(
-                    prefill: prefill, target: routineTarget, fallbackUnit: km)
+                    prefill: prefill, target: routineTarget, displayUnit: km)
             }
         }
 
@@ -578,7 +591,7 @@ final class CardioPrefillTests: SwiftDataTestHarness {
         var resumed: [Int: CardioEntryDraft] = [:]
         for i in 0..<2 {
             if let snapshot = store.load(slotID: slotID, setIndex: i),
-                let restored = CardioEntryDraft(snapshot: snapshot, defaultUnit: km)
+                let restored = CardioEntryDraft(snapshot: snapshot, displayUnit: km)
             {
                 resumed[i] = restored
             }

@@ -87,7 +87,7 @@ turn on Cardio.
 During a workout, a cardio set still logs with duration alone. Tap Details on
 the set row to also record:
 
-- distance, in km or mi
+- distance, in the unit you chose in Settings
 - average heart rate
 - heart-rate zone
 - calories
@@ -98,14 +98,19 @@ Every one of these is optional, and pace and speed are worked out for you once a
 distance and a duration are entered. Enter the details before tapping Log — to
 change them afterwards, tap Undo and log the set again.
 
+Distance is always entered in the unit you chose in Settings, shown beside the
+field. There is no unit picker on the set row.
+
 In a routine, a cardio slot can also carry a target distance. Open the slot's
-Prescription section and enter it in km or mi — the unit you choose is saved
-with the target, so a routine written in miles keeps reading in miles. A cardio
-slot starts at one set with no rest, and does not show warm-up steps,
+Prescription section and enter it — the unit is whichever one you chose in
+Settings, and the field shows it beside the number. Change the unit in Settings
+and every target re-reads in the new unit; the distance itself does not change.
+A cardio slot starts at one set with no rest, and does not show warm-up steps,
 techniques, tempo, or the effort target, because those describe reps and weight.
 
 When you start the workout, the cardio set row fills in what you did last time:
-distance, incline or decline, and resistance. Average heart rate, heart-rate
+distance, incline or decline, and resistance. A distance you ran in a different
+unit is converted, so what you see is always in your current Settings unit. Average heart rate, heart-rate
 zone, and calories are never filled in, because those are results of that
 session rather than settings you chose. If you have not done the exercise
 before, the routine's target distance fills in the distance instead — either
@@ -167,9 +172,11 @@ You can:
 - import routines
 - export workout history
 
-Distance unit applies to new cardio entries only. Workouts and routines keep
-the unit they were saved in, so a run logged in miles keeps reading in miles
-even if you later switch to km.
+Settings is the only place the cardio distance unit is chosen — no distance
+field anywhere in the app has a unit picker of its own. Change it here and every
+target distance, and every distance you enter during a workout, uses the new
+unit. Workouts you have already finished keep reading in History in the unit you
+ran them in, because those are a record of what you did rather than a plan.
 
 ---
 

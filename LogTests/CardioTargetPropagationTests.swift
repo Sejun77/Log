@@ -68,10 +68,10 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         XCTAssertEqual(summary.subtitle, "1 × 1800s · 5 km · 60s rest · RIR 2")
     }
 
-    /// Built from a live block, the distance renders in the slot's **own**
-    /// stored unit — a routine authored in miles keeps reading in miles
-    /// whatever the current global preference is.
-    func testSummaryFromLiveBlockUsesTheStoredUnit() throws {
+    /// Built from a live block, the distance renders in the unit the **caller**
+    /// asked for — a routine authored in miles reads in km once the user
+    /// prefers km, because a target is a plan rather than a record.
+    func testSummaryFromLiveBlockUsesTheRequestedDisplayUnit() throws {
         let ex = Exercise(name: "Treadmill Run")
         context.insert(ex)
         ex.setTimeBased(true)
@@ -86,9 +86,14 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         context.insert(block)
         try context.save()
 
-        // Fallback deliberately km — the stored "mi" must win.
-        let summary = BlockPrescriptionSummary(block: block, fallbackUnit: km)
-        XCTAssertEqual(summary.subtitle, "1 × 1800s · 3.1 mi")
+        // Authored in mi, rendered in the caller's unit: the stored
+        // "mi" raw is not a display override.
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, displayUnit: km).subtitle,
+            "1 × 1800s · 4.99 km")
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, displayUnit: mi).subtitle,
+            "1 × 1800s · 3.1 mi")
     }
 
     /// Strength and timed-hold blocks render exactly as they did before this
@@ -165,9 +170,14 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let snapshot = PlannedPrescriptionSnapshot(from: source, exercise: nil)
         context.insert(snapshot)
 
-        let target = try XCTUnwrap(snapshot.targetDistance(fallbackUnit: km))
-        XCTAssertEqual(target.unit, mi)
-        XCTAssertEqual(target.displayText, "3.1 mi")
+        // The *meters* are what the snapshot froze; the unit it renders in
+        // still follows the preference.
+        XCTAssertEqual(
+            try XCTUnwrap(snapshot.targetDistanceMeters), 3.1 * 1_609.344,
+            accuracy: 0.001)
+        let target = try XCTUnwrap(snapshot.targetDistance(displayUnit: km))
+        XCTAssertEqual(target.unit, km)
+        XCTAssertEqual(target.displayText, "4.99 km")
     }
 
     /// A frozen snapshot is immutable: editing the routine afterwards must not
@@ -199,7 +209,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
             from: cardioPrescription(), exercise: nil)
         let plan = SessionPlan(from: payload, notes: nil)
 
-        let target = try XCTUnwrap(plan.targetDistance(fallbackUnit: km))
+        let target = try XCTUnwrap(plan.targetDistance(displayUnit: km))
         XCTAssertEqual(target.displayText, "5 km")
     }
 
@@ -216,7 +226,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         XCTAssertEqual(plan.sets, 1)
         XCTAssertNil(plan.targetDistanceMeters)
         XCTAssertNil(plan.targetDistanceUnitRaw)
-        XCTAssertNil(plan.targetDistance(fallbackUnit: km))
+        XCTAssertNil(plan.targetDistance(displayUnit: km))
     }
 
     func testSessionPlanRoundTripsThroughJSON() throws {
@@ -239,7 +249,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         plan.targetDistanceMeters = 5_000
         plan.targetDistanceUnitRaw = "km"
 
-        XCTAssertEqual(plan.primarySummary, "1 sets · 1800s · 5 km")
+        XCTAssertEqual(plan.primarySummary(distanceUnit: .kilometers), "1 sets · 1800s · 5 km")
     }
 
     func testSessionPlanPrimarySummaryIsUnchangedWithoutADistance() {
@@ -247,13 +257,13 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         strength.sets = 3
         strength.repMin = 8
         strength.repMax = 12
-        XCTAssertEqual(strength.primarySummary, "3 sets · 8–12 reps")
+        XCTAssertEqual(strength.primarySummary(distanceUnit: .kilometers), "3 sets · 8–12 reps")
 
         var hold = SessionPlan()
         hold.sets = 3
         hold.usesDuration = true
         hold.durationMaxSeconds = 45
-        XCTAssertEqual(hold.primarySummary, "3 sets · 45s")
+        XCTAssertEqual(hold.primarySummary(distanceUnit: .kilometers), "3 sets · 45s")
     }
 
     // MARK: - 31. Resolver precedence
@@ -267,7 +277,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
 
         let resolved = try XCTUnwrap(
             SessionPlanResolver.plannedTargetDistance(
-                sessionPlan: plan, snapshot: snapshot, fallbackUnit: km))
+                sessionPlan: plan, snapshot: snapshot, displayUnit: km))
         XCTAssertEqual(resolved.displayText, "10 km")
     }
 
@@ -278,17 +288,17 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let resolved = try XCTUnwrap(
             SessionPlanResolver.plannedTargetDistance(
                 sessionPlan: SessionPlan(), snapshot: snapshot,
-                fallbackUnit: km))
+                displayUnit: km))
         XCTAssertEqual(resolved.displayText, "5 km")
     }
 
     func testResolverReturnsNilWhenNoTierHasATarget() {
         XCTAssertNil(
             SessionPlanResolver.plannedTargetDistance(
-                sessionPlan: nil, snapshot: nil, fallbackUnit: km))
+                sessionPlan: nil, snapshot: nil, displayUnit: km))
         XCTAssertNil(
             SessionPlanResolver.plannedTargetDistance(
-                sessionPlan: SessionPlan(), snapshot: .empty, fallbackUnit: km))
+                sessionPlan: SessionPlan(), snapshot: .empty, displayUnit: km))
     }
 
     // MARK: - 31–32. Draft seeding precedence
@@ -301,14 +311,14 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         logged: SetLog?,
         snapshot: ParentDraftStore.Snapshot?,
         target: CardioTargetDistance?,
-        defaultUnit: DistanceUnit
+        displayUnit: DistanceUnit
     ) -> CardioEntryDraft? {
         if let logged, logged.hasCardioMetrics {
-            return CardioEntryDraft(logged: logged, defaultUnit: defaultUnit)
+            return CardioEntryDraft(logged: logged, displayUnit: displayUnit)
         }
         if logged == nil, let snapshot,
             let restored = CardioEntryDraft(
-                snapshot: snapshot, defaultUnit: defaultUnit)
+                snapshot: snapshot, displayUnit: displayUnit)
         {
             return restored
         }
@@ -329,7 +339,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let draft = try XCTUnwrap(
             resolveDraft(
                 logged: nil, snapshot: nil, target: target("5"),
-                defaultUnit: km))
+                displayUnit: km))
 
         XCTAssertEqual(draft.distance, "5")
         XCTAssertEqual(draft.unit, km)
@@ -343,7 +353,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let draft = try XCTUnwrap(
             resolveDraft(
                 logged: nil, snapshot: nil, target: target("3.1", mi),
-                defaultUnit: km))
+                displayUnit: km))
 
         XCTAssertEqual(draft.unit, mi)
         XCTAssertEqual(draft.distance, "3.1")
@@ -352,7 +362,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
     func testNoTargetLeavesTheDraftUnseeded() {
         XCTAssertNil(
             resolveDraft(
-                logged: nil, snapshot: nil, target: nil, defaultUnit: km))
+                logged: nil, snapshot: nil, target: nil, displayUnit: km))
     }
 
     /// The Save & Exit → Resume guarantee: a persisted draft always beats the
@@ -365,7 +375,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let draft = try XCTUnwrap(
             resolveDraft(
                 logged: nil, snapshot: snapshot, target: target("5"),
-                defaultUnit: km))
+                displayUnit: km))
         XCTAssertEqual(draft.distance, "7.5")
     }
 
@@ -381,7 +391,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let draft = try XCTUnwrap(
             resolveDraft(
                 logged: nil, snapshot: snapshot, target: target("5"),
-                defaultUnit: km))
+                displayUnit: km))
         XCTAssertEqual(
             draft.distance, "",
             "a cleared field must stay cleared across a resume")
@@ -405,10 +415,11 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let draft = try XCTUnwrap(
             resolveDraft(
                 logged: nil, snapshot: snapshot, target: target("5"),
-                defaultUnit: km))
+                displayUnit: km))
 
+        // The typed text survives; the unit it is read in follows Settings.
         XCTAssertEqual(draft.distance, "2")
-        XCTAssertEqual(draft.unit, mi)
+        XCTAssertEqual(draft.unit, km)
     }
 
     /// A logged set is the strongest tier: what was recorded wins over both the
@@ -423,7 +434,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let draft = try XCTUnwrap(
             resolveDraft(
                 logged: log, snapshot: nil, target: target("5"),
-                defaultUnit: km))
+                displayUnit: km))
         XCTAssertEqual(draft.distance, "4.2")
     }
 
@@ -436,7 +447,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         let draft = try XCTUnwrap(
             resolveDraft(
                 logged: nil, snapshot: nil, target: target("5"),
-                defaultUnit: km))
+                displayUnit: km))
 
         let log = SetLog(
             indexInExercise: 0, reps: 0, weight: nil, durationSeconds: 1_800)
@@ -454,7 +465,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
     /// has.
     func testDurationOnlyCardioLoggingIsUnaffected() throws {
         let draft =
-            resolveDraft(logged: nil, snapshot: nil, target: nil, defaultUnit: km)
+            resolveDraft(logged: nil, snapshot: nil, target: nil, displayUnit: km)
             ?? CardioEntryDraft(unit: km)
 
         let log = SetLog(
@@ -474,7 +485,7 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
         var draft = try XCTUnwrap(
             resolveDraft(
                 logged: nil, snapshot: nil, target: target("5"),
-                defaultUnit: km))
+                displayUnit: km))
         draft.distance = "4.2"
 
         let log = SetLog(
