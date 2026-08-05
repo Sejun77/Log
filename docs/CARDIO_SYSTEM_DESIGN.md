@@ -811,7 +811,8 @@ rendering decision, never a data one:
 | Target-distance seeding into a draft | **the preference** |
 | Previous-performance prefill | **the preference** — the stored meters are converted into it |
 | A logged set re-read into its own row | **the preference** |
-| A draft restored after Save & Exit | **the preference** |
+| A draft restored after Save & Exit | **the preference**, converted from the unit it was typed in |
+| An in-flight draft when the preference changes | **the preference**, re-expressed live |
 | An empty new field | **the preference** |
 | History row (performed `SetLog`) | **the preference** — distance *and* pace |
 
@@ -860,6 +861,47 @@ opened by one. Removing it would be a migration; keeping it costs nothing.
 Nothing on any display path consults it — `CardioHistorySummary.secondaryLines`
 takes a `displayUnit:` and uses it unconditionally, so a row holding `"mi"`,
 `"kilometres"`, `""` or nothing renders identically.
+
+**Two mechanisms, not one.** Following the preference takes different work
+depending on where the unit lives, and both bugs shipped before being caught:
+
+1. *Views that read the preference directly.* `AppSettings.distanceUnit` is a
+   plain `UserDefaults` lookup, so SwiftUI records no dependency and a body
+   reading it renders the right unit **once**. History showed a stale unit until
+   the page was rebuilt. Every view that displays distance now holds
+   `@AppStorage(AppSettings.Keys.distanceIsMetric)` and derives its unit through
+   `AppSettings.distanceUnit(isMetric:)`.
+2. *State that carries a unit.* `CardioEntryDraft.unit` is per-set state seeded
+   when the draft is built, so the active-workout rows stayed stale even though
+   `ActiveWorkoutView` was observing the preference correctly — re-rendering
+   stale state changes nothing. `.onChange(of: distanceUnit)` resyncs the drafts
+   through the pure `CardioEntryDraft.converted(to:)`.
+
+**Converting a draft means parse → convert → reformat**, because a draft holds
+text rather than meters. Text that parses to a usable distance is converted and
+reformatted; empty text stays empty; text with no usable number (`"."`, `"abc"`,
+`"0"`, out-of-range) keeps its exact keystrokes and only the unit moves, since
+there is nothing to convert and inventing a number would be worse. Every one of
+those strings already means "no distance" to `metrics`, so nothing downstream
+can misread the preserved text.
+
+A trailing separator is deliberately **not** in that group: `Double("6.")` is
+`6.0`, so `"6."` is a usable 6 km and converts to `"3.73"` mi. Someone mid-way
+through typing "6.25" loses their keystrokes. That is the accepted cost — the
+alternative leaves `"6."` under a `mi` label, silently restating 6 km as 6 mi,
+which is the exact reinterpretation this section exists to forbid. The number
+stays true to what the user meant; only their cursor position does not.
+
+**The resync does not persist, and does not need to.** It writes the draft
+dictionary directly rather than through the binding that mirrors into
+`ParentDraftStore` — changing a display preference is not the user editing their
+workout. Correctness across Save & Exit comes from the store recording the text
+*with the unit it was typed in*, so
+`CardioEntryDraft.init(snapshot:displayUnit:)` converts on resume exactly as the
+live resync did. A draft typed as "5" km reads "3.11" mi whether the app stayed
+open or was force-quit in between. (The persisted unit is thus read as a
+*conversion source*, never as a display override — the same distinction
+`targetDistanceUnitRaw` gets, arrived at for the same reason.)
 
 **Why performed entry and display follow the preference too.** The alternative —
 a per-set unit picker on the Details row — was what shipped first, and it had the

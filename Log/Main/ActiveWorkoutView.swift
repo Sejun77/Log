@@ -217,7 +217,7 @@ struct ActiveWorkoutView: View {
         Binding(
             get: {
                 cardioDraftsBySlotID[slotID]?[setIndex]
-                    ?? CardioEntryDraft(unit: AppSettings.distanceUnit)
+                    ?? CardioEntryDraft(unit: distanceUnit)
             },
             set: { newValue in
                 cardioDraftsBySlotID[slotID, default: [:]][setIndex] = newValue
@@ -243,7 +243,7 @@ struct ActiveWorkoutView: View {
     /// nothing. Runs after `rehydrateFromWorkoutIfPresent` so `itemsByExerciseID`
     /// is populated.
     private func rehydrateCardioDrafts() {
-        let displayUnit = AppSettings.distanceUnit
+        let displayUnit = distanceUnit
         var drafts = cardioDraftsBySlotID
         var cardioSlots: [UUID] = []
 
@@ -369,7 +369,7 @@ struct ActiveWorkoutView: View {
         // One preference read for the whole slot: targets and previous-bout
         // prefills alike are expressed in the Settings unit, because both are
         // being rendered into the same editable field.
-        let displayUnit = AppSettings.distanceUnit
+        let displayUnit = distanceUnit
         let target = SessionPlanResolver.plannedTargetDistance(
             sessionPlan: sessionPlans[slotID],
             snapshot: ex.prescriptionSnapshot,
@@ -418,7 +418,42 @@ struct ActiveWorkoutView: View {
         cardioDraftsBySlotID[slotID] = perSet
     }
 
-    private var defaultDistanceUnit: DistanceUnit { AppSettings.distanceUnit }
+    /// The unit every cardio row displays and edits in, derived from the
+    /// observable preference so `.onChange(of: distanceUnit)` fires.
+    private var distanceUnit: DistanceUnit {
+        AppSettings.distanceUnit(isMetric: distanceIsMetric)
+    }
+
+    /// Re-express every in-flight cardio draft in `newUnit`.
+    ///
+    /// This is the whole live-refresh fix. Each draft is converted through the
+    /// pure `CardioEntryDraft.converted(to:)`, so a parseable distance keeps
+    /// its meters and changes only how it reads, an empty row stays empty, and
+    /// half-typed text is preserved verbatim. The collapsed preview, the
+    /// distance suffix, pace and speed all read `draft.unit`, so they follow
+    /// from this one assignment rather than needing to be refreshed separately.
+    ///
+    /// **Deliberately does not persist.** It writes `cardioDraftsBySlotID`
+    /// directly rather than going through `cardioDraftBinding`, whose setter
+    /// would push every row into `ParentDraftStore`. Changing a display
+    /// preference is not the user editing their workout, and the persisted
+    /// draft does not need rewriting to stay correct: it records the text
+    /// *with the unit it was typed in*, and
+    /// `CardioEntryDraft.init(snapshot:displayUnit:)` converts on resume. So a
+    /// resumed session shows exactly what the live one showed, without this
+    /// having touched the store.
+    ///
+    /// Logged sets are included: their rows are read-only mirrors of what was
+    /// recorded, and re-expressing one converts its display only — the `SetLog`
+    /// is not reachable from here.
+    private func resyncCardioDrafts(to newUnit: DistanceUnit) {
+        for (slotID, perSet) in cardioDraftsBySlotID {
+            for (setIndex, draft) in perSet where draft.unit != newUnit {
+                cardioDraftsBySlotID[slotID]?[setIndex] =
+                    draft.converted(to: newUnit)
+            }
+        }
+    }
 
     private func ensureInputsInitializedFromPlan() {
         guard inputsByExerciseID.isEmpty else { return }
@@ -1579,7 +1614,7 @@ struct ActiveWorkoutView: View {
     private func planSummarySection(for exercise: PlanExercise) -> some View {
         let sp = sessionPlans[exercise.routineSlotID] ?? SessionPlan()
         let line1 = sp.primarySummary(
-            distanceUnit: AppSettings.distanceUnit(isMetric: distanceIsMetric))
+            distanceUnit: distanceUnit)
         let line2 = sp.secondarySummary(effortSummary: planEffortSummary(for: exercise, sp: sp))
         let notes = sp.slotNotes
         let hasContent =
@@ -2353,6 +2388,15 @@ struct ActiveWorkoutView: View {
             }
             .onChange(of: currentBlockIndex) { _, _ in persistPosition() }
             .onChange(of: currentExerciseIndex) { _, _ in persistPosition() }
+            // Cardio Slice 8 patch. Unlike History — which was simply not
+            // observing the preference — the cardio rows render `draft.unit`,
+            // which is **state**, seeded when the draft was created. The body
+            // already re-renders (this view holds `@AppStorage` for the key),
+            // but re-rendering stale state changes nothing, so the drafts
+            // themselves have to be re-expressed.
+            .onChange(of: distanceUnit) { _, newUnit in
+                resyncCardioDrafts(to: newUnit)
+            }
             .onReceive(
                 NotificationCenter.default.publisher(
                     for: UIApplication.didBecomeActiveNotification

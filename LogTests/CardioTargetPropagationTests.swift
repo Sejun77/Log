@@ -417,8 +417,10 @@ final class CardioTargetPropagationTests: SwiftDataTestHarness {
                 logged: nil, snapshot: snapshot, target: target("5"),
                 displayUnit: km))
 
-        // The typed text survives; the unit it is read in follows Settings.
-        XCTAssertEqual(draft.distance, "2")
+        // The persisted draft still wins over the target, and its distance is
+        // converted into the current preference rather than relabelled:
+        // 2 mi = 3.22 km.
+        XCTAssertEqual(draft.distance, "3.22")
         XCTAssertEqual(draft.unit, km)
     }
 

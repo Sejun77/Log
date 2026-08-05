@@ -914,6 +914,167 @@ final class DistanceUnitSettingTests: SwiftDataTestHarness {
         XCTAssertEqual(try XCTUnwrap(p.targetDistanceMeters), fiveKmInMeters)
     }
 
+    // MARK: - Active cardio rows re-express live
+    //
+    // The fifth patch. Unlike History, `ActiveWorkoutView` was already
+    // observing the preference — but the rows render `draft.unit`, which is
+    // *state* seeded when the draft was built, so re-rendering changed
+    // nothing. `.onChange(of: distanceUnit)` now resyncs the drafts through
+    // `CardioEntryDraft.converted(to:)`.
+
+    /// A target-seeded draft follows a later preference change, not just the
+    /// preference in force when it was seeded.
+    func testTargetSeededDraftReExpressesOnAPreferenceChange() throws {
+        selectUnit(km)
+        let p = cardioPrescription(meters: fiveKmInMeters, unitRaw: "km")
+        let seeded = try XCTUnwrap(
+            CardioDraftResolver.seededDraft(
+                prefill: nil,
+                target: p.targetDistance(displayUnit: AppSettings.distanceUnit),
+                displayUnit: AppSettings.distanceUnit))
+        XCTAssertEqual(seeded.distance, "5")
+
+        // Settings flips; the view resyncs the draft it is holding.
+        selectUnit(mi)
+        let resynced = seeded.converted(to: AppSettings.distanceUnit)
+
+        XCTAssertEqual(resynced.unit, mi)
+        XCTAssertEqual(resynced.distance, "3.11")
+        XCTAssertEqual(
+            try XCTUnwrap(p.targetDistanceMeters), fiveKmInMeters,
+            "the routine target must not be rewritten")
+    }
+
+    /// Same for a draft prefilled from a previous bout.
+    func testPrefilledDraftReExpressesOnAPreferenceChange() throws {
+        let suggestion = CardioPrefillSuggestion(
+            setIndex: 0, distanceMeters: fiveKmInMeters, distanceUnit: km,
+            inclinePercent: 3, resistanceLevel: nil)
+
+        selectUnit(km)
+        let seeded = try XCTUnwrap(
+            CardioDraftResolver.seededDraft(
+                prefill: suggestion, target: nil,
+                displayUnit: AppSettings.distanceUnit))
+        XCTAssertEqual(seeded.distance, "5")
+
+        selectUnit(mi)
+        let resynced = seeded.converted(to: AppSettings.distanceUnit)
+
+        XCTAssertEqual(resynced.distance, "3.11")
+        XCTAssertEqual(resynced.unit, mi)
+        XCTAssertEqual(resynced.incline, "3", "unitless fields are untouched")
+    }
+
+    /// A logged set's read-only row re-expresses too, and doing so cannot reach
+    /// the `SetLog` it mirrors.
+    func testLoggedRowReExpressesWithoutTouchingTheSetLog() throws {
+        let log = SetLog(
+            indexInExercise: 0, reps: 0, weight: nil, durationSeconds: 1_800)
+        context.insert(log)
+        selectUnit(km)
+        log.applyCardioMetrics(
+            CardioMetrics(distanceMeters: fiveKmInMeters, distanceUnit: km))
+        try context.save()
+
+        let shown = CardioEntryDraft(
+            logged: log, displayUnit: AppSettings.distanceUnit)
+        XCTAssertEqual(shown.distance, "5")
+
+        selectUnit(mi)
+        let resynced = shown.converted(to: AppSettings.distanceUnit)
+
+        XCTAssertEqual(resynced.distance, "3.11")
+        XCTAssertEqual(resynced.unit, mi)
+        XCTAssertEqual(
+            try XCTUnwrap(log.distanceMeters), fiveKmInMeters,
+            "the logged distance must not move")
+        XCTAssertEqual(log.distanceUnitRaw, "km")
+    }
+
+    /// A row the user cleared stays cleared across a preference change — the
+    /// resync must not refill it from the target it once came from.
+    func testUserClearedDraftStaysEmptyAcrossAPreferenceChange() {
+        selectUnit(km)
+        let cleared = CardioEntryDraft(unit: AppSettings.distanceUnit)
+
+        selectUnit(mi)
+        let resynced = cleared.converted(to: AppSettings.distanceUnit)
+
+        XCTAssertEqual(resynced.distance, "")
+        XCTAssertTrue(resynced.isEmpty)
+        XCTAssertEqual(resynced.unit, mi)
+    }
+
+    /// **Requirements 8, 9 and 11.** The live row and a resumed one agree,
+    /// without the preference change having written to `ParentDraftStore`.
+    ///
+    /// The store keeps the text *and the unit it was typed in*, so resume can
+    /// convert exactly as the live resync did. That is what makes it safe for
+    /// `resyncCardioDrafts` not to persist: nothing needs rewriting for the
+    /// two paths to land in the same place.
+    func testLiveResyncAndResumeAgreeWithoutRewritingTheStore() throws {
+        let store = ParentDraftStore(
+            workoutID: UUID(),
+            defaults: try XCTUnwrap(
+                UserDefaults(suiteName: "DistanceUnitSettingTests.resync")))
+        defer { store.clearAll() }
+        let slotID = UUID()
+
+        // Typed under km, persisted as the user typed it.
+        selectUnit(km)
+        let typed = CardioEntryDraft(
+            unit: AppSettings.distanceUnit, distance: "5", avgHeartRate: "142")
+        store.persist(slotID: slotID, setIndex: 0, cardio: typed)
+
+        let persisted = try XCTUnwrap(store.load(slotID: slotID, setIndex: 0))
+        XCTAssertEqual(persisted.distance, "5")
+        XCTAssertEqual(persisted.distanceUnit, "km")
+
+        // Settings flips. The live view resyncs in memory only.
+        selectUnit(mi)
+        let live = typed.converted(to: AppSettings.distanceUnit)
+        XCTAssertEqual(live.distance, "3.11")
+
+        // The store was not rewritten by the preference change.
+        let untouched = try XCTUnwrap(store.load(slotID: slotID, setIndex: 0))
+        XCTAssertEqual(
+            untouched.distance, "5",
+            "a display preference change must not rewrite a persisted draft")
+        XCTAssertEqual(untouched.distanceUnit, "km")
+
+        // …and resume still lands on the same reading as the live row.
+        let resumed = try XCTUnwrap(
+            CardioEntryDraft(
+                snapshot: untouched, displayUnit: AppSettings.distanceUnit))
+        XCTAssertEqual(resumed.distance, live.distance)
+        XCTAssertEqual(resumed.unit, live.unit)
+        XCTAssertEqual(resumed.avgHeartRate, "142")
+
+        // Both express the same canonical distance the user entered.
+        XCTAssertEqual(
+            try XCTUnwrap(resumed.metrics.distanceMeters), 5_004.972,
+            accuracy: 1.0)
+    }
+
+    /// The preview, pace and speed all read `draft.unit`, so one resync moves
+    /// them together — the four things the row shows cannot disagree.
+    func testPreviewPaceAndSpeedAllFollowTheResync() {
+        selectUnit(km)
+        let metric = CardioEntryDraft(
+            unit: AppSettings.distanceUnit, distance: "6.2")
+        XCTAssertEqual(metric.summaryText, "6.2 km")
+        XCTAssertEqual(metric.paceText(durationSeconds: 2_700), "7:15 /km")
+        XCTAssertEqual(metric.speedText(durationSeconds: 2_700), "8.3 km/h")
+
+        selectUnit(mi)
+        let imperial = metric.converted(to: AppSettings.distanceUnit)
+
+        XCTAssertEqual(imperial.summaryText, "3.85 mi")
+        XCTAssertEqual(imperial.paceText(durationSeconds: 2_700), "11:41 /mi")
+        XCTAssertEqual(imperial.speedText(durationSeconds: 2_700), "5.1 mi/h")
+    }
+
     // MARK: - The removed Settings footer
 
     /// **Requirement 15 of the test list.** The footer explaining the old

@@ -245,6 +245,140 @@ final class CardioEntryDraftTests: XCTestCase {
         XCTAssertEqual(d.summaryText, "-3% incline · level 8 · Z3")
     }
 
+    // MARK: - 8b. Live display-unit conversion
+    //
+    // What happens to an in-flight row when Settings changes underneath it.
+    // The draft holds text, so conversion means parse → convert → reformat,
+    // and the interesting cases are the ones where parsing fails.
+
+    /// A clean km draft re-expressed in miles: the underlying distance is
+    /// preserved exactly, only its expression changes.
+    func testConvertingAValidKilometerDraftToMiles() throws {
+        let converted = draft(unit: .kilometers, distance: "5")
+            .converted(to: .miles)
+
+        XCTAssertEqual(converted.unit, .miles)
+        XCTAssertEqual(converted.distance, "3.11")
+        XCTAssertEqual(
+            try XCTUnwrap(converted.metrics.distanceMeters), 5_004.972,
+            accuracy: 1.0,
+            "the same distance, to within the rounding the field displays")
+    }
+
+    /// The mirror, and the one that must not lose the value: 3.1 mi → 4.99 km.
+    func testConvertingAValidMileDraftToKilometers() throws {
+        let original = draft(unit: .miles, distance: "3.1")
+        let converted = original.converted(to: .kilometers)
+
+        XCTAssertEqual(converted.unit, .kilometers)
+        XCTAssertEqual(converted.distance, "4.99")
+        XCTAssertEqual(
+            try XCTUnwrap(original.metrics.distanceMeters), 4_988.9664,
+            accuracy: 0.001)
+        XCTAssertEqual(
+            try XCTUnwrap(converted.metrics.distanceMeters), 4_990,
+            accuracy: 0.001,
+            "the displayed value is rounded, so a converted draft carries the "
+                + "rounded distance — it is what the user now sees")
+    }
+
+    /// Pace and speed are derived from `unit`, so they follow the conversion
+    /// without any separate refresh. This is what makes the live preview,
+    /// pace row and speed row update together.
+    func testConversionUpdatesPaceAndSpeed() {
+        let metric = draft(unit: .kilometers, distance: "6.2")
+        XCTAssertEqual(metric.paceText(durationSeconds: 2_700), "7:15 /km")
+        XCTAssertEqual(metric.speedText(durationSeconds: 2_700), "8.3 km/h")
+
+        let imperial = metric.converted(to: .miles)
+        XCTAssertEqual(imperial.distance, "3.85")
+        XCTAssertEqual(imperial.paceText(durationSeconds: 2_700), "11:41 /mi")
+        XCTAssertEqual(imperial.speedText(durationSeconds: 2_700), "5.1 mi/h")
+    }
+
+    /// The collapsed Details label follows too — it is built from `metrics`
+    /// and `unit`, both of which the conversion moved.
+    func testConversionUpdatesTheCollapsedSummary() {
+        let metric = draft(unit: .kilometers, distance: "5", avgHeartRate: "142")
+        XCTAssertEqual(metric.summaryText, "5 km · 142 bpm")
+
+        XCTAssertEqual(
+            metric.converted(to: .miles).summaryText, "3.11 mi · 142 bpm")
+    }
+
+    /// A row the user cleared stays cleared — conversion must not put a number
+    /// into an empty field.
+    func testConvertingAnEmptyDraftLeavesItEmpty() {
+        let converted = draft(unit: .kilometers, distance: "")
+            .converted(to: .miles)
+
+        XCTAssertEqual(converted.unit, .miles)
+        XCTAssertEqual(converted.distance, "")
+        XCTAssertTrue(converted.isEmpty)
+    }
+
+    /// Input with no usable number keeps its **exact** keystrokes and changes
+    /// only the unit. There is nothing to convert, so converting would mean
+    /// inventing a value; every one of these already means "no distance" to
+    /// `metrics`, so the preserved text cannot be misread downstream.
+    func testConvertingUnparseableDistancePreservesTheRawText() {
+        for text in [".", "abc", "0", "1001", "   "] {
+            let draftInKm = draft(unit: .kilometers, distance: text)
+            XCTAssertNil(
+                draftInKm.metrics.distanceMeters,
+                "precondition: \"\(text)\" is not a usable distance")
+
+            let converted = draftInKm.converted(to: .miles)
+            XCTAssertEqual(
+                converted.distance, text,
+                "\"\(text)\" must survive a unit change untouched")
+            XCTAssertEqual(converted.unit, .miles)
+        }
+    }
+
+    /// A trailing separator is **not** in that group: `Double("6.")` is 6.0, so
+    /// "6." is a usable 6 km and converts like any other number.
+    ///
+    /// This costs the user their in-progress keystrokes — a field part-way
+    /// through "6.25" becomes "3.73" — and that is the deliberate trade. The
+    /// alternative leaves "6." sitting under a "mi" label, which restates 6 km
+    /// as 6 mi: the silent reinterpretation this slice exists to prevent.
+    func testConvertingATrailingSeparatorConvertsTheNumber() {
+        let converted = draft(unit: .kilometers, distance: "6.")
+            .converted(to: .miles)
+
+        XCTAssertEqual(converted.distance, "3.73")
+        XCTAssertEqual(converted.unit, .miles)
+    }
+
+    /// Every other field is unitless and must come through a conversion
+    /// byte-identical.
+    func testConversionTouchesNothingButTheDistance() {
+        let original = draft(
+            unit: .kilometers, distance: "5", avgHeartRate: "150",
+            calories: "300", incline: "-2.5", resistance: "6", hrZone: .z4)
+        let converted = original.converted(to: .miles)
+
+        XCTAssertEqual(converted.avgHeartRate, original.avgHeartRate)
+        XCTAssertEqual(converted.calories, original.calories)
+        XCTAssertEqual(converted.incline, original.incline)
+        XCTAssertEqual(converted.resistance, original.resistance)
+        XCTAssertEqual(converted.hrZone, original.hrZone)
+    }
+
+    /// Converting to the unit it is already in is an identity, so a redundant
+    /// resync cannot nudge a rounded value.
+    func testConvertingToTheSameUnitIsAnIdentity() {
+        let original = draft(unit: .miles, distance: "3.1")
+        XCTAssertEqual(original.converted(to: .miles), original)
+
+        // And repeated round trips do not drift further than the first
+        // rounding: 3.1 mi → 4.99 km → 3.1 mi.
+        XCTAssertEqual(
+            original.converted(to: .kilometers).converted(to: .miles).distance,
+            "3.1")
+    }
+
     // MARK: - 9. Persistence bridge
 
     func testDraftRestoresFromSnapshot() throws {
@@ -259,14 +393,15 @@ final class CardioEntryDraftTests: XCTestCase {
 
         let snapshot = try XCTUnwrap(store.load(slotID: slot, setIndex: 0))
 
-        // Restored in the *current* preference, not the one the draft was
-        // persisted under: the field's label follows Settings, so restoring the
-        // old unit would put a number on screen meaning something other than
-        // its label. Every typed field survives verbatim.
+        // Restored in the current preference, and the distance **converted**
+        // into it: the persisted unit says what the text was typed in, so 3.1
+        // mi comes back as 4.99 km rather than being relabelled as 4.99— or,
+        // worse, left as "3.1" under a km label. This is what makes a resumed
+        // session show exactly what the live one showed.
         let restored = try XCTUnwrap(
             CardioEntryDraft(snapshot: snapshot, displayUnit: km))
         XCTAssertEqual(restored.unit, km)
-        XCTAssertEqual(restored.distance, original.distance)
+        XCTAssertEqual(restored.distance, "4.99")
         XCTAssertEqual(restored.avgHeartRate, original.avgHeartRate)
         XCTAssertEqual(restored.calories, original.calories)
         XCTAssertEqual(restored.incline, original.incline)
