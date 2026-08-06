@@ -377,4 +377,61 @@ final class KoreanLocalizationTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - History cardio charts (Cardio Slice 11)
+
+    /// Strings introduced by the cardio progression charts. The metric titles
+    /// "Distance", "Pace", and "Calories" are shared with the active-workout
+    /// Details section (asserted above) and are deliberately not repeated here;
+    /// what is new is the abbreviated heart-rate title and the four empty
+    /// states, which name the specific field that is missing.
+    private static let cardioChartKeys = [
+        "Avg HR",
+        "No distance logged for this exercise yet.",
+        "No pace yet — a session needs both a distance and a duration.",
+        "No calories logged for this exercise yet.",
+        "No heart rate logged for this exercise yet.",
+    ]
+
+    func testCardioChartStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.cardioChartKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Cardio chart string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testCardioChartStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.cardioChartKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// Every metric title in the History picker is rendered through
+    /// `LocalizedStringKey`, so each one either has a translation or falls back
+    /// to its English literal. This pins the cardio titles specifically: they
+    /// are the ones a Korean tester meets in a menu of otherwise Korean text.
+    func testCardioMetricTitlesLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let cardioTitles = ProgressMetric.allCases
+            .filter(\.isCardioOnly)
+            .map(\.title)
+
+        XCTAssertEqual(cardioTitles.count, 4)
+        for title in cardioTitles {
+            XCTAssertNotEqual(
+                localized(title, in: ko), title,
+                "Cardio metric title \(title) has no Korean translation"
+            )
+        }
+    }
 }

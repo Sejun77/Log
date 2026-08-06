@@ -166,6 +166,15 @@ Use History to review:
 - session notes
 - progress over time per exercise
 
+The Progression chart plots one point per session for the exercise you choose.
+A strength exercise offers e1RM, volume, best weight, and reps. A cardio
+exercise offers distance, duration, pace, calories, and average heart rate
+instead — e1RM and volume are not offered, because there is no weight to work
+them out from. Distance and pace use the unit you chose in Settings and re-read
+the moment you change it; what you recorded never changes. Pace comes from the
+session's totals, so a session with no distance, or no duration, has no pace
+point, and the rosette marks your fastest session rather than your slowest.
+
 ## Settings
 
 Use Settings to adjust app defaults and manage data.
@@ -325,6 +334,14 @@ nothing you have recorded is altered.
 - 중량과 반복 횟수
 - 세션 메모
 - 운동별 진행 변화
+
+진행 그래프는 선택한 운동에 대해 세션마다 한 점씩 표시합니다. 근력 운동에서는
+e1RM, 볼륨, 최고 중량, 반복 횟수를 볼 수 있습니다. 유산소 운동에서는 대신 거리,
+시간, 페이스, 칼로리, 평균 심박수를 볼 수 있습니다. 중량이 없어 계산할 수 없는
+e1RM과 볼륨은 표시되지 않습니다. 거리와 페이스는 설정에서 선택한 단위를 따르며,
+단위를 바꾸면 즉시 다시 표시됩니다. 기록된 값 자체는 변하지 않습니다. 페이스는
+세션 전체 합계로 계산하므로 거리나 시간이 없는 세션에는 페이스 점이 표시되지
+않으며, 기록 표시는 가장 느린 세션이 아니라 가장 빠른 세션에 붙습니다.
 
 ## 설정
 

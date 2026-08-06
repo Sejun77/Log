@@ -1161,6 +1161,89 @@ rules (§2.3) from the next edit onward.
 There is **no SwiftData migration** in this slice: `isCardio` has existed since
 Slice 2, and this is an ordinary field write on existing rows.
 
+### 2.40 History cardio charts (settled in Slice 11)
+
+Cardio gets chart metrics of its own, inside the History **Progression** chart
+that already exists. No new screen, no second chart component: the metric picker
+gains cardio entries, and `ProgressChart` gains four cases.
+
+#### Metrics
+
+| Metric | Value plotted | Source |
+|---|---|---|
+| Distance | session total, in the Settings unit | `SetLog.distanceMeters` |
+| Duration | session total, seconds | `SetLog.durationSeconds` (the pre-existing `.totalDuration` path, untouched) |
+| Pace | session total duration ÷ total distance, seconds per unit | derived via `CardioDerived` |
+| Calories | session total, kcal | `SetLog.calories` |
+| Avg HR | duration-weighted mean, bpm | `SetLog.avgHeartRate` |
+
+Incline and resistance stay History-row-only, as planned. Speed is computed by
+`SessionTotals.speedUnitsPerHour` but is **not** offered as a chart option — it
+is pace's reciprocal, and two axes for one quantity is clutter.
+
+#### Aggregation (`CardioProgressAnalytics`)
+
+One point per session per exercise, matching how the strength chart has always
+grouped. All of an exercise's sets in that session are summed, **warm-ups
+included** — the same rule `.totalDuration` already used, and the one that keeps
+the chart agreeing with the History row the user is reading.
+
+- Distance and duration are plain sums; absent ⇒ 0 ⇒ **no point**, never a zero
+  point.
+- Pace is **weighted**, never a mean of per-set paces: averaging rates weights a
+  400 m stride the same as a 10 km run and reports a pace nobody ran. It needs
+  both totals positive, so a distance-only or duration-only session is simply
+  absent from the pace chart.
+- Calories and heart rate stay optional. A blank field is excluded from the
+  series and from the average — not treated as zero.
+- Heart rate is duration-weighted when any reading carries a duration; untimed
+  readings sit out of that weighting rather than entering at weight 0. With no
+  timed readings at all it falls back to a plain mean.
+- Nothing filters on `SetKind` or on exercise type: a strength set carries no
+  distance and no duration, so it contributes 0 by construction. That is the
+  mechanism keeping strength rows out of cardio charts.
+
+#### Separation from strength
+
+`availableProgressMetrics` checks cardio **first** (cardio implies time-based, so
+the duration-only rule would otherwise swallow it) and returns only cardio
+metrics. A cardio exercise is never offered e1RM, volume, best weight, or reps; a
+strength exercise is never offered distance, pace, calories, or heart rate; a
+non-cardio timed hold is still duration-only. In the other direction,
+`WorkoutHistoryAnalytics`'s `weight > 0 && reps > 0` gate already excludes cardio
+from the strength/volume series — §3.4 called that "existing protection to
+preserve", and it is now pinned by test rather than assumed.
+
+#### Units and presentation
+
+Distance and pace render in `AppSettings.distanceUnit`. `ProgressChart` declares
+`@AppStorage(AppSettings.Keys.distanceIsMetric)` and recomputes on change, so
+flipping km ↔ mi re-plots an open chart — the Slice 8 rule, applied to charts.
+Stored meters never move.
+
+Two presentation details that would be wrong if taken from the strength chart
+unchanged:
+
+- **Pace is plotted in seconds per unit** (the only linear form) with axis ticks
+  formatted `m:ss`. Neither "330" nor the decimal "5.5" is a pace anyone reads.
+- **The PR rosette follows the minimum for pace**, the maximum for everything
+  else. Marking the slowest run as a personal record is a lie the chart would
+  tell at a glance.
+
+Each cardio metric has its own empty state naming the missing field, because for
+cardio "no data" usually means one field was left blank, not that the exercise
+was never trained.
+
+#### Not built, deliberately
+
+Weekly distance / weekly duration roll-ups and the pace chart's distance
+secondary axis (both sketched in §3.4) are **not** in this slice. The §3.4 pace
+caveat stands and is unmitigated: a 400 m interval session and a 10 km run share
+one axis. What reduces the harm is that each point is a *session total* pace
+rather than a per-set pace, and distance is one tap away in the same picker. If
+testers find it misleading, the secondary axis is the fix — the aggregation
+layer already returns everything it needs.
+
 ### 2.4 Deferring HealthKit
 
 **Answer to design question 5. Yes — explicitly deferred, and not to Phase 3
@@ -1296,6 +1379,14 @@ alone; they are the ones that carry the value.
 requires `weight > 0 && reps > 0`, so cardio sets already fall out of the
 strength series naturally. This must be verified by test, not assumed — it is
 the thing that keeps a 45-minute walk from appearing as a bench press data point.
+
+✅ **Shipped in Slice 11**, with the scope trimmed — see §2.40 for what was
+built and why. Per-session distance, duration, pace, calories, and average heart
+rate ship inside the existing Progression chart. The **weekly** distance and
+duration roll-ups do **not**, and neither does the pace chart's distance
+secondary axis; the pace caveat above therefore stands unmitigated and is
+documented as such. The `hasValidWorkingSet` protection is now pinned by
+`CardioProgressChartTests.testCardioWorkoutsAreInvisibleToStrengthAnalytics`.
 
 ### 3.5 Import / export
 
@@ -1602,7 +1693,7 @@ independently committable, additive-first.
 | 6c | ✅ Distance-unit Settings control, Settings-only policy (§2.37) | The Slice 1 preference had no UI; exposing it is independent of everything below. Patched before merge to remove the per-target unit pickers that overrode it |
 | 7 | ✅ CSV v2 (dual-header import, history export columns) + routine-transfer compatibility (§2.38) | Isolated, high test value. Shipped ninth in execution order, after 6b and 6c |
 | 8 | ✅ Catalogue v3 + assisted "mark as cardio" prompt (§2.39) | Last in Phase 1 — it is the only slice that touches existing user data |
-| 9 | Phase 2 charts | After real cardio data exists |
+| 9 | ✅ Cardio History charts (§2.40) — per-session series; weekly roll-ups still open | After real cardio data exists |
 
 Slices 1–8 are Phase 1. Slice 6 is the one most tempting to defer and the one
 most likely to reintroduce a known bug; it ships with Phase 1 or Phase 1 does not
@@ -1624,8 +1715,14 @@ Resolve before Slice 1, not during:
    one `UserDefaults` integer. The user-guide line was written anyway — the two
    are complements, not alternatives: the prompt catches the seven beta
    exercises once, the guide explains the toggle forever.
-3. **Does the pace chart read well enough to ship in Phase 2?** Deferrable to
-   Phase 2 itself, since distance and duration series carry the value alone.
+3. **Does the pace chart read well enough to ship in Phase 2?** ~~Deferrable to
+   Phase 2 itself, since distance and duration series carry the value alone.~~
+   **Shipped in Slice 11, and still open as a question for testers.** Pace is a
+   chart option alongside distance and duration, plotted from session totals
+   with `m:ss` ticks. What the design feared — a 400 m interval session next to
+   a 10 km run on one axis — is not solved, only made honest: each point is a
+   real session pace, and distance sits one tap away in the same picker. The
+   secondary-axis mitigation is still the fix if beta feedback says it misleads.
 4. **Should `hrZone` and `avgHeartRate` both exist?** They serve different
    equipment. If beta testers only ever use one, drop the other in Slice 3.
 5. ~~**Should decline (negative incline) be supported?**~~ **Resolved: yes.**
