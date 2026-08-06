@@ -1115,14 +1115,37 @@ did: `shouldOfferPrompt` reads the flag and the candidates, and nothing from the
 seeding path. A launch where `seedIfNeeded` short-circuits on its own version
 flag still offers the migration.
 
-Two independent gates mean the prompt cannot appear when it has nothing to do:
+**Only the user resolves the flag.** No launch-path code writes it — a rule
+learned the hard way, see the patch note below.
 
-- **Fresh installs.** The seeder calls `resolvePrompt` when the store is empty at
-  seed time, so v3's correct cardio rows are never followed by a migration
-  offer — not even later, when the user hand-builds a Cardio exercise and leaves
-  the toggle off.
-- **No candidates.** `shouldPrompt` re-reads the store every launch, so a user
-  who converted their exercises manually in Exercise Detail stops being asked.
+The prompt still cannot appear when it has nothing to do, because
+`shouldOfferPrompt` re-reads the store every time:
+
+- **Fresh installs** are silent because catalogue v3 seeds cardio rows with
+  `isCardio == true`, so the candidate rule finds nothing. No flag write is
+  needed to achieve that, and none happens.
+- **Converted stores** are silent for the same reason: a user who flipped the
+  toggles manually in Exercise Detail stops being asked.
+
+#### Patch note: the seeder must not pre-resolve the flag
+
+The first cut resolved the flag whenever the seeder ran against an empty store,
+reasoning that a fresh v3 install has nothing to migrate. True at that instant,
+and wrong a moment later. Install the build, then import your exercise CSV — the
+documented way to bring a library across — and genuine legacy Cardio rows land
+in a store whose flag already reads "resolved". On device this produced
+`versionGate=BLOCKED promptVersionRaw=3` against seven valid candidates: the
+offer was dead before it was ever asked for, permanently.
+
+The suppression bought nothing the candidate rule did not already provide, so it
+is gone. One edge case is accepted deliberately in exchange: a user who builds a
+time-based Cardio exercise by hand and leaves the Cardio toggle off is offered
+the migration once. That is a fair question to ask, and far cheaper than
+silently stranding an imported library.
+
+`CardioMigrationService.diagnostics(in:defaults:)` (DEBUG only) prints every
+input to the gate plus the reason it answered as it did, because
+"pending=false, candidates=6" is a symptom, not a diagnosis.
 
 #### What conversion writes, and what it preserves
 
@@ -1357,9 +1380,10 @@ instead. Fresh installs get it correct from the start. This asymmetry is
 intentional and must be covered by test.
 
 ✅ **Shipped in Slice 10**, exactly as written, and the asymmetry is covered by
-`CardioCatalogMigrationTests`. One addition the plan did not anticipate: the
-seeder also *resolves* the migration prompt when it seeds into an empty store,
-so a fresh install can never be offered a migration it does not need (§2.39).
+`CardioCatalogMigrationTests`. The seeder writes the catalogue and nothing else:
+an addition that pre-resolved the migration prompt on a fresh seed was tried and
+reverted before merge, because it silently stranded libraries imported after
+install (§2.39, "the seeder must not pre-resolve the flag").
 
 ### Migration risk register
 

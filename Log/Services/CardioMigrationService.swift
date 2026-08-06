@@ -95,11 +95,66 @@ enum CardioMigrationService {
     }
 
     /// Records that the prompt no longer needs to be shown under this catalogue
-    /// version. Called for "Not Now", after a successful conversion, and by the
-    /// seeder on a fresh install (where v3 already seeds cardio correctly).
+    /// version. Called for "Not Now" and after a successful conversion — i.e.
+    /// **only in response to the user**. Nothing on the launch path writes it;
+    /// see the note on `ExerciseSeedService` for why the seeder no longer does.
     static func resolvePrompt(defaults: UserDefaults = .standard) {
         defaults.set(ExerciseCatalog.currentVersion, forKey: promptVersionKey)
     }
+
+    // MARK: - Diagnostics (DEBUG)
+
+    #if DEBUG
+    /// Every input to `shouldOfferPrompt`, plus the reason it answered as it
+    /// did. Exists because "pending=false, candidates=6" is not a diagnosis —
+    /// it says the gate rejected without saying which half.
+    struct Diagnostics {
+        let isUITesting: Bool
+        let catalogVersion: Int
+        /// Raw value as stored, so an *absent* flag is distinguishable from a
+        /// stored `0`. `defaults.integer(forKey:)` collapses both to 0.
+        let rawPromptVersion: Int?
+        let versionGatePasses: Bool
+        let candidateCount: Int
+        let shouldOffer: Bool
+
+        /// Why no offer, in the service's terms. `nil` when an offer is owed.
+        var skipReason: String? {
+            if shouldOffer { return nil }
+            if !versionGatePasses {
+                return "prompt already resolved for catalogue v"
+                    + "\(rawPromptVersion.map(String.init) ?? "nil")"
+                    + " (current v\(catalogVersion))"
+            }
+            return "no candidates in store"
+        }
+
+        var summary: String {
+            "uiTesting=\(isUITesting) catalogVersion=\(catalogVersion) "
+                + "promptVersionRaw=\(rawPromptVersion.map(String.init) ?? "absent") "
+                + "versionGate=\(versionGatePasses ? "pass" : "BLOCKED") "
+                + "candidates=\(candidateCount) shouldOffer=\(shouldOffer)"
+                + (skipReason.map { " skipReason=\($0)" } ?? "")
+        }
+    }
+
+    static func diagnostics(
+        in ctx: ModelContext,
+        defaults: UserDefaults = .standard
+    ) -> Diagnostics {
+        let raw = defaults.object(forKey: promptVersionKey) as? Int
+        let gate = (raw ?? 0) < ExerciseCatalog.currentVersion
+        let count = candidates(in: ctx).count
+        return Diagnostics(
+            isUITesting: CommandLine.arguments.contains("--ui-testing"),
+            catalogVersion: ExerciseCatalog.currentVersion,
+            rawPromptVersion: raw,
+            versionGatePasses: gate,
+            candidateCount: count,
+            shouldOffer: gate && count > 0
+        )
+    }
+    #endif
 
     // MARK: - Conversion
 

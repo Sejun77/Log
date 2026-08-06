@@ -360,25 +360,47 @@ final class CardioCatalogMigrationTests: SwiftDataTestHarness {
             0)
     }
 
-    /// Requirement 12, end to end: a fresh install seeds v3 cardio rows, which
-    /// are not candidates, *and* the seeder resolves the flag — so a Cardio
-    /// exercise the user hand-builds later never triggers a migration offer.
+    /// A fresh install must not prompt — and the reason matters. It is silent
+    /// because catalogue v3 seeds cardio rows correctly and the candidate rule
+    /// finds nothing, **not** because anything pre-resolved the flag.
     func testFreshInstallSeedNeverPrompts() throws {
         seed()
 
         XCTAssertTrue(CardioMigrationService.candidates(in: context).isEmpty)
         XCTAssertFalse(
             CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
+    }
 
-        let handBuilt = legacyCardioExercise(name: "My Own Bike")
-        try context.save()
-        XCTAssertTrue(
-            CardioMigrationService.isCandidate(handBuilt),
-            "the rule still matches the row…")
+    /// The seeder must not write the prompt flag on any path.
+    ///
+    /// > **Regression test for the pre-merge bug.** The first cut resolved the
+    /// > flag whenever it seeded into an empty store. On device that produced
+    /// > `versionGate=BLOCKED promptVersionRaw=3` against a store with seven
+    /// > valid candidates: the offer was dead before it was ever asked for.
+    func testFreshSeedDoesNotResolveThePromptFlag() throws {
+        seed()
+
+        XCTAssertNil(
+            defaults.object(forKey: CardioMigrationService.promptVersionKey),
+            "only the user resolves the prompt — seeding must not touch it")
+    }
+
+    /// The case the bug actually broke: install the new build, *then* import an
+    /// old exercise library. Those rows are genuine legacy candidates and must
+    /// still be offered.
+    func testCandidatesArrivingAfterAFreshSeedAreStillOffered() throws {
+        seed()
         XCTAssertFalse(
             CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults),
-            "…but a fresh install already resolved the prompt, so it stays "
-                + "silent")
+            "precondition: nothing to offer straight after seeding")
+
+        // e.g. an exercise CSV import bringing a pre-cardio row across.
+        let imported = legacyCardioExercise(name: "CSV Bike")
+
+        XCTAssertTrue(CardioMigrationService.isCandidate(imported))
+        XCTAssertTrue(
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults),
+            "a candidate that appears after seeding must still be offered")
     }
 
     /// An upgrading v2-era install is the case the prompt exists for: the

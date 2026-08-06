@@ -193,18 +193,30 @@ struct BootstrapRoot: View {
     /// bails while the splash is still up.
     @MainActor
     private func offerCardioMigration() async {
-        guard !isUITesting else { return }
+        #if DEBUG
+        let diagnostics = CardioMigrationService.diagnostics(in: ctx)
+        let pendingBefore = hasPendingCardioMigration
+        let showingBefore = showCardioMigrationPrompt
+        func trace(_ outcome: String) {
+            print(
+                "🏃 cardio migration: \(diagnostics.summary) "
+                    + "pending=\(pendingBefore)→\(hasPendingCardioMigration) "
+                    + "showing=\(showingBefore)→\(showCardioMigrationPrompt) "
+                    + "loading=\(isLoading) phase=\(scenePhase) "
+                    + "outcome=\(outcome)"
+            )
+        }
+        #else
+        func trace(_ outcome: String) {}
+        #endif
+
+        guard !isUITesting else {
+            trace("skipped: --ui-testing")
+            return
+        }
 
         hasPendingCardioMigration =
             CardioMigrationService.shouldOfferPrompt(in: ctx)
-
-        #if DEBUG
-        print(
-            "🏃 cardio migration: pending=\(hasPendingCardioMigration) "
-                + "candidates=\(CardioMigrationService.candidates(in: ctx).count) "
-                + "loading=\(isLoading)"
-        )
-        #endif
 
         // Deliberately **not** gated on `scenePhase`. Reading it here would be
         // reading a snapshot captured when this closure's view value was made,
@@ -213,14 +225,28 @@ struct BootstrapRoot: View {
         // the offer with nothing left to retrigger it. Presenting while
         // inactive is harmless: if the system swallows it, the `.active`
         // transition retries.
-        guard hasPendingCardioMigration, !isLoading else { return }
+        guard hasPendingCardioMigration else {
+            #if DEBUG
+            trace("skipped: \(diagnostics.skipReason ?? "no offer owed")")
+            #else
+            trace("skipped")
+            #endif
+            return
+        }
+        guard !isLoading else {
+            trace("deferred: splash still up, will retry after loading")
+            return
+        }
 
         // Let the current transaction (splash fade, or the dismissal of the
         // system alert that just gave us `.active` back) finish before asking
         // UIKit to present. Presenting into a transition is what made this
         // flaky in the first place.
         try? await Task.sleep(nanoseconds: 400_000_000)
-        guard hasPendingCardioMigration, !isLoading else { return }
+        guard hasPendingCardioMigration, !isLoading else {
+            trace("deferred: state changed while settling")
+            return
+        }
 
         // Re-arm rather than assign. If a previous attempt was swallowed the
         // binding is still `true`, and assigning `true` again is a no-op that
@@ -229,11 +255,13 @@ struct BootstrapRoot: View {
         // SwiftUI a fresh false→true edge to act on. The one cost is that an
         // alert genuinely on screen when the app is backgrounded re-presents
         // itself on return; it ends up in the right state either way.
+        let didReArm = showCardioMigrationPrompt
         if showCardioMigrationPrompt {
             showCardioMigrationPrompt = false
             await Task.yield()
         }
         showCardioMigrationPrompt = true
+        trace(didReArm ? "presented (re-armed)" : "presented")
     }
 
     // MARK: - Test Data Reset
