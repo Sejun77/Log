@@ -189,26 +189,44 @@ final class ExerciseTrackingModeTests: SwiftDataTestHarness {
         XCTAssertEqual(ex.trackingMode, .timedHold)
     }
 
-    /// The seed catalogue is untouched in this slice: no seed is cardio, and
-    /// the catalogue version is not bumped.
-    func testSeedCatalogueShipsNoCardioAndIsNotVersionBumped() {
+    /// The seed catalogue marks cardio only where the body part says so.
+    ///
+    /// > **Superseded by Cardio Slice 10.** This test originally asserted the
+    /// > opposite — that *no* seed is cardio and the catalogue version is still
+    /// > 2 — which was Slice 2's deliberate deferral, not a product rule.
+    /// > Slice 10 shipped catalogue v3, so what is worth pinning now is the
+    /// > line the deferral was protecting: cardio is opt-in **by body part**,
+    /// > never inferred from an exercise's name, and a timed hold like Plank is
+    /// > not swept in with it.
+    func testSeedCatalogueMarksCardioOnlyForTheCardioBodyPart() {
         let seeded = ExerciseCatalog.v1.map { seed -> Exercise in
             let ex = Exercise(
                 name: seed.name,
                 bodyPart: seed.bodyPart,
                 isCustom: false
             )
-            ex.isTimeBased = seed.isTimeBased
+            ex.setTimeBased(seed.isTimeBased)
+            ex.setCardio(seed.isCardio)
             return ex
         }
 
         XCTAssertFalse(
-            seeded.contains { $0.isCardio },
-            "Slice 2 must not seed any cardio exercise"
+            seeded.filter { $0.isCardio }.isEmpty,
+            "catalogue v3 seeds cardio exercises"
         )
+        for ex in seeded where ex.isCardio {
+            XCTAssertEqual(
+                ex.bodyPart, "Cardio",
+                "\(ex.name) is marked cardio without the Cardio body part"
+            )
+        }
         XCTAssertEqual(
-            ExerciseCatalog.currentVersion, 2,
-            "Catalogue version bump belongs to a later slice"
+            seeded.first { $0.name == "Plank" }?.trackingMode, .timedHold,
+            "a timed hold outside Cardio must stay a timed hold"
+        )
+        XCTAssertGreaterThanOrEqual(
+            ExerciseCatalog.currentVersion, 3,
+            "catalogue v3 is what delivers the cardio seeds to fresh installs"
         )
     }
 }

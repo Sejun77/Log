@@ -17,6 +17,12 @@ struct BootstrapRoot: View {
     @State private var isLoading = true
     @State private var launchStart = Date()
 
+    /// Cardio Slice 10: drives the one-time assisted "mark as cardio" alert.
+    /// Armed after the splash clears (never during loading, where the overlay
+    /// swallows hit testing) and only when `CardioMigrationService` finds
+    /// candidates under an unresolved prompt version.
+    @State private var showCardioMigrationPrompt = false
+
     // MARK: - Environment Flags
 
     /// Returns true when running under UI tests (Xcode launch argument).
@@ -39,6 +45,26 @@ struct BootstrapRoot: View {
                     .modifier(IgnoreAllSafeAreas())
                     // Block taps while loading is visible.
                     .allowsHitTesting(isLoading)
+            }
+            // Cardio Slice 10: assisted, user-approved migration of pre-cardio
+            // Cardio exercises. Nothing is converted unless the user taps the
+            // primary button; "Not Now" silences the prompt for this catalogue
+            // version. See `CardioMigrationService` for the candidate rule and
+            // the prompt policy.
+            .alert(
+                "Update Cardio Exercises",
+                isPresented: $showCardioMigrationPrompt
+            ) {
+                Button("Mark as Cardio") {
+                    CardioMigrationService.markCandidatesAsCardio(in: ctx)
+                }
+                Button("Not Now", role: .cancel) {
+                    CardioMigrationService.resolvePrompt()
+                }
+            } message: {
+                Text(
+                    "Log now supports dedicated cardio tracking. Older exercises in the Cardio category can be updated to use distance, pace, heart rate, calories, incline, and resistance fields."
+                )
             }
             .task {
                 launchStart = Date()
@@ -115,6 +141,16 @@ struct BootstrapRoot: View {
                 }
 
                 isLoading = false
+
+                // Cardio Slice 10: offer the assisted migration only after the
+                // splash clears, so the alert is never presented behind the
+                // hit-testing-blocked overlay. Read-only when it decides not to
+                // prompt — an empty or unreadable store simply yields no
+                // candidates, so launch is never blocked by this check.
+                if !isUITesting {
+                    showCardioMigrationPrompt =
+                        CardioMigrationService.shouldPrompt(in: ctx)
+                }
             }
     }
 
@@ -148,6 +184,12 @@ struct BootstrapRoot: View {
         // reappear under UI tests.
         UserDefaults.standard.removeObject(
             forKey: ExerciseSeedService.seedVersionKey
+        )
+        // Cardio Slice 10: same reasoning for the assisted-migration flag —
+        // the wiped store re-seeds as a fresh install, which resolves the
+        // prompt again on its own.
+        UserDefaults.standard.removeObject(
+            forKey: CardioMigrationService.promptVersionKey
         )
     }
 

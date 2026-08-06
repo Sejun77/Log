@@ -2295,6 +2295,18 @@
         }
       }
     },
+    "Log now supports dedicated cardio tracking. Older exercises in the Cardio category can be updated to use distance, pace, heart rate, calories, incline, and resistance fields." : {
+      "comment" : "Cardio Slice 10: message of the one-time assisted cardio-migration alert",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이제 Log에서 유산소 전용 기록을 지원합니다. 유산소 부위에 있는 기존 운동을 거리, 페이스, 심박수, 칼로리, 경사, 저항 항목을 사용하도록 업데이트할 수 있습니다."
+          }
+        }
+      }
+    },
     "Machine" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2312,6 +2324,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "직접 정렬"
+          }
+        }
+      }
+    },
+    "Mark as Cardio" : {
+      "comment" : "Cardio Slice 10: primary button of the assisted cardio-migration alert — converts the detected exercises",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "유산소로 표시"
           }
         }
       }
@@ -2616,6 +2640,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "없음"
+          }
+        }
+      }
+    },
+    "Not Now" : {
+      "comment" : "Cardio Slice 10: secondary button of the assisted cardio-migration alert — converts nothing",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "나중에"
           }
         }
       }
@@ -4406,6 +4442,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "단위"
+          }
+        }
+      }
+    },
+    "Update Cardio Exercises" : {
+      "comment" : "Cardio Slice 10: title of the one-time assisted cardio-migration alert",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "유산소 운동 업데이트"
           }
         }
       }

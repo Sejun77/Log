@@ -15,6 +15,12 @@ import XCTest
 /// > catalogue* stays duration-based and that a cardio slot is still governed
 /// > by the duration rules. Structured metrics are opt-in per set; a beta
 /// > cardio log carrying only a duration renders exactly as it always has.
+/// >
+/// > **Superseded again, in part, by Cardio Slice 10.** Catalogue v3 marks the
+/// > seeded Cardio rows `isCardio = true`. They are still duration-based —
+/// > which is what every assertion here checks, and it stays true — but a fresh
+/// > install now gets the metric fields alongside the duration instead of
+/// > notes. See `CardioCatalogMigrationTests`.
 ///
 /// These tests pin the parts of that decision that are easy to break later:
 /// the seeded cardio catalogue stays duration-based, the Cardio body part stays

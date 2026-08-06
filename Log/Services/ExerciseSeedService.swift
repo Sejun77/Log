@@ -57,6 +57,16 @@ enum ExerciseSeedService {
         let existing: [Exercise] =
             (try? ctx.fetch(FetchDescriptor<Exercise>())) ?? []
 
+        // Cardio Slice 10: an empty store at seed time is a fresh install, so
+        // catalogue v3 is about to write correct `isCardio` rows and there is
+        // no legacy data to migrate. Resolve the assisted-migration prompt now
+        // rather than leaving it armed — otherwise a user who later hand-builds
+        // a time-based Cardio exercise without the Cardio toggle would be
+        // offered a migration they never needed.
+        if existing.isEmpty {
+            CardioMigrationService.resolvePrompt(defaults: defaults)
+        }
+
         var existingNameKeys: Set<String> = Set(
             existing.map { normalize($0.name) }
         )
@@ -79,7 +89,12 @@ enum ExerciseSeedService {
                 setupDefaults: seed.setupDefaults,
                 isCustom: false
             )
-            ex.isTimeBased = seed.isTimeBased
+            // Written through the model's invariant-enforcing setters rather
+            // than by direct assignment: `setCardio` is a no-op unless the row
+            // is already time-based, so a malformed catalogue entry can never
+            // produce `isCardio == true && isTimeBased == false` in the store.
+            ex.setTimeBased(seed.isTimeBased)
+            ex.setCardio(seed.isCardio)
             ex.includesBodyweightInLoad =
                 defaultIncludesBodyweightInLoad(equipmentType: seed.equipmentType)
             ex.order = nextOrder
