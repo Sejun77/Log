@@ -448,6 +448,18 @@
         }
       }
     },
+    "Add Segment" : {
+      "comment" : "Structured Cardio Slice 12C: menu button that appends a segment to the cardio plan",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구간 추가"
+          }
+        }
+      }
+    },
     "Add Superset" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -466,6 +478,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 기법 추가"
+          }
+        }
+      }
+    },
+    "Add warm-up, work, recovery, or cool-down segments." : {
+      "comment" : "Structured Cardio Slice 12C: empty state of the cardio segment editor",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워밍업, 본 운동, 회복, 쿨다운 구간을 추가하세요."
           }
         }
       }
@@ -1028,6 +1052,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "실패 후 부분 가동 범위로 계속합니다."
+          }
+        }
+      }
+    },
+    "Cool-down" : {
+      "comment" : "Structured Cardio Slice 12C: cardio segment type: the easy end of a bout",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "쿨다운"
           }
         }
       }
@@ -1656,6 +1692,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "장비 및 세팅"
+          }
+        }
+      }
+    },
+    "Every field is optional. Fill in at least one." : {
+      "comment" : "Structured Cardio Slice 12C: footer of the segment editor sheet explaining that a segment needs at least one target",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 항목은 선택 사항이며, 최소 한 가지는 입력해야 합니다."
           }
         }
       }
@@ -3107,6 +3155,18 @@
         }
       }
     },
+    "Recovery" : {
+      "comment" : "Structured Cardio Slice 12C: cardio segment type: the easy part between efforts",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "회복"
+          }
+        }
+      }
+    },
     "Recent Workouts" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3136,6 +3196,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "제거"
+          }
+        }
+      }
+    },
+    "Remove Segment" : {
+      "comment" : "Structured Cardio Slice 12C: destructive button in the segment editor sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구간 삭제"
           }
         }
       }
@@ -3720,6 +3792,18 @@
         }
       }
     },
+    "Segments" : {
+      "comment" : "Structured Cardio Slice 12C: section header listing the segments of a cardio plan",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구간"
+          }
+        }
+      }
+    },
     "Select an exercise to view progression." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4158,6 +4242,18 @@
         }
       }
     },
+    "Structured Cardio" : {
+      "comment" : "Structured Cardio Slice 12C: routine editor row and screen title for the cardio segment plan",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "유산소 구성"
+          }
+        }
+      }
+    },
     "Superset" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4391,6 +4487,18 @@
         }
       }
     },
+    "This plan is full." : {
+      "comment" : "Structured Cardio Slice 12C: footer shown when a cardio plan has reached the maximum number of segments",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 구성은 더 이상 추가할 수 없습니다."
+          }
+        }
+      }
+    },
     "Time-based" : {
       "localizations" : {
         "ko" : {
@@ -4598,6 +4706,18 @@
     "W%lld" : {
 
     },
+    "Warm-up" : {
+      "comment" : "Structured Cardio Slice 12C: cardio segment type: the easy start of a bout",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워밍업"
+          }
+        }
+      }
+    },
     "Warm-up Set" : {
       "comment" : "History row label for a warm-up set",
       "extractionState" : "manual",
@@ -4737,6 +4857,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 데이터가 변경되었습니다"
+          }
+        }
+      }
+    },
+    "Work" : {
+      "comment" : "Structured Cardio Slice 12C: cardio segment type: the main effort",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "본 운동"
           }
         }
       }

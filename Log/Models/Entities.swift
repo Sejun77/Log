@@ -611,6 +611,23 @@ final class SlotPrescription {
     var targetDistanceMeters: Double? = nil
     var targetDistanceUnitRaw: String? = nil
 
+    /// Structured Cardio Slice 12C — the slot's optional segment plan
+    /// (warm-up / work / recovery / cool-down), JSON-encoded.
+    ///
+    /// A `Data?` column rather than a `@Model` + relationship, following
+    /// `WorkoutItem.warmupStepsSnapshotData`: segments are never queried
+    /// independently, so rows would buy nothing and cost cascade rules,
+    /// ordering discipline, deep-copy, and an orphan sweep — the class of bug
+    /// `BackfillService.purgeOrphanSetTemplates` exists to clean up.
+    ///
+    /// Read and written **only** through `structuredCardioPlan` /
+    /// `setStructuredCardioPlan` (see `SlotPrescription+StructuredCardio.swift`),
+    /// which normalize on both sides, so a corrupt payload degrades to "no
+    /// plan" instead of reaching a view. Optional / nil-default: every existing
+    /// prescription migrates lightweightly and reads as unstructured, which is
+    /// what 100% of them are.
+    var cardioSegmentsData: Data? = nil
+
     /// The tempo this prescription may actually display.
     ///
     /// Tempo describes eccentric/concentric rep phases and is meaningless for a
@@ -832,6 +849,15 @@ final class PlannedPrescriptionSnapshot {
     // migrate lightweightly and read as "no distance target".
     var targetDistanceMeters: Double? = nil
     var targetDistanceUnitRaw: String? = nil
+
+    /// Structured Cardio Slice 12C — frozen copy of the slot's segment plan.
+    ///
+    /// The column lands with the editor (12C) rather than with its first reader
+    /// (12D) on purpose: 12C is the one schema-touching slice in the structured
+    /// cardio plan, and adding this later would make a second one. **Nothing
+    /// writes or reads it yet** — session snapshotting is 12D — so a workout
+    /// started today snapshots nil, exactly as before.
+    var cardioSegmentsData: Data? = nil
 
     /// The tempo History / session detail may display for this frozen snapshot.
     /// Nil for a duration-based row, so an already-completed workout that

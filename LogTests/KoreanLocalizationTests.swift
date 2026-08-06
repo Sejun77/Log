@@ -416,6 +416,62 @@ final class KoreanLocalizationTests: XCTestCase {
         }
     }
 
+    // MARK: - Structured cardio editor (Slice 12C)
+
+    /// Every string the routine editor's Structured Cardio screen introduces.
+    /// The four segment-type names are the ones that matter most: they are the
+    /// vocabulary of the feature, and they render inside an otherwise Korean
+    /// routine editor.
+    private static let structuredCardioKeys = [
+        "Structured Cardio",
+        "Segments",
+        "Add Segment",
+        "Add warm-up, work, recovery, or cool-down segments.",
+        "Remove Segment",
+        "Every field is optional. Fill in at least one.",
+        "This plan is full.",
+        "Warm-up",
+        "Work",
+        "Recovery",
+        "Cool-down",
+    ]
+
+    func testStructuredCardioStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.structuredCardioKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Structured cardio string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testStructuredCardioStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.structuredCardioKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// `CardioSegmentKind.label` is the single source of the four type names —
+    /// the editor renders it through `LocalizedStringKey`, so every case must
+    /// have a catalog entry or a Korean user sees an English row.
+    func testEverySegmentKindLabelLocalizes() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        XCTAssertEqual(CardioSegmentKind.allCases.count, 4)
+        for kind in CardioSegmentKind.allCases {
+            XCTAssertNotEqual(
+                localized(kind.label, in: ko), kind.label,
+                "Segment kind \(kind.rawValue) has no Korean translation")
+        }
+    }
+
     /// Every metric title in the History picker is rendered through
     /// `LocalizedStringKey`, so each one either has a translation or falls back
     /// to its English literal. This pins the cardio titles specifically: they

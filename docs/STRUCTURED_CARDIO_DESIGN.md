@@ -1,8 +1,9 @@
 # Structured Cardio — Design
 
-**Status:** design complete (Slice 12A). **Slice 12B shipped** — the pure value
-types exist and are tested; nothing is persisted, rendered, or exported yet
-(see §11). Companion to `CARDIO_SYSTEM_DESIGN.md`, which covers Phase 1
+**Status:** design complete (Slice 12A). **Slices 12B and 12C shipped** — the
+value types exist, a cardio routine slot can carry a segment plan, and the
+routing editor authors it. Nothing is shown during a workout, in History, or in
+any export yet (see §11 and §12). Companion to `CARDIO_SYSTEM_DESIGN.md`, which covers Phase 1
 (Slices 1–11, shipped).
 
 **Scope:** how Log programs a cardio bout that has *shape* — warm-up, work,
@@ -488,7 +489,7 @@ means the only slice that touches the schema does nothing else.
 | Slice | Contents | Touches schema? | Tests required? |
 |---|---|---|---|
 | **12B** ✅ | Pure `CardioSegment` / `CardioSegmentGroup` / `CardioSegmentPlan`, validation, bounds, `expandedSegments()`, summary text. No UI, no persistence — **shipped, see §11** | No | Yes (pure) |
-| **12C** | `cardioSegmentsData` on `SlotPrescription` + `PlannedPrescriptionSnapshot`; `CardioRoutineRules.showsCardioSegments`; routine editor Segments screen; localization of the kind labels | **Yes** (2 additive optional columns) | **Yes** — schema slice |
+| **12C** ✅ | `cardioSegmentsData` on `SlotPrescription` + `PlannedPrescriptionSnapshot`; `CardioRoutineRules.showsCardioSegments`; routine editor Segments screen; localization of the kind labels — **shipped, see §12** | **Yes** (2 additive optional columns) | **Yes** — schema slice |
 | **12D** | `SessionPlan` carry-through, snapshot at session start, active-workout checklist + tick persistence, switch-adapter rules. Logging path untouched | No | Yes — session/ownership |
 | **12E** | History detail "Planned" section; routine transfer payload; compatibility fixtures | No | Yes — transfer/compat |
 | **12F** | *Conditional.* Repeat-group UI; then, only if justified, per-segment actuals | Only if actuals ship | Yes |
@@ -628,7 +629,106 @@ names come from.
 
 ---
 
-## 12. Open questions for beta feedback
+## 12. Slice 12C — as built
+
+**Shipped:** routine-level persistence and the authoring UI.
+
+| File | |
+|---|---|
+| `Log/Models/Entities.swift` | `cardioSegmentsData: Data?` on `SlotPrescription` **and** `PlannedPrescriptionSnapshot` |
+| `Log/Models/SlotPrescription+StructuredCardio.swift` | `structuredCardioPlan`, `setStructuredCardioPlan(_:)`, `clearStructuredCardioPlan()`, `hasStructuredCardioPlan` |
+| `Log/Services/CardioRoutineRules.swift` | `showsCardioSegments(_:)` |
+| `Log/Main/Routines/CardioSegmentPlanEditor.swift` | the editor screen + per-segment sheet |
+| `Log/Main/Routines/PrescriptionFields.swift` | the **Structured Cardio** row, beside the distance target |
+| `Log/Services/RoutineDuplicator.swift` | copies the payload |
+
+### Persisted fields
+
+`SlotPrescription.cardioSegmentsData: Data?` — the editable plan, JSON.
+
+`PlannedPrescriptionSnapshot.cardioSegmentsData: Data?` — added now, **written
+by nobody**. 12C is the one schema-touching slice in this plan (§9); adding the
+snapshot column with its first reader in 12D would have made a second one. A
+workout started today still snapshots nil.
+
+Both optional, nil-default. **Verified on a real store**: launching the new build
+against an existing simulator database added both `ZCARDIOSEGMENTSDATA` BLOB
+columns by lightweight migration with 31 exercises, 5 workouts and 6 set logs
+preserved and no custom `SchemaMigrationPlan`.
+
+### One representation of "no structure"
+
+`structuredCardioPlan` returns `nil` for a nil payload, an empty plan, an
+unreadable payload, and a payload whose every segment normalizes away.
+`setStructuredCardioPlan` clears the column for a nil or empty plan rather than
+storing an empty payload. So the store has exactly one way to say "no
+structure", no view checks three states, and **a corrupt payload costs the plan,
+never the routine** — a slot whose column is garbage still opens and edits.
+
+### Editor behavior
+
+The prescription section gains a **Structured Cardio** row for cardio slots
+only (`showsCardioSegments`), directly under the distance target, showing the
+plan summary or "None". It pushes a list screen:
+
+- **Add Segment** — a menu of the four kinds; the new row is seeded with a
+  plausible duration (warm-up/cool-down 5 min, work 10 min, recovery 2 min) so
+  it is valid on creation, and its editor opens immediately.
+- **Tap a row** — a sheet with type, duration (`DurationFieldRow` presets +
+  wheels), distance, incline/decline, resistance, HR zone, and a note. **Done is
+  disabled while every field is empty**, which is how "a segment needs at least
+  one target" is enforced — a disabled control rather than an alert after the
+  fact.
+- **Swipe to delete**, **drag to reorder** (EditButton). Order is the plan.
+- Add is disabled at the segment cap, with a footer saying so.
+
+Every mutation commits straight to the prescription; there is no unsaved state
+to lose, matching how the rest of the routine editor behaves.
+
+**Segment fields exposed: all of them.** The design's §4.1 sketch expected
+incline/resistance/HR zone might have to be deferred for space; in a dedicated
+per-segment sheet they cost one row each, so nothing was cut.
+
+### Repeats: still deferred
+
+The editor authors exactly **one group with `repeatCount == 1`**. The field is
+stored, enforced, and round-tripped — a repeated plan written by 12F (or by
+hand) reads and renders correctly today — but no UI produces one. Pinned by
+`testEditorAuthoredPlansUseASingleUnrepeatedGroup`.
+
+### Duplication
+
+`RoutineDuplicator.copyPrescription` copies `cardioSegmentsData` **raw**, not
+decode → re-encode: a payload this build would normalize (or cannot parse)
+survives duplication byte-for-byte instead of being silently rewritten. `Data`
+is a value type, so the duplicate owns its payload — editing it cannot reach the
+source. The Slice 5 target-distance fields keep copying as before.
+
+### Localization
+
+11 new keys, Korean included: the screen and row titles, the section header, the
+add button, the empty state, the two footers, the remove button, and the four
+segment-type names. `CardioSegmentKind.label` is rendered through
+`LocalizedStringKey`, so the four names have exactly one source.
+
+Composed summaries ("3 segments · 30m") stay **verbatim and unlocalized**,
+matching `SessionPlan.primarySummary` and every other assembled plan summary in
+the app — there is no whole phrase to translate.
+
+### Deferred to 12D and later
+
+- **Everything in-workout**: no checklist, no ticking, no segment display on the
+  active screen. A plan authored today changes nothing about running a workout.
+- Snapshotting the plan at session start, `SessionPlan` carry-through, and the
+  exercise-switch rules (§7.5) — the snapshot column exists but is unused.
+- History display (12E), routine transfer payload (12E), repeat UI (12F).
+- **User guide**: not updated. The feature is authorable but does nothing during
+  a workout yet, and a guide entry would promise behavior 12D has not shipped.
+  It lands with the checklist.
+
+---
+
+## 13. Open questions for beta feedback
 
 1. Do users want segments on the **routine slot** (programming, reusable) or
    ad-hoc on **the session** (today's plan only)? This design says the slot; the
