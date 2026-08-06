@@ -1060,6 +1060,45 @@ by `KoreanLocalizationTests`. The check itself is read-only and failure-tolerant
 — an empty or unreadable store yields no candidates — so it can never block or
 corrupt launch. It is skipped entirely under `--ui-testing`.
 
+#### Presentation timing (pre-merge patch)
+
+The first cut evaluated the offer **once**, at the end of the launch `.task`,
+and assigned `isPresented = true` immediately after `isLoading = false`. Manual
+smoke found the alert never appearing against a store full of valid candidates.
+
+The root cause is that a single presentation attempt is not reliable. iOS's
+notification-permission alert owns the presentation context during launch and
+swallows ours; SwiftUI does **not** reset `isPresented` when a presentation is
+dropped, so the flag stayed stuck `true` and no later assignment of `true` could
+produce the false→true edge SwiftUI acts on. One dropped attempt was permanent.
+Requesting the presentation inside the same transaction as the splash cross-fade
+made it worse. Reproduced 3/3 launches on a simulator with the permission alert
+pending.
+
+What ships instead separates *owing* the offer from *presenting* it:
+
+| State | Meaning |
+|---|---|
+| `hasPendingCardioMigration` | The service says an offer is owed. Survives a dropped presentation. |
+| `showCardioMigrationPrompt` | The alert's `isPresented` binding. Assumed unreliable. |
+
+`offerCardioMigration()` re-asks `shouldOfferPrompt`, waits ~400 ms for the
+current transaction to settle, and then presents — **re-arming** (`false`, yield,
+`true`) when the binding is already `true`, so a swallowed attempt still gets a
+fresh edge. It runs after the splash clears **and** on every `scenePhase`
+transition to `.active`, which is the signal iOS gives when a system alert is
+dismissed. It cannot nag or loop: it never resolves the flag itself, and
+`shouldOfferPrompt` answers `false` the moment the user taps either button.
+
+Deliberately **not** gated on `scenePhase == .active` inside the function: an
+`@Environment` value read from a captured closure can be a stale `.inactive`
+long after the scene went active, and a gate that is stale in the "skip"
+direction would drop the offer with nothing left to retrigger it. Presenting
+while inactive is harmless — if the system swallows it, the next `.active`
+retries. Verified on device: with the app **resumed rather than relaunched**
+(same PID, launch `.task` never re-run), the alert appears on the return to
+`.active`.
+
 #### Prompt persistence: one-time **per catalogue version**
 
 The flag `cardioMigrationPromptVersion` stores an `Int` — the
@@ -1070,6 +1109,11 @@ version that adds cardio entries may offer it once more to a user who still has
 candidates, which is why the version was chosen over a bool — one-time-forever
 would permanently strand anyone who dismissed the prompt before creating their
 cardio exercises.
+
+The offer is a question about the **store**, never about what a given launch
+did: `shouldOfferPrompt` reads the flag and the candidates, and nothing from the
+seeding path. A launch where `seedIfNeeded` short-circuits on its own version
+flag still offers the migration.
 
 Two independent gates mean the prompt cannot appear when it has nothing to do:
 

@@ -263,22 +263,101 @@ final class CardioCatalogMigrationTests: SwiftDataTestHarness {
     func testEmptyStoreHasNoCandidates() {
         XCTAssertTrue(CardioMigrationService.candidates(in: context).isEmpty)
         XCTAssertFalse(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults))
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
     }
 
     // MARK: - 5. Prompt gating
 
-    func testPromptAppearsWhenCandidatesExist() {
+    /// The four corners of the gate, spelled out. The pre-merge bug was in the
+    /// *presentation*, not here, but these pin the contract `BootstrapRoot` now
+    /// re-asks on every return to `.active`.
+    func testMissingFlagWithCandidatesOffersPrompt() {
         legacyCardioExercise()
+        XCTAssertEqual(
+            defaults.object(forKey: CardioMigrationService.promptVersionKey)
+                as? Int, nil,
+            "precondition: the flag is absent")
         XCTAssertTrue(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults))
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
     }
 
-    func testPromptDoesNotAppearWithoutCandidates() {
+    func testMissingFlagWithoutCandidatesDoesNotOfferPrompt() {
         let ex = legacyCardioExercise()
         ex.setCardio(true)
         XCTAssertFalse(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults))
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
+    }
+
+    func testCurrentVersionFlagWithCandidatesDoesNotOfferPrompt() {
+        legacyCardioExercise()
+        defaults.set(
+            ExerciseCatalog.currentVersion,
+            forKey: CardioMigrationService.promptVersionKey)
+
+        XCTAssertFalse(
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
+    }
+
+    func testOlderVersionFlagWithCandidatesOffersPrompt() {
+        legacyCardioExercise()
+        defaults.set(
+            ExerciseCatalog.currentVersion - 1,
+            forKey: CardioMigrationService.promptVersionKey)
+
+        XCTAssertTrue(
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
+    }
+
+    /// The offer is a question about the **store**, not about what this launch
+    /// happened to do. Here the seed flag is already current, so `seedIfNeeded`
+    /// short-circuits and inserts nothing — and the offer still stands.
+    func testPromptIsIndependentOfSeedingRunningThisLaunch() throws {
+        defaults.set(
+            ExerciseCatalog.currentVersion,
+            forKey: ExerciseSeedService.seedVersionKey)
+        legacyCardioExercise(name: "Old Bike")
+        let countBefore = try allExercises().count
+
+        seed()
+
+        XCTAssertEqual(
+            try allExercises().count, countBefore,
+            "precondition: the seed pass did nothing this launch")
+        XCTAssertNil(
+            defaults.object(forKey: CardioMigrationService.promptVersionKey),
+            "a short-circuited seed pass must not resolve the prompt")
+        XCTAssertTrue(
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults),
+            "the offer must not depend on the seeder having run")
+    }
+
+    /// Asking repeatedly — which is what the scene-phase retry does — must not
+    /// change the answer or resolve anything by itself.
+    func testRepeatedEvaluationIsIdempotentAndWritesNothing() {
+        legacyCardioExercise()
+
+        for _ in 0..<5 {
+            XCTAssertTrue(
+                CardioMigrationService.shouldOfferPrompt(
+                    in: context, defaults: defaults))
+        }
+
+        XCTAssertNil(
+            defaults.object(forKey: CardioMigrationService.promptVersionKey),
+            "evaluating the offer must never resolve it — only the user or a "
+                + "fresh seed does that")
+        XCTAssertEqual(CardioMigrationService.candidates(in: context).count, 1)
+    }
+
+    /// Evaluating against an empty store is the launch-path worst case: it must
+    /// answer `false` without throwing or crashing.
+    func testEvaluationOnEmptyStoreIsSafe() {
+        XCTAssertFalse(
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
+        XCTAssertEqual(
+            CardioMigrationService.markCandidatesAsCardio(
+                in: context, defaults: defaults),
+            0)
     }
 
     /// Requirement 12, end to end: a fresh install seeds v3 cardio rows, which
@@ -289,7 +368,7 @@ final class CardioCatalogMigrationTests: SwiftDataTestHarness {
 
         XCTAssertTrue(CardioMigrationService.candidates(in: context).isEmpty)
         XCTAssertFalse(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults))
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
 
         let handBuilt = legacyCardioExercise(name: "My Own Bike")
         try context.save()
@@ -297,7 +376,7 @@ final class CardioCatalogMigrationTests: SwiftDataTestHarness {
             CardioMigrationService.isCandidate(handBuilt),
             "the rule still matches the row…")
         XCTAssertFalse(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults),
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults),
             "…but a fresh install already resolved the prompt, so it stays "
                 + "silent")
     }
@@ -311,19 +390,19 @@ final class CardioCatalogMigrationTests: SwiftDataTestHarness {
         seed()
 
         XCTAssertTrue(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults),
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults),
             "a store that already had rows is an upgrade, not a fresh install")
     }
 
     func testNotNowStopsTheNagging() {
         legacyCardioExercise()
         XCTAssertTrue(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults))
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
 
         CardioMigrationService.resolvePrompt(defaults: defaults)
 
         XCTAssertFalse(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults),
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults),
             "the prompt must not reappear on the next launch under the same "
                 + "catalogue version")
     }
@@ -348,7 +427,7 @@ final class CardioCatalogMigrationTests: SwiftDataTestHarness {
             forKey: CardioMigrationService.promptVersionKey)
 
         XCTAssertTrue(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults),
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults),
             "a dismissal recorded under an older catalogue version must not "
                 + "silence the current one")
     }
@@ -360,13 +439,13 @@ final class CardioCatalogMigrationTests: SwiftDataTestHarness {
         let ex = legacyCardioExercise()
         try context.save()
         XCTAssertTrue(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults))
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
 
         ex.setCardio(true)
         try context.save()
 
         XCTAssertFalse(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults))
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
     }
 
     // MARK: - 6. Conversion
@@ -400,13 +479,7 @@ final class CardioCatalogMigrationTests: SwiftDataTestHarness {
             in: context, defaults: defaults)
 
         XCTAssertFalse(
-            CardioMigrationService.shouldPrompt(in: context, defaults: defaults))
-    }
-
-    func testMarkAsCardioOnAnEmptyStoreIsANoOp() {
-        let converted = CardioMigrationService.markCandidatesAsCardio(
-            in: context, defaults: defaults)
-        XCTAssertEqual(converted, 0)
+            CardioMigrationService.shouldOfferPrompt(in: context, defaults: defaults))
     }
 
     /// The conversion writes one field. Everything the user owns — identity,

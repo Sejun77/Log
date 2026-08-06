@@ -73,12 +73,17 @@ enum CardioMigrationService {
 
     // MARK: - Prompt state
 
-    /// Whether the prompt should be shown right now: the flag has not been
-    /// resolved for this catalogue version **and** at least one candidate
-    /// exists. Both halves matter — the flag alone would nag users with nothing
-    /// to convert, and the candidates alone would nag on every launch after
-    /// "Not Now".
-    static func shouldPrompt(
+    /// Whether the app owes the user an offer: the flag has not been resolved
+    /// for this catalogue version **and** at least one candidate exists. Both
+    /// halves matter — the flag alone would nag users with nothing to convert,
+    /// and the candidates alone would nag on every launch after "Not Now".
+    ///
+    /// This is a **question about the store**, not about the current launch. It
+    /// reads nothing from the seeding path, so it answers the same way whether
+    /// or not `ExerciseSeedService` did any work this launch, and it is safe to
+    /// ask repeatedly — which is what `BootstrapRoot` does, because a single
+    /// presentation attempt can be swallowed by a system alert.
+    static func shouldOfferPrompt(
         in ctx: ModelContext,
         defaults: UserDefaults = .standard
     ) -> Bool {
