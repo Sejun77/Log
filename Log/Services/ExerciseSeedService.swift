@@ -57,6 +57,23 @@ enum ExerciseSeedService {
         let existing: [Exercise] =
             (try? ctx.fetch(FetchDescriptor<Exercise>())) ?? []
 
+        // Cardio Slice 10 (patched pre-merge): the seeder deliberately does
+        // **not** touch `CardioMigrationService`'s prompt flag.
+        //
+        // It used to resolve the flag when the store was empty at seed time, on
+        // the theory that a fresh install seeded by v3 has nothing to migrate.
+        // True at that instant, and wrong a moment later: a user who installs
+        // and *then* imports their exercise CSV — the documented way to bring a
+        // library over — lands genuine legacy Cardio rows in a store whose flag
+        // already says "resolved", and the offer they should have been shown is
+        // suppressed forever. That is the bug this comment exists to prevent
+        // someone reintroducing.
+        //
+        // Fresh installs stay silent without any flag write, because catalogue
+        // v3 seeds cardio rows with `isCardio == true` and the candidate rule
+        // therefore finds nothing. The flag is now written only in response to
+        // the user ("Not Now" or "Mark as Cardio").
+
         var existingNameKeys: Set<String> = Set(
             existing.map { normalize($0.name) }
         )
@@ -79,7 +96,12 @@ enum ExerciseSeedService {
                 setupDefaults: seed.setupDefaults,
                 isCustom: false
             )
-            ex.isTimeBased = seed.isTimeBased
+            // Written through the model's invariant-enforcing setters rather
+            // than by direct assignment: `setCardio` is a no-op unless the row
+            // is already time-based, so a malformed catalogue entry can never
+            // produce `isCardio == true && isTimeBased == false` in the store.
+            ex.setTimeBased(seed.isTimeBased)
+            ex.setCardio(seed.isCardio)
             ex.includesBodyweightInLoad =
                 defaultIncludesBodyweightInLoad(equipmentType: seed.equipmentType)
             ex.order = nextOrder

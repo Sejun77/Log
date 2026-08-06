@@ -1000,6 +1000,167 @@ is additive-first) and stays compatibility metadata on this side too: a routine
 exported in miles renders in km for a reader whose Settings say km, and flips the
 moment that preference changes. Nothing stored moves.
 
+### 2.39 Catalogue v3 and the assisted migration (settled in Slice 10)
+
+The last Phase 1 slice, and the only one that touches data a user already has.
+It has two halves that look like one feature but must not be confused: **the
+catalogue teaches new installs**, **the prompt asks old ones**.
+
+#### Catalogue v3
+
+`ExerciseSeed` gains an `isCardio` flag and `ExerciseCatalog.currentVersion`
+becomes **3**. All seven Cardio entries — Walking, Treadmill Run, Treadmill
+Walk, Stationary Bike, Elliptical, Stair Climber, Rowing Machine — ship
+`isTimeBased = true, isCardio = true`; nothing else in the catalogue changes.
+Plank stays a timed hold, every strength entry stays strength, and no new names
+were added.
+
+The invariant is enforced twice on the way in. `ExerciseSeed.init` normalizes
+`isCardio` to `isTimeBased && isCardio`, so a malformed catalogue edit cannot
+even *describe* the impossible state; the seeder then writes through
+`Exercise.setTimeBased` / `setCardio` rather than assigning the stored
+properties, so the model layer would reject it a second time.
+
+What v3 deliberately does **not** do is touch an existing install. The seeder's
+per-name dedupe skips every name already in the store, so a v2-era user's
+"Treadmill Run" keeps `isCardio == false` after the pass — including all their
+edits, notes, and equipment. That asymmetry is the whole reason the prompt
+exists, and it is pinned by test
+(`testV3ReSeedDoesNotOverwriteUserEditedCardioRow`).
+
+#### Candidate rule
+
+`CardioMigrationService.isCandidate` matches an exercise when **all three** hold:
+
+| Condition | Why |
+|---|---|
+| `bodyPart` is Cardio (trimmed, case-insensitive) | The user already classified it; legacy rows and CSV imports carry casing/whitespace variants of the canonical string |
+| `isTimeBased == true` | Cardio is a facet of duration (§2.1); a reps-and-weight row is not a mis-filed cardio bout |
+| `isCardio == false` | Nothing to do otherwise |
+
+**Names are never read.** A "Treadmill Run" filed under Legs is not a candidate,
+and neither is Plank, a wall sit, or any other timed hold outside Cardio. The
+rule is intentionally narrow: a false negative costs one toggle in Exercise
+Detail, a false positive silently changes how someone's exercise behaves.
+
+#### Prompt behavior
+
+`BootstrapRoot` presents a plain SwiftUI `.alert` after the splash clears — never
+during it, where the loading overlay blocks hit testing:
+
+| | |
+|---|---|
+| Title | "Update Cardio Exercises" |
+| Message | "Log now supports dedicated cardio tracking. Older exercises in the Cardio category can be updated to use distance, pace, heart rate, calories, incline, and resistance fields." |
+| Primary | "Mark as Cardio" → `markCandidatesAsCardio` |
+| Secondary (cancel) | "Not Now" → `resolvePrompt`, converts nothing |
+
+All four strings are in `Localizable.xcstrings` with Korean translations, pinned
+by `KoreanLocalizationTests`. The check itself is read-only and failure-tolerant
+— an empty or unreadable store yields no candidates — so it can never block or
+corrupt launch. It is skipped entirely under `--ui-testing`.
+
+#### Presentation timing (pre-merge patch)
+
+The first cut evaluated the offer **once**, at the end of the launch `.task`,
+and assigned `isPresented = true` immediately after `isLoading = false`. Manual
+smoke found the alert never appearing against a store full of valid candidates.
+
+The root cause is that a single presentation attempt is not reliable. iOS's
+notification-permission alert owns the presentation context during launch and
+swallows ours; SwiftUI does **not** reset `isPresented` when a presentation is
+dropped, so the flag stayed stuck `true` and no later assignment of `true` could
+produce the false→true edge SwiftUI acts on. One dropped attempt was permanent.
+Requesting the presentation inside the same transaction as the splash cross-fade
+made it worse. Reproduced 3/3 launches on a simulator with the permission alert
+pending.
+
+What ships instead separates *owing* the offer from *presenting* it:
+
+| State | Meaning |
+|---|---|
+| `hasPendingCardioMigration` | The service says an offer is owed. Survives a dropped presentation. |
+| `showCardioMigrationPrompt` | The alert's `isPresented` binding. Assumed unreliable. |
+
+`offerCardioMigration()` re-asks `shouldOfferPrompt`, waits ~400 ms for the
+current transaction to settle, and then presents — **re-arming** (`false`, yield,
+`true`) when the binding is already `true`, so a swallowed attempt still gets a
+fresh edge. It runs after the splash clears **and** on every `scenePhase`
+transition to `.active`, which is the signal iOS gives when a system alert is
+dismissed. It cannot nag or loop: it never resolves the flag itself, and
+`shouldOfferPrompt` answers `false` the moment the user taps either button.
+
+Deliberately **not** gated on `scenePhase == .active` inside the function: an
+`@Environment` value read from a captured closure can be a stale `.inactive`
+long after the scene went active, and a gate that is stale in the "skip"
+direction would drop the offer with nothing left to retrigger it. Presenting
+while inactive is harmless — if the system swallows it, the next `.active`
+retries. Verified on device: with the app **resumed rather than relaunched**
+(same PID, launch `.task` never re-run), the alert appears on the return to
+`.active`.
+
+#### Prompt persistence: one-time **per catalogue version**
+
+The flag `cardioMigrationPromptVersion` stores an `Int` — the
+`ExerciseCatalog.currentVersion` under which the prompt was last resolved — not a
+`Bool`. Under v3 the prompt is offered at most once: either button resolves it,
+so "Not Now" ends the nagging for good on this version. A future catalogue
+version that adds cardio entries may offer it once more to a user who still has
+candidates, which is why the version was chosen over a bool — one-time-forever
+would permanently strand anyone who dismissed the prompt before creating their
+cardio exercises.
+
+The offer is a question about the **store**, never about what a given launch
+did: `shouldOfferPrompt` reads the flag and the candidates, and nothing from the
+seeding path. A launch where `seedIfNeeded` short-circuits on its own version
+flag still offers the migration.
+
+**Only the user resolves the flag.** No launch-path code writes it — a rule
+learned the hard way, see the patch note below.
+
+The prompt still cannot appear when it has nothing to do, because
+`shouldOfferPrompt` re-reads the store every time:
+
+- **Fresh installs** are silent because catalogue v3 seeds cardio rows with
+  `isCardio == true`, so the candidate rule finds nothing. No flag write is
+  needed to achieve that, and none happens.
+- **Converted stores** are silent for the same reason: a user who flipped the
+  toggles manually in Exercise Detail stops being asked.
+
+#### Patch note: the seeder must not pre-resolve the flag
+
+The first cut resolved the flag whenever the seeder ran against an empty store,
+reasoning that a fresh v3 install has nothing to migrate. True at that instant,
+and wrong a moment later. Install the build, then import your exercise CSV — the
+documented way to bring a library across — and genuine legacy Cardio rows land
+in a store whose flag already reads "resolved". On device this produced
+`versionGate=BLOCKED promptVersionRaw=3` against seven valid candidates: the
+offer was dead before it was ever asked for, permanently.
+
+The suppression bought nothing the candidate rule did not already provide, so it
+is gone. One edge case is accepted deliberately in exchange: a user who builds a
+time-based Cardio exercise by hand and leaves the Cardio toggle off is offered
+the migration once. That is a fair question to ask, and far cheaper than
+silently stranding an imported library.
+
+`CardioMigrationService.diagnostics(in:defaults:)` (DEBUG only) prints every
+input to the gate plus the reason it answered as it did, because
+"pending=false, candidates=6" is a symptom, not a diagnosis.
+
+#### What conversion writes, and what it preserves
+
+`markCandidatesAsCardio` sets exactly one field per candidate, via `setCardio`,
+then saves once. Preserved verbatim: `id`, name, body part, notes, equipment
+type, setup defaults, `order`, `isCustom`, routine slots and their `slotID`s,
+prescriptions, `WorkoutItem` / `SetLog` history rows, and workout snapshots. No
+exercise is created, deleted, or recreated; no `SetLog` is rewritten; no CSV or
+export format changed. Routines change only in the derived sense that their slots
+now resolve to `trackingMode == .cardio` and therefore follow the cardio routine
+rules (§2.3) from the next edit onward.
+
+There is **no SwiftData migration** in this slice: `isCardio` has existed since
+Slice 2, and this is an ordinary field write on existing rows.
+
 ### 2.4 Deferring HealthKit
 
 **Answer to design question 5. Yes — explicitly deferred, and not to Phase 3
@@ -1192,6 +1353,14 @@ explicitly confirmed suggestion**, never an automatic rewrite:
 This satisfies "do not silently convert unless there is a clear migration rule"
 by having a rule that is explicit *and* user-gated.
 
+✅ **Shipped in Slice 10** as `CardioMigrationService` + a `BootstrapRoot`
+alert — see §2.39 for the candidate rule, the prompt copy, the
+one-time-per-catalogue-version persistence policy, and the exact list of what
+conversion preserves. Two details settled during implementation: the alert does
+**not** list the affected exercises by name (an alert cannot, and a sheet was
+more UI than this earns — the body part *is* the list), and the body-part match
+is trimmed and case-insensitive so legacy and CSV-imported rows are not missed.
+
 ### Old history is immutable
 
 New `SetLog` fields are optional with nil defaults. Every existing `SetLog` keeps
@@ -1209,6 +1378,12 @@ exist**, so an install that already has "Treadmill Run" from v2 will *not* have
 it rewritten — that install picks the exercise up via the assisted prompt
 instead. Fresh installs get it correct from the start. This asymmetry is
 intentional and must be covered by test.
+
+✅ **Shipped in Slice 10**, exactly as written, and the asymmetry is covered by
+`CardioCatalogMigrationTests`. The seeder writes the catalogue and nothing else:
+an addition that pre-resolved the migration prompt on a fresh seed was tried and
+reverted before merge, because it silently stranded libraries imported after
+install (§2.39, "the seeder must not pre-resolve the flag").
 
 ### Migration risk register
 
@@ -1426,7 +1601,7 @@ independently committable, additive-first.
 | 6b | ✅ Cardio previous-performance prefill (§2.36) | Needs the target-vs-actual distinction Slice 5 established, and Slice 6's draft rules |
 | 6c | ✅ Distance-unit Settings control, Settings-only policy (§2.37) | The Slice 1 preference had no UI; exposing it is independent of everything below. Patched before merge to remove the per-target unit pickers that overrode it |
 | 7 | ✅ CSV v2 (dual-header import, history export columns) + routine-transfer compatibility (§2.38) | Isolated, high test value. Shipped ninth in execution order, after 6b and 6c |
-| 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |
+| 8 | ✅ Catalogue v3 + assisted "mark as cardio" prompt (§2.39) | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | Phase 2 charts | After real cardio data exists |
 
 Slices 1–8 are Phase 1. Slice 6 is the one most tempting to defer and the one
@@ -1442,9 +1617,13 @@ Resolve before Slice 1, not during:
 1. **Default sets for a cardio slot: 1, or `AppSettings.defaultSets`?** This
    document assumes 1. If users build interval-ish cardio out of multiple sets
    today, that assumption is wrong and should be checked against beta feedback.
-2. **Is the assisted migration prompt worth its complexity?** The alternative is
-   a line in the user guide saying "turn on Cardio for your cardio exercises".
-   Cheaper, slightly worse. Decide before Slice 8.
+2. ~~**Is the assisted migration prompt worth its complexity?**~~ **Resolved:
+   yes, and it cost less than feared.** Slice 10 shipped it as one service
+   (~130 lines, no UI of its own) plus a four-string `.alert`, because the
+   candidate rule turned out to be three field comparisons and the prompt state
+   one `UserDefaults` integer. The user-guide line was written anyway — the two
+   are complements, not alternatives: the prompt catches the seven beta
+   exercises once, the guide explains the toggle forever.
 3. **Does the pace chart read well enough to ship in Phase 2?** Deferrable to
    Phase 2 itself, since distance and duration series carry the value alone.
 4. **Should `hrZone` and `avgHeartRate` both exist?** They serve different

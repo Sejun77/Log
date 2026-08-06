@@ -339,4 +339,42 @@ final class KoreanLocalizationTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Assisted cardio migration prompt (Cardio Slice 10)
+
+    /// Every string in the one-time "Update Cardio Exercises" alert. It is the
+    /// first thing an upgrading Korean tester sees, and it asks them to approve
+    /// a change to their own data — mixed-language copy there is worse than
+    /// anywhere else in the app.
+    private static let cardioMigrationPromptKeys = [
+        "Update Cardio Exercises",
+        "Log now supports dedicated cardio tracking. Older exercises in the "
+            + "Cardio category can be updated to use distance, pace, heart "
+            + "rate, calories, incline, and resistance fields.",
+        "Mark as Cardio",
+        "Not Now",
+    ]
+
+    func testCardioMigrationPromptStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.cardioMigrationPromptKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Cardio migration prompt string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testCardioMigrationPromptStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.cardioMigrationPromptKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
 }

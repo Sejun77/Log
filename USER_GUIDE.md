@@ -122,8 +122,17 @@ cleared.
 
 Cardio exercises are grouped under the Cardio body part. The app includes
 Walking, Treadmill Run, Treadmill Walk, Stationary Bike, Elliptical, Stair
-Climber, and Rowing Machine as duration-based exercises, and you can add your
-own the same way.
+Climber, and Rowing Machine, already set up as cardio, and you can add your own
+the same way.
+
+If you used the app before cardio tracking existed, the exercises you already
+have in the Cardio category are still tracked by time alone. The app offers once
+to update them: tap Mark as Cardio to switch them over, or Not Now to leave them
+as they are. Nothing changes unless you tap Mark as Cardio, and either way your
+names, notes, setup, routines, and workout history stay exactly as they are.
+Only exercises in the Cardio category are offered — a plank or a wall sit is
+never included. You can also turn Cardio on for any exercise yourself at any
+time.
 
 ## Rest Timer
 
