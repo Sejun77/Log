@@ -197,7 +197,7 @@ final class CardioEntryDraftTests: XCTestCase {
         let d = draft(unit: .miles, distance: "3")
 
         XCTAssertEqual(d.paceText(durationSeconds: 1_500), "8:20 /mi")
-        XCTAssertEqual(d.speedText(durationSeconds: 1_500), "7.2 mi/h")
+        XCTAssertEqual(d.speedText(durationSeconds: 1_500), "7.2 mph")
     }
 
     func testNoDistanceHidesPaceAndSpeed() {
@@ -293,7 +293,7 @@ final class CardioEntryDraftTests: XCTestCase {
         let imperial = metric.converted(to: .miles)
         XCTAssertEqual(imperial.distance, "3.85")
         XCTAssertEqual(imperial.paceText(durationSeconds: 2_700), "11:41 /mi")
-        XCTAssertEqual(imperial.speedText(durationSeconds: 2_700), "5.1 mi/h")
+        XCTAssertEqual(imperial.speedText(durationSeconds: 2_700), "5.1 mph")
     }
 
     /// The collapsed Details label follows too — it is built from `metrics`

@@ -116,6 +116,115 @@ enum DurationFormat {
 }
 
 // ======================================================
+// MARK: - h / min / s field decomposition
+// ======================================================
+
+/// Pure translation between a **total-seconds text value** and the three
+/// h / min / s text fields the active-workout duration row edits.
+///
+/// The active workout's stored draft is still a single seconds string (the
+/// `inputsByExerciseID` tuple and every `ParentDraftStore` entry are unchanged),
+/// and `DurationLimits.parseSeconds` is still the one place that resolves it.
+/// This type only splits that string for display and reassembles it on edit, so
+/// the row can offer "1 h 23 min 20 s" without a new storage shape, a new
+/// validation rule, or a second source of truth.
+///
+/// Every rule here exists to keep the reassembled string behaving **exactly**
+/// as the old raw-seconds field did:
+///   - all three fields empty → `""`, which `parseSeconds` resolves to nil and
+///     the row falls back to the planned duration (the old "cleared" behavior);
+///   - any field filled → a digit string, so zero stays "0" (resolved to nil,
+///     i.e. not loggable) and an oversized value still clamps at
+///     `DurationLimits.maxExerciseSeconds` at parse time rather than here;
+///   - non-numeric text counts as 0 for its component rather than trapping, and
+///     each component is bounded before recombining so no paste can overflow.
+enum DurationFieldParts: Equatable {
+
+    /// The three field values, as typed. Empty means "not filled in" — it is
+    /// deliberately distinct from "0", because only *all three* empty restores
+    /// the planned duration.
+    struct Parts: Equatable {
+        var hours: String
+        var minutes: String
+        var seconds: String
+
+        static let empty = Parts(hours: "", minutes: "", seconds: "")
+
+        /// True when nothing has been entered in any field.
+        var isEmpty: Bool {
+            hours.isEmpty && minutes.isEmpty && seconds.isEmpty
+        }
+    }
+
+    /// Largest value accepted from any single field before recombining.
+    ///
+    /// Well above anything reachable through the row (`parseSeconds` clamps the
+    /// total to 6h anyway); it exists purely so a pasted 30-digit number cannot
+    /// overflow the `hours * 3600` multiply.
+    private static let maxComponent = DurationLimits.maxExerciseSeconds
+
+    /// Split a stored total-seconds string into field values.
+    ///
+    /// Empty or non-numeric input yields all-empty fields, matching what the
+    /// old single field showed for the same stored value. Zero-valued
+    /// components render empty rather than "0" so the row reads "1 h" instead
+    /// of "1 h 0 min 0 s" — except a total of zero, which keeps a literal "0"
+    /// in the seconds field because the user did type it.
+    static func parts(fromSecondsText text: String) -> Parts {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let total = Int(trimmed) else { return .empty }
+        guard total > 0 else {
+            return Parts(hours: "", minutes: "", seconds: "0")
+        }
+        let c = DurationFormat.components(total)
+        return Parts(
+            hours: c.hours > 0 ? String(c.hours) : "",
+            minutes: c.minutes > 0 ? String(c.minutes) : "",
+            seconds: c.seconds > 0 ? String(c.seconds) : ""
+        )
+    }
+
+    /// Recombine field values into the total-seconds string that gets stored.
+    ///
+    /// All-empty stays `""` — the cleared state the old field had. Anything
+    /// else produces a digit string, never a negative and never an overflow.
+    static func secondsText(from parts: Parts) -> String {
+        guard !parts.isEmpty else { return "" }
+        let total = DurationFormat.totalSeconds(
+            hours: component(parts.hours),
+            minutes: component(parts.minutes),
+            seconds: component(parts.seconds)
+        )
+        return String(total)
+    }
+
+    /// Total seconds a set of fields represents, or nil when all-empty.
+    /// Convenience for tests and callers that want the number, not the text.
+    static func totalSeconds(from parts: Parts) -> Int? {
+        guard !parts.isEmpty else { return nil }
+        return DurationFormat.totalSeconds(
+            hours: component(parts.hours),
+            minutes: component(parts.minutes),
+            seconds: component(parts.seconds)
+        )
+    }
+
+    /// Digits-only keystroke filter for one field, mirroring how the row's
+    /// binding already strips non-digits from the seconds string.
+    static func sanitize(_ text: String) -> String {
+        String(text.filter(\.isNumber))
+    }
+
+    /// One field's numeric value: empty / non-numeric / negative → 0, and
+    /// bounded so recombining cannot overflow.
+    private static func component(_ text: String) -> Int {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Int(trimmed), value > 0 else { return 0 }
+        return Swift.min(value, maxComponent)
+    }
+}
+
+// ======================================================
 // MARK: - Picker presets
 // ======================================================
 

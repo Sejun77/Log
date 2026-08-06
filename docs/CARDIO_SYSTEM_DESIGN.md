@@ -151,7 +151,7 @@ this is what keeps Phase 1 from regressing today's behavior.
 Storing them creates a row that can contradict itself (a stored pace that
 disagrees with the stored distance and duration is unresolvable — which one is
 the truth?). They are computed at render time from the two stored values and
-shown as `4:50 /km` and `12.4 km/h`.
+shown as `4:50 /km` and `12.4 km/h` (`4:50 /mi` and `12.4 mph` in miles).
 
 **Distance is stored canonically in meters** with the entry unit recorded
 alongside. This is deliberately *better* than what weight does today
@@ -400,7 +400,10 @@ draft intact, so correcting a set costs two taps.
 **Pace and speed appear only when derivable.** No placeholder row, no dash: with
 no distance, no duration, or a zero duration, the preview simply does not exist.
 Speed reads "8.3 km/h", pace "7:15 /km", both derived at render time and neither
-stored.
+stored. In miles the same two read "5.1 mph" and "11:40 /mi": the speed unit
+comes from `DistanceUnit.speedUnitSymbol`, which spells the imperial case out
+rather than composing "mi/h", while pace stays composed from the bare symbol
+("min/km" / "min/mi").
 
 #### Pre-merge patch (manual review of Slice 4)
 

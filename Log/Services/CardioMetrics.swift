@@ -32,6 +32,20 @@ enum DistanceUnit: String, CaseIterable, Codable, Equatable {
     /// heading rather than a quantity.
     var paceUnitSymbol: String { "min/\(symbol)" }
 
+    /// The unit a speed is expressed in — "km/h" or "mph".
+    ///
+    /// Not `"\(symbol)/h"`: that composes correctly for km but yields "mi/h",
+    /// which nobody writes. "mph" is the universal spelling wherever miles are
+    /// used, so the imperial case is spelled out rather than derived. Every
+    /// speed label in the app goes through this one property so the two can
+    /// never drift apart.
+    var speedUnitSymbol: String {
+        switch self {
+        case .kilometers: return "km/h"
+        case .miles: return "mph"
+        }
+    }
+
     /// Localized label for a pace field in this unit — "Pace (min/km)" /
     /// "Pace (min/mi)".
     ///

@@ -96,4 +96,50 @@ final class CardioPaceLabelTests: SwiftDataTestHarness {
     func testEachUnitHasItsOwnLabel() {
         XCTAssertNotEqual(km.paceFieldLabel, mi.paceFieldLabel)
     }
+
+    // MARK: - 7. Speed wording (Slice 8 pre-merge patch)
+
+    /// The imperial speed unit was composed as `"\(symbol)/h"`, which produced
+    /// "mi/h" — a spelling nobody uses. `speedUnitSymbol` owns it now.
+
+    func testSpeedUnitSymbolIsKilometersPerHourForKilometers() {
+        XCTAssertEqual(km.speedUnitSymbol, "km/h")
+    }
+
+    func testSpeedUnitSymbolIsMphForMiles() {
+        XCTAssertEqual(mi.speedUnitSymbol, "mph")
+    }
+
+    /// The rejected spelling must not come back through any unit.
+    func testNoUnitRendersSpeedAsMiPerH() {
+        for unit in DistanceUnit.allCases {
+            XCTAssertNotEqual(
+                unit.speedUnitSymbol, "mi/h",
+                "speed unit regressed to the composed \"mi/h\" spelling")
+        }
+    }
+
+    /// The rendered preview — the only place speed reaches the user — uses the
+    /// helper, so both units read correctly end to end.
+    func testDraftSpeedTextUsesTheHelperSymbol() {
+        var draft = CardioEntryDraft(unit: km, distance: "5")
+        XCTAssertEqual(draft.speedText(durationSeconds: 1_500), "12.0 km/h")
+
+        draft.unit = mi
+        XCTAssertEqual(draft.speedText(durationSeconds: 1_500), "12.0 mph")
+    }
+
+    /// Pace is untouched by the speed patch: it still composes from the bare
+    /// symbol, in both the label and the value.
+    func testPaceWordingIsUnaffectedByTheSpeedPatch() {
+        XCTAssertEqual(km.paceUnitSymbol, "min/km")
+        XCTAssertEqual(mi.paceUnitSymbol, "min/mi")
+        XCTAssertEqual(km.paceFieldLabel, "Pace (min/km)")
+        XCTAssertEqual(mi.paceFieldLabel, "Pace (min/mi)")
+
+        var draft = CardioEntryDraft(unit: km, distance: "5")
+        XCTAssertEqual(draft.paceText(durationSeconds: 1_500), "5:00 /km")
+        draft.unit = mi
+        XCTAssertEqual(draft.paceText(durationSeconds: 2_400), "8:00 /mi")
+    }
 }

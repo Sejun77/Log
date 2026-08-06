@@ -1072,7 +1072,7 @@ final class DistanceUnitSettingTests: SwiftDataTestHarness {
 
         XCTAssertEqual(imperial.summaryText, "3.85 mi")
         XCTAssertEqual(imperial.paceText(durationSeconds: 2_700), "11:41 /mi")
-        XCTAssertEqual(imperial.speedText(durationSeconds: 2_700), "5.1 mi/h")
+        XCTAssertEqual(imperial.speedText(durationSeconds: 2_700), "5.1 mph")
     }
 
     // MARK: - The removed Settings footer

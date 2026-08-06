@@ -159,15 +159,16 @@ struct CardioEntryDraft: Equatable {
         return "\(formatted) /\(unit.symbol)"
     }
 
-    /// Live speed, as "8.3 km/h". Same nil-rather-than-placeholder contract as
-    /// `paceText`.
+    /// Live speed, as "8.3 km/h" / "5.1 mph". Same nil-rather-than-placeholder
+    /// contract as `paceText`. The unit comes from `speedUnitSymbol` rather
+    /// than being composed here, so miles read "mph" and not "mi/h".
     func speedText(durationSeconds: Int?) -> String? {
         guard
             let speed = metrics.speedUnitsPerHour(
                 durationSeconds: durationSeconds, in: unit),
             let formatted = CardioDerived.formatSpeed(unitsPerHour: speed)
         else { return nil }
-        return "\(formatted) \(unit.symbol)/h"
+        return "\(formatted) \(unit.speedUnitSymbol)"
     }
 
     // MARK: - Field sanitizers

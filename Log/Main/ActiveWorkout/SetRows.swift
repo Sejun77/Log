@@ -124,9 +124,6 @@ struct SetEntryRow: View {
 // MARK: - UI for a single time-based set entry
 
 struct TimeSetEntryRow: View {
-    @FocusState private var focused: Field?
-    private enum Field { case duration }
-
     let index: Int
     let template: PlanSetTemplate
     let isLogged: Bool
@@ -148,12 +145,13 @@ struct TimeSetEntryRow: View {
 
     /// Seconds this row would start/log right now.
     ///
-    /// The field is free-text `.numberPad`, so it can be empty, partial, or
-    /// larger than the app's bound. `DurationLimits.parseSeconds` resolves
-    /// empty/non-numeric input to nil (falling back to the planned duration)
-    /// and clamps anything oversized, so neither button can act on a negative
-    /// or out-of-range value. Both the buttons and the compact echo read this,
-    /// so what the user sees is exactly what gets logged.
+    /// `duration` is the total-seconds string the h/min/s fields write, so it
+    /// can be empty, partial, or larger than the app's bound.
+    /// `DurationLimits.parseSeconds` resolves empty/non-numeric input to nil
+    /// (falling back to the planned duration) and clamps anything oversized, so
+    /// neither button can act on a negative or out-of-range value. Both buttons
+    /// and the cardio pace/speed preview read this, so what the user sees is
+    /// exactly what gets logged.
     private var resolvedDuration: Int {
         DurationLimits.parseSeconds(
             duration, max: DurationLimits.maxExerciseSeconds)
@@ -184,22 +182,16 @@ struct TimeSetEntryRow: View {
             }
 
             HStack(spacing: 12) {
-                TextField("Duration (s)", text: $duration)
-                    .font(.dsBody.monospacedDigit())
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 120)
-                    .disabled(isLogged)
-                    .focused($focused, equals: .duration)
-
-                // Long cardio durations are entered in raw seconds, where
-                // "2700" is hard to read back. Echo the compact form once the
-                // value passes a minute so a typo is obvious before logging.
-                if resolvedDuration >= 60 {
-                    Text(DurationFormat.compact(resolvedDuration))
-                        .font(.dsCaption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
+                // Duration is entered as h / min / s. The binding underneath is
+                // still the same total-seconds string, so `resolvedDuration`,
+                // the planned-duration fallback, the clamp, and draft
+                // persistence are all unchanged — only the input surface is.
+                // The old raw-seconds field needed a formatted echo beside it
+                // to be readable ("2700" → "45m"); three labelled fields are
+                // self-describing, so the echo (and the wrapping it caused) is
+                // gone with it.
+                DurationEntryFields(
+                    secondsText: $duration, isDisabled: isLogged)
 
                 Spacer(minLength: 8)
 
