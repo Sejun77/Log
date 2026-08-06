@@ -15,8 +15,8 @@ final class ExerciseCSVTests: XCTestCase {
         ])
         XCTAssertEqual(
             csv,
-            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes\r\n"
-                + "Bench,Chest,Barbell,,false,"
+            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes,isCardio\r\n"
+                + "Bench,Chest,Barbell,,false,,false"
         )
     }
 
@@ -26,8 +26,8 @@ final class ExerciseCSVTests: XCTestCase {
         ])
         XCTAssertEqual(
             csv,
-            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes\r\n"
-                + "Plank,,,,true,"
+            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes,isCardio\r\n"
+                + "Plank,,,,true,,false"
         )
     }
 
@@ -42,7 +42,7 @@ final class ExerciseCSVTests: XCTestCase {
     func testEmptyExportIsHeaderOnly() {
         XCTAssertEqual(
             ExerciseCSV.export([]),
-            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes"
+            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes,isCardio"
         )
     }
 

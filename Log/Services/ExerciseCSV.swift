@@ -1,6 +1,6 @@
 import Foundation
 
-/// One row of the v1 `exercises.csv` schema — the flat projection of an
+/// One row of the `exercises.csv` schema — the flat projection of an
 /// `Exercise` used by CSV export/import (REMAINING_WORK_PLAN.md §3.10).
 ///
 /// Carries no `id` / `isCustom` / `order`: those are never read from a file.
@@ -16,24 +16,36 @@ struct ExerciseCSVRow: Equatable {
     var isTimeBased: Bool
     var notes: String?
 
+    /// Cardio Phase 1, Slice 9. Appended **last** in the parameter list (and
+    /// last in the CSV column order) so every existing construction site keeps
+    /// compiling and every v1 file keeps parsing; absent means `false`.
+    var isCardio: Bool
+
+    /// The initializer normalizes `Exercise`'s cardio invariant — cardio
+    /// implies time-based — so a row can never carry the impossible
+    /// `isCardio && !isTimeBased` state that `Exercise.trackingMode` would have
+    /// to degrade to `.strength`. A hand-edited file claiming cardio therefore
+    /// imports *as cardio* rather than being silently downgraded.
     init(
         name: String,
         bodyPart: String? = nil,
         equipmentType: String? = nil,
         setupDefaults: String? = nil,
         isTimeBased: Bool = false,
-        notes: String? = nil
+        notes: String? = nil,
+        isCardio: Bool = false
     ) {
         self.name = name
         self.bodyPart = bodyPart
         self.equipmentType = equipmentType
         self.setupDefaults = setupDefaults
-        self.isTimeBased = isTimeBased
+        self.isTimeBased = isTimeBased || isCardio
         self.notes = notes
+        self.isCardio = isCardio
     }
 }
 
-/// Pure parser / validator + exporter for the v1 `exercises.csv` schema. Maps
+/// Pure parser / validator + exporter for the `exercises.csv` schema. Maps
 /// between CSV text (via `CSVCodec`) and `[ExerciseCSVRow]`. No SwiftData, no
 /// UI, no file I/O — the dedupe-against-existing-rows + insert behavior is a
 /// later slice (Slice 4) layered on top of the `valid` rows this produces.
@@ -44,24 +56,54 @@ struct ExerciseCSVRow: Equatable {
 ///   - Each **data row** lands in exactly one bucket: `valid`, `skipped`, or
 ///     `rejected`. Skips are benign (empty rows, in-file duplicate names);
 ///     rejects are errors (wrong column count, missing name, unparseable
-///     `isTimeBased`) and carry a reason for the import preview.
+///     `isTimeBased` / `isCardio`) and carry a reason for the import preview.
 ///   - Body part / equipment / setup / notes are **soft**: any free-text value
 ///     is accepted (non-canonical values persist as custom later, matching
 ///     `CustomOptionStore`); they are never a reject reason.
+///
+/// **Versioning (Cardio Phase 1, Slice 9).** v2 appends one column, `isCardio`,
+/// to the end of the v1 order. There is no version *marker* column — the header
+/// itself identifies the format, which is what lets a v1 file keep importing
+/// untouched. Export always writes v2; import accepts either header and treats
+/// a v1 file as `isCardio = false` throughout. New columns are always appended,
+/// never inserted, so a v1 reader still finds each old column at its old index.
 enum ExerciseCSV {
-    /// Canonical v1 header, fixed column order. Export emits exactly this;
-    /// import requires exactly these columns (compared trimmed + case-insensitive).
+
+    /// The header shapes this parser understands. Column *order* is fixed
+    /// within each; the format is chosen by matching the file's header row.
+    enum Format: Equatable {
+        /// Pre-cardio, 6 columns.
+        case v1
+        /// v1 + `isCardio`, 7 columns.
+        case v2
+
+        var columns: [String] {
+            switch self {
+            case .v1: return ExerciseCSV.headerV1
+            case .v2: return ExerciseCSV.header
+            }
+        }
+
+        var columnCount: Int { columns.count }
+    }
+
+    /// Canonical **v2** header, fixed column order. Export emits exactly this.
     static let header = [
-        "name", "bodyPart", "equipmentType", "setupDefaults", "isTimeBased", "notes",
+        "name", "bodyPart", "equipmentType", "setupDefaults", "isTimeBased",
+        "notes", "isCardio",
     ]
 
-    private static let columnCount = header.count
+    /// The v1 header, still accepted on import (backward compatibility).
+    static let headerV1 = Array(header.dropLast())
+
+    /// Zero-based index of the `isCardio` cell in a v2 row.
+    private static let isCardioColumn = header.count - 1
 
     // MARK: - Export
 
-    /// Serialize rows to CSV text: the canonical header followed by one record
-    /// per row. `nil` optionals are written as empty cells; `isTimeBased`
-    /// writes `"true"` / `"false"`.
+    /// Serialize rows to CSV text: the canonical **v2** header followed by one
+    /// record per row. `nil` optionals are written as empty cells;
+    /// `isTimeBased` / `isCardio` write `"true"` / `"false"`.
     static func export(_ rows: [ExerciseCSVRow]) -> String {
         var grid: [[String]] = [header]
         for r in rows {
@@ -72,6 +114,7 @@ enum ExerciseCSV {
                 r.setupDefaults ?? "",
                 r.isTimeBased ? "true" : "false",
                 r.notes ?? "",
+                r.isCardio ? "true" : "false",
             ])
         }
         return CSVCodec.encode(grid)
@@ -93,7 +136,13 @@ enum ExerciseCSV {
                 equipmentType: trimmedToNil(ex.equipmentType),
                 setupDefaults: trimmedToNil(ex.setupDefaults),
                 isTimeBased: ex.isTimeBased,
-                notes: trimmedToNil(ex.notes)
+                notes: trimmedToNil(ex.notes),
+                // Read the stored flag rather than `trackingMode`: the mode is
+                // a *derived view* that degrades an inconsistent store to
+                // `.strength`, and an export should carry what is actually
+                // recorded. `ExerciseCSVRow`'s initializer applies the same
+                // cardio-implies-time-based normalization the model does.
+                isCardio: ex.isCardio
             )
         }
     }
@@ -121,6 +170,11 @@ enum ExerciseCSV {
         case wrongColumnCount(expected: Int, found: Int)
         case missingName
         case invalidIsTimeBased(String)
+        /// Unparseable `isCardio` cell (v2 files only). Rejecting rather than
+        /// defaulting to `false` matches how `isTimeBased` already behaves —
+        /// a value the user typed and we cannot read is an error to surface,
+        /// not one to silently reinterpret.
+        case invalidIsCardio(String)
 
         /// Human-readable reason for the import preview.
         var message: String {
@@ -131,6 +185,8 @@ enum ExerciseCSV {
                 return "Missing exercise name."
             case let .invalidIsTimeBased(value):
                 return "Invalid isTimeBased value \"\(value)\" (use true or false)."
+            case let .invalidIsCardio(value):
+                return "Invalid isCardio value \"\(value)\" (use true or false)."
             }
         }
     }
@@ -160,8 +216,13 @@ enum ExerciseCSV {
             case .empty:
                 return "The file is empty."
             case let .mismatch(expected, found):
+                // `expected` is the current (v2) header. The older header
+                // without `isCardio` is still accepted, so say so rather than
+                // letting someone with a pre-cardio export conclude their file
+                // is unusable.
                 return "Header mismatch. Expected: \(expected.joined(separator: ", ")). "
-                    + "Found: \(found.joined(separator: ", "))."
+                    + "Found: \(found.joined(separator: ", ")). "
+                    + "The older header without isCardio is also accepted."
             }
         }
     }
@@ -175,13 +236,17 @@ enum ExerciseCSV {
     /// Parse + validate CSV text. Returns `.failure` on a header problem (no
     /// rows processed), otherwise a `.success(ParseReport)` partitioning every
     /// data row into valid / skipped / rejected.
+    ///
+    /// Accepts both the v2 header and the older v1 header; a v1 file yields
+    /// rows with `isCardio == false`.
     static func parse(_ text: String) -> Result<ParseReport, HeaderError> {
         let grid = CSVCodec.parse(text)
         guard let headerRow = grid.first else { return .failure(.empty) }
 
-        guard headerMatches(headerRow) else {
+        guard let format = format(for: headerRow) else {
             return .failure(.mismatch(expected: header, found: headerRow))
         }
+        let columnCount = format.columnCount
 
         var report = ParseReport(valid: [], skipped: [], rejected: [])
         var seenNameKeys = Set<String>()
@@ -223,6 +288,23 @@ enum ExerciseCSV {
                 continue
             }
 
+            // v1 files have no cell here at all; absent means "not cardio".
+            var isCardio = false
+            if format == .v2 {
+                let rawCardio = fields[isCardioColumn]
+                guard let parsed = parseBool(rawCardio) else {
+                    report.rejected.append(.init(
+                        row: rowNumber,
+                        reason: .invalidIsCardio(
+                            rawCardio.trimmingCharacters(in: .whitespacesAndNewlines)
+                        ),
+                        fields: fields
+                    ))
+                    continue
+                }
+                isCardio = parsed
+            }
+
             let nameKey = name.lowercased()
             guard seenNameKeys.insert(nameKey).inserted else {
                 report.skipped.append(.init(
@@ -237,7 +319,8 @@ enum ExerciseCSV {
                 equipmentType: trimmedToNil(fields[2]),
                 setupDefaults: trimmedToNil(fields[3]),
                 isTimeBased: isTimeBased,
-                notes: trimmedToNil(fields[5])
+                notes: trimmedToNil(fields[5]),
+                isCardio: isCardio
             ))
         }
 
@@ -246,12 +329,18 @@ enum ExerciseCSV {
 
     // MARK: - Helpers
 
-    /// Header is accepted when it has the right column count and each column
-    /// matches the canonical name trimmed + case-insensitively (so `Name` or
-    /// ` name ` from a spreadsheet still validate).
-    private static func headerMatches(_ row: [String]) -> Bool {
-        guard row.count == header.count else { return false }
-        for (lhs, rhs) in zip(row, header) {
+    /// Identify the file's format from its header row, or `nil` when it matches
+    /// neither. v2 is tried first so the current export always resolves in one
+    /// comparison. A header is accepted when it has that format's column count
+    /// and each column matches the canonical name trimmed + case-insensitively
+    /// (so `Name` or ` name ` from a spreadsheet still validate).
+    static func format(for row: [String]) -> Format? {
+        [Format.v2, .v1].first { matches(row, $0.columns) }
+    }
+
+    private static func matches(_ row: [String], _ columns: [String]) -> Bool {
+        guard row.count == columns.count else { return false }
+        for (lhs, rhs) in zip(row, columns) {
             let l = lhs.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if l != rhs.lowercased() { return false }
         }

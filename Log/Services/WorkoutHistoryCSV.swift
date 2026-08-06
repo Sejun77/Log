@@ -22,6 +22,47 @@ struct WorkoutHistoryCSVRow: Equatable {
     var restSeconds: Int?
     var timestamp: Date
     var workoutNotes: String?
+
+    // Cardio metrics (Cardio Phase 1, Slice 9). All optional and all appended
+    // after `workoutNotes`, so a strength or timed-hold row simply leaves them
+    // nil and exports as blank cells. Nil is exported as blank, never as 0 —
+    // "not recorded" and "recorded as zero" have to stay distinguishable in a
+    // spreadsheet, and for `inclinePercent` 0 is an ordinary interior value.
+    var cardio: CardioMetrics = CardioMetrics()
+
+    init(
+        workoutDate: Date,
+        completedAt: Date? = nil,
+        routineName: String? = nil,
+        exerciseName: String,
+        blockOrder: Int? = nil,
+        setIndex: Int,
+        subIndex: Int? = nil,
+        kind: String,
+        reps: Int,
+        weight: Double? = nil,
+        durationSeconds: Int? = nil,
+        restSeconds: Int? = nil,
+        timestamp: Date,
+        workoutNotes: String? = nil,
+        cardio: CardioMetrics = CardioMetrics()
+    ) {
+        self.workoutDate = workoutDate
+        self.completedAt = completedAt
+        self.routineName = routineName
+        self.exerciseName = exerciseName
+        self.blockOrder = blockOrder
+        self.setIndex = setIndex
+        self.subIndex = subIndex
+        self.kind = kind
+        self.reps = reps
+        self.weight = weight
+        self.durationSeconds = durationSeconds
+        self.restSeconds = restSeconds
+        self.timestamp = timestamp
+        self.workoutNotes = workoutNotes
+        self.cardio = cardio
+    }
 }
 
 /// Pure exporter for workout history. Maps `[Workout]` → denormalized CSV text
@@ -29,10 +70,24 @@ struct WorkoutHistoryCSVRow: Equatable {
 /// I/O; reads model properties only. Mirrors the `ExerciseCSV` layering.
 enum WorkoutHistoryCSV {
     /// Canonical column order. Export emits exactly this header.
+    ///
+    /// The seven cardio columns (Cardio Phase 1, Slice 9) are **appended** to
+    /// the original fourteen, never interleaved, so a spreadsheet or script
+    /// built against the pre-cardio export still finds every old column at its
+    /// old index.
+    ///
+    /// `distanceMeters` is the canonical distance — it is the value that was
+    /// stored and the only one safe to aggregate. `distanceUnitRaw` rides along
+    /// purely as compatibility / original-input metadata recording which unit
+    /// the user typed the bout in; it does **not** control how anything is
+    /// displayed (display follows the Settings distance unit everywhere) and a
+    /// consumer summing distance should ignore it entirely.
     static let header = [
         "workoutDate", "completedAt", "routineName", "exerciseName",
         "blockOrder", "setIndex", "subIndex", "kind", "reps", "weight",
         "durationSeconds", "restSeconds", "timestamp", "workoutNotes",
+        "distanceMeters", "distanceUnitRaw", "avgHeartRate", "hrZone",
+        "calories", "inclinePercent", "resistanceLevel",
     ]
 
     /// ISO-8601 (RFC 3339, UTC) formatter. `ISO8601DateFormatter` defaults to
@@ -73,7 +128,13 @@ enum WorkoutHistoryCSV {
                         durationSeconds: log.durationSeconds,
                         restSeconds: log.restSeconds,
                         timestamp: log.timestamp,
-                        workoutNotes: workout.notes
+                        workoutNotes: workout.notes,
+                        // Read through `cardioMetrics`, the only intended read
+                        // path: it normalizes every column, so a corrupt stored
+                        // value exports blank rather than escaping into a file.
+                        // Strength and timed-hold logs yield an empty
+                        // `CardioMetrics`, i.e. seven blank cells.
+                        cardio: log.cardioMetrics
                     ))
                 }
             }
@@ -98,11 +159,18 @@ enum WorkoutHistoryCSV {
                 r.subIndex.map(String.init) ?? "",
                 r.kind,
                 String(r.reps),
-                r.weight.map(formatWeight) ?? "",
+                r.weight.map(formatDecimal) ?? "",
                 r.durationSeconds.map(String.init) ?? "",
                 r.restSeconds.map(String.init) ?? "",
                 isoFormatter.string(from: r.timestamp),
                 r.workoutNotes ?? "",
+                r.cardio.distanceMeters.map(formatDecimal) ?? "",
+                r.cardio.distanceUnit?.rawValue ?? "",
+                r.cardio.avgHeartRate.map(String.init) ?? "",
+                r.cardio.hrZone?.rawValue ?? "",
+                r.cardio.calories.map(String.init) ?? "",
+                r.cardio.inclinePercent.map(formatDecimal) ?? "",
+                r.cardio.resistanceLevel.map(formatDecimal) ?? "",
             ])
         }
         return CSVCodec.encode(grid)
@@ -115,11 +183,16 @@ enum WorkoutHistoryCSV {
 
     // MARK: - Helpers
 
-    /// Locale-independent weight rendering: integral values print without a
-    /// decimal point ("80"), fractional values keep their digits ("82.5").
-    /// Uses the `.` radix unconditionally (no locale comma) for spreadsheet
-    /// portability.
-    private static func formatWeight(_ value: Double) -> String {
+    /// Locale-independent numeric rendering: integral values print without a
+    /// decimal point ("80", "5000", "-3"), fractional values keep their digits
+    /// ("82.5", "-1.5"). Uses the `.` radix unconditionally (no locale comma)
+    /// for spreadsheet portability.
+    ///
+    /// Shared by weight and by the cardio distance / incline / resistance
+    /// columns so every numeric cell in the file reads the same way. Signed
+    /// input is handled by construction — a treadmill decline exports as
+    /// "-3", not as a blank or an absolute value.
+    private static func formatDecimal(_ value: Double) -> String {
         if value.rounded() == value {
             return String(Int(value))
         }

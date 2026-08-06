@@ -58,6 +58,19 @@ final class WorkoutHistoryCSVTests: XCTestCase {
             WorkoutHistoryCSV.header,
             ["workoutDate", "completedAt", "routineName", "exerciseName",
              "blockOrder", "setIndex", "subIndex", "kind", "reps", "weight",
+             "durationSeconds", "restSeconds", "timestamp", "workoutNotes",
+             "distanceMeters", "distanceUnitRaw", "avgHeartRate", "hrZone",
+             "calories", "inclinePercent", "resistanceLevel"]
+        )
+    }
+
+    /// The pre-cardio columns keep their original indices — the cardio columns
+    /// were appended, so anything built against the old export still reads.
+    func testOriginalColumnsKeepTheirIndices() {
+        XCTAssertEqual(
+            Array(WorkoutHistoryCSV.header.prefix(14)),
+            ["workoutDate", "completedAt", "routineName", "exerciseName",
+             "blockOrder", "setIndex", "subIndex", "kind", "reps", "weight",
              "durationSeconds", "restSeconds", "timestamp", "workoutNotes"]
         )
     }
