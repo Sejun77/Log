@@ -9,7 +9,7 @@ final class ExerciseCSVExportTests: XCTestCase {
 
     // MARK: - rows(from:)
 
-    func testRowsMapAllSixDefinitionFields() {
+    func testRowsMapAllDefinitionFields() {
         let ex = Exercise(
             name: "Bench",
             bodyPart: "Chest",
@@ -60,15 +60,15 @@ final class ExerciseCSVExportTests: XCTestCase {
         let ex = Exercise(name: "Bench", bodyPart: "Chest", equipmentType: "Barbell")
         XCTAssertEqual(
             ExerciseCSV.export(exercises: [ex]),
-            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes\r\n"
-                + "Bench,Chest,Barbell,,false,"
+            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes,isCardio\r\n"
+                + "Bench,Chest,Barbell,,false,,false"
         )
     }
 
     func testExportExercisesEmptyIsHeaderOnly() {
         XCTAssertEqual(
             ExerciseCSV.export(exercises: []),
-            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes"
+            "name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes,isCardio"
         )
     }
 
@@ -89,7 +89,7 @@ final class ExerciseCSVExportTests: XCTestCase {
         let ex = Exercise(name: "Plank", bodyPart: "Core", equipmentType: "Bodyweight")
         ex.isTimeBased = true
         XCTAssertTrue(
-            ExerciseCSV.export(exercises: [ex]).hasSuffix("Plank,Core,Bodyweight,,true,")
+            ExerciseCSV.export(exercises: [ex]).hasSuffix("Plank,Core,Bodyweight,,true,,false")
         )
     }
 

@@ -913,6 +913,93 @@ field whose number could disagree with the label beside it. Since distance is
 stored canonically in meters, unit is purely a question of *how this user reads
 and types numbers*, which is settings-shaped, not per-set and not per-row.
 
+### 2.38 CSV / transfer compatibility (settled in Slice 9)
+
+> Numbering note: this is the slice the implementation-order table calls **7**
+> (CSV v2); it shipped ninth in execution order, after 6b and 6c.
+
+**The rule the whole slice rests on: never move a column, never consume a
+version.** Every one of the three formats is something a user already has on
+disk or in a share sheet. A change that reorders a column, inserts one in the
+middle, or bumps a schema version turns their existing file into an error
+message. So all three changes are strictly *append optional fields to the end*,
+and all three older formats keep importing untouched.
+
+**Exercise CSV v2.** One column, `isCardio`, appended after `notes`. There is no
+version-marker column — **the header row itself identifies the format**, which
+is precisely what lets a v1 file keep importing. `ExerciseCSV.Format` resolves
+the header (v2 first, then v1) with the existing trimmed/case-insensitive
+comparison, and everything downstream keys off the resolved format's column
+count, so a v1 file's six-column rows still validate against six.
+
+| | v1 | v2 |
+|---|---|---|
+| Columns | 6 | 7 (v1 + `isCardio`) |
+| Written by | builds before Slice 9 | export, always |
+| Read by | still accepted | accepted |
+| `isCardio` for a v1 row | — | `false` |
+
+`isCardio` parses through the same lenient boolean the `isTimeBased` cell uses
+(true/false, yes/no, 1/0, blank → false), and an unparseable value **rejects the
+row** with a `.invalidIsCardio` reason carrying the raw text. That is the
+existing `isTimeBased` behavior, deliberately: a value the user typed and we
+cannot read is an error worth surfacing in the import preview, not one to
+quietly reinterpret as "not cardio".
+
+**Cardio is normalized up, not down.** A row claiming `isCardio` without
+`isTimeBased` is the impossible state §2.1 rules out. `ExerciseCSVRow`'s
+initializer resolves it by setting `isTimeBased = isTimeBased || isCardio`, and
+`ExerciseCSVImporter` writes through `Exercise.setTimeBased` then
+`setCardio` — the model's own write sites — rather than assigning the two flags.
+The alternative (letting `trackingMode` degrade it to `.strength`) would import
+a file the user explicitly marked as cardio and silently produce a strength
+exercise. Both layers agree, so neither can drift.
+
+Nothing is inferred from a name, a body part, or notes: an exercise is cardio
+only if the file says so. Catalogue seeding is untouched — that is the separate
+catalogue-v3 slice.
+
+**Workout history CSV.** Export-only — there is no history importer, by design
+(history is append-only and snapshotted at session start), so there is no
+old-file-compatibility question on the read side at all. Seven columns are
+**appended** after `workoutNotes`, leaving all fourteen original columns at
+their original indices:
+
+`distanceMeters` · `distanceUnitRaw` · `avgHeartRate` · `hrZone` · `calories` ·
+`inclinePercent` · `resistanceLevel`
+
+Rows are read through `SetLog.cardioMetrics`, the only intended read path, so a
+value that could only have come from a hand-edited store is normalized away
+rather than written into a file the user may hand to a spreadsheet. Strength and
+timed-hold rows yield an empty `CardioMetrics` and therefore seven blank cells.
+
+**Blank is not zero.** A missing optional exports as an empty cell, never `0`.
+The two are different facts, and for `inclinePercent` the difference is load-
+bearing: 0 is an ordinary interior value meaning "recorded as flat", and a
+signed field also has to keep negative decline (`-3`) with its sign rather than
+blanking or absolutizing it.
+
+**`distanceMeters` is canonical; `distanceUnitRaw` is metadata.** The meters
+column is what was stored and the only column safe to aggregate — a weekly total
+summed across mixed km/mi rows would be quietly wrong, which is the whole reason
+storage is canonical. `distanceUnitRaw` records which unit the user typed the
+bout in and exists for compatibility and provenance only. **It does not control
+display anywhere** — display follows the Settings preference (§2.37) — and a
+consumer summing distance should ignore it entirely.
+
+**Routine transfer.** Slice 5 already added `targetDistanceMeters` /
+`targetDistanceUnitRaw` to `RoutineTransferSlotPrescriptionDTO` as additive keys
+with nil defaults, so Slice 9 added no payload fields — only the end-to-end
+proof: model → export → real JSON bytes → decode → import → model, in both
+units, plus a literal pre-Slice-5 payload that still decodes and imports with no
+target. `currentSchemaVersion` stays **1**; nothing about an older document
+became invalid, so consuming a version would have been a cost paid for nothing.
+
+`targetDistanceUnitRaw` is kept (removing a field is a migration, and this slice
+is additive-first) and stays compatibility metadata on this side too: a routine
+exported in miles renders in km for a reader whose Settings say km, and flips the
+moment that preference changes. Nothing stored moves.
+
 ### 2.4 Deferring HealthKit
 
 **Answer to design question 5. Yes — explicitly deferred, and not to Phase 3
@@ -1052,20 +1139,21 @@ the thing that keeps a 45-minute walk from appearing as a bench press data point
 ### 3.5 Import / export
 
 **Answer to design question 10.** Three formats, three different compatibility
-situations:
+situations. All three are **settled in Slice 9** — see §2.38 for what was built
+and why.
 
-**`ExerciseCSV`** — round-trips, and the importer *requires exactly* the v1
-header `name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes`. Adding a
-column naively would reject every previously exported file.
+**`ExerciseCSV`** — round-trips, and the importer previously *required exactly*
+the v1 header `name,bodyPart,equipmentType,setupDefaults,isTimeBased,notes`.
+Adding a column naively would reject every previously exported file.
 
 > **v2 header** appends `isCardio`. The importer accepts **both** v1 and v2
 > headers; a v1 file imports with `isCardio = false`. The exporter emits v2.
 > Header detection is by column count + name match, consistent with the existing
 > trimmed/case-insensitive comparison.
 
-**`WorkoutHistoryCSV`** — export-only, so new columns are purely additive. Append
-`distanceMeters`, `distanceUnit`, `avgHeartRate`, `hrZone`, `calories`,
-`inclinePercent`, `resistanceLevel` after the existing 14 columns.
+**`WorkoutHistoryCSV`** — export-only, so new columns are purely additive.
+Appends `distanceMeters`, `distanceUnitRaw`, `avgHeartRate`, `hrZone`,
+`calories`, `inclinePercent`, `resistanceLevel` after the existing 14 columns.
 
 **`RoutineTransferDocument`** — `currentSchemaVersion` gates *newer* documents
 with a hard reject; older-or-equal is accepted, and unknown fields decode via
@@ -1128,7 +1216,7 @@ intentional and must be covered by test.
 |---|---|---|
 | `isCardio == true` with `isTimeBased == false` | Med | Enforce at both write sites; assert in tests; `trackingMode` reads `isTimeBased` first so the impossible state degrades to `.strength` rather than crashing |
 | Exercise-switch adapter leaves cardio metrics on a strength slot | **High** | Add cardio fields to the adapter's existing compatibility table in the same slice; extend `SwitchExerciseConsistencyTests` |
-| CSV v1 files rejected after header change | **High** | Dual-header import, tested against a literal v1 fixture |
+| CSV v1 files rejected after header change | **High** | ✅ Slice 9: dual-header import, tested against literal v1 fixtures end to end (parse **and** importer) |
 | Mixed km/mi aggregation | Med | Canonical meters storage |
 | Old cardio logs render differently | Med | Summary omits absent segments; test asserts a duration-only row is byte-identical to today |
 | Field bloat on `SetLog` slows strength logging | Low | All fields nil for strength; no new relationship, no extra insert |
@@ -1312,7 +1400,7 @@ moment someone writes "felt like 5k". Notes stay unparsed, deliberately.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Exercise-switch adapter leaks cardio state into a strength slot | Reintroduces the P1 bug the beta just fixed | Cardio fields join the adapter's existing compatibility table in the same slice; extend the existing switch test suites before shipping |
-| `ExerciseCSV` header change rejects users' old exports | Users lose the ability to re-import their own data | Dual-header import, tested against a literal v1 fixture |
+| `ExerciseCSV` header change rejects users' old exports | Users lose the ability to re-import their own data | ✅ Slice 9: dual-header import, tested against literal v1 fixtures end to end (§2.38) |
 | Cardio pollutes strength charts | Silently wrong e1RM/volume | Existing `weight > 0 && reps > 0` filter, pinned by test rather than assumed |
 | Active-workout logging regresses | Highest-severity area in the app | Primary path unchanged; metrics strictly additive behind a disclosure; duration-only flow tested as byte-identical |
 | Scope creep into intervals | Phase 1 never ships | Intervals are explicitly Phase 3 and get their own design document |
@@ -1337,7 +1425,7 @@ independently committable, additive-first.
 | 6 | ✅ Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
 | 6b | ✅ Cardio previous-performance prefill (§2.36) | Needs the target-vs-actual distinction Slice 5 established, and Slice 6's draft rules |
 | 6c | ✅ Distance-unit Settings control, Settings-only policy (§2.37) | The Slice 1 preference had no UI; exposing it is independent of everything below. Patched before merge to remove the per-target unit pickers that overrode it |
-| 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |
+| 7 | ✅ CSV v2 (dual-header import, history export columns) + routine-transfer compatibility (§2.38) | Isolated, high test value. Shipped ninth in execution order, after 6b and 6c |
 | 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | Phase 2 charts | After real cardio data exists |
 

@@ -85,7 +85,14 @@ enum ExerciseCSVImporter {
                 setupDefaults: row.setupDefaults,
                 isCustom: true
             )
-            ex.isTimeBased = row.isTimeBased
+            // Go through the model's write sites rather than assigning the two
+            // flags directly: `setTimeBased` / `setCardio` are what enforce
+            // "cardio implies time-based", so an imported row can never
+            // materialize an `Exercise` in a state `trackingMode` would have to
+            // degrade. Order matters — time-based must be established first, or
+            // `setCardio` would drop the flag it guards on.
+            ex.setTimeBased(row.isTimeBased)
+            ex.setCardio(row.isCardio)
             ex.order = nextOrder
             ctx.insert(ex)
 
