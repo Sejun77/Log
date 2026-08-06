@@ -93,16 +93,23 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
         XCTAssertTrue(plan.usesDuration)
     }
 
-    func testCardioToCardioKeepPreservesTheAuthoredUnit() {
+    /// The adapter copies the target columns verbatim — including the legacy
+    /// `targetDistanceUnitRaw`, which is still carried for compatibility.
+    /// *Display* is a separate question: it follows the Settings preference,
+    /// so the same plan reads in whichever unit it is asked for.
+    func testCardioToCardioKeepPreservesTheStoredTargetColumns() {
         let plan = switchOutcome(
             .keepCurrentPlan, from: .cardio, to: .cardio,
             current: cardioPlan(distanceMeters: 5_000, unitRaw: "mi")
         ).sessionPlan
 
+        XCTAssertEqual(plan.targetDistanceMeters, 5_000)
         XCTAssertEqual(plan.targetDistanceUnitRaw, "mi")
         XCTAssertEqual(
-            plan.targetDistance(fallbackUnit: km)?.unit, mi,
-            "the target must read back in the unit it was authored in")
+            plan.targetDistance(displayUnit: km)?.unit, km,
+            "the carried-over raw unit is not a display override")
+        XCTAssertEqual(
+            plan.targetDistance(displayUnit: mi)?.unit, mi)
     }
 
     // MARK: - 2. cardio → cardio Reset
@@ -203,7 +210,7 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
             XCTAssertNil(
                 SessionPlanResolver.plannedTargetDistance(
                     sessionPlan: outcome.sessionPlan, snapshot: snapshot,
-                    fallbackUnit: km),
+                    displayUnit: km),
                 "no tier may still resolve a target for \(newMode)")
         }
     }
@@ -219,7 +226,7 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
         let resolved = try XCTUnwrap(
             SessionPlanResolver.plannedTargetDistance(
                 sessionPlan: outcome.sessionPlan, snapshot: snapshot,
-                fallbackUnit: km))
+                displayUnit: km))
         XCTAssertEqual(resolved.displayText, "5 km")
     }
 
@@ -309,8 +316,8 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
             current: cardioPlan()
         ).sessionPlan
 
-        XCTAssertFalse(plan.primarySummary.contains("km"))
-        XCTAssertFalse(plan.primarySummary.contains("mi"))
+        XCTAssertFalse(plan.primarySummary(distanceUnit: .kilometers).contains("km"))
+        XCTAssertFalse(plan.primarySummary(distanceUnit: .kilometers).contains("mi"))
     }
 
     func testCardioToTimedHoldLeavesNoCardioOnlyFields() {
@@ -325,7 +332,7 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
         XCTAssertNil(plan.repMin, "a timed hold never shows reps")
         // … the distance target does not.
         XCTAssertNil(plan.targetDistanceMeters)
-        XCTAssertFalse(plan.primarySummary.contains("km"))
+        XCTAssertFalse(plan.primarySummary(distanceUnit: .kilometers).contains("km"))
     }
 
     // MARK: - 12–14. Draft retention verdict
@@ -461,7 +468,7 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
         let snapshot = store.load(slotID: slotID, setIndex: 0)
         XCTAssertNil(
             snapshot.flatMap {
-                CardioEntryDraft(snapshot: $0, defaultUnit: km)
+                CardioEntryDraft(snapshot: $0, displayUnit: km)
             },
             "a cleared slot must rebuild no cardio draft at all")
     }
@@ -496,7 +503,7 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
         plan: SessionPlan, snapshot: PrescriptionSnapshotPayload?
     ) -> CardioEntryDraft? {
         SessionPlanResolver.plannedTargetDistance(
-            sessionPlan: plan, snapshot: snapshot, fallbackUnit: km
+            sessionPlan: plan, snapshot: snapshot, displayUnit: km
         )
         .map { CardioEntryDraft(unit: $0.unit, distance: $0.valueText ?? "") }
     }
@@ -543,7 +550,7 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
             current: cardioPlan())
         let restored = try XCTUnwrap(
             store.load(slotID: slotID, setIndex: 0).flatMap {
-                CardioEntryDraft(snapshot: $0, defaultUnit: km)
+                CardioEntryDraft(snapshot: $0, displayUnit: km)
             })
 
         XCTAssertEqual(restored.distance, "4.2")
@@ -577,13 +584,13 @@ final class CardioExerciseSwitchTests: SwiftDataTestHarness {
         let keptCardio = switchOutcome(
             .keepCurrentPlan, from: .cardio, to: .cardio, current: cardioPlan()
         ).sessionPlan
-        XCTAssertTrue(keptCardio.primarySummary.contains("5 km"))
+        XCTAssertTrue(keptCardio.primarySummary(distanceUnit: .kilometers).contains("5 km"))
 
         let intoCardio = switchOutcome(
             .keepCurrentPlan, from: .strength, to: .cardio,
             current: strengthPlan()
         ).sessionPlan
-        XCTAssertFalse(intoCardio.primarySummary.contains("km"))
+        XCTAssertFalse(intoCardio.primarySummary(distanceUnit: .kilometers).contains("km"))
     }
 
     // MARK: - Mode axis vs. field-shape axis

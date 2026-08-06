@@ -172,7 +172,7 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
             CardioHistorySummary.primaryText(for: log),
             "A strength set must fall through to the weight/reps rendering")
         XCTAssertTrue(
-            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km).isEmpty)
+            CardioHistorySummary.secondaryLines(for: log, displayUnit: km).isEmpty)
     }
 
     // MARK: - 3. Re-logging clears a previous attempt
@@ -207,7 +207,7 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
 
         XCTAssertEqual(CardioHistorySummary.primaryText(for: log), "2700s")
         XCTAssertEqual(
-            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km),
+            CardioHistorySummary.secondaryLines(for: log, displayUnit: km),
             ["6.2 km · 7:15 /km", "142 bpm · 410 kcal"])
     }
 
@@ -220,7 +220,7 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
 
         XCTAssertEqual(CardioHistorySummary.primaryText(for: log), "1800s")
         XCTAssertTrue(
-            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km).isEmpty)
+            CardioHistorySummary.secondaryLines(for: log, displayUnit: km).isEmpty)
     }
 
     func testTimedHoldRendersLikeBefore() {
@@ -230,7 +230,7 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
 
         XCTAssertEqual(CardioHistorySummary.primaryText(for: log), "60s")
         XCTAssertTrue(
-            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km).isEmpty)
+            CardioHistorySummary.secondaryLines(for: log, displayUnit: km).isEmpty)
     }
 
     /// A workout finished with a mix of set types renders each row correctly —
@@ -263,13 +263,13 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
         XCTAssertEqual(CardioHistorySummary.primaryText(for: cardioLogs[0]), "1800s")
         XCTAssertTrue(
             CardioHistorySummary.secondaryLines(
-                for: cardioLogs[0], fallbackUnit: km).isEmpty)
+                for: cardioLogs[0], displayUnit: km).isEmpty)
 
         // Fully recorded cardio: duration stays primary, metrics grouped below.
         XCTAssertEqual(CardioHistorySummary.primaryText(for: cardioLogs[1]), "2700s")
         XCTAssertEqual(
             CardioHistorySummary.secondaryLines(
-                for: cardioLogs[1], fallbackUnit: km),
+                for: cardioLogs[1], displayUnit: km),
             [
                 "6.2 km · 7:15 /km",
                 "-3% incline · level 8",
@@ -281,7 +281,7 @@ final class ActiveWorkoutCardioEntryTests: SwiftDataTestHarness {
             CardioHistorySummary.primaryText(for: plankItem.setLogs[0]), "60s")
         XCTAssertTrue(
             CardioHistorySummary.secondaryLines(
-                for: plankItem.setLogs[0], fallbackUnit: km).isEmpty)
+                for: plankItem.setLogs[0], displayUnit: km).isEmpty)
     }
 
     // MARK: - 5. Cardio slot gating

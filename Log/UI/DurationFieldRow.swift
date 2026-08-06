@@ -43,22 +43,6 @@ struct DurationFieldRow: View {
 
     @State private var isExpanded = false
 
-    // MARK: Derived ranges
-
-    /// Hours only make sense past a one-hour bound; at exactly an hour the
-    /// minutes wheel covers the whole range (0…60) more directly.
-    private var showsHours: Bool { maxSeconds > 3_600 }
-
-    private var hourRange: [Int] { Array(0...(maxSeconds / 3_600)) }
-
-    private var minuteRange: [Int] {
-        showsHours ? Array(0...59) : Array(0...(maxSeconds / 60))
-    }
-
-    private var secondRange: [Int] { Array(0...59) }
-
-    private var visiblePresets: [Int] { presets.filter { $0 <= maxSeconds } }
-
     // MARK: Body
 
     var body: some View {
@@ -82,10 +66,12 @@ struct DurationFieldRow: View {
         .buttonStyle(.plain)
 
         if isExpanded {
-            if !visiblePresets.isEmpty {
-                presetStrip
-            }
-            wheels
+            DurationWheelPicker(
+                seconds: $seconds,
+                maxSeconds: maxSeconds,
+                zeroLabel: zeroLabel,
+                presets: presets,
+                accessibilityTitle: title)
         }
     }
 
@@ -94,6 +80,64 @@ struct DurationFieldRow: View {
             return Text(LocalizedStringKey(zeroLabel))
         }
         return Text(DurationFormat.compact(seconds))
+    }
+}
+
+// ======================================================
+// MARK: - The scrolling duration setter itself
+// ======================================================
+
+/// The preset strip + h/m/s wheels, with no row chrome around them.
+///
+/// Extracted out of `DurationFieldRow` unchanged so the *active workout* set
+/// row can offer the same control without inheriting a Form row's title,
+/// chevron, and full-width tap target. `DurationFieldRow` still renders it in
+/// exactly the same place it used to render these views inline, so rest,
+/// routine prescription, warm-up, and Settings editing are untouched — this is
+/// a move, not a redesign.
+///
+/// Storage contract is the row's: optional `Int` seconds where `nil` (and any
+/// value <= 0) means "unset", and every write goes through
+/// `DurationLimits.normalized(_:max:)` so the value can never be negative or
+/// above `maxSeconds`.
+struct DurationWheelPicker: View {
+
+    /// Stored seconds. `nil` = unset; writes are normalized and clamped.
+    @Binding var seconds: Int?
+
+    /// Upper bound — `DurationLimits.maxExerciseSeconds` or `.maxRestSeconds`.
+    let maxSeconds: Int
+
+    /// Label for the "clear it" preset chip. Localized.
+    var zeroLabel: String = "—"
+
+    /// Quick-tap values. Any preset above `maxSeconds` is dropped.
+    var presets: [Int] = []
+
+    /// Title the wheels report to VoiceOver (their visible labels are hidden).
+    var accessibilityTitle: String
+
+    // MARK: Derived ranges
+
+    /// Hours only make sense past a one-hour bound; at exactly an hour the
+    /// minutes wheel covers the whole range (0…60) more directly.
+    private var showsHours: Bool { maxSeconds > 3_600 }
+
+    private var hourRange: [Int] { Array(0...(maxSeconds / 3_600)) }
+
+    private var minuteRange: [Int] {
+        showsHours ? Array(0...59) : Array(0...(maxSeconds / 60))
+    }
+
+    private var secondRange: [Int] { Array(0...59) }
+
+    private var visiblePresets: [Int] { presets.filter { $0 <= maxSeconds } }
+
+    var body: some View {
+        if !visiblePresets.isEmpty {
+            presetStrip
+        }
+        wheels
     }
 
     // MARK: Presets
@@ -160,7 +204,7 @@ struct DurationFieldRow: View {
                 Text("\(v)\(unit)").monospacedDigit().tag(v)
             }
         } label: {
-            Text(LocalizedStringKey(title))
+            Text(LocalizedStringKey(accessibilityTitle))
         }
         .pickerStyle(.wheel)
         .labelsHidden()

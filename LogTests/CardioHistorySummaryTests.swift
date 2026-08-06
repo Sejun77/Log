@@ -43,10 +43,10 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
     }
 
     private func lines(
-        _ log: SetLog, fallbackUnit: DistanceUnit? = nil
+        _ log: SetLog, displayUnit: DistanceUnit? = nil
     ) -> [String] {
         CardioHistorySummary.secondaryLines(
-            for: log, fallbackUnit: fallbackUnit ?? km)
+            for: log, displayUnit: displayUnit ?? km)
     }
 
     // MARK: - 1. Backward compatibility
@@ -163,25 +163,33 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
         XCTAssertEqual(lines(log), ["142 bpm · Z3 · 410 kcal"])
     }
 
-    /// Distance renders in the unit the set was recorded in, and the pace is
-    /// derived in that same unit — a mile row never shows a km pace.
+    /// Distance renders in the **display** unit, and the pace is derived in
+    /// that same unit, so the number and the "/km" or "/mi" beside it can never
+    /// disagree.
     func testMilesRowRendersInMiles() {
         // 3 mi = 4828.032 m; 1500 s / 3 mi = 500 s/mi → 8:20 /mi
         let log = makeLog(
             durationSeconds: 1_500,
             metrics: CardioMetrics(distanceMeters: 4_828.032, distanceUnit: .miles))
 
-        XCTAssertEqual(lines(log), ["3 mi · 8:20 /mi"])
+        XCTAssertEqual(lines(log, displayUnit: .miles), ["3 mi · 8:20 /mi"])
     }
 
-    /// The recorded unit wins over the current preference, so History reads
-    /// back the way the user typed it.
-    func testRecordedUnitWinsOverFallbackUnit() {
+    /// The recorded `distanceUnitRaw` does **not** win over the display unit:
+    /// distance is stored canonically in meters, so History re-expresses an old
+    /// row rather than restating the unit it happened to be typed in. The
+    /// stored columns are untouched.
+    func testRecordedUnitDoesNotOverrideTheDisplayUnit() {
         let log = makeLog(
             durationSeconds: 1_500,
             metrics: CardioMetrics(distanceMeters: 4_828.032, distanceUnit: .miles))
 
-        XCTAssertEqual(lines(log, fallbackUnit: .kilometers), ["3 mi · 8:20 /mi"])
+        // 4828.032 m = 4.828032 km; 1500 s / 4.828032 km ≈ 310.7 s/km → 5:11
+        XCTAssertEqual(
+            lines(log, displayUnit: .kilometers), ["4.83 km · 5:11 /km"])
+        XCTAssertEqual(lines(log, displayUnit: .miles), ["3 mi · 8:20 /mi"])
+        XCTAssertEqual(log.distanceUnitRaw, "mi")
+        XCTAssertEqual(log.distanceMeters, 4_828.032)
     }
 
     // MARK: - 3. Distance without a usable duration
@@ -283,24 +291,24 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
 
     // MARK: - 6. Invalid stored values
 
-    /// An unparseable unit falls back to the supplied unit instead of dropping
-    /// the distance — the distance itself is canonical meters, so the number
-    /// stays correct either way.
-    func testInvalidDistanceUnitRawFallsBackWithoutCrashing() {
+    /// An unparseable stored unit changes nothing, because it is never read:
+    /// the distance is canonical meters and renders in the display unit. Kept
+    /// as its own test because such rows exist in the wild.
+    func testInvalidDistanceUnitRawRendersWithoutCrashing() {
         let log = makeLog(durationSeconds: 1_800)
         log.distanceMeters = 5_000
         log.distanceUnitRaw = "kilometres"
 
-        XCTAssertEqual(lines(log, fallbackUnit: .kilometers), ["5 km · 6:00 /km"])
-        XCTAssertEqual(lines(log, fallbackUnit: .miles), ["3.11 mi · 9:39 /mi"])
+        XCTAssertEqual(lines(log, displayUnit: .kilometers), ["5 km · 6:00 /km"])
+        XCTAssertEqual(lines(log, displayUnit: .miles), ["3.11 mi · 9:39 /mi"])
     }
 
-    func testMissingDistanceUnitRawFallsBackWithoutCrashing() {
+    func testMissingDistanceUnitRawRendersWithoutCrashing() {
         let log = makeLog(durationSeconds: 1_800)
         log.distanceMeters = 5_000
         log.distanceUnitRaw = nil
 
-        XCTAssertEqual(lines(log, fallbackUnit: .kilometers), ["5 km · 6:00 /km"])
+        XCTAssertEqual(lines(log, displayUnit: .kilometers), ["5 km · 6:00 /km"])
     }
 
     func testInvalidHRZoneRawIsOmittedWithoutCrashing() {
@@ -355,7 +363,7 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
             calories: 410, inclinePercent: 3, resistanceLevel: 8, hrZone: .z3)
 
         let segments = CardioHistorySummary.collapsedSegments(
-            everything, fallbackUnit: km)
+            everything, displayUnit: km)
 
         XCTAssertEqual(segments.count, CardioHistorySummary.collapsedSegmentLimit)
         XCTAssertEqual(segments.count, 3)
@@ -368,7 +376,7 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
             calories: 410, inclinePercent: 3, resistanceLevel: 8, hrZone: .z3)
 
         XCTAssertEqual(
-            CardioHistorySummary.collapsedSummary(everything, fallbackUnit: km),
+            CardioHistorySummary.collapsedSummary(everything, displayUnit: km),
             "6.2 km · 142 bpm · 410 kcal")
     }
 
@@ -379,7 +387,7 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
             distanceMeters: 6_200, distanceUnit: km, avgHeartRate: 142,
             calories: 410, inclinePercent: 3, resistanceLevel: 8, hrZone: .z3)
         let summary = try XCTUnwrap(
-            CardioHistorySummary.collapsedSummary(everything, fallbackUnit: km))
+            CardioHistorySummary.collapsedSummary(everything, displayUnit: km))
 
         for excluded in ["incline", "level", "Z3", "/km", "km/h"] {
             XCTAssertFalse(
@@ -395,7 +403,7 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
             inclinePercent: -3, resistanceLevel: 8, hrZone: .z3)
 
         XCTAssertEqual(
-            CardioHistorySummary.collapsedSummary(machineOnly, fallbackUnit: km),
+            CardioHistorySummary.collapsedSummary(machineOnly, displayUnit: km),
             "-3% incline · level 8 · Z3")
     }
 
@@ -406,7 +414,7 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
 
         // distance claims slot 1; incline and resistance fill 2 and 3.
         XCTAssertEqual(
-            CardioHistorySummary.collapsedSummary(partial, fallbackUnit: km),
+            CardioHistorySummary.collapsedSummary(partial, displayUnit: km),
             "5 km · 2% incline · level 8")
     }
 
@@ -415,13 +423,13 @@ final class CardioHistorySummaryTests: SwiftDataTestHarness {
     func testCollapsedSummaryNeverIncludesPaceOrSpeed() throws {
         let distanceOnly = CardioMetrics(distanceMeters: 6_200, distanceUnit: km)
         let summary = try XCTUnwrap(
-            CardioHistorySummary.collapsedSummary(distanceOnly, fallbackUnit: km))
+            CardioHistorySummary.collapsedSummary(distanceOnly, displayUnit: km))
 
         XCTAssertEqual(summary, "6.2 km")
     }
 
     func testCollapsedSummaryIsNilWhenNothingRecorded() {
         XCTAssertNil(
-            CardioHistorySummary.collapsedSummary(CardioMetrics(), fallbackUnit: km))
+            CardioHistorySummary.collapsedSummary(CardioMetrics(), displayUnit: km))
     }
 }

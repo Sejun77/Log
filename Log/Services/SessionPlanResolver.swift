@@ -129,15 +129,13 @@ enum SessionPlanResolver {
     static func plannedTargetDistance(
         sessionPlan: SessionPlan?,
         snapshot: PrescriptionSnapshotPayload?,
-        fallbackUnit: DistanceUnit
+        displayUnit: DistanceUnit
     ) -> CardioTargetDistance? {
-        if let target = sessionPlan?.targetDistance(fallbackUnit: fallbackUnit) {
+        if let target = sessionPlan?.targetDistance(displayUnit: displayUnit) {
             return target
         }
         return CardioTargetDistance(
-            meters: snapshot?.targetDistanceMeters,
-            unitRaw: snapshot?.targetDistanceUnitRaw,
-            fallbackUnit: fallbackUnit)
+            meters: snapshot?.targetDistanceMeters, displayUnit: displayUnit)
     }
 
     /// Resolve the planned rest-after-exercise. Walks

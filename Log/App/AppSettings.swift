@@ -64,8 +64,23 @@ enum AppSettings {
     /// The distance unit implied by `distanceIsMetric`. Read this rather than
     /// the `Bool` wherever a unit is needed, so call sites never re-derive the
     /// mapping.
+    ///
+    /// **A SwiftUI `body` must not read this.** It is a plain `UserDefaults`
+    /// lookup, so SwiftUI records no dependency on it and a view that renders
+    /// distance keeps its old unit until something else invalidates it — the
+    /// bug where an open History page still showed km after Settings changed to
+    /// mi. Views declare `@AppStorage(AppSettings.Keys.distanceIsMetric)` and
+    /// pass it to `distanceUnit(isMetric:)` instead.
     static var distanceUnit: DistanceUnit {
-        distanceIsMetric ? .kilometers : .miles
+        distanceUnit(isMetric: distanceIsMetric)
+    }
+
+    /// The same mapping, for a caller that already has the `Bool` — an
+    /// `@AppStorage` view property, whose whole point is that SwiftUI *can*
+    /// observe it. Factored out so the `Bool` → unit rule lives in exactly one
+    /// place rather than being re-derived at each call site.
+    static func distanceUnit(isMetric: Bool) -> DistanceUnit {
+        isMetric ? .kilometers : .miles
     }
 
     // MARK: Autoregulation

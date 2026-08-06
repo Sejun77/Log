@@ -59,18 +59,27 @@ enum DurationLimits {
         Swift.min(Swift.max(0, seconds), upperBound)
     }
 
-    /// Parse free-text numeric seconds entry — the active workout's
-    /// "Duration (s)" field is a `.numberPad` `TextField`, so it can hold an
-    /// empty, partial, or oversized string.
+    /// Parse a stored seconds **string** — the active workout keeps its
+    /// per-set duration draft as text (`inputsByExerciseID`,
+    /// `ParentDraftStore`), so it can be empty or, from an older build, a
+    /// partial or oversized number.
     ///
     /// Empty / whitespace-only / non-numeric input resolves to `nil` rather
-    /// than 0, so a half-typed field never logs a zero-second set; the caller
+    /// than 0, so a cleared field never logs a zero-second set; the caller
     /// falls back to the planned duration. Valid input goes through
     /// `normalized(_:max:)`, so it is clamped and never negative.
     static func parseSeconds(_ text: String, max upperBound: Int) -> Int? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let value = Int(trimmed) else { return nil }
         return normalized(value, max: upperBound)
+    }
+
+    /// The inverse of `parseSeconds`, for writing a picked value back into that
+    /// text draft. `nil` becomes `""` — the cleared state, distinct from "0" —
+    /// so a cleared picker and an untouched field resolve identically.
+    static func secondsText(_ seconds: Int?) -> String {
+        guard let seconds, seconds > 0 else { return "" }
+        return String(seconds)
     }
 }
 

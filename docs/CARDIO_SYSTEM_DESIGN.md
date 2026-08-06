@@ -151,7 +151,7 @@ this is what keeps Phase 1 from regressing today's behavior.
 Storing them creates a row that can contradict itself (a stored pace that
 disagrees with the stored distance and duration is unresolvable — which one is
 the truth?). They are computed at render time from the two stored values and
-shown as `4:50 /km` and `12.4 km/h`.
+shown as `4:50 /km` and `12.4 km/h` (`4:50 /mi` and `12.4 mph` in miles).
 
 **Distance is stored canonically in meters** with the entry unit recorded
 alongside. This is deliberately *better* than what weight does today
@@ -159,11 +159,13 @@ alongside. This is deliberately *better* than what weight does today
 in kg is silently reinterpreted). Distance is more unit-ambiguous than weight
 and has no bodyweight-style anchor to sanity-check it, and a weekly-distance
 chart aggregating mixed km/mi rows would be quietly wrong. Canonical meters
-makes aggregation correct by construction; `distanceUnitRaw` preserves what the
-user typed so their own history reads back the way they entered it.
+makes aggregation correct by construction; `distanceUnitRaw` records what the
+user typed, for export and backward compatibility.
 
 A new `AppSettings.distanceIsMetric` (default: follow `Locale`) supplies the
-entry unit, matching the existing `weightIsKg` pattern.
+unit for both entry and display, matching the existing `weightIsKg` pattern.
+Unlike `weightIsKg` it reinterprets nothing when it changes, because the stored
+value is meters rather than a bare number — see §2.37 for the full policy.
 
 **Heart-rate zone** is a small closed enum (`z1`…`z5`), not free text, so it can
 be grouped and charted. It is independent of `avgHeartRate` — users have one or
@@ -244,13 +246,13 @@ bare "3%" next to the other numeric segments is ambiguous, and a machine level
 is unitless, so those two need a word; decline reuses the same key with a sign
 ("-3% incline") rather than adding a second one.
 
-**Fallback for an invalid raw unit.** When `distanceUnitRaw` is missing or
-unparseable the summary falls back to `AppSettings.distanceUnit` and still shows
-the distance, rather than dropping it — the value is stored canonically in
+**An invalid raw unit is a non-event.** `distanceUnitRaw` is never read for
+display (see §2.37): the summary renders in `AppSettings.distanceUnit` and shows
+the distance whatever the raw column holds — the value is stored canonically in
 meters, so the number is correct in whichever unit it is rendered. An invalid
 `hrZoneRaw` has no such fallback and is simply omitted: there is no correct
 value to recover, and inventing a zone would be worse than showing none. The
-fallback unit is a parameter, not a global read, so the formatter stays pure and
+display unit is a parameter, not a global read, so the formatter stays pure and
 its tests do not depend on the tester's locale.
 
 ### 2.3 Prescription (target) fields
@@ -285,11 +287,14 @@ existing routine, snapshot and persisted session plan migrates untouched, and a
 
 **`CardioTargetDistance` is the read path**, the programming-side mirror of
 `CardioMetrics`. Every read runs the stored meters back through
-`CardioMetrics.normalizedDistanceMeters` and the unit raw through the tolerant
-`DistanceUnit.from(raw:)`, so a negative, absurd or hand-edited value degrades
-to nil-or-fallback instead of reaching a formatter.
+`CardioMetrics.normalizedDistanceMeters`, so a negative, absurd or hand-edited
+value degrades to nil instead of reaching a formatter.
 `SlotPrescription.applyTargetDistance` is the matching write site and always
 writes **both** columns, so a unit can never be orphaned from its distance.
+
+**A target has no unit of its own — see "Unit policy" below.** Every read takes
+a `displayUnit:` and renders in it; `targetDistanceUnitRaw` is written but never
+read on the display path.
 
 **Target and performed distance are different fields on different models.** A
 5 km target logged as 4.2 km has to stay visibly different from a 4.2 km target,
@@ -395,7 +400,10 @@ draft intact, so correcting a set costs two taps.
 **Pace and speed appear only when derivable.** No placeholder row, no dash: with
 no distance, no duration, or a zero duration, the preview simply does not exist.
 Speed reads "8.3 km/h", pace "7:15 /km", both derived at render time and neither
-stored.
+stored. In miles the same two read "5.1 mph" and "11:40 /mi": the speed unit
+comes from `DistanceUnit.speedUnitSymbol`, which spells the imperial case out
+rather than composing "mi/h", while pace stays composed from the bare symbol
+("min/km" / "min/mi").
 
 #### Pre-merge patch (manual review of Slice 4)
 
@@ -716,11 +724,17 @@ One precedence chain, stated once in `CardioDraftResolver`:
 
     logged set → user-typed draft → previous performance → routine target
 
-**Only setup metrics prefill.** Distance, its unit, incline/decline and
-resistance are decisions the user makes again; average heart rate, HR zone and
-calories are what their body did during one specific bout. The split is enforced
-by the **type**: `CardioPrefillSuggestion` has no field for an outcome metric, so
-no future call site can reintroduce one by forgetting to filter.
+**Only setup metrics prefill.** Distance, incline/decline and resistance are
+decisions the user makes again; average heart rate, HR zone and calories are what
+their body did during one specific bout. The split is enforced by the **type**:
+`CardioPrefillSuggestion` has no field for an outcome metric, so no future call
+site can reintroduce one by forgetting to filter.
+
+The suggestion still carries the previous bout's `distanceUnit`, but §2.37's
+Settings-only rule means `seededDraft` no longer restates it: the stored meters
+are converted into `AppSettings.distanceUnit`, so a 3.1 mi bout prefills as
+"4.99" for a user who now prefers km. The field being seeded is labelled with the
+preference, so seeding the old unit would mislabel the number.
 
 **Eligibility is shared, not restated.** `CardioPrefillService` and
 `LastPerformancePrefillService` both select through
@@ -758,6 +772,146 @@ immediately after `refreshLastPerformancePrefill`.
 **Prefill writes nothing but drafts.** It never touches the routine, the
 prescription snapshot, `SessionPlan.targetDistanceMeters`, or History; it is
 read-only against SwiftData; and it does not parse notes.
+
+### 2.37 The distance-unit preference (settled in the Settings slice; policy revised before merge)
+
+Slice 1 built `AppSettings.distanceIsMetric` and every entry path has defaulted
+from it since; what was missing was a way for the user to see or change it. The
+Settings → Units section now offers **Distance unit: km / mi** beside the
+existing weight picker.
+
+**The picker's `@AppStorage` default is locale-resolved, not `true`.** While the
+key is unset, `AppSettings.distanceIsMetric` falls back to
+`defaultDistanceIsMetric()`, so a hardcoded `true` would have shown "km" to a US
+tester whose entry fields were already defaulting to miles — a control
+describing a preference the app was not using.
+
+**Settings is the only user-facing distance-unit control.** This is the revised
+policy; the paragraphs below record what it replaced and why.
+
+*What shipped first.* The slice treated the preference as a *default for new
+entries only*, and left three km/mi pickers in place: the ones Slice 5 put in the
+routine prescription editor and the active-workout Edit Plan sheet, and the
+per-set one Slice 4 put on the active-workout Details row. Manual review before
+merge found the consequence: those pickers made a **routine prescription (or a
+single set) override the Settings preference**. A user who set km in Settings
+still saw — and could still author — a target in miles, with no way to make the
+routine follow the preference short of re-editing every slot. Two controls for
+one concept, with the narrower one winning. All three pickers are gone; the unit
+now appears beside each field as a static suffix.
+
+*The rule now.* **No distance carries a unit of its own — targets, drafts and
+performed sets alike.** Distance is stored canonically in meters throughout and
+rendered in `AppSettings.distanceUnit` wherever it appears, so this is a
+rendering decision, never a data one:
+
+| Read path | Unit used |
+|---|---|
+| Routine target distance (display + edit) | **the preference** |
+| Active Edit Plan target distance (display + edit) | **the preference** |
+| Block / plan summary target | **the preference** |
+| Active-workout Details distance (display + edit) | **the preference** |
+| Target-distance seeding into a draft | **the preference** |
+| Previous-performance prefill | **the preference** — the stored meters are converted into it |
+| A logged set re-read into its own row | **the preference** |
+| A draft restored after Save & Exit | **the preference**, converted from the unit it was typed in |
+| An in-flight draft when the preference changes | **the preference**, re-expressed live |
+| An empty new field | **the preference** |
+| History row (performed `SetLog`) | **the preference** — distance *and* pace |
+
+`targetDistanceUnitRaw` is **not removed** from `SlotPrescription`,
+`PlannedPrescriptionSnapshot`, `PrescriptionSnapshotPayload` or `SessionPlan`:
+existing rows keep it, routine transfer/import keeps round-tripping it, and
+`applyTargetDistance` keeps writing it — with the unit the target was entered in,
+i.e. the preference at write time. What changed is that **no display path reads
+it**. Removing the column is a later, separate decision; keeping it costs
+nothing and keeps this patch migration-free.
+
+Switching the preference therefore re-expresses every target distance —
+`5 km` becomes `3.11 mi` — while `targetDistanceMeters` never moves. Nothing is
+rewritten, converted, or migrated; the stored meters are the truth and the unit
+is a lens. The routine and Edit Plan rows show the unit as a static suffix beside
+the field and re-seed from the stored meters when the preference changes, so a
+half-typed "6." can never be reinterpreted as the other unit.
+
+The Settings footer explaining the old "applies to new entries" rule is
+**removed**: it described the superseded policy, and under the new one there is
+nothing surprising left to explain. The Units section is a label and a segmented
+picker.
+
+Deliberately not offered: meters, yards, a custom unit system, and separate pace
+units. Pace already follows the unit of the row it belongs to
+(`DistanceUnit.paceFieldLabel`), which is the only sensible answer.
+
+**There are no exceptions left, including History.** An earlier revision of
+this patch kept History rendering in each row's own `distanceUnitRaw`, on the
+reasoning that a completed set is a record and restating it would be the app
+claiming you ran a number you never saw. That argument does not survive contact
+with the screen: it produced a History list mixing `3.1 mi` and `5 km` rows for
+one user, which cannot be scanned or mentally totalled, and it made the unit a
+user sees depend on which build they happened to log a set under. Nobody logs a
+distance intending to fix its *presentation* forever.
+
+The number that was recorded is `distanceMeters`, and that never moves. The unit
+is a lens over it, and the lens belongs to the reader. So History converts, pace
+included — `4.99 km · 6:01 /km` for a bout logged as `3.1 mi` — and a list is
+readable in one unit again.
+
+**`distanceUnitRaw` stays on `SetLog`, written and never read for display.** It
+still records what the set was entered in, which CSV export and any future
+importer can use, and it is what an older build would read if a store were
+opened by one. Removing it would be a migration; keeping it costs nothing.
+Nothing on any display path consults it — `CardioHistorySummary.secondaryLines`
+takes a `displayUnit:` and uses it unconditionally, so a row holding `"mi"`,
+`"kilometres"`, `""` or nothing renders identically.
+
+**Two mechanisms, not one.** Following the preference takes different work
+depending on where the unit lives, and both bugs shipped before being caught:
+
+1. *Views that read the preference directly.* `AppSettings.distanceUnit` is a
+   plain `UserDefaults` lookup, so SwiftUI records no dependency and a body
+   reading it renders the right unit **once**. History showed a stale unit until
+   the page was rebuilt. Every view that displays distance now holds
+   `@AppStorage(AppSettings.Keys.distanceIsMetric)` and derives its unit through
+   `AppSettings.distanceUnit(isMetric:)`.
+2. *State that carries a unit.* `CardioEntryDraft.unit` is per-set state seeded
+   when the draft is built, so the active-workout rows stayed stale even though
+   `ActiveWorkoutView` was observing the preference correctly — re-rendering
+   stale state changes nothing. `.onChange(of: distanceUnit)` resyncs the drafts
+   through the pure `CardioEntryDraft.converted(to:)`.
+
+**Converting a draft means parse → convert → reformat**, because a draft holds
+text rather than meters. Text that parses to a usable distance is converted and
+reformatted; empty text stays empty; text with no usable number (`"."`, `"abc"`,
+`"0"`, out-of-range) keeps its exact keystrokes and only the unit moves, since
+there is nothing to convert and inventing a number would be worse. Every one of
+those strings already means "no distance" to `metrics`, so nothing downstream
+can misread the preserved text.
+
+A trailing separator is deliberately **not** in that group: `Double("6.")` is
+`6.0`, so `"6."` is a usable 6 km and converts to `"3.73"` mi. Someone mid-way
+through typing "6.25" loses their keystrokes. That is the accepted cost — the
+alternative leaves `"6."` under a `mi` label, silently restating 6 km as 6 mi,
+which is the exact reinterpretation this section exists to forbid. The number
+stays true to what the user meant; only their cursor position does not.
+
+**The resync does not persist, and does not need to.** It writes the draft
+dictionary directly rather than through the binding that mirrors into
+`ParentDraftStore` — changing a display preference is not the user editing their
+workout. Correctness across Save & Exit comes from the store recording the text
+*with the unit it was typed in*, so
+`CardioEntryDraft.init(snapshot:displayUnit:)` converts on resume exactly as the
+live resync did. A draft typed as "5" km reads "3.11" mi whether the app stayed
+open or was force-quit in between. (The persisted unit is thus read as a
+*conversion source*, never as a display override — the same distinction
+`targetDistanceUnitRaw` gets, arrived at for the same reason.)
+
+**Why performed entry and display follow the preference too.** The alternative —
+a per-set unit picker on the Details row — was what shipped first, and it had the
+same defect as the per-target pickers: a second control for one concept, and a
+field whose number could disagree with the label beside it. Since distance is
+stored canonically in meters, unit is purely a question of *how this user reads
+and types numbers*, which is settings-shaped, not per-set and not per-row.
 
 ### 2.4 Deferring HealthKit
 
@@ -1182,6 +1336,7 @@ independently committable, additive-first.
 | 5 | ✅ Prescription target distance + cardio routine rules (sets 1, no rest, hide warmup/techniques/tempo/effort) | Programming surface, once logging works |
 | 6 | ✅ Exercise-switch adapter compatibility for cardio fields | Immediately after 5, while the field table is fresh; do **not** defer this |
 | 6b | ✅ Cardio previous-performance prefill (§2.36) | Needs the target-vs-actual distinction Slice 5 established, and Slice 6's draft rules |
+| 6c | ✅ Distance-unit Settings control, Settings-only policy (§2.37) | The Slice 1 preference had no UI; exposing it is independent of everything below. Patched before merge to remove the per-target unit pickers that overrode it |
 | 7 | CSV v2 (dual-header import, history export columns) | Isolated, high test value |
 | 8 | Catalogue v3 + assisted "mark as cardio" prompt | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | Phase 2 charts | After real cardio data exists |

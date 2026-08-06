@@ -35,6 +35,13 @@ struct RoutineEditor: View {
 
     // App-wide autoreg metric drives which effort target (RIR/RPE) the block
     // row subtitle shows; `.none` maps to `nil` → no effort suffix (Slice C).
+    /// Cardio Slice 8 patch: observable, so a Settings change re-renders this
+    /// view. `AppSettings.distanceUnit` is a plain `UserDefaults` read and
+    /// SwiftUI cannot see it — reading it in a `body` renders the right unit
+    /// once and then never updates. See `AppSettings.distanceUnit`.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
     @AppStorage(AppSettings.Keys.autoregMode)
     private var autoregModeRaw: String = AutoregMode.rir.rawValue
 
@@ -297,7 +304,7 @@ struct RoutineEditor: View {
         _ = blockSummaryRefresh
         let summaries = BlockPrescriptionSummary.map(
             for: sortedBlocks, effortMetric: effortMetric,
-            fallbackUnit: AppSettings.distanceUnit
+            displayUnit: AppSettings.distanceUnit(isMetric: distanceIsMetric)
         )
         return Section("Blocks") {
             ForEach(sortedBlocks, id: \.id) { block in

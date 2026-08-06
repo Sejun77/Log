@@ -250,6 +250,13 @@ private struct PrescriptionFields: View {
     var hideRestFields: Bool = false
     var hideSetsField: Bool = false
 
+    /// Cardio Slice 8 patch: observable, so a Settings change re-renders this
+    /// view. `AppSettings.distanceUnit` is a plain `UserDefaults` read and
+    /// SwiftUI cannot see it — reading it in a `body` renders the right unit
+    /// once and then never updates. See `AppSettings.distanceUnit`.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
     @AppStorage(AppSettings.Keys.autoregMode)
     private var autoregModeRaw: String = AutoregMode.rir.rawValue
 
@@ -281,7 +288,7 @@ private struct PrescriptionFields: View {
         // simply does not exist for the modes that cannot use it.
         if CardioRoutineRules.showsTargetDistance(trackingMode) {
             TargetDistanceRow(
-                prescription: prescription, fallbackUnit: entryUnit)
+                prescription: prescription, displayUnit: entryUnit)
         }
 
         if !hideRestFields {
@@ -305,11 +312,13 @@ private struct PrescriptionFields: View {
         }
     }
 
-    /// Default entry unit for the distance field: the user's Settings
-    /// preference. Only a *default* — a target already authored in the other
-    /// unit keeps the unit it was written in, so switching the global
-    /// preference never reinterprets a number someone already typed.
-    private var entryUnit: DistanceUnit { AppSettings.distanceUnit }
+    /// The unit the distance field displays and edits in: the user's Settings
+    /// preference, and the only place it can be changed. Distance is stored
+    /// canonically in meters, so switching the preference re-expresses an
+    /// existing target rather than reinterpreting it.
+    private var entryUnit: DistanceUnit {
+        AppSettings.distanceUnit(isMetric: distanceIsMetric)
+    }
 
     // MARK: - Effort target mode (Slice D)
 
@@ -610,17 +619,21 @@ struct TempoEditorView: View {
 /// Empty, non-numeric, zero, negative and out-of-range input all commit **nil**
 /// ("no target"), which is the correct reading of a field the user cleared or
 /// fumbled. Nothing here can fail loudly.
+///
+/// **The row has no unit control.** The unit is `AppSettings.distanceUnit` and
+/// is shown as a static suffix, so there is exactly one place in the app to
+/// change it. Changing it there re-seeds this field from the stored meters, so
+/// a 5 km target becomes "3.11 mi" without the persisted value moving.
 private struct TargetDistanceRow: View {
     @Bindable var prescription: SlotPrescription
-    /// Entry unit for a target that does not yet have one of its own.
-    let fallbackUnit: DistanceUnit
+    /// The unit this row displays and edits in — the Settings preference.
+    let displayUnit: DistanceUnit
 
     @State private var text: String = ""
-    @State private var unit: DistanceUnit = .kilometers
-    /// Guards the one-time seed. Without it, `onAppear` firing again (a
-    /// re-render, a navigation return) would overwrite in-progress text with
-    /// the committed value.
-    @State private var didSeed = false
+    /// The unit the field's text is currently expressed in. Tracked so a
+    /// preference change can be told apart from a re-render and re-seed only
+    /// then; never user-settable.
+    @State private var seededUnit: DistanceUnit?
 
     private static let fieldWidth: CGFloat = 96
 
@@ -634,17 +647,10 @@ private struct TargetDistanceRow: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: Self.fieldWidth)
                 .multilineTextAlignment(.trailing)
-            // Storage is canonical meters either way, so switching the unit
-            // re-reads the same target rather than converting the typed number
-            // — matching the active-workout Unit picker exactly.
-            Picker("Unit", selection: unitBinding) {
-                ForEach(DistanceUnit.allCases, id: \.self) { u in
-                    Text(u.symbol).tag(u)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 88)
+            // Label, not a control: the unit is chosen in Settings.
+            Text(displayUnit.symbol)
+                .font(.dsBody)
+                .foregroundStyle(.secondary)
         }
         .toolbar {
             // `.decimalPad` has no Return key, so the field needs a
@@ -655,6 +661,7 @@ private struct TargetDistanceRow: View {
             }
         }
         .onAppear(perform: seedFromModel)
+        .onChange(of: displayUnit) { _, _ in reseedForUnitChange() }
     }
 
     private var distanceBinding: Binding<String> {
@@ -667,23 +674,33 @@ private struct TargetDistanceRow: View {
         )
     }
 
-    private var unitBinding: Binding<DistanceUnit> {
-        Binding(
-            get: { unit },
-            set: {
-                unit = $0
-                commit()
-            }
-        )
+    /// Read the committed target back into entry text, once. The `seededUnit`
+    /// guard is what stops `onAppear` firing again (a re-render, a navigation
+    /// return) from overwriting in-progress text with the committed value.
+    private func seedFromModel() {
+        guard seededUnit == nil else { return }
+        seededUnit = displayUnit
+        text = prescription.targetDistance(displayUnit: displayUnit)?.valueText
+            ?? ""
     }
 
-    /// Read the committed target back into entry text, once.
-    private func seedFromModel() {
-        guard !didSeed else { return }
-        didSeed = true
-        let target = prescription.targetDistance(fallbackUnit: fallbackUnit)
-        unit = target?.unit ?? fallbackUnit
-        text = target?.valueText ?? ""
+    /// Re-express the field when the Settings unit changes underneath it.
+    ///
+    /// Re-reads from the stored meters rather than converting `text`, so a
+    /// half-typed "6." cannot be turned into a committed number.
+    ///
+    /// Deliberately does **not** commit. The displayed text is rounded for
+    /// legibility (4988.9664 m reads "4.99 km"), so writing it back would round
+    /// the stored meters every time the preference was toggled — a silent edit
+    /// to the user's data for a display change they made in another screen. The
+    /// meters stay exactly as authored; `targetDistanceUnitRaw` keeps its old
+    /// value until the user actually types, which is harmless because nothing
+    /// reads it for display.
+    private func reseedForUnitChange() {
+        guard seededUnit != displayUnit else { return }
+        seededUnit = displayUnit
+        text = prescription.targetDistance(displayUnit: displayUnit)?.valueText
+            ?? ""
     }
 
     /// Normalize and write both columns together. An unusable value clears the
@@ -691,6 +708,6 @@ private struct TargetDistanceRow: View {
     /// and what the routine stores never disagree.
     private func commit() {
         prescription.applyTargetDistance(
-            CardioTargetDistance(text: text, unit: unit))
+            CardioTargetDistance(text: text, unit: displayUnit))
     }
 }

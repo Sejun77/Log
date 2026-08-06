@@ -208,12 +208,12 @@ final class CardioDistanceOnlyTargetTests: SwiftDataTestHarness {
         routine(with: re)
         try context.save()
 
-        XCTAssertNil(p.targetDistance(fallbackUnit: km))
+        XCTAssertNil(p.targetDistance(displayUnit: km))
         // `hasHydratableContent` reads the raw column, so a negative value
         // still counts as "set". Assert the safe half of the contract: nothing
         // crashes and no target is rendered from it.
         BackfillService.hydrateEmptySlotPrescriptions(in: context)
-        XCTAssertNil(p.targetDistance(fallbackUnit: km))
+        XCTAssertNil(p.targetDistance(displayUnit: km))
     }
 
     // MARK: - 1. Startable
@@ -288,7 +288,7 @@ final class CardioDistanceOnlyTargetTests: SwiftDataTestHarness {
 
         let target = try XCTUnwrap(
             SessionPlanResolver.plannedTargetDistance(
-                sessionPlan: nil, snapshot: payload, fallbackUnit: km))
+                sessionPlan: nil, snapshot: payload, displayUnit: km))
         let draft = CardioEntryDraft(
             unit: target.unit, distance: target.valueText ?? "")
 
@@ -307,7 +307,7 @@ final class CardioDistanceOnlyTargetTests: SwiftDataTestHarness {
             exercise: nil)
         let target = try XCTUnwrap(
             SessionPlanResolver.plannedTargetDistance(
-                sessionPlan: nil, snapshot: payload, fallbackUnit: km))
+                sessionPlan: nil, snapshot: payload, displayUnit: km))
         let draft = CardioEntryDraft(
             unit: target.unit, distance: target.valueText ?? "")
 
@@ -325,7 +325,7 @@ final class CardioDistanceOnlyTargetTests: SwiftDataTestHarness {
 
         XCTAssertEqual(CardioHistorySummary.primaryText(for: log), "1650s")
         XCTAssertEqual(
-            CardioHistorySummary.secondaryLines(for: log, fallbackUnit: km),
+            CardioHistorySummary.secondaryLines(for: log, displayUnit: km),
             ["5 km · 5:30 /km"])
     }
 
@@ -369,7 +369,7 @@ final class CardioDistanceOnlyTargetTests: SwiftDataTestHarness {
 
         let snapshot = try XCTUnwrap(store.load(slotID: slotID, setIndex: 0))
         let restored = try XCTUnwrap(
-            CardioEntryDraft(snapshot: snapshot, defaultUnit: km))
+            CardioEntryDraft(snapshot: snapshot, displayUnit: km))
 
         XCTAssertEqual(restored.distance, "4.2")
     }
@@ -385,7 +385,7 @@ final class CardioDistanceOnlyTargetTests: SwiftDataTestHarness {
         try context.save()
 
         XCTAssertEqual(
-            BlockPrescriptionSummary(block: block, fallbackUnit: km).subtitle,
+            BlockPrescriptionSummary(block: block, displayUnit: km).subtitle,
             "1 set · 5 km")
     }
 }

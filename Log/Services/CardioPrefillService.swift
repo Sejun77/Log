@@ -205,32 +205,30 @@ enum CardioDraftResolver {
     /// Incline and resistance come only from the previous bout — the routine
     /// has no target for either (a deliberate §2.3 decision).
     ///
+    /// **Everything is expressed in `displayUnit`.** A previous bout's
+    /// `distanceUnit` records how it was *logged*, but what is being seeded is
+    /// an editable field whose label follows the Settings preference, so the
+    /// stored meters are converted into that unit rather than restated in the
+    /// old one. A 3.1 mi bout prefills as "4.99" under a km preference. The
+    /// `SetLog` it came from is untouched, and History still renders it in
+    /// miles.
+    ///
     /// Returns nil when neither source offers anything.
     static func seededDraft(
         prefill: CardioPrefillSuggestion?,
         target: CardioTargetDistance?,
-        fallbackUnit: DistanceUnit
+        displayUnit: DistanceUnit
     ) -> CardioEntryDraft? {
-        let prefillDistance = prefill.flatMap { suggestion -> (String, DistanceUnit)? in
-            guard let meters = suggestion.distanceMeters else { return nil }
-            let unit = suggestion.distanceUnit ?? fallbackUnit
-            guard let value = unit.value(fromMeters: meters),
+        let prefillDistance = prefill.flatMap { suggestion -> String? in
+            guard let meters = suggestion.distanceMeters,
+                let value = displayUnit.value(fromMeters: meters),
                 let text = CardioDerived.formatDistance(value: value)
             else { return nil }
-            return (text, unit)
+            return text
         }
 
-        let distance: String
-        let unit: DistanceUnit
-        if let prefillDistance {
-            (distance, unit) = prefillDistance
-        } else if let target {
-            distance = target.valueText ?? ""
-            unit = target.unit
-        } else {
-            distance = ""
-            unit = fallbackUnit
-        }
+        let distance = prefillDistance ?? target?.valueText ?? ""
+        let unit = displayUnit
 
         let incline = prefill?.inclinePercent.flatMap(signedText) ?? ""
         let resistance =

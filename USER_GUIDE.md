@@ -87,7 +87,7 @@ turn on Cardio.
 During a workout, a cardio set still logs with duration alone. Tap Details on
 the set row to also record:
 
-- distance, in km or mi
+- distance, in the unit you chose in Settings
 - average heart rate
 - heart-rate zone
 - calories
@@ -98,14 +98,19 @@ Every one of these is optional, and pace and speed are worked out for you once a
 distance and a duration are entered. Enter the details before tapping Log — to
 change them afterwards, tap Undo and log the set again.
 
+Distance is always entered in the unit you chose in Settings, shown beside the
+field. There is no unit picker on the set row.
+
 In a routine, a cardio slot can also carry a target distance. Open the slot's
-Prescription section and enter it in km or mi — the unit you choose is saved
-with the target, so a routine written in miles keeps reading in miles. A cardio
-slot starts at one set with no rest, and does not show warm-up steps,
+Prescription section and enter it — the unit is whichever one you chose in
+Settings, and the field shows it beside the number. Change the unit in Settings
+and every target re-reads in the new unit; the distance itself does not change.
+A cardio slot starts at one set with no rest, and does not show warm-up steps,
 techniques, tempo, or the effort target, because those describe reps and weight.
 
 When you start the workout, the cardio set row fills in what you did last time:
-distance, incline or decline, and resistance. Average heart rate, heart-rate
+distance, incline or decline, and resistance. A distance you ran in a different
+unit is converted, so what you see is always in your current Settings unit. Average heart rate, heart-rate
 zone, and calories are never filled in, because those are results of that
 session rather than settings you chose. If you have not done the exercise
 before, the routine's target distance fills in the distance instead — either
@@ -159,12 +164,20 @@ Use Settings to adjust app defaults and manage data.
 You can:
 
 - choose weight unit: lb or kg
+- choose distance unit for cardio: km or mi
 - choose effort type: RIR or RPE
 - set your bodyweight
 - set default sets, rep ranges, and rest times
 - import or export exercises
 - import routines
 - export workout history
+
+Settings is the only place the cardio distance unit is chosen — no distance
+field anywhere in the app has a unit picker of its own. Change it here and every
+target distance, and every distance you enter during a workout, uses the new
+unit. History converts too: a run you logged in miles shows in km, pace
+included, once you switch to km. Only the way distances are shown changes —
+nothing you have recorded is altered.
 
 ---
 
@@ -311,8 +324,12 @@ You can:
 설정할 수 있는 내용:
 
 - 중량 단위 선택: lb 또는 kg
+- 유산소 거리 단위 선택: km 또는 mi
 - 운동 강도 방식 선택: RIR 또는 RPE -체중 설정
 - 기본 세트 수, 반복 범위, 휴식 시간 설정
 - 운동 가져오기 / 내보내기
 - 루틴 가져오기
 - 운동 기록 내보내기
+
+거리 단위는 새로 입력하는 유산소 기록에만 적용됩니다. 이미 저장된 운동과 루틴은 저장
+당시의 단위를 유지하므로, mi로 기록한 러닝은 나중에 km로 바꾸어도 계속 mi로 표시됩니다.

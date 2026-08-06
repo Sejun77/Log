@@ -100,21 +100,21 @@ final class ActiveEditPlanLiveUpdateTests: SwiftDataTestHarness {
 
         XCTAssertEqual(try XCTUnwrap(plan.targetDistanceMeters), 8_000, accuracy: 0.001)
         XCTAssertEqual(plan.targetDistanceUnitRaw, "km")
-        XCTAssertTrue(plan.primarySummary.contains("8 km"))
+        XCTAssertTrue(plan.primarySummary(distanceUnit: .kilometers).contains("8 km"))
     }
 
     /// The Plan card's line 1 reads the live `SessionPlan`, so it was never the
     /// broken half — pinned so a future refactor cannot quietly make it stale.
     func testPlanSummaryReflectsTheEditImmediately() {
         var plan = cardioPlan()
-        XCTAssertTrue(plan.primarySummary.contains("5 km"))
+        XCTAssertTrue(plan.primarySummary(distanceUnit: .kilometers).contains("5 km"))
 
         plan.targetDistanceMeters = 8_000
-        XCTAssertTrue(plan.primarySummary.contains("8 km"))
+        XCTAssertTrue(plan.primarySummary(distanceUnit: .kilometers).contains("8 km"))
 
         plan.targetDistanceMeters = nil
         plan.targetDistanceUnitRaw = nil
-        XCTAssertFalse(plan.primarySummary.contains("km"))
+        XCTAssertFalse(plan.primarySummary(distanceUnit: .kilometers).contains("km"))
     }
 
     // MARK: - 2. An untouched draft follows the target
@@ -313,7 +313,7 @@ final class ActiveEditPlanLiveUpdateTests: SwiftDataTestHarness {
         for i in 0..<2 {
             if let snapshot = store.load(slotID: slotID, setIndex: i),
                 let restored = CardioEntryDraft(
-                    snapshot: snapshot, defaultUnit: km)
+                    snapshot: snapshot, displayUnit: km)
             {
                 resumed[i] = restored
             }

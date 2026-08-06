@@ -124,9 +124,6 @@ struct SetEntryRow: View {
 // MARK: - UI for a single time-based set entry
 
 struct TimeSetEntryRow: View {
-    @FocusState private var focused: Field?
-    private enum Field { case duration }
-
     let index: Int
     let template: PlanSetTemplate
     let isLogged: Bool
@@ -148,12 +145,14 @@ struct TimeSetEntryRow: View {
 
     /// Seconds this row would start/log right now.
     ///
-    /// The field is free-text `.numberPad`, so it can be empty, partial, or
+    /// `duration` is the total-seconds string the duration setter writes, so it
+    /// can be empty (cleared) or, from an older build's draft, partial or
     /// larger than the app's bound. `DurationLimits.parseSeconds` resolves
     /// empty/non-numeric input to nil (falling back to the planned duration)
     /// and clamps anything oversized, so neither button can act on a negative
-    /// or out-of-range value. Both the buttons and the compact echo read this,
-    /// so what the user sees is exactly what gets logged.
+    /// or out-of-range value. The buttons, the setter's own value chip, and the
+    /// cardio pace/speed preview all read this, so what the user sees is
+    /// exactly what gets logged.
     private var resolvedDuration: Int {
         DurationLimits.parseSeconds(
             duration, max: DurationLimits.maxExerciseSeconds)
@@ -183,26 +182,16 @@ struct TimeSetEntryRow: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                TextField("Duration (s)", text: $duration)
-                    .font(.dsBody.monospacedDigit())
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 120)
-                    .disabled(isLogged)
-                    .focused($focused, equals: .duration)
-
-                // Long cardio durations are entered in raw seconds, where
-                // "2700" is hard to read back. Echo the compact form once the
-                // value passes a minute so a typo is obvious before logging.
-                if resolvedDuration >= 60 {
-                    Text(DurationFormat.compact(resolvedDuration))
-                        .font(.dsCaption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
+            // Duration is picked with the app's scrolling duration setter, the
+            // same control rest and routine prescriptions use. The binding
+            // underneath is still the same total-seconds string, so
+            // `resolvedDuration`, the planned-duration fallback, the clamp, and
+            // draft persistence are all unchanged — only the input surface is.
+            // Start / Log are handed to the setter so they stay on the value's
+            // line while the wheels open below them.
+            ActiveDurationSetter(
+                secondsText: $duration, isDisabled: isLogged
+            ) {
                 if isLogged {
                     Button("Undo") { onUndo() }
                         .buttonStyle(.bordered)
@@ -225,9 +214,8 @@ struct TimeSetEntryRow: View {
                     .disabled(!canLog)
                 }
             }
-            .frame(minWidth: 80)
 
-            // Cardio only. Placed below the primary row so the duration field
+            // Cardio only. Placed below the primary row so the duration control
             // and Log button keep their exact position and tap targets, and so
             // the Log gate stays `d > 0` — metrics never block logging.
             if let cardioDraft {

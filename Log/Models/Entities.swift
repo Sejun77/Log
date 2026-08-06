@@ -595,12 +595,15 @@ final class SlotPrescription {
     // `SetLog.distanceMeters`, and the two are deliberately separate fields on
     // separate types so a 5 km target logged as 4.2 km stays honest.
     //
-    // Stored canonically in meters with the entry unit alongside it, exactly as
-    // the performed metrics are (`SetLog.distanceMeters` / `distanceUnitRaw`),
-    // so a routine authored in miles still aggregates correctly and still reads
-    // back in the unit it was written in. Both optional / nil-default: every
-    // existing prescription migrates lightweightly and a cardio slot with no
-    // distance target is the normal case, not a degraded one.
+    // Stored canonically in meters, so aggregation is correct by construction.
+    // `targetDistanceUnitRaw` records the unit the target was *entered* in and
+    // is kept for backward, transfer and import compatibility — it is **not** a
+    // display override: a target renders in `AppSettings.distanceUnit`, which
+    // is the only place the user picks a distance unit. (Contrast
+    // `SetLog.distanceUnitRaw`, which *does* win: a performed bout is a record
+    // of what was run.) Both optional / nil-default: every existing
+    // prescription migrates lightweightly and a cardio slot with no distance
+    // target is the normal case, not a degraded one.
     //
     // Pace and speed are deliberately absent here for the same reason they are
     // absent from `CardioMetrics`: both are distance ÷ duration and are derived

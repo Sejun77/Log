@@ -1267,6 +1267,18 @@
         }
       }
     },
+    "Distance unit" : {
+      "comment" : "Settings: cardio distance entry unit",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "거리 단위"
+          }
+        }
+      }
+    },
     "Done" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1351,6 +1363,7 @@
       }
     },
     "Duration (s)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -2175,6 +2188,9 @@
         }
       }
     },
+    "km" : {
+
+    },
     "Last" : {
       "localizations" : {
         "ko" : {
@@ -2320,6 +2336,9 @@
           }
         }
       }
+    },
+    "mi" : {
+
     },
     "Middle range" : {
       "localizations" : {

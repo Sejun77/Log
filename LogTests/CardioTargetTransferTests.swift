@@ -109,7 +109,7 @@ final class CardioTargetTransferTests: SwiftDataTestHarness {
 
         XCTAssertNil(prescription.targetDistanceMeters)
         XCTAssertNil(prescription.targetDistanceUnitRaw)
-        XCTAssertNil(prescription.targetDistance(fallbackUnit: km))
+        XCTAssertNil(prescription.targetDistance(displayUnit: km))
     }
 
     /// The version guard is untouched — this change did not consume a version.
@@ -168,9 +168,12 @@ final class CardioTargetTransferTests: SwiftDataTestHarness {
         let prescription = try importedPrescription(
             doc(prescriptionDTO(targetMeters: 5_000, targetUnitRaw: "km")))
 
-        let target = try XCTUnwrap(prescription.targetDistance(fallbackUnit: mi))
-        XCTAssertEqual(target.unit, km)
-        XCTAssertEqual(target.displayText, "5 km")
+        // The imported raw unit is preserved in storage for transfer
+        // compatibility, but display follows the reader's preference.
+        XCTAssertEqual(prescription.targetDistanceUnitRaw, "km")
+        let target = try XCTUnwrap(prescription.targetDistance(displayUnit: mi))
+        XCTAssertEqual(target.unit, mi)
+        XCTAssertEqual(target.displayText, "3.11 mi")
     }
 
     // MARK: - Imported documents are outside data
@@ -200,7 +203,7 @@ final class CardioTargetTransferTests: SwiftDataTestHarness {
             accuracy: 0.001)
         XCTAssertNil(prescription.targetDistanceUnitRaw)
         XCTAssertEqual(
-            prescription.targetDistance(fallbackUnit: km)?.displayText, "5 km",
+            prescription.targetDistance(displayUnit: km)?.displayText, "5 km",
             "the fallback unit renders it rather than dropping it")
     }
 

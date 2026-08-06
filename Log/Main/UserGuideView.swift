@@ -202,7 +202,7 @@ extension UserGuideView {
                 "duration exercises do not show reps, weight, or tempo",
                 "leaving a field empty means it is not set",
             ],
-            outro: "To track an exercise as cardio, open it in Exercises, turn on Time-based, then turn on Cardio.\n\nDuring a workout, a cardio set still logs with duration alone. Tap Details on the set row to also record distance, average heart rate, heart-rate zone, calories, incline or decline, and resistance. Every one of these is optional, and pace and speed are worked out for you once a distance and a duration are entered. Enter the details before tapping Log — to change them afterwards, tap Undo and log the set again.\n\nIn a routine, a cardio slot can also carry a target distance. Open the slot's Prescription section and enter it in km or mi — the unit you choose is saved with the target. A cardio slot starts at one set with no rest, and does not show warm-up steps, techniques, tempo, or the effort target, because those describe reps and weight.\n\nWhen you start the workout, the cardio set row fills in what you did last time: distance, incline or decline, and resistance. Average heart rate, heart-rate zone, and calories are never filled in, because those are results of that session rather than settings you chose. If you have not done the exercise before, the routine's target distance fills in the distance instead — either way, the target stays visible in the plan.\n\nChange any of it freely: what gets logged is what you actually did, and your edits are kept if you Save & Exit and come back. If you clear a field, it stays cleared.\n\nCardio exercises are grouped under the Cardio body part. The app includes Walking, Treadmill Run, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine as duration-based exercises, and you can add your own the same way."
+            outro: "To track an exercise as cardio, open it in Exercises, turn on Time-based, then turn on Cardio.\n\nDuring a workout, a cardio set still logs with duration alone. Tap Details on the set row to also record distance, average heart rate, heart-rate zone, calories, incline or decline, and resistance. Every one of these is optional, and pace and speed are worked out for you once a distance and a duration are entered. Distance is always entered in the unit you chose in Settings, shown beside the field — there is no unit picker on the set row. Enter the details before tapping Log — to change them afterwards, tap Undo and log the set again.\n\nIn a routine, a cardio slot can also carry a target distance. Open the slot's Prescription section and enter it — the unit is whichever one you chose in Settings, and the field shows it beside the number. Change the unit in Settings and every target re-reads in the new unit; the distance itself does not change. A cardio slot starts at one set with no rest, and does not show warm-up steps, techniques, tempo, or the effort target, because those describe reps and weight.\n\nWhen you start the workout, the cardio set row fills in what you did last time: distance, incline or decline, and resistance. A distance you ran in a different unit is converted, so what you see is always in your current Settings unit. Average heart rate, heart-rate zone, and calories are never filled in, because those are results of that session rather than settings you chose. If you have not done the exercise before, the routine's target distance fills in the distance instead — either way, the target stays visible in the plan.\n\nChange any of it freely: what gets logged is what you actually did, and your edits are kept if you Save & Exit and come back. If you clear a field, it stays cleared.\n\nCardio exercises are grouped under the Cardio body part. The app includes Walking, Treadmill Run, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine as duration-based exercises, and you can add your own the same way."
         ),
         GuideSection(
             heading: "Rest Timer",
@@ -237,13 +237,15 @@ extension UserGuideView {
             intro: "Use Settings to adjust app defaults and manage data.\n\nYou can:",
             items: [
                 "choose weight unit: lb or kg",
+                "choose distance unit for cardio: km or mi",
                 "choose effort type: RIR or RPE",
                 "set your bodyweight",
                 "set default sets, rep ranges, and rest times",
                 "import or export exercises",
                 "import routines",
                 "export workout history",
-            ]
+            ],
+            outro: "Settings is the only place the cardio distance unit is chosen — no distance field anywhere in the app has a unit picker of its own. Change it here and every distance in the app follows: routine targets, what you enter during a workout, and your History, pace included. A run you logged in miles shows in km once you switch to km. Only the way distances are shown changes — nothing you have recorded is altered."
         ),
     ]
 
@@ -336,7 +338,7 @@ extension UserGuideView {
                 "시간 기반 운동에서는 반복 횟수, 중량, 템포가 표시되지 않습니다.",
                 "값을 비워 두면 설정되지 않은 상태로 처리됩니다.",
             ],
-            outro: "운동을 유산소로 기록하려면 운동 탭에서 해당 운동을 열고 시간 기반을 켠 다음 유산소를 켜세요.\n\n운동 중에도 유산소 세트는 시간만으로 기록할 수 있습니다. 세트 행의 세부 정보를 누르면 거리, 평균 심박수, 심박 존, 칼로리, 경사 / 내리막, 저항도 함께 기록할 수 있습니다. 모두 선택 사항이며, 거리와 시간을 입력하면 페이스와 속도는 자동으로 계산됩니다. 세부 정보는 기록을 누르기 전에 입력하세요. 기록한 뒤에 값을 바꾸려면 취소를 누르고 세트를 다시 기록하면 됩니다.\n\n루틴에서는 유산소 슬롯에 목표 거리를 설정할 수도 있습니다. 슬롯의 처방 섹션을 열고 km 또는 mi로 입력하세요. 선택한 단위는 목표와 함께 저장됩니다. 유산소 슬롯은 1세트, 휴식 없음으로 시작하며 워밍업 단계, 테크닉, 템포, 강도 목표는 표시되지 않습니다. 이 항목들은 반복 횟수와 중량을 기준으로 하기 때문입니다.\n\n운동을 시작하면 유산소 세트 행에 지난번 기록이 채워집니다. 거리, 경사 / 내리막, 저항이 채워지며, 평균 심박수와 심박 존, 칼로리는 채워지지 않습니다. 이 값들은 직접 설정한 값이 아니라 그 세션의 결과이기 때문입니다. 해당 운동을 처음 하는 경우에는 루틴의 목표 거리가 대신 채워집니다. 어느 쪽이든 목표는 플랜에 그대로 표시됩니다.\n\n모두 자유롭게 바꿀 수 있으며, 기록되는 값은 실제로 수행한 값입니다. 저장 후 나가기를 했다가 돌아와도 수정한 값은 유지되고, 비운 칸은 비워진 상태로 유지됩니다.\n\n유산소 운동은 유산소 부위로 묶여 있습니다. 앱에는 걷기, 트레드밀 러닝, 트레드밀 걷기, 실내 자전거, 일립티컬, 스텝밀, 로잉 머신이 시간 기반 운동으로 포함되어 있으며, 같은 방식으로 직접 추가할 수도 있습니다."
+            outro: "운동을 유산소로 기록하려면 운동 탭에서 해당 운동을 열고 시간 기반을 켠 다음 유산소를 켜세요.\n\n운동 중에도 유산소 세트는 시간만으로 기록할 수 있습니다. 세트 행의 세부 정보를 누르면 거리, 평균 심박수, 심박 존, 칼로리, 경사 / 내리막, 저항도 함께 기록할 수 있습니다. 모두 선택 사항이며, 거리와 시간을 입력하면 페이스와 속도는 자동으로 계산됩니다. 거리는 항상 설정에서 선택한 단위로 입력하며, 단위는 입력란 옆에 표시됩니다. 세트 행에는 단위 선택기가 없습니다. 세부 정보는 기록을 누르기 전에 입력하세요. 기록한 뒤에 값을 바꾸려면 취소를 누르고 세트를 다시 기록하면 됩니다.\n\n루틴에서는 유산소 슬롯에 목표 거리를 설정할 수도 있습니다. 슬롯의 처방 섹션을 열고 거리를 입력하세요. 단위는 설정에서 선택한 단위가 사용되며 입력란 옆에 표시됩니다. 설정에서 단위를 바꾸면 모든 목표 거리가 새 단위로 다시 표시되며, 거리 자체는 변하지 않습니다. 유산소 슬롯은 1세트, 휴식 없음으로 시작하며 워밍업 단계, 테크닉, 템포, 강도 목표는 표시되지 않습니다. 이 항목들은 반복 횟수와 중량을 기준으로 하기 때문입니다.\n\n운동을 시작하면 유산소 세트 행에 지난번 기록이 채워집니다. 거리, 경사 / 내리막, 저항이 채워지며, 다른 단위로 기록한 거리는 현재 설정 단위로 변환되어 표시됩니다. 평균 심박수와 심박 존, 칼로리는 채워지지 않습니다. 이 값들은 직접 설정한 값이 아니라 그 세션의 결과이기 때문입니다. 해당 운동을 처음 하는 경우에는 루틴의 목표 거리가 대신 채워집니다. 어느 쪽이든 목표는 플랜에 그대로 표시됩니다.\n\n모두 자유롭게 바꿀 수 있으며, 기록되는 값은 실제로 수행한 값입니다. 저장 후 나가기를 했다가 돌아와도 수정한 값은 유지되고, 비운 칸은 비워진 상태로 유지됩니다.\n\n유산소 운동은 유산소 부위로 묶여 있습니다. 앱에는 걷기, 트레드밀 러닝, 트레드밀 걷기, 실내 자전거, 일립티컬, 스텝밀, 로잉 머신이 시간 기반 운동으로 포함되어 있으며, 같은 방식으로 직접 추가할 수도 있습니다."
         ),
         GuideSection(
             heading: "휴식 타이머",
@@ -371,13 +373,15 @@ extension UserGuideView {
             intro: "설정에서는 앱 기본값과 데이터를 관리할 수 있습니다.\n\n설정할 수 있는 내용:",
             items: [
                 "중량 단위 선택: lb 또는 kg",
+                "유산소 거리 단위 선택: km 또는 mi",
                 "운동 강도 방식 선택: RIR 또는 RPE",
                 "체중 설정",
                 "기본 세트 수, 반복 범위, 휴식 시간 설정",
                 "운동 가져오기 / 내보내기",
                 "루틴 가져오기",
                 "운동 기록 내보내기",
-            ]
+            ],
+            outro: "유산소 거리 단위는 설정에서만 선택할 수 있습니다. 앱의 어떤 거리 입력란에도 단위 선택기가 따로 없습니다. 여기에서 단위를 바꾸면 앱의 모든 거리에 새 단위가 적용됩니다. 루틴 목표 거리, 운동 중 입력하는 거리, 그리고 기록의 거리와 페이스까지 모두 포함됩니다. mi로 기록한 러닝도 km로 바꾸면 km로 표시됩니다. 표시 방식만 바뀔 뿐, 저장된 기록은 변하지 않습니다."
         ),
     ]
 }

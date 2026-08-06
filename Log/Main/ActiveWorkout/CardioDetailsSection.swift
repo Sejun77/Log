@@ -5,9 +5,9 @@ import SwiftUI
 /// The collapsed **Details** disclosure under a cardio set row.
 ///
 /// Everything here is optional. The row above it logs on duration alone, and
-/// this section starts collapsed, so the primary cardio flow — type seconds,
-/// tap Log — is exactly as many taps as it was before Slice 4. A user who never
-/// opens Details never sees a cardio field.
+/// this section starts collapsed, so the primary cardio flow — set the
+/// duration, tap Log — is exactly as many taps as it was before Slice 4. A user
+/// who never opens Details never sees a cardio field.
 ///
 /// Rendered only when the slot's exercise is `.cardio`; timed holds and
 /// strength sets never construct it.
@@ -116,17 +116,11 @@ struct CardioDetailsSection: View {
                 .disabled(isLogged)
                 .focused($focused, equals: .distance)
 
-            // The unit is per-set, seeded from the Settings preference. Storage
-            // is canonical meters either way, so switching it re-reads the same
-            // distance rather than converting the typed number.
-            Picker("Unit", selection: unitBinding) {
-                ForEach(DistanceUnit.allCases, id: \.self) { unit in
-                    Text(unit.symbol).tag(unit)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: Self.suffixWidth + DSSpacing.sm + 76)
-            .disabled(isLogged)
+            // A label, not a control: the distance unit is chosen in Settings
+            // and nowhere else, so this row reads exactly like Calories or
+            // Incline. Storage is canonical meters, so the preference decides
+            // how the number is written and read, never what it means.
+            UnitSuffix(verbatim: draft.unit.symbol)
         }
     }
 
@@ -251,10 +245,6 @@ struct CardioDetailsSection: View {
         )
     }
 
-    private var unitBinding: Binding<DistanceUnit> {
-        Binding(get: { draft.unit }, set: { draft.unit = $0 })
-    }
-
     private func intBinding(
         _ keyPath: WritableKeyPath<CardioEntryDraft, String>
     ) -> Binding<String> {
@@ -288,21 +278,22 @@ struct CardioDetailsSection: View {
 /// Fixed-width trailing unit label. Present even when empty, so a unitless
 /// field (Resistance) keeps its control in the same column as the others.
 private struct UnitSuffix: View {
-    let text: LocalizedStringKey?
+    private let label: Text
 
-    init(_ text: LocalizedStringKey? = nil) { self.text = text }
+    init(_ text: LocalizedStringKey? = nil) {
+        label = text.map { Text($0) } ?? Text(verbatim: "")
+    }
+
+    /// Untranslated variant, for a unit symbol resolved at runtime ("km" /
+    /// "mi"). These stay in the source language like `kg` / `lb` / `s`, so they
+    /// must not go through a catalog lookup.
+    init(verbatim text: String) { label = Text(verbatim: text) }
 
     var body: some View {
-        Group {
-            if let text {
-                Text(text)
-            } else {
-                Text(verbatim: "")
-            }
-        }
-        .font(.dsBodySecondary)
-        .foregroundStyle(.secondary)
-        .frame(width: CardioDetailsSection.suffixWidth, alignment: .leading)
+        label
+            .font(.dsBodySecondary)
+            .foregroundStyle(.secondary)
+            .frame(width: CardioDetailsSection.suffixWidth, alignment: .leading)
     }
 }
 

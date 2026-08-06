@@ -506,6 +506,25 @@ private struct WorkoutDetailView: View {
     @Query private var routines: [Routine]
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
 
+    /// Cardio Slice 8 patch. Reading `AppSettings.distanceUnit` in `body`
+    /// rendered the *correct* unit but never re-rendered: it is a plain
+    /// `UserDefaults` lookup, so SwiftUI recorded no dependency and an open
+    /// History page kept showing km after Settings changed to mi. Reopening the
+    /// page appeared to fix it only because that built a fresh body.
+    ///
+    /// `@AppStorage` is the dependency SwiftUI can see. The default matches
+    /// `AppSettings.distanceIsMetric`'s own locale-resolved fallback, so an
+    /// unset key renders the same unit here as everywhere else rather than
+    /// hardcoding km.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
+    /// The unit cardio rows render in, derived from observable state so the
+    /// whole list re-renders the moment the preference changes.
+    private var distanceUnit: DistanceUnit {
+        AppSettings.distanceUnit(isMetric: distanceIsMetric)
+    }
+
     private var isActive: Bool { activeGuard.activeWorkoutID == workout.id }
 
     private func exerciseName(for item: WorkoutItem) -> String {
@@ -713,8 +732,11 @@ private struct WorkoutDetailView: View {
                 // with no metrics produces no extra lines and no extra spacing,
                 // so strength rows, timed holds, and duration-only cardio logs
                 // occupy exactly the layout they always have.
+                // Formatted here, per render, from the observable preference —
+                // never stored in `@State`, so there is no cached string that
+                // could survive a unit change.
                 let cardioLines = CardioHistorySummary.secondaryLines(
-                    for: log, fallbackUnit: AppSettings.distanceUnit)
+                    for: log, displayUnit: distanceUnit)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {

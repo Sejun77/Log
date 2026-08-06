@@ -16,10 +16,15 @@ import Foundation
 /// it rejects, what reaches the store — is testable without a SwiftUI host.
 struct CardioEntryDraft: Equatable {
 
-    /// Entry unit for `distance`. Seeded from `AppSettings.distanceUnit` when
-    /// the draft is created, then owned by the row's Unit picker, so switching
-    /// the global preference mid-session never reinterprets a number the user
-    /// has already typed.
+    /// The unit `distance` is entered and displayed in — always
+    /// `AppSettings.distanceUnit`, supplied by the caller.
+    ///
+    /// It is stored on the draft rather than read from `AppSettings` here so
+    /// the type stays pure and its tests do not depend on the tester's
+    /// preferences, but it is **not a per-set choice**: the Details row shows
+    /// the symbol as a label, there is no picker, and every construction site
+    /// passes the preference. Distance is stored canonically in meters, so this
+    /// decides how a number is read and written, never what it means.
     var unit: DistanceUnit
 
     var distance: String = ""
@@ -89,7 +94,54 @@ struct CardioEntryDraft: Equatable {
     /// it, which is strictly worse than showing fewer things legibly: the
     /// expanded section is one tap away and shows everything.
     var summaryText: String? {
-        CardioHistorySummary.collapsedSummary(metrics, fallbackUnit: unit)
+        CardioHistorySummary.collapsedSummary(metrics, displayUnit: unit)
+    }
+
+    // MARK: - Display-unit conversion
+
+    /// The same draft re-expressed in `newUnit`.
+    ///
+    /// Called when the Settings distance unit changes under an in-flight row.
+    /// The draft holds **text**, not meters, so "re-express" has to mean parse
+    /// → convert → reformat, and that is only sound when the text parses:
+    ///
+    /// - **Parses to a usable distance** (`"5"`, `"6.25"`, and also `"6."` —
+    ///   `Double("6.")` is `6.0`): normalized to meters through the same
+    ///   `CardioMetrics.parseDistance` the logging path uses, converted, and
+    ///   reformatted. `"5"` km becomes `"3.11"` mi. The underlying distance is
+    ///   preserved; only its expression changes.
+    ///
+    ///   A trailing separator is therefore *not* a special case: someone
+    ///   part-way through typing "6.25" km sees their field become "3.73" mi.
+    ///   That loses the keystrokes, but it is the lesser evil — the alternative
+    ///   is leaving "6." under a "mi" label, which silently restates 6 km as
+    ///   6 mi, exactly the reinterpretation this whole slice exists to prevent.
+    ///   The number on screen stays true to what the user meant; only their
+    ///   cursor position does not.
+    /// - **Empty**: stays empty. A row the user cleared stays cleared.
+    /// - **Unparseable or out of range** (`"."`, `"abc"`, `"0"`, `"1001"`):
+    ///   the raw text is left **exactly** as typed and only the unit changes.
+    ///   There is no number to convert, so converting would mean inventing one;
+    ///   and refusing to move the unit would leave one row disagreeing with the
+    ///   app-wide label. These strings mean "no distance" to every other path
+    ///   (`metrics` already drops them), so nothing downstream can misread the
+    ///   preserved text as a measurement.
+    ///
+    /// Nothing else on the draft is touched: incline, resistance, heart rate,
+    /// calories and zone are unitless or non-distance. Pure — it returns a new
+    /// value and writes nothing, so a caller can decide separately whether the
+    /// result is worth persisting.
+    func converted(to newUnit: DistanceUnit) -> CardioEntryDraft {
+        guard newUnit != unit else { return self }
+        var copy = self
+        copy.unit = newUnit
+        if let meters = CardioMetrics.parseDistance(distance, unit: unit),
+            let value = newUnit.value(fromMeters: meters),
+            let text = CardioDerived.formatDistance(value: value)
+        {
+            copy.distance = text
+        }
+        return copy
     }
 
     // MARK: - Derived preview
@@ -107,15 +159,16 @@ struct CardioEntryDraft: Equatable {
         return "\(formatted) /\(unit.symbol)"
     }
 
-    /// Live speed, as "8.3 km/h". Same nil-rather-than-placeholder contract as
-    /// `paceText`.
+    /// Live speed, as "8.3 km/h" / "5.1 mph". Same nil-rather-than-placeholder
+    /// contract as `paceText`. The unit comes from `speedUnitSymbol` rather
+    /// than being composed here, so miles read "mph" and not "mi/h".
     func speedText(durationSeconds: Int?) -> String? {
         guard
             let speed = metrics.speedUnitsPerHour(
                 durationSeconds: durationSeconds, in: unit),
             let formatted = CardioDerived.formatSpeed(unitsPerHour: speed)
         else { return nil }
-        return "\(formatted) \(unit.symbol)/h"
+        return "\(formatted) \(unit.speedUnitSymbol)"
     }
 
     // MARK: - Field sanitizers
@@ -166,12 +219,22 @@ extension CardioEntryDraft {
     /// holds no cardio fields at all — which is every strength draft, every
     /// timed-hold draft, and every draft written before Slice 4.
     ///
-    /// An unrecognized persisted unit falls back to `defaultUnit` rather than
-    /// discarding the distance the user typed.
-    init?(snapshot: ParentDraftStore.Snapshot, defaultUnit: DistanceUnit) {
+    /// The snapshot's own `distanceUnit` is read as the unit the text was
+    /// **typed in**, then converted to `displayUnit` — not honoured as a
+    /// display override. That distinction is what makes resume agree with a
+    /// live session: a draft typed as "5" km and then viewed under a miles
+    /// preference reads "3.11" mi either way, whether the app stayed open or
+    /// was force-quit in between. Interpreting the text directly in
+    /// `displayUnit` would instead turn 5 km into 5 mi across a relaunch.
+    ///
+    /// An unrecognized persisted unit falls back to `displayUnit`, which makes
+    /// the conversion a no-op and preserves the typed text rather than
+    /// scaling it by a unit nobody can vouch for.
+    init?(snapshot: ParentDraftStore.Snapshot, displayUnit: DistanceUnit) {
         guard snapshot.hasCardio else { return nil }
+        let typedIn = DistanceUnit.from(raw: snapshot.distanceUnit) ?? displayUnit
         self.init(
-            unit: DistanceUnit.from(raw: snapshot.distanceUnit) ?? defaultUnit,
+            unit: typedIn,
             distance: snapshot.distance ?? "",
             avgHeartRate: snapshot.avgHeartRate ?? "",
             calories: snapshot.calories ?? "",
@@ -179,15 +242,22 @@ extension CardioEntryDraft {
             resistance: snapshot.resistance ?? "",
             hrZone: HRZone.from(raw: snapshot.hrZone)
         )
+        self = converted(to: displayUnit)
     }
 
     /// Seed a draft from an already-logged `SetLog`, so a logged cardio set
     /// still shows what was recorded when the session is resumed. Values are
     /// rendered back through the same formatters the entry fields use, so the
     /// text round-trips.
-    init(logged: SetLog, defaultUnit: DistanceUnit) {
+    ///
+    /// Rendered in `displayUnit`, not the log's own `distanceUnitRaw`: the row
+    /// is a live entry surface whose label follows the preference, and the
+    /// stored value is canonical meters, so converting is exact. (History rows
+    /// are a different surface and keep the logged unit — see
+    /// `CardioHistorySummary`.)
+    init(logged: SetLog, displayUnit: DistanceUnit) {
         let metrics = logged.cardioMetrics
-        let unit = metrics.distanceUnit ?? defaultUnit
+        let unit = displayUnit
         let distance =
             metrics.distanceValue(in: unit)
             .flatMap { CardioDerived.formatDistance(value: $0) } ?? ""

@@ -14,11 +14,20 @@ import Foundation
 /// routine that prescribed it.
 ///
 /// Like `CardioMetrics` it is the **only** intended read path for the stored
-/// columns: every value passes back through `CardioMetrics`' distance
-/// normalizer and the tolerant `DistanceUnit.from(raw:)` lookup, so a row
-/// holding a negative distance, an absurd one, or a `targetDistanceUnitRaw` of
-/// `"kilometres"` degrades to nil-or-fallback rather than reaching a formatter.
-/// Reading the columns directly should be limited to persistence tests.
+/// distance: every value passes back through `CardioMetrics`' distance
+/// normalizer, so a row holding a negative distance or an absurd one degrades
+/// to nil rather than reaching a formatter. Reading the columns directly should
+/// be limited to persistence tests.
+///
+/// **Unit policy (Slice 8 patch): a target has no unit of its own.** Distance
+/// is stored canonically in meters and rendered in whatever
+/// `AppSettings.distanceUnit` says today, so a target authored in miles reads
+/// in km the moment the user prefers km — the number converts, the meters do
+/// not move. `targetDistanceUnitRaw` is still written (and still read by
+/// transfer/import) for backward compatibility, but it is no longer a
+/// user-facing override: nothing on the display path consults it. This is the
+/// deliberate difference from `CardioMetrics`, where a *performed* bout keeps
+/// the unit it was run in because it is a record of something that happened.
 ///
 /// Pace and speed are absent for the same reason they are absent from
 /// `CardioMetrics`: both are distance ÷ duration and are derived at render
@@ -30,23 +39,23 @@ struct CardioTargetDistance: Equatable {
     /// `CardioLimits.maxDistanceMeters` — the initializer refuses anything else.
     let meters: Double
 
-    /// The unit the target was authored in, so it reads back the way it was
-    /// written even if the user later changes the global preference.
+    /// The unit this target is displayed and edited in — always the caller's
+    /// current preference, never a per-target choice.
     let unit: DistanceUnit
 
-    /// The stored columns as a validated value, or nil when there is no usable
+    /// The stored distance as a validated value, or nil when there is no usable
     /// target.
     ///
-    /// - Parameter fallbackUnit: used when `unitRaw` is missing or unparseable.
-    ///   The distance is still shown rather than dropped: it is stored
-    ///   canonically in meters, so the number is correct in whichever unit it
-    ///   renders. Passed in rather than read from `AppSettings` so the type
-    ///   stays pure and its tests do not depend on the tester's preferences.
-    init?(meters: Double?, unitRaw: String?, fallbackUnit: DistanceUnit) {
+    /// - Parameter displayUnit: the unit to render in. Callers pass
+    ///   `AppSettings.distanceUnit`; it is a parameter rather than a direct
+    ///   read so the type stays pure and its tests do not depend on the
+    ///   tester's preferences. The stored `targetDistanceUnitRaw` is
+    ///   deliberately not consulted.
+    init?(meters: Double?, displayUnit: DistanceUnit) {
         guard let meters = CardioMetrics.normalizedDistanceMeters(meters)
         else { return nil }
         self.meters = meters
-        self.unit = DistanceUnit.from(raw: unitRaw) ?? fallbackUnit
+        self.unit = displayUnit
     }
 
     /// Build from user-entered text, for the routine editor's field.
@@ -80,6 +89,11 @@ struct CardioTargetDistance: Equatable {
     /// The two columns to persist. Written as a pair so they can never disagree
     /// about whether a target was set — the mirror of
     /// `SetLog.applyCardioMetrics`.
+    ///
+    /// `unitRaw` still carries a value so existing rows, routine transfer and
+    /// import keep a well-formed pair, but it records the unit the target was
+    /// *entered* in rather than a preference the reader must honour — the read
+    /// path ignores it entirely.
     var storage: (meters: Double?, unitRaw: String?) {
         (meters, unit.rawValue)
     }
@@ -95,13 +109,11 @@ extension SlotPrescription {
 
     /// The slot's validated target distance, or nil when none is set.
     ///
-    /// - Parameter fallbackUnit: the unit used when the stored raw unit is
-    ///   missing or unparseable. Callers pass `AppSettings.distanceUnit`.
-    func targetDistance(fallbackUnit: DistanceUnit) -> CardioTargetDistance? {
+    /// - Parameter displayUnit: the unit to render in. Callers pass
+    ///   `AppSettings.distanceUnit`; `targetDistanceUnitRaw` is not consulted.
+    func targetDistance(displayUnit: DistanceUnit) -> CardioTargetDistance? {
         CardioTargetDistance(
-            meters: targetDistanceMeters,
-            unitRaw: targetDistanceUnitRaw,
-            fallbackUnit: fallbackUnit)
+            meters: targetDistanceMeters, displayUnit: displayUnit)
     }
 
     /// Write site for the target-distance columns. Passing nil clears both.
@@ -118,11 +130,10 @@ extension SlotPrescription {
 
 extension PlannedPrescriptionSnapshot {
 
-    /// The frozen target distance this workout was started with.
-    func targetDistance(fallbackUnit: DistanceUnit) -> CardioTargetDistance? {
+    /// The frozen target distance this workout was started with. The *meters*
+    /// are frozen; the unit it renders in still follows the preference.
+    func targetDistance(displayUnit: DistanceUnit) -> CardioTargetDistance? {
         CardioTargetDistance(
-            meters: targetDistanceMeters,
-            unitRaw: targetDistanceUnitRaw,
-            fallbackUnit: fallbackUnit)
+            meters: targetDistanceMeters, displayUnit: displayUnit)
     }
 }
