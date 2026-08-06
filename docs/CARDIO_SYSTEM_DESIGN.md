@@ -1705,6 +1705,7 @@ independently committable, additive-first.
 | 8 | ✅ Catalogue v3 + assisted "mark as cardio" prompt (§2.39) | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | ✅ Cardio History charts (§2.40) — per-session series; weekly roll-ups still open | After real cardio data exists |
 | 12A | ✅ **Design only** — structured cardio, see [`STRUCTURED_CARDIO_DESIGN.md`](STRUCTURED_CARDIO_DESIGN.md) | Phase 1 is complete and real cardio data now exists to design against |
+| 12B | ✅ Structured cardio **pure value types** — `StructuredCardioPlan.swift`: segments, groups, bounds, expansion, summaries. No persistence, no UI, no export | Pure-first, exactly like Slice 1: the type is proven before anything depends on it |
 
 Slices 1–8 are Phase 1. Slice 6 is the one most tempting to defer and the one
 most likely to reintroduce a known bug; it ships with Phase 1 or Phase 1 does not

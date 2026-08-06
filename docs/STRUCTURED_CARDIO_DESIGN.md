@@ -1,7 +1,8 @@
 # Structured Cardio — Design
 
-**Status:** design complete (Cardio Slice 12A). No implementation, no model
-changes, no tests. Companion to `CARDIO_SYSTEM_DESIGN.md`, which covers Phase 1
+**Status:** design complete (Slice 12A). **Slice 12B shipped** — the pure value
+types exist and are tested; nothing is persisted, rendered, or exported yet
+(see §11). Companion to `CARDIO_SYSTEM_DESIGN.md`, which covers Phase 1
 (Slices 1–11, shipped).
 
 **Scope:** how Log programs a cardio bout that has *shape* — warm-up, work,
@@ -486,8 +487,8 @@ means the only slice that touches the schema does nothing else.
 
 | Slice | Contents | Touches schema? | Tests required? |
 |---|---|---|---|
-| **12B** | Pure `CardioSegment` / `CardioSegmentGroup` / `CardioSegmentPlan`, validation, bounds, `expanded()`, summary text. No UI, no persistence | No | Yes (pure) |
-| **12C** | `cardioSegmentsData` on `SlotPrescription` + `PlannedPrescriptionSnapshot`; `CardioRoutineRules.showsCardioSegments`; routine editor Segments screen; duplicator fix | **Yes** (2 additive optional columns) | **Yes** — schema slice |
+| **12B** ✅ | Pure `CardioSegment` / `CardioSegmentGroup` / `CardioSegmentPlan`, validation, bounds, `expandedSegments()`, summary text. No UI, no persistence — **shipped, see §11** | No | Yes (pure) |
+| **12C** | `cardioSegmentsData` on `SlotPrescription` + `PlannedPrescriptionSnapshot`; `CardioRoutineRules.showsCardioSegments`; routine editor Segments screen; localization of the kind labels | **Yes** (2 additive optional columns) | **Yes** — schema slice |
 | **12D** | `SessionPlan` carry-through, snapshot at session start, active-workout checklist + tick persistence, switch-adapter rules. Logging path untouched | No | Yes — session/ownership |
 | **12E** | History detail "Planned" section; routine transfer payload; compatibility fixtures | No | Yes — transfer/compat |
 | **12F** | *Conditional.* Repeat-group UI; then, only if justified, per-segment actuals | Only if actuals ship | Yes |
@@ -521,7 +522,113 @@ Not built, not designed for, not partially stubbed:
 
 ---
 
-## 11. Open questions for beta feedback
+## 11. Slice 12B — as built
+
+**Shipped:** `Log/Services/StructuredCardioPlan.swift` (one file, pure value
+types) + `LogTests/StructuredCardioPlanTests.swift` (55 tests). No SwiftData
+change, no persistence, no UI, no export.
+
+### Types
+
+| Type | Responsibility |
+|---|---|
+| `CardioPlanLimits` | The three bounds: `maxRepeatCount` 20, `maxSegmentsPerGroup` 20, `maxExpandedSegments` 60 |
+| `CardioPlanError` | Typed refusal reason — `segmentHasNoTarget`, `emptyGroup`, `repeatCountOutOfRange`, `tooManySegmentsInGroup`, `tooManyExpandedSegments`. `Equatable`, so the 12C editor can say *which* thing to fix |
+| `CardioSegmentKind` | `warmUp` / `work` / `recovery` / `coolDown`, `from(raw:)`, and a decoder that maps an unknown raw to `.work` |
+| `CardioSegment` | One planned piece. `id: UUID` (persisted), kind, and the five optional targets + note |
+| `CardioSegmentGroup` | `segments` + `repeatCount`; a flat plan is one group ×1 |
+| `CardioSegmentPlan` | `version` + `groups`, plus totals, expansion, and summaries |
+| `ResolvedCardioSegment` | One occurrence in the expanded list: `index`, `groupIndex`, `round`, `roundCount`, `segment`, and a deterministic `id` |
+
+`CardioSegment.id` was not in the §2.1 sketch and is deliberate: the 12D
+checklist keys tick state by segment, and that state has to survive Save & Exit,
+cold resume, and a reorder. An index would not — inserting a warm-up at the top
+would move every tick down a row. `ResolvedCardioSegment.id` is derived
+(`"<segment uuid>#<round>"`), not a fresh `UUID()`, so a SwiftUI list diffs
+cleanly across recomputes and round 2 can be ticked without ticking round 1.
+
+### The rule the whole slice turns on: authoring rejects, decoding repairs
+
+Typed input is refused with a typed error — a person is there to fix it. A
+stored or imported payload is normalized — nobody is. This is the same split
+`CardioMetrics` (rejects typos) and `DurationLimits` (clamps legacy data)
+already make; structured cardio adds no numeric rules of its own, it delegates
+every field to those two.
+
+| | Authoring (`init` throws) | Decoding (`init(from:)`) |
+|---|---|---|
+| Segment with no target | `segmentHasNoTarget` | segment dropped from its group |
+| Out-of-range incline / resistance / distance | field drops to nil; segment refused if nothing remains | same |
+| Duration ≤ 0 | reads as "unset" (`DurationLimits`); segment refused if nothing remains | same |
+| Duration > 6 h | clamped to `DurationLimits.maxExerciseSeconds` | same |
+| Unknown segment kind | n/a (typed) | `.work` |
+| Unknown HR zone | n/a (typed) | field dropped, segment kept |
+| `repeatCount` outside 1...20 | `repeatCountOutOfRange` | clamped into range |
+| > 20 segments in a group | `tooManySegmentsInGroup` | truncated to 20 |
+| > 60 expanded segments | `tooManyExpandedSegments` | groups kept as a **prefix**, stopping at the first that does not fit |
+| Group with no segments | `emptyGroup` | group dropped whole |
+
+Prefix rather than best-fit truncation: skipping an oversized middle group and
+keeping the cool-down after it would silently change what the session means.
+
+**An empty plan is valid** and means "no structure" — deleting the last segment
+in the editor must not be an error state. `CardioSegmentPlan.empty` and
+`isEmpty` exist so 12C can store `nil` rather than an empty payload.
+
+### Expansion
+
+`plan.expandedSegments() -> [ResolvedCardioSegment]` — pure, total, and
+deterministic (same plan in, same array out, ids included). It cannot exceed the
+60-segment bound because both construction and decoding already enforce it, so
+it does not throw. The receiver cannot be mutated: every stored property is a
+`let`. Groups expand in order, rounds in order, segments in order within a round
+— work/recovery alternate, never grouped by kind.
+
+`totalDurationSeconds` / `totalDistanceMeters` count every round, and are `nil`
+rather than `0` when no segment carries that target.
+
+### Summaries
+
+Three levels, all taking `DistanceUnit` as a parameter — no pure type reads
+`AppSettings`:
+
+| API | Example |
+|---|---|
+| `segment.summary(distanceUnit:)` | `Work · 20m · 5 km · 1% · L8 · Z3` |
+| `segment.shortSummary(distanceUnit:)` | `1m work` (leading target only) |
+| `group.summary(distanceUnit:)` | `5m warm-up · 20m work` / `5 × (1m work / 2m recovery)` |
+| `plan.summary(distanceUnit:)` | `10 segments · 15m · 5 km`, or `No segments` |
+| `plan.structureSummary(distanceUnit:)` | `5 × (1m work / 2m recovery)` |
+
+`plan.summary` counts **expanded** segments — what the athlete performs, not
+what the author typed. Formatting is delegated: `DurationFormat.compact` for
+time, `CardioTargetDistance.displayText` for distance, so a plan and a routine's
+distance target can never render differently.
+
+**Localization: deliberately not yet.** These strings are plain English,
+following `SessionPlan.primarySummary`, which is the closest analogue in the app
+— a pure summary of a prescription, also unlocalized, also built by
+interpolation. There is no UI in this slice, so localizing now would add
+`.xcstrings` keys with no render site and freeze wording that the 12C editor is
+likely to change. The 12C/12D slices that first display these own the
+localization, and `CardioSegmentKind.label` is the single place the four kind
+names come from.
+
+### Deferred to 12C and later
+
+- **Persistence** — `cardioSegmentsData: Data?` on `SlotPrescription` and
+  `PlannedPrescriptionSnapshot`, plus `SessionPlan` carry-through (§2.2, §3.4).
+  Nothing in 12B is stored.
+- **Routine editor UI** and `CardioRoutineRules.showsCardioSegments`.
+- **`repeatCount` UI** — the field exists and is enforced, but the editor pins
+  it to 1 until 12F.
+- **Localization** of the kind labels and summaries (above).
+- Active-workout checklist and tick state (12D); History display and routine
+  transfer payload (12E); per-segment actuals (12F, gated).
+
+---
+
+## 12. Open questions for beta feedback
 
 1. Do users want segments on the **routine slot** (programming, reusable) or
    ad-hoc on **the session** (today's plan only)? This design says the slot; the
