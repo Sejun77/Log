@@ -4,6 +4,9 @@
 **Date:** 2026-08-02
 **Supersedes:** the "structured cardio metrics" entry under Deferred Feedback in
 `ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
+**Companion:** [`STRUCTURED_CARDIO_DESIGN.md`](STRUCTURED_CARDIO_DESIGN.md) —
+structured cardio (segments and intervals), design-complete as Slice 12A,
+unimplemented. This document covers Phase 1, Slices 1–11, all shipped.
 
 ---
 
@@ -1612,6 +1615,13 @@ Nothing here is committed. Each item is independently justifiable or droppable.
 1. **Interval / structured cardio** — repeats of work/rest bouts. The largest
    and most genuinely requested; also close to a second prescription system, so
    it deserves its own design document rather than a phase bullet.
+   ✅ **Design complete (Slice 12A) — see [`STRUCTURED_CARDIO_DESIGN.md`](STRUCTURED_CARDIO_DESIGN.md).**
+   The recommendation is an optional ordered list of planned segments encoded on
+   `SlotPrescription` (no new `@Model`, no migration), rendered in the workout as
+   a read-only checklist, with **logging left aggregate** — one cardio `SetLog`
+   per bout, so History, the Slice 11 charts, prefill, and CSV are untouched.
+   Repeat intervals and per-segment actuals are designed for and deliberately
+   deferred. Implementation is Slices 12B–12F; none of it is built.
 2. **Cardio PRs** — fastest 5k, longest ride. Needs a distance-bucketing rule to
    be meaningful.
 3. **Time in heart-rate zone** — needs per-interval HR, which manual entry
@@ -1694,6 +1704,7 @@ independently committable, additive-first.
 | 7 | ✅ CSV v2 (dual-header import, history export columns) + routine-transfer compatibility (§2.38) | Isolated, high test value. Shipped ninth in execution order, after 6b and 6c |
 | 8 | ✅ Catalogue v3 + assisted "mark as cardio" prompt (§2.39) | Last in Phase 1 — it is the only slice that touches existing user data |
 | 9 | ✅ Cardio History charts (§2.40) — per-session series; weekly roll-ups still open | After real cardio data exists |
+| 12A | ✅ **Design only** — structured cardio, see [`STRUCTURED_CARDIO_DESIGN.md`](STRUCTURED_CARDIO_DESIGN.md) | Phase 1 is complete and real cardio data now exists to design against |
 
 Slices 1–8 are Phase 1. Slice 6 is the one most tempting to defer and the one
 most likely to reintroduce a known bug; it ships with Phase 1 or Phase 1 does not
