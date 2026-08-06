@@ -5,9 +5,9 @@ import SwiftUI
 /// The collapsed **Details** disclosure under a cardio set row.
 ///
 /// Everything here is optional. The row above it logs on duration alone, and
-/// this section starts collapsed, so the primary cardio flow — type seconds,
-/// tap Log — is exactly as many taps as it was before Slice 4. A user who never
-/// opens Details never sees a cardio field.
+/// this section starts collapsed, so the primary cardio flow — set the
+/// duration, tap Log — is exactly as many taps as it was before Slice 4. A user
+/// who never opens Details never sees a cardio field.
 ///
 /// Rendered only when the slot's exercise is `.cardio`; timed holds and
 /// strength sets never construct it.

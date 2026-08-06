@@ -145,12 +145,13 @@ struct TimeSetEntryRow: View {
 
     /// Seconds this row would start/log right now.
     ///
-    /// `duration` is the total-seconds string the h/min/s fields write, so it
-    /// can be empty, partial, or larger than the app's bound.
-    /// `DurationLimits.parseSeconds` resolves empty/non-numeric input to nil
-    /// (falling back to the planned duration) and clamps anything oversized, so
-    /// neither button can act on a negative or out-of-range value. Both buttons
-    /// and the cardio pace/speed preview read this, so what the user sees is
+    /// `duration` is the total-seconds string the duration setter writes, so it
+    /// can be empty (cleared) or, from an older build's draft, partial or
+    /// larger than the app's bound. `DurationLimits.parseSeconds` resolves
+    /// empty/non-numeric input to nil (falling back to the planned duration)
+    /// and clamps anything oversized, so neither button can act on a negative
+    /// or out-of-range value. The buttons, the setter's own value chip, and the
+    /// cardio pace/speed preview all read this, so what the user sees is
     /// exactly what gets logged.
     private var resolvedDuration: Int {
         DurationLimits.parseSeconds(
@@ -181,20 +182,16 @@ struct TimeSetEntryRow: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                // Duration is entered as h / min / s. The binding underneath is
-                // still the same total-seconds string, so `resolvedDuration`,
-                // the planned-duration fallback, the clamp, and draft
-                // persistence are all unchanged — only the input surface is.
-                // The old raw-seconds field needed a formatted echo beside it
-                // to be readable ("2700" → "45m"); three labelled fields are
-                // self-describing, so the echo (and the wrapping it caused) is
-                // gone with it.
-                DurationEntryFields(
-                    secondsText: $duration, isDisabled: isLogged)
-
-                Spacer(minLength: 8)
-
+            // Duration is picked with the app's scrolling duration setter, the
+            // same control rest and routine prescriptions use. The binding
+            // underneath is still the same total-seconds string, so
+            // `resolvedDuration`, the planned-duration fallback, the clamp, and
+            // draft persistence are all unchanged — only the input surface is.
+            // Start / Log are handed to the setter so they stay on the value's
+            // line while the wheels open below them.
+            ActiveDurationSetter(
+                secondsText: $duration, isDisabled: isLogged
+            ) {
                 if isLogged {
                     Button("Undo") { onUndo() }
                         .buttonStyle(.bordered)
@@ -217,9 +214,8 @@ struct TimeSetEntryRow: View {
                     .disabled(!canLog)
                 }
             }
-            .frame(minWidth: 80)
 
-            // Cardio only. Placed below the primary row so the duration field
+            // Cardio only. Placed below the primary row so the duration control
             // and Log button keep their exact position and tap targets, and so
             // the Log gate stays `d > 0` — metrics never block logging.
             if let cardioDraft {

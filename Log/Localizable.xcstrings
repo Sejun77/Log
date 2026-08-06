@@ -1363,6 +1363,7 @@
       }
     },
     "Duration (s)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -1986,16 +1987,6 @@
         }
       }
     },
-    "Hours" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "시간"
-          }
-        }
-      }
-    },
     "Import" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2366,16 +2357,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "최소"
-          }
-        }
-      }
-    },
-    "Minutes" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "분"
           }
         }
       }
@@ -3703,16 +3684,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이 슬롯의 세션 플랜"
-          }
-        }
-      }
-    },
-    "Seconds" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "초"
           }
         }
       }
