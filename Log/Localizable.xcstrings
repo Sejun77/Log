@@ -656,6 +656,18 @@
         }
       }
     },
+    "Avg HR" : {
+      "comment" : "Cardio Slice 11: History chart metric — average heart rate. Abbreviated to fit the metric picker",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "평균 심박수"
+          }
+        }
+      }
+    },
     "Average Heart Rate" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2461,6 +2473,18 @@
         }
       }
     },
+    "No distance logged for this exercise yet." : {
+      "comment" : "Cardio Slice 11: empty state for the History distance chart",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동에 기록된 거리가 아직 없습니다."
+          }
+        }
+      }
+    },
     "No exercises match “%@”" : {
       "localizations" : {
         "ko" : {
@@ -2513,6 +2537,30 @@
         }
       }
     },
+    "No heart rate logged for this exercise yet." : {
+      "comment" : "Cardio Slice 11: empty state for the History average-heart-rate chart",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동에 기록된 심박수가 아직 없습니다."
+          }
+        }
+      }
+    },
+    "No pace yet — a session needs both a distance and a duration." : {
+      "comment" : "Cardio Slice 11: empty state for the History pace chart",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "페이스 데이터가 아직 없습니다. 거리와 시간을 모두 기록해야 페이스가 계산됩니다."
+          }
+        }
+      }
+    },
     "No plan" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2542,6 +2590,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "아직 루틴이 없습니다. 위에서 만들어 보세요."
+          }
+        }
+      }
+    },
+    "No calories logged for this exercise yet." : {
+      "comment" : "Cardio Slice 11: empty state for the History calories chart",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동에 기록된 칼로리가 아직 없습니다."
           }
         }
       }

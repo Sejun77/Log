@@ -5,8 +5,28 @@ import SwiftUI
 // MARK: - Progress metric options
 enum ProgressMetric: String, CaseIterable, Identifiable {
     case e1rm, volume, bestWeight, totalReps, bestReps, totalDuration
+    // Cardio metrics (Slice 11). `totalDuration` is deliberately shared with
+    // timed holds rather than duplicated — it is the same sum of the same
+    // column, and a cardio bout's duration chart should read identically to a
+    // plank's.
+    case cardioDistance, cardioPace, cardioCalories, cardioHeartRate
     var id: String { rawValue }
 
+    /// Metrics that only make sense for a cardio exercise. Used both to build
+    /// the cardio option list and to keep these out of the "no exercise
+    /// selected" list, which otherwise offers pace for a bench press.
+    var isCardioOnly: Bool {
+        switch self {
+        case .cardioDistance, .cardioPace, .cardioCalories, .cardioHeartRate:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Picker label. Rendered through `LocalizedStringKey`, so a title with a
+    /// string-catalog entry is translated and one without falls back to this
+    /// literal — the behavior every `Text("…")` in the app already has.
     var title: String {
         switch self {
         case .e1rm: return "e1RM"
@@ -15,10 +35,19 @@ enum ProgressMetric: String, CaseIterable, Identifiable {
         case .totalReps: return "Reps"
         case .bestReps: return "Best reps"
         case .totalDuration: return "Duration"
+        case .cardioDistance: return "Distance"
+        case .cardioPace: return "Pace"
+        case .cardioCalories: return "Calories"
+        case .cardioHeartRate: return "Avg HR"
         }
     }
 
-    var yAxisLabel: String {
+    /// Series label for the chart marks. Cardio units come from Settings —
+    /// distance is stored in meters and only ever converted at display time, so
+    /// this takes the unit rather than reading it, which is what lets the chart
+    /// re-render when the preference changes (`AppSettings.distanceUnit` is a
+    /// plain `UserDefaults` read that SwiftUI cannot observe).
+    func yAxisLabel(distanceUnit: DistanceUnit) -> String {
         switch self {
         case .e1rm:
             return "e1RM (\(Units.weightIsKg ? "kg" : "lb"))"
@@ -32,12 +61,46 @@ enum ProgressMetric: String, CaseIterable, Identifiable {
             return "Best reps (single set)"
         case .totalDuration:
             return "Total duration (s)"
+        case .cardioDistance:
+            return "Distance (\(distanceUnit.symbol))"
+        case .cardioPace:
+            return "Pace (\(distanceUnit.paceUnitSymbol))"
+        case .cardioCalories:
+            return "Calories (kcal)"
+        case .cardioHeartRate:
+            return "Avg heart rate (bpm)"
+        }
+    }
+
+    /// For pace, lower is better: the rosette must mark the *fastest* session,
+    /// not the slowest. Every other metric peaks upward.
+    var lowerIsBetter: Bool { self == .cardioPace }
+
+    /// Empty-state copy. Generic for the strength metrics (unchanged), specific
+    /// for cardio, where "no data" usually means one particular field was left
+    /// blank rather than that the exercise was never trained.
+    var emptyStateText: LocalizedStringKey {
+        switch self {
+        case .cardioDistance:
+            return "No distance logged for this exercise yet."
+        case .cardioPace:
+            return "No pace yet — a session needs both a distance and a duration."
+        case .cardioCalories:
+            return "No calories logged for this exercise yet."
+        case .cardioHeartRate:
+            return "No heart rate logged for this exercise yet."
+        default:
+            return "No sets logged for this exercise yet."
         }
     }
 }
 
 /// Progress metrics offered for an exercise in History.
-/// - Time-based: duration only (unchanged; takes precedence).
+/// - Cardio: distance, duration, pace, calories, heart rate (Slice 11). Checked
+///   first, because cardio implies time-based and would otherwise be swallowed
+///   by the duration-only rule below. Deliberately excludes e1RM / volume /
+///   reps: a treadmill run has no load to estimate a one-rep max from.
+/// - Time-based (non-cardio timed hold): duration only (unchanged).
 /// - Bodyweight-inclusive **with** a user bodyweight: load-based metrics
 ///   (computed on effective load) plus rep-based metrics.
 /// - Bodyweight-inclusive **without** a user bodyweight: rep-based metrics only
@@ -50,8 +113,20 @@ func availableProgressMetrics(
     isTimeBased: Bool,
     isBodyweightEquipment: Bool,
     includesBodyweight: Bool,
-    hasUserBodyweight: Bool
+    hasUserBodyweight: Bool,
+    isCardio: Bool = false
 ) -> [ProgressMetric] {
+    // Cardio implies time-based (the `Exercise` invariant), so this must come
+    // first or every cardio exercise would resolve to duration-only. The extra
+    // `isTimeBased` check keeps a hand-corrupted row from reaching cardio
+    // metrics it has no duration for — the same defensive read `trackingMode`
+    // performs.
+    if isCardio && isTimeBased {
+        return [
+            .cardioDistance, .totalDuration, .cardioPace, .cardioCalories,
+            .cardioHeartRate,
+        ]
+    }
     if isTimeBased {
         return [.totalDuration]
     }
@@ -133,13 +208,18 @@ struct HistoryView: View {
 
     private var metricsForSelectedExercise: [ProgressMetric] {
         guard let ex = selectedExercise else {
-            return ProgressMetric.allCases
+            // Nothing selected: the same list this has always offered. The
+            // cardio metrics are filtered out rather than added to it — there
+            // is no exercise to say they apply to, and "Pace" in a list that
+            // might be about a bench press is worse than not offering it.
+            return ProgressMetric.allCases.filter { !$0.isCardioOnly }
         }
         return availableProgressMetrics(
             isTimeBased: ex.isTimeBased,
             isBodyweightEquipment: isBodyweightEquipment(ex.equipmentType),
             includesBodyweight: ex.includesBodyweightInLoad,
-            hasUserBodyweight: AppSettings.userBodyweight != nil
+            hasUserBodyweight: AppSettings.userBodyweight != nil,
+            isCardio: ex.isCardio
         )
     }
 
@@ -270,7 +350,7 @@ struct HistoryView: View {
             // Binding, option source, availability rules, and labels unchanged.
             Picker("Metric", selection: $metric) {
                 ForEach(metricsForSelectedExercise) { m in
-                    Text(m.title).tag(m)
+                    Text(LocalizedStringKey(m.title)).tag(m)
                 }
             }
             .pickerStyle(.menu)
@@ -359,7 +439,8 @@ struct HistoryView: View {
                 isTimeBased: ex?.isTimeBased ?? false,
                 isBodyweightEquipment: isBodyweightEquipment(ex?.equipmentType),
                 includesBodyweight: ex?.includesBodyweightInLoad ?? false,
-                hasUserBodyweight: AppSettings.userBodyweight != nil
+                hasUserBodyweight: AppSettings.userBodyweight != nil,
+                isCardio: ex?.isCardio ?? false
             )
             if !available.contains(metric) {
                 metric = available.first ?? .totalReps
@@ -889,6 +970,17 @@ private struct ProgressChart: View {
     /// User's bodyweight (Settings) in the displayed unit; nil = not set.
     var userBodyweight: Double? = nil
 
+    /// Cardio distance/pace display unit. Declared as `@AppStorage` rather than
+    /// read from `AppSettings` so SwiftUI records the dependency: flipping
+    /// km ↔ mi in Settings has to re-plot an already-open chart, which is the
+    /// bug the Slice 8 policy exists to prevent.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
+    private var distanceUnit: DistanceUnit {
+        AppSettings.distanceUnit(isMetric: distanceIsMetric)
+    }
+
     private let PR_ICON_SIZE: CGFloat = 11
 
     struct Point: Identifiable {
@@ -905,11 +997,11 @@ private struct ProgressChart: View {
             ForEach(points) { p in
                 LineMark(
                     x: .value("Date", p.date),
-                    y: .value(metric.yAxisLabel, p.value)
+                    y: .value(metric.yAxisLabel(distanceUnit: distanceUnit), p.value)
                 )
                 PointMark(
                     x: .value("Date", p.date),
-                    y: .value(metric.yAxisLabel, p.value)
+                    y: .value(metric.yAxisLabel(distanceUnit: distanceUnit), p.value)
                 )
             }
 
@@ -917,7 +1009,7 @@ private struct ProgressChart: View {
             ForEach(points.filter { $0.isPR }) { p in
                 PointMark(
                     x: .value("Date", p.date),
-                    y: .value(metric.yAxisLabel, p.value)
+                    y: .value(metric.yAxisLabel(distanceUnit: distanceUnit), p.value)
                 )
                 .annotation(position: .top) {
                     // Subtle PR marker: the rosette alone (no filled badge/ring)
@@ -945,23 +1037,40 @@ private struct ProgressChart: View {
             }
         }
         .chartYAxis {
-            AxisMarks { _ in
+            AxisMarks { value in
                 AxisGridLine().foregroundStyle(DSColor.border.opacity(0.6))
-                AxisValueLabel()
+                // Pace is plotted in seconds per unit, because that is the only
+                // form that scales linearly. Ticks read as `m:ss` — "5:30", not
+                // "330" and not the decimal "5.5", which nobody runs to.
+                if metric == .cardioPace, let seconds = value.as(Double.self),
+                    let label = CardioDerived.formatPace(secondsPerUnit: seconds)
+                {
+                    AxisValueLabel {
+                        Text(label)
+                    }
                     .font(.dsCaption)
                     .foregroundStyle(DSColor.textSecondary)
+                } else {
+                    AxisValueLabel()
+                        .font(.dsCaption)
+                        .foregroundStyle(DSColor.textSecondary)
+                }
             }
         }
         .overlay {
             if points.isEmpty {
-                Text("No sets logged for this exercise yet.")
+                Text(metric.emptyStateText)
                     .font(.dsBodySecondary)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
         .onChange(of: workouts) { computePoints() }
         .onChange(of: metric) { computePoints() }
         .onChange(of: startDate) { computePoints() }
+        // Settings km ↔ mi re-plots the cardio series in the new unit. The
+        // stored meters never move — only the projection does.
+        .onChange(of: distanceIsMetric) { computePoints() }
         .onAppear { computePoints() }
     }
 
@@ -1052,6 +1161,26 @@ private struct ProgressChart: View {
                             )
                     }
                     return total > 0 ? Double(total) : nil
+
+                // Cardio (Slice 11). Every one of these delegates to
+                // `CardioProgressAnalytics`, so the aggregation rules —
+                // weighted pace, nil-means-absent, warm-up sets included —
+                // live in one tested place rather than in this view.
+                case .cardioDistance:
+                    return CardioProgressAnalytics.totals(forItems: items)
+                        .distanceValue(in: distanceUnit)
+
+                case .cardioPace:
+                    return CardioProgressAnalytics.totals(forItems: items)
+                        .paceSecondsPerUnit(in: distanceUnit)
+
+                case .cardioCalories:
+                    return CardioProgressAnalytics.totals(forItems: items)
+                        .caloriesValue
+
+                case .cardioHeartRate:
+                    return CardioProgressAnalytics.totals(forItems: items)
+                        .avgHeartRateValue
                 }
             }()
 
@@ -1060,11 +1189,14 @@ private struct ProgressChart: View {
             }
         }
 
-        // Sort + PR detection
+        // Sort + PR detection. The best session is the highest value for every
+        // metric except pace, where the fastest session is the *lowest* — a
+        // rosette on the slowest run would be a lie the chart tells at a glance.
         let sorted = perDay.sorted { $0.0 < $1.0 }
+        let values = sorted.map(\.1)
         guard
-            let maxVal = sorted.map({ $0.1 }).max(),
-            let firstMaxIdx = sorted.firstIndex(where: { $0.1 == maxVal })
+            let bestVal = metric.lowerIsBetter ? values.min() : values.max(),
+            let firstBestIdx = sorted.firstIndex(where: { $0.1 == bestVal })
         else {
             points = []
             return
@@ -1072,7 +1204,7 @@ private struct ProgressChart: View {
 
         points = sorted.enumerated().map { idx, pair in
             let (date, v) = pair
-            return Point(date: date, value: v, isPR: idx == firstMaxIdx)
+            return Point(date: date, value: v, isPR: idx == firstBestIdx)
         }
     }
 }
