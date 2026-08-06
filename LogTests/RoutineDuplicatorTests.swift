@@ -256,6 +256,93 @@ final class RoutineDuplicatorServiceTests: SwiftDataTestHarness {
         XCTAssertEqual(srcSlot.prescription?.rirEnd, 0)
     }
 
+    // MARK: - 5b2. Cardio target distance deep-copied
+
+    /// Regression: `copyPrescription` carried every prescription field **except**
+    /// the two Cardio Slice 5 ones, so duplicating a routine silently dropped
+    /// the cardio distance target — the plan looked identical and had lost the
+    /// only thing that made it a 5 km run. Found during the Slice 12A design
+    /// pass, which traced every site a cardio prescription field must reach.
+    func testCardioTargetDistanceDeepCopied() {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Treadmill Run")
+        ex.setTimeBased(true)
+        ex.setCardio(true)
+        let srcSlot = addSlot(to: src, exercise: ex, order: 0)
+        srcSlot.prescription?.usesDuration = true
+        srcSlot.prescription?.durationMaxSeconds = 1_800
+        srcSlot.prescription?.targetDistanceMeters = 5_000
+
+        let copy = RoutineDuplicator.duplicate(src, among: [src], in: context)
+        let copyP = copy.blocks.first!.exercises.first!.prescription
+
+        XCTAssertEqual(copyP?.targetDistanceMeters, 5_000)
+        XCTAssertTrue(copyP?.usesDuration ?? false)
+        XCTAssertEqual(copyP?.durationMaxSeconds, 1_800)
+
+        // Isolation: the copy owns its own target.
+        copyP?.targetDistanceMeters = 10_000
+        XCTAssertEqual(srcSlot.prescription?.targetDistanceMeters, 5_000)
+    }
+
+    /// The entry-unit provenance rides along with the target. It is **not** a
+    /// display override (display follows Settings everywhere), but it records
+    /// what the user typed, and a duplicate that forgot it would misreport the
+    /// plan's own history on re-import and transfer.
+    func testCardioTargetDistanceUnitRawDeepCopied() {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Treadmill Run")
+        ex.setTimeBased(true)
+        ex.setCardio(true)
+        let srcSlot = addSlot(to: src, exercise: ex, order: 0)
+        srcSlot.prescription?.targetDistanceMeters = 8_046.72  // 5 miles
+        srcSlot.prescription?.targetDistanceUnitRaw = DistanceUnit.miles.rawValue
+
+        let copy = RoutineDuplicator.duplicate(src, among: [src], in: context)
+        let copyP = copy.blocks.first!.exercises.first!.prescription
+
+        XCTAssertEqual(copyP?.targetDistanceUnitRaw, "mi")
+        XCTAssertEqual(copyP?.targetDistanceMeters, 8_046.72)
+        XCTAssertEqual(
+            DistanceUnit.from(raw: copyP?.targetDistanceUnitRaw), .miles,
+            "the copy must not be re-derived from the Settings unit")
+    }
+
+    /// A slot with no distance target copies as one — the field is optional and
+    /// nil is the normal case, not a value to be filled in.
+    func testSlotWithoutCardioTargetCopiesWithNilTarget() {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Bench")
+        addSlot(to: src, exercise: ex, order: 0)
+
+        let copy = RoutineDuplicator.duplicate(src, among: [src], in: context)
+        let copyP = copy.blocks.first!.exercises.first!.prescription
+
+        XCTAssertNil(copyP?.targetDistanceMeters)
+        XCTAssertNil(copyP?.targetDistanceUnitRaw)
+    }
+
+    /// Duplicating a cardio routine must leave the original exactly as it was —
+    /// including the target the fix now copies.
+    func testSourceCardioTargetUnchangedByDuplication() {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Treadmill Run")
+        ex.setTimeBased(true)
+        ex.setCardio(true)
+        let srcSlot = addSlot(to: src, exercise: ex, order: 0)
+        srcSlot.prescription?.targetDistanceMeters = 5_000
+        srcSlot.prescription?.targetDistanceUnitRaw = DistanceUnit.kilometers.rawValue
+        let srcPrescription = srcSlot.prescription
+
+        _ = RoutineDuplicator.duplicate(src, among: [src], in: context)
+
+        XCTAssertEqual(srcSlot.prescription?.targetDistanceMeters, 5_000)
+        XCTAssertEqual(srcSlot.prescription?.targetDistanceUnitRaw, "km")
+        XCTAssertTrue(
+            srcSlot.prescription === srcPrescription,
+            "the source keeps its own prescription instance")
+    }
+
     // MARK: - 5c. Legacy prescription (nil effortModeRaw) copies + derives .single
 
     func testLegacyEffortFieldsCopyAndDeriveSingle() {

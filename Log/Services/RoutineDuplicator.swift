@@ -205,7 +205,15 @@ enum RoutineDuplicator {
             rpeEnd: src.rpeEnd,
             durationMinSeconds: src.durationMinSeconds,
             durationMaxSeconds: src.durationMaxSeconds,
-            usesDuration: src.usesDuration
+            usesDuration: src.usesDuration,
+            // Cardio Slice 5 fields. Both are copied **verbatim**: the target is
+            // canonical meters, and `targetDistanceUnitRaw` is provenance —
+            // the unit the user typed it in — not a display override. Re-deriving
+            // either from `AppSettings` here would rewrite the copy's history of
+            // itself, and a duplicate that says "5 km" where the original said
+            // "3.1 mi" describes a plan nobody wrote.
+            targetDistanceMeters: src.targetDistanceMeters,
+            targetDistanceUnitRaw: src.targetDistanceUnitRaw
         )
         ctx.insert(p)
         p.techniquePlans = src.techniquePlans.map { copyTechnique($0, in: ctx) }
