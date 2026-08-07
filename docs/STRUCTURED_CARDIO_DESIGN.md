@@ -372,7 +372,7 @@ render — the same rule the cardio Details row already follows.
 | Surface | Change |
 |---|---|
 | History **row** summary | **None.** Aggregate duration/distance/pace, exactly as Slice 3 built it |
-| History **detail** | Adds a read-only **Planned** section from the frozen snapshot, labelled as the plan — never presented as what happened |
+| History **detail** | Adds a read-only **Cardio Plan** section from the frozen snapshot, labelled as the plan — never presented as what happened |
 | Slice 11 **charts** | **None.** `CardioProgressAnalytics` sums `SetLog` fields; segments are not `SetLog`s |
 | Pace / distance / duration aggregation | **None.** Session totals, unchanged |
 | Calories / heart rate | **None.** Still per-bout aggregates |
@@ -494,7 +494,7 @@ means the only slice that touches the schema does nothing else.
 | **12B** ✅ | Pure `CardioSegment` / `CardioSegmentGroup` / `CardioSegmentPlan`, validation, bounds, `expandedSegments()`, summary text. No UI, no persistence — **shipped, see §11** | No | Yes (pure) |
 | **12C** ✅ | `cardioSegmentsData` on `SlotPrescription` + `PlannedPrescriptionSnapshot`; `CardioRoutineRules.showsCardioSegments`; routine editor Segments screen; localization of the kind labels — **shipped, see §12** | **Yes** (2 additive optional columns) | **Yes** — schema slice |
 | **12D** ✅ | `SessionPlan` carry-through, snapshot at session start, active-workout checklist + tick persistence, switch-adapter rules. Logging path untouched — **shipped, see §13** | No | Yes — session/ownership |
-| **12E** ✅ | History detail "Planned" section; routine transfer payload; compatibility fixtures — **shipped, see §14** | No | Yes — transfer/compat |
+| **12E** ✅ | History detail "Cardio Plan" section; routine transfer payload; compatibility fixtures — **shipped, see §14** | No | Yes — transfer/compat |
 | **12F** | *Conditional.* Repeat-group UI; then, only if justified, per-segment actuals | Only if actuals ship | Yes |
 
 **12F gate.** Repeat UI ships when a tester asks for intervals twice. Per-segment
@@ -963,7 +963,7 @@ verbatim, matching `SessionPlan.primarySummary` and the 12C editor.
 
 - **History**: no structured-cardio display anywhere — not in the row summary,
   not in the detail. The frozen snapshot now *carries* the plan, which is what
-  12E's "Planned" section will read; nothing renders it yet.
+  12E's "Cardio Plan" section will read; nothing renders it yet.
 - **Routine transfer**, CSV/export/import: unchanged, no segment payload.
 - **Charts**: unchanged — `CardioProgressAnalytics` sums `SetLog` fields and
   segments are not `SetLog`s.
@@ -982,24 +982,60 @@ nothing touching the logging path.
 | File | |
 |---|---|
 | `Log/Models/SlotPrescription+StructuredCardio.swift` | `PlannedPrescriptionSnapshot.structuredCardioPlan` — History's only read path |
-| `Log/Services/CardioPlannedHistory.swift` | **new** — pure row/summary builder for the Planned section |
-| `Log/Main/HistoryView.swift` | the Planned block, in both the singleton and superset render paths |
+| `Log/Services/CardioPlannedHistory.swift` | **new** — pure row/summary builder for the Cardio Plan section |
+| `Log/Main/HistoryView.swift` | the Cardio Plan block, in both the singleton and superset render paths |
+| `Log/Services/CardioHistorySummary.swift` | `inclineText` / `resistanceText` exposed, so planned and logged lines share one vocabulary |
 | `Log/Services/RoutineTransferDTO.swift` | `cardioSegments` on the prescription DTO + `RoutineTransferCardioSegmentsDTO` |
 | `Log/Services/RoutineTransfer.swift` | export mapping |
 | `Log/Services/RoutineTransferImport.swift` | import mapping |
 
-### History: the Planned section
+### History: the Cardio Plan section
 
-A **Planned** block inside each exercise's History section, between Equipment &
-Setup and the logged set rows:
+A **Cardio Plan** block inside each exercise's History section, between
+Equipment & Setup and the logged set rows:
 
 ```
-Planned                                         3 segments · 30m · 5 km
-Warm-up · 5m
-Work · 20m · 5 km · 1% · Z3
-Cool-down · 5m
+Cardio Plan                                     3 segments · 21m · 2 km
+Warm-up                                                             10m
+2 km · 0% incline · level 5 · Z1 · Easy
+Recovery                                                             1m
+Z1
+Cool-down                                                           10m
+Z1
 ```
 
+**Labelled "Cardio Plan", not "Planned".** The pre-merge label was accurate and
+too vague — it named the *tense* of the section rather than what was in it. The
+active checklist already calls the same list Cardio Plan, so History now uses
+the same words for the same thing, and "plan" is unambiguous that these are
+programmed segments rather than per-segment results. The key is the one 12D
+introduced, so this cost no new localization.
+
+**Row shape mirrors the logged set row it sits above.** Kind on the left, one
+headline value on the right, detail underneath — the same three type styles
+(`.dsBody` label, `.dsBodySecondary.monospacedDigit()` trailing value,
+`.dsCaption` metadata, `spacing: 2`) `setLogList` uses, so planned and performed
+values line up in one column and the eye lands in the same places reading
+either. The only difference is what the numbers *mean*, and the header says
+which.
+
+- `primaryTargetText` is the segment's **leading** target — its duration, or
+  whatever it does carry when it has none, so the headline column is never
+  blank. It holds the position a logged row gives its duration.
+- `secondaryText` is everything else on one line, joined with the same
+  separator the logged metric lines use.
+- **The note is part of that metadata line, never its own.** One rule, no length
+  threshold: a short note reads as one more piece of detail instead of a
+  detached fragment, and a long one wraps inside the same typography rather than
+  switching style mid-row.
+- Incline and resistance use the **logged row's vocabulary** ("0% incline",
+  "level 5") via `CardioHistorySummary.inclineText` / `.resistanceText`, now the
+  single source of those localized words. The compact forms ("1%", "L8") stay in
+  the routine editor and the active checklist, where brevity earns its place;
+  History sits two rows above the logged metric line, and naming the same
+  quantity differently there would read as two unrelated things. Duration keeps
+  the plan's own "10m" rather than the logged `"1800s"` — a *target* of 1800s is
+  not how anyone programs a session.
 - Rows come from the pure `CardioPlannedHistory.rows(for:distanceUnit:)`, which
   expands through the same 12B `expandedSegments()` the active checklist uses —
   one implementation, so History and the workout can never disagree about what
@@ -1007,8 +1043,9 @@ Cool-down · 5m
 - The kind travels as a **localization key** (`CardioSegmentKind.label`) and is
   rendered through `LocalizedStringKey`, so the section reads in Korean. The
   targets are verbatim, like every other composed plan summary.
-- A repeated group shows `Round 2/5` per row, reusing the key 12D introduced. No
-  plan the current editor writes has one, so today every row renders without it.
+- A repeated group shows `Round 2/5` beside the kind, reusing the key 12D
+  introduced. No plan the current editor writes has one, so today every row
+  renders without it.
 - Distances follow `AppSettings.distanceUnit` at render time, so switching
   km ↔ mi re-reads History's planned rows exactly as it re-reads its logged ones.
 
@@ -1031,7 +1068,7 @@ only a cardio slot can author segments (`showsCardioSegments` is true for
 `.cardio` alone), and 12D's switch adapter writes nil onto any snapshot it
 adapts to a non-cardio mode. So a strength item and a timed hold decode nil and
 add zero rows without History ever asking what tracking mode the item was. A
-corrupt payload decodes nil too — it costs the Planned section, never the
+corrupt payload decodes nil too — it costs the Cardio Plan section, never the
 History row.
 
 ### Source of truth
@@ -1040,7 +1077,7 @@ History row.
 SlotPrescription.cardioSegmentsData          ← the routine editor writes (12C)
   → PlannedPrescriptionSnapshot              ← frozen at session start (12D)
       → SessionPlan → the active checklist   ← what you tick (12D)
-      → History "Planned"                    ← what you planned (12E)
+      → History "Cardio Plan"                ← what you planned (12E)
 ```
 
 History reads the **frozen snapshot**, never the live routine. Reprogram the
@@ -1098,8 +1135,10 @@ never seen a tick.
 
 ### Localization
 
-One new key, Korean included: `Planned` ("계획"). The round badge and the four
-kind names reuse the keys 12C/12D already introduced.
+**No new keys.** The section reuses `Cardio Plan` ("유산소 계획") from 12D, and
+the round badge and the four kind names reuse the keys 12C/12D introduced. A
+`Planned` key was added and then removed again during pre-merge polish, when the
+heading was renamed to match the checklist.
 
 ### Deferred to 12F
 

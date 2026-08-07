@@ -147,7 +147,7 @@ final class UserGuideContentTests: XCTestCase {
         XCTAssertTrue(
             en.contains(
                 "After the workout, History shows that plan again under "
-                    + "Planned, above the logged sets."),
+                    + "Cardio Plan, above the logged sets."),
             "English History wording drifted from USER_GUIDE.md")
         XCTAssertTrue(
             en.contains(
@@ -163,7 +163,7 @@ final class UserGuideContentTests: XCTestCase {
         let ko = try XCTUnwrap(
             section(heading: "시간 기반 운동과 유산소 운동", in: korean)?.outro)
         XCTAssertTrue(
-            ko.contains("운동을 마치면 기록 탭에서 기록된 세트 위에 계획 항목으로"),
+            ko.contains("운동을 마치면 기록 탭에서 기록된 세트 위에 유산소 계획 항목으로"),
             "Korean History wording drifted from USER_GUIDE.md")
         XCTAssertTrue(
             ko.contains(

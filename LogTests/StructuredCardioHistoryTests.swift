@@ -221,7 +221,10 @@ final class StructuredCardioHistoryTests: SwiftDataTestHarness {
         }
     }
 
-    func testRowTargetsExcludeTheKindAndListEveryTarget() throws {
+    /// The leading target becomes the row's headline value, everything else
+    /// drops to the metadata line — the same split a logged row makes between
+    /// its duration and its metric lines.
+    func testTheLeadingTargetIsPrimaryAndTheRestIsSecondary() throws {
         let plan = try CardioSegmentPlan(groups: [
             CardioSegmentGroup(segments: [
                 segment(
@@ -234,26 +237,114 @@ final class StructuredCardioHistoryTests: SwiftDataTestHarness {
             CardioPlannedHistory.rows(for: plan, distanceUnit: .kilometers)
                 .first)
 
+        XCTAssertEqual(row.primaryTargetText, "20m", "duration leads")
         XCTAssertFalse(
-            row.targetText.contains("Work"),
+            row.secondaryText.contains("20m"),
+            "the headline value is not repeated in the metadata")
+        XCTAssertFalse(
+            row.primaryTargetText.contains("Work"),
             "the kind is rendered separately, localized")
-        XCTAssertTrue(row.targetText.contains("5 km"))
-        XCTAssertTrue(row.targetText.contains("1%"))
-        XCTAssertTrue(row.targetText.contains("L8"))
-        XCTAssertTrue(row.targetText.contains("Z3"))
+        XCTAssertFalse(row.secondaryText.contains("Work"))
+        XCTAssertTrue(row.secondaryText.contains("5 km"))
+        XCTAssertTrue(row.secondaryText.contains("Z3"))
     }
 
-    func testASegmentNoteIsCarriedOntoItsRow() throws {
+    /// A segment with no duration promotes whatever it does carry, so the
+    /// headline column is never blank.
+    func testASegmentWithoutADurationPromotesItsNextTarget() throws {
+        let plan = try CardioSegmentPlan(groups: [
+            CardioSegmentGroup(segments: [segment(.work, distance: 5_000)])
+        ])
+
+        let row = try XCTUnwrap(
+            CardioPlannedHistory.rows(for: plan, distanceUnit: .kilometers)
+                .first)
+
+        XCTAssertEqual(row.primaryTargetText, "5 km")
+        XCTAssertTrue(row.secondaryText.isEmpty)
+    }
+
+    /// Incline and resistance use the *logged* row's words, because the
+    /// Planned block sits two rows above the logged metric line and naming the
+    /// same quantities differently would read as two unrelated things.
+    func testMetadataUsesTheSameVocabularyAsTheLoggedMetricLine() throws {
         let plan = try CardioSegmentPlan(groups: [
             CardioSegmentGroup(segments: [
-                segment(.work, duration: 600, note: "Hill repeat")
+                segment(.work, duration: 600, incline: -3, resistance: 5)
             ])
         ])
 
-        XCTAssertEqual(
+        let row = try XCTUnwrap(
             CardioPlannedHistory.rows(for: plan, distanceUnit: .kilometers)
-                .first?.note,
-            "Hill repeat")
+                .first)
+
+        XCTAssertEqual(
+            row.secondaryText,
+            [
+                try XCTUnwrap(CardioHistorySummary.inclineText(percent: -3)),
+                try XCTUnwrap(CardioHistorySummary.resistanceText(level: 5)),
+            ].joined(separator: CardioHistorySummary.separator),
+            "one source for the words 'incline' and 'level'")
+        XCTAssertTrue(
+            row.secondaryText.contains("-3%"), "decline keeps its sign")
+    }
+
+    /// A short note is one more piece of metadata, not a detached line — so it
+    /// arrives inside `secondaryText` with the other targets.
+    func testAShortNoteJoinsTheMetadataLine() throws {
+        let plan = try CardioSegmentPlan(groups: [
+            CardioSegmentGroup(segments: [
+                segment(
+                    .work, duration: 600, distance: 2_000, zone: .z1,
+                    note: "Easy")
+            ])
+        ])
+
+        let row = try XCTUnwrap(
+            CardioPlannedHistory.rows(for: plan, distanceUnit: .kilometers)
+                .first)
+
+        XCTAssertEqual(row.primaryTargetText, "10m")
+        XCTAssertEqual(row.secondaryText, "2 km · Z1 · Easy")
+        XCTAssertTrue(
+            row.secondaryText.hasSuffix("Easy"),
+            "the note is the last segment of the metadata line")
+    }
+
+    /// A long note takes the same path, so it wraps inside the metadata
+    /// typography rather than switching style mid-row. Nothing branches on
+    /// length — there is one rule, and that is what keeps the section
+    /// consistent.
+    func testALongNoteUsesTheSameMetadataLine() throws {
+        let long = String(repeating: "steady effort, ", count: 12)
+        let plan = try CardioSegmentPlan(groups: [
+            CardioSegmentGroup(segments: [
+                segment(.work, duration: 600, note: long)
+            ])
+        ])
+
+        let row = try XCTUnwrap(
+            CardioPlannedHistory.rows(for: plan, distanceUnit: .kilometers)
+                .first)
+
+        XCTAssertEqual(
+            row.secondaryText,
+            long.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// A segment with only a note-less leading target has no metadata line at
+    /// all, so the row is a single clean line.
+    func testASegmentWithOneTargetHasNoMetadataLine() throws {
+        let plan = try CardioSegmentPlan(groups: [
+            CardioSegmentGroup(segments: [segment(.recovery, duration: 60)])
+        ])
+
+        let row = try XCTUnwrap(
+            CardioPlannedHistory.rows(for: plan, distanceUnit: .kilometers)
+                .first)
+
+        XCTAssertEqual(row.primaryTargetText, "1m")
+        XCTAssertTrue(row.secondaryText.isEmpty)
     }
 
     // ==================================================
@@ -302,9 +393,11 @@ final class StructuredCardioHistoryTests: SwiftDataTestHarness {
         let imperial = try XCTUnwrap(
             CardioPlannedHistory.rows(for: plan, distanceUnit: .miles).first)
 
-        XCTAssertTrue(metric.targetText.contains("km"))
-        XCTAssertTrue(imperial.targetText.contains("mi"))
-        XCTAssertNotEqual(metric.targetText, imperial.targetText)
+        // Distance-only, so the unit lands in the headline value.
+        XCTAssertTrue(metric.primaryTargetText.contains("km"))
+        XCTAssertTrue(imperial.primaryTargetText.contains("mi"))
+        XCTAssertNotEqual(
+            metric.primaryTargetText, imperial.primaryTargetText)
     }
 
     /// The section headline follows the same unit, and counts **expanded**
@@ -344,10 +437,10 @@ final class StructuredCardioHistoryTests: SwiftDataTestHarness {
             CardioPlannedSegmentRow(
                 id: row.id,
                 kindLabelKey: row.kindLabelKey,
-                targetText: row.targetText,
+                primaryTargetText: row.primaryTargetText,
+                secondaryText: row.secondaryText,
                 round: row.round,
-                roundCount: row.roundCount,
-                note: row.note))
+                roundCount: row.roundCount))
     }
 
     /// Ticks live in their own per-workout `UserDefaults` key and are cleared

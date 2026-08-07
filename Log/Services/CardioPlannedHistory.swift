@@ -28,19 +28,31 @@ struct CardioPlannedSegmentRow: Identifiable, Equatable {
     /// checklist do — so History reads in Korean too.
     let kindLabelKey: String
 
-    /// The targets without the kind: "20m · 5 km · 1% · Z3". Verbatim, like
-    /// every other composed plan summary in the app — assembled from numbers
-    /// and units, so there is no whole phrase to translate.
-    let targetText: String
+    /// The row's **leading** target — what goes on the primary line's trailing
+    /// edge, where a logged row puts its duration: "10m", or the first target
+    /// the segment does carry when it has no duration.
+    ///
+    /// Split out so a planned row has the same shape as a logged one: kind on
+    /// the left, one headline value on the right, detail underneath. Empty only
+    /// for a segment with no targets at all, which construction and decoding
+    /// both refuse.
+    let primaryTargetText: String
+
+    /// Everything else on one line: the remaining targets **and the note**,
+    /// joined with the same separator the logged metric lines use —
+    /// "2 km · 0% incline · level 5 · Z1 · Easy".
+    ///
+    /// The note lives here rather than on a line of its own so a short note
+    /// reads as one more piece of metadata instead of a detached fragment, and
+    /// a long one wraps inside the same typography instead of switching style
+    /// mid-row. Empty when the segment carries nothing but its leading target.
+    let secondaryText: String
 
     /// Round position, present only for a segment in a repeated group. nil for
     /// every plan the 12C editor can author (it pins `repeatCount` to 1), so a
-    /// flat plan renders with no round column at all.
+    /// flat plan renders with no round label at all.
     let round: Int?
     let roundCount: Int?
-
-    /// The author's free text for this segment, if any.
-    let note: String?
 
     /// True when this row belongs to a repeat and should show "Round 2/5".
     var isRepeated: Bool { round != nil && roundCount != nil }
@@ -73,16 +85,68 @@ enum CardioPlannedHistory {
         distanceUnit: DistanceUnit
     ) -> [CardioPlannedSegmentRow] {
         plan.expandedSegments().map { resolved in
-            CardioPlannedSegmentRow(
+            let parts = targetParts(
+                of: resolved.segment, distanceUnit: distanceUnit)
+            // The note is the last piece of metadata, never its own line.
+            let detail =
+                Array(parts.dropFirst())
+                + [resolved.segment.note].compactMap { $0 }
+
+            return CardioPlannedSegmentRow(
                 id: resolved.id,
                 kindLabelKey: resolved.segment.kind.label,
-                targetText: resolved.segment.shortTargetSummary(
-                    distanceUnit: distanceUnit),
+                primaryTargetText: parts.first ?? "",
+                secondaryText: detail.joined(
+                    separator: CardioHistorySummary.separator),
                 round: resolved.isRepeated ? resolved.round : nil,
-                roundCount: resolved.isRepeated ? resolved.roundCount : nil,
-                note: resolved.segment.note
+                roundCount: resolved.isRepeated ? resolved.roundCount : nil
             )
         }
+    }
+
+    /// One planned segment's targets, in the fixed order a row reads them:
+    /// duration, distance, incline, resistance, HR zone.
+    ///
+    /// Deliberately **not** `CardioSegment.shortTargetSummary`, which the
+    /// routine editor and the active checklist use. Those two are compact
+    /// surfaces where "1%" and "L8" earn their brevity; History sits two rows
+    /// above the *logged* metric line, and naming the same quantities
+    /// differently there would read as two unrelated things. So incline and
+    /// resistance come from `CardioHistorySummary`'s formatters — the single
+    /// source of those localized words — and distance and zone use the same
+    /// helpers the logged line does.
+    ///
+    /// Duration keeps the plan's own compact form ("10m") rather than the
+    /// logged row's raw `"1800s"`: a *target* of 1800s is not how anyone
+    /// programs a session, and the section's own summary already reads "21m".
+    private static func targetParts(
+        of segment: CardioSegment,
+        distanceUnit: DistanceUnit
+    ) -> [String] {
+        var parts: [String] = []
+        if let durationSeconds = segment.durationSeconds {
+            parts.append(DurationFormat.compact(durationSeconds))
+        }
+        if let text = CardioTargetDistance(
+            meters: segment.distanceMeters, displayUnit: distanceUnit)?
+            .displayText
+        {
+            parts.append(text)
+        }
+        if let incline = segment.inclinePercent,
+            let text = CardioHistorySummary.inclineText(percent: incline)
+        {
+            parts.append(text)
+        }
+        if let resistance = segment.resistanceLevel,
+            let text = CardioHistorySummary.resistanceText(level: resistance)
+        {
+            parts.append(text)
+        }
+        if let zone = segment.hrZone {
+            parts.append(zone.shortLabel)
+        }
+        return parts
     }
 
     /// The section's headline: "3 segments · 30m · 5 km".

@@ -118,7 +118,7 @@ log: the ticks are not saved to your history, nothing has to be ticked before
 you log, and the bout is still recorded as one cardio set from the duration and
 Details fields.
 
-After the workout, History shows that plan again under Planned, above the
+After the workout, History shows that plan again under Cardio Plan, above the
 logged sets. It is the plan the workout was started with, so editing the routine
 later never changes what an older workout says it planned. These are planned
 segments only — not a record of which ones you did. Your ticks are not shown,

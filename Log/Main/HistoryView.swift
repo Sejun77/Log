@@ -809,7 +809,11 @@ private struct WorkoutDetailView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: DSSpacing.sm) {
-                    Text("Planned")
+                    // "Cardio Plan", not "Planned": the same words the active
+                    // workout checklist uses for the same list, and unambiguous
+                    // that these are programmed cardio segments rather than
+                    // per-segment results. Reuses the 12D key.
+                    Text("Cardio Plan")
                         .font(.dsCaption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer(minLength: DSSpacing.sm)
@@ -830,37 +834,55 @@ private struct WorkoutDetailView: View {
         }
     }
 
-    /// One planned segment: "Warm-up · 5m", or "Work · 1m   Round 2/5".
+    /// One planned segment, laid out exactly like a logged set row above it:
     ///
-    /// The kind goes through `LocalizedStringKey` (so it reads in Korean) and
-    /// the targets are concatenated verbatim after it, which keeps a row on one
-    /// line without splitting it into two `Text`s that could wrap apart.
+    ///     Warm-up                                                    10m
+    ///     2 km · 0% incline · level 5 · Z1 · Easy
+    ///
+    /// Same three type styles as `setLogList`'s rows — `.dsBody` primary label,
+    /// `.dsBodySecondary.monospacedDigit()` trailing value, `.dsCaption`
+    /// metadata line, `spacing: 2` between them — so the eye lands in the same
+    /// places whether it is reading the plan or the result. The only difference
+    /// is what the values *mean*, and the section header says which.
+    ///
+    /// The note is part of the metadata line rather than a line of its own: a
+    /// short note reads as one more piece of detail instead of a detached
+    /// fragment, and a long one wraps in the same typography rather than
+    /// switching style mid-row.
     @ViewBuilder
     private func plannedCardioRow(_ row: CardioPlannedSegmentRow) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: DSSpacing.sm) {
-            (Text(LocalizedStringKey(row.kindLabelKey))
-                + Text(verbatim: row.targetText.isEmpty ? "" : " · ")
-                + Text(verbatim: row.targetText))
-                .font(.dsBodySecondary.monospacedDigit())
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(LocalizedStringKey(row.kindLabelKey))
+                    .font(.dsBody)
 
-            Spacer(minLength: DSSpacing.sm)
+                // Only ever present on a repeated group — no plan the current
+                // editor writes has one, so a flat plan shows no round label.
+                // Reuses the key the active checklist introduced in 12D.
+                if let round = row.round, let roundCount = row.roundCount {
+                    Text("Round \(round)/\(roundCount)")
+                        .font(.dsCaption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
 
-            // Only ever present on a repeated group — no plan the current
-            // editor writes has one, so a flat plan shows no round column.
-            // Reuses the key the active checklist introduced in 12D.
-            if let round = row.round, let roundCount = row.roundCount {
-                Text("Round \(round)/\(roundCount)")
+                Spacer()
+
+                // The leading target holds the position a logged row gives its
+                // duration, so planned and performed values line up in one
+                // column down the section.
+                if !row.primaryTargetText.isEmpty {
+                    Text(row.primaryTargetText)
+                        .font(.dsBodySecondary.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !row.secondaryText.isEmpty {
+                Text(row.secondaryText)
                     .font(.dsCaption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        }
-        if let note = row.note {
-            Text(note)
-                .font(.dsCaption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
         }
     }
 
