@@ -291,6 +291,35 @@ private struct PrescriptionFields: View {
                 prescription: prescription, displayUnit: entryUnit)
         }
 
+        // Structured Cardio Slice 12C — the shape of the bout, next to the
+        // targets that describe its size. The cardio counterpart of the warm-up
+        // scheme (hidden for cardio), so a slot never offers both.
+        if CardioRoutineRules.showsCardioSegments(trackingMode) {
+            NavigationLink {
+                CardioSegmentPlanEditor(prescription: prescription)
+            } label: {
+                HStack {
+                    Text("Structured Cardio")
+                    Spacer()
+                    // Verbatim: the summary is composed from counts and units,
+                    // like every other plan summary in the app. Reading it here
+                    // (rather than caching) is what makes the row refresh when
+                    // the editor pushes an edit back.
+                    if let summary = prescription.structuredCardioPlan?
+                        .summary(distanceUnit: entryUnit)
+                    {
+                        Text(summary)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    } else {
+                        Text("None")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+
         if !hideRestFields {
             restRow("Rest between sets", keyPath: \.restSecondsBetweenSets)
             restRow("Rest after exercise", keyPath: \.restSecondsAfterExercise)

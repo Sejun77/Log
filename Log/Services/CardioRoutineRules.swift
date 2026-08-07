@@ -36,6 +36,20 @@ enum CardioRoutineRules {
         mode == .cardio
     }
 
+    /// Structured cardio segments are offered for cardio only — Slice 12C.
+    ///
+    /// The mirror of `showsWarmupScheme`: the warm-up *scheme* is hidden for
+    /// cardio because it programs reps and percentages of a working weight, and
+    /// this is what replaces it. A cardio warm-up is a segment, never a
+    /// `WarmupScheme`, and the two never appear on the same slot.
+    ///
+    /// Not offered for timed holds: a plank has no warm-up/work/cool-down
+    /// shape, and a segment list on a Plank slot would be an invitation to
+    /// mis-program it.
+    static func showsCardioSegments(_ mode: TrackingMode) -> Bool {
+        mode == .cardio
+    }
+
     /// Warm-up schemes are hidden for cardio.
     ///
     /// The Slice 4 polish already reduced the cardio warm-up editor to "Reps"

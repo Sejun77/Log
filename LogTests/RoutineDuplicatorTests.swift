@@ -343,6 +343,80 @@ final class RoutineDuplicatorServiceTests: SwiftDataTestHarness {
             "the source keeps its own prescription instance")
     }
 
+    // MARK: - 5b3. Structured cardio plan deep-copied (Slice 12C)
+
+    private func structuredPlan() throws -> CardioSegmentPlan {
+        try CardioSegmentPlan(groups: [
+            CardioSegmentGroup(segments: [
+                CardioSegment(kind: .warmUp, durationSeconds: 300),
+                CardioSegment(kind: .work, durationSeconds: 1_200),
+                CardioSegment(kind: .coolDown, durationSeconds: 300),
+            ])
+        ])
+    }
+
+    func testStructuredCardioPlanDeepCopied() throws {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Treadmill Run")
+        ex.setTimeBased(true)
+        ex.setCardio(true)
+        let srcSlot = addSlot(to: src, exercise: ex, order: 0)
+        let plan = try structuredPlan()
+        srcSlot.prescription?.setStructuredCardioPlan(plan)
+
+        let copy = RoutineDuplicator.duplicate(src, among: [src], in: context)
+        let copyP = copy.blocks.first!.exercises.first!.prescription
+
+        XCTAssertEqual(copyP?.cardioSegmentsData, srcSlot.prescription?.cardioSegmentsData)
+        XCTAssertEqual(copyP?.structuredCardioPlan, plan)
+        XCTAssertEqual(
+            copyP?.structuredCardioPlan?.expandedSegments().map(\.segment.kind),
+            [.warmUp, .work, .coolDown],
+            "order survives duplication")
+    }
+
+    /// `Data` is a value type, so the copy owns its payload — editing the
+    /// duplicate's plan must not reach back into the source routine.
+    func testDuplicateStructuredPlanIsIndependent() throws {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Treadmill Run")
+        ex.setTimeBased(true)
+        ex.setCardio(true)
+        let srcSlot = addSlot(to: src, exercise: ex, order: 0)
+        srcSlot.prescription?.setStructuredCardioPlan(try structuredPlan())
+
+        let copy = RoutineDuplicator.duplicate(src, among: [src], in: context)
+        let copyP = copy.blocks.first!.exercises.first!.prescription
+
+        copyP?.setStructuredCardioPlan(
+            try CardioSegmentPlan(groups: [
+                CardioSegmentGroup(segments: [
+                    CardioSegment(kind: .work, durationSeconds: 60)
+                ])
+            ]))
+
+        XCTAssertEqual(copyP?.structuredCardioPlan?.expandedCount, 1)
+        XCTAssertEqual(
+            srcSlot.prescription?.structuredCardioPlan?.expandedCount, 3,
+            "the source keeps its own plan")
+
+        // …and the other direction.
+        copyP?.clearStructuredCardioPlan()
+        XCTAssertNotNil(srcSlot.prescription?.cardioSegmentsData)
+    }
+
+    func testSlotWithoutStructuredPlanCopiesWithNilPayload() throws {
+        let src = makeRoutine("R", order: 0)
+        let ex = makeExercise("Bench")
+        addSlot(to: src, exercise: ex, order: 0)
+
+        let copy = RoutineDuplicator.duplicate(src, among: [src], in: context)
+        let copyP = copy.blocks.first!.exercises.first!.prescription
+
+        XCTAssertNil(copyP?.cardioSegmentsData)
+        XCTAssertNil(copyP?.structuredCardioPlan)
+    }
+
     // MARK: - 5c. Legacy prescription (nil effortModeRaw) copies + derives .single
 
     func testLegacyEffortFieldsCopyAndDeriveSingle() {

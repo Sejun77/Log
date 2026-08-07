@@ -228,6 +228,42 @@ func activeRestNotificationID(workoutID: UUID?, slotID: UUID) -> String {
     return RestTimer.stableNotificationID(workoutID: wID, slotID: slotID)
 }
 
+// MARK: - Stale rest after an exercise switch
+
+/// Whether a running rest timer has been orphaned by an exercise switch.
+///
+/// A rest is always started by a *logged set*: `appendSetLog` /
+/// `appendTimeSetLog` log, then `startRestWithPersistence` runs the clock and
+/// schedules one local notification keyed to the resting slot. Switching a
+/// slot's exercise deletes that slot's `WorkoutItem` and every `SetLog` under it
+/// (and the superset cascade can clear other slots' logs for the same reason),
+/// so the set the rest was counting down from can stop existing while the clock
+/// keeps running. The user then gets a "rest is over" notification for a set the
+/// app no longer has, on an exercise they already replaced.
+///
+/// The test is therefore not "did this slot get switched" but **"does the
+/// resting slot still have a logged set behind it"** — which is exactly the
+/// condition that went false, and which also covers the cascade case without
+/// naming it. A rest belonging to an untouched slot (a superset partner still
+/// mid-round) keeps running, so normal behaviour is unaffected.
+///
+/// - Parameters:
+///   - isRestRunning: `RestTimer.isRunning`.
+///   - restSlotID: the slot the running rest belongs to
+///     (`AppState.activeRestSlotID`). `nil` means the rest cannot be attributed
+///     — the conservative answer there is "leave it alone", because cancelling
+///     a rest that might be legitimate is the worse of the two mistakes.
+///   - loggedSetsBySlotID: post-switch logged set indices per slot.
+/// - Returns: true when the rest should be stopped and its notification cancelled.
+func shouldCancelRestAfterExerciseSwitch(
+    isRestRunning: Bool,
+    restSlotID: UUID?,
+    loggedSetsBySlotID: [UUID: Set<Int>]
+) -> Bool {
+    guard isRestRunning, let restSlotID else { return false }
+    return (loggedSetsBySlotID[restSlotID] ?? []).isEmpty
+}
+
 // MARK: - Lightweight default plan template
 
 /// Builds a lightweight `PlanSetTemplate` for set indices that go beyond

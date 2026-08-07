@@ -611,6 +611,23 @@ final class SlotPrescription {
     var targetDistanceMeters: Double? = nil
     var targetDistanceUnitRaw: String? = nil
 
+    /// Structured Cardio Slice 12C — the slot's optional segment plan
+    /// (warm-up / work / recovery / cool-down), JSON-encoded.
+    ///
+    /// A `Data?` column rather than a `@Model` + relationship, following
+    /// `WorkoutItem.warmupStepsSnapshotData`: segments are never queried
+    /// independently, so rows would buy nothing and cost cascade rules,
+    /// ordering discipline, deep-copy, and an orphan sweep — the class of bug
+    /// `BackfillService.purgeOrphanSetTemplates` exists to clean up.
+    ///
+    /// Read and written **only** through `structuredCardioPlan` /
+    /// `setStructuredCardioPlan` (see `SlotPrescription+StructuredCardio.swift`),
+    /// which normalize on both sides, so a corrupt payload degrades to "no
+    /// plan" instead of reaching a view. Optional / nil-default: every existing
+    /// prescription migrates lightweightly and reads as unstructured, which is
+    /// what 100% of them are.
+    var cardioSegmentsData: Data? = nil
+
     /// The tempo this prescription may actually display.
     ///
     /// Tempo describes eccentric/concentric rep phases and is meaningless for a
@@ -833,6 +850,20 @@ final class PlannedPrescriptionSnapshot {
     var targetDistanceMeters: Double? = nil
     var targetDistanceUnitRaw: String? = nil
 
+    /// Structured Cardio Slice 12C — frozen copy of the slot's segment plan.
+    ///
+    /// The column landed with the editor (12C) rather than with its first
+    /// reader (12D) on purpose: 12C was the one schema-touching slice in the
+    /// structured cardio plan, and adding this later would have made a second
+    /// one. **Slice 12D is what fills it**: session start now freezes the
+    /// slot's plan here, so the in-workout checklist keeps showing the plan the
+    /// session was started with even after the routine is edited.
+    ///
+    /// Stored as the encoded payload, never re-encoded from a decoded value:
+    /// a plan this build would normalize survives the session byte-for-byte,
+    /// exactly as `RoutineDuplicator` copies it.
+    var cardioSegmentsData: Data? = nil
+
     /// The tempo History / session detail may display for this frozen snapshot.
     /// Nil for a duration-based row, so an already-completed workout that
     /// captured a stale tempo never renders one. Mirrors
@@ -867,6 +898,7 @@ final class PlannedPrescriptionSnapshot {
         usesDuration: Bool = false,
         targetDistanceMeters: Double? = nil,
         targetDistanceUnitRaw: String? = nil,
+        cardioSegmentsData: Data? = nil,
         equipment: String? = nil,
         setupNotes: String? = nil
     ) {
@@ -888,6 +920,7 @@ final class PlannedPrescriptionSnapshot {
         self.usesDuration = usesDuration
         self.targetDistanceMeters = targetDistanceMeters
         self.targetDistanceUnitRaw = targetDistanceUnitRaw
+        self.cardioSegmentsData = cardioSegmentsData
         self.equipment = equipment
         self.setupNotes = setupNotes
     }
@@ -917,6 +950,8 @@ final class PlannedPrescriptionSnapshot {
             usesDuration: source.usesDuration,
             targetDistanceMeters: source.targetDistanceMeters,
             targetDistanceUnitRaw: source.targetDistanceUnitRaw,
+            // Raw, not decode → re-encode: see the property's note.
+            cardioSegmentsData: source.cardioSegmentsData,
             equipment: exercise?.equipmentType,
             setupNotes: exercise?.setupDefaults
         )

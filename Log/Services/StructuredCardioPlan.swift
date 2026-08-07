@@ -229,6 +229,17 @@ struct CardioSegment: Codable, Equatable, Identifiable {
             .joined(separator: " · ")
     }
 
+    /// The targets without the kind — for a row that already shows the kind on
+    /// its own line (the 12C editor list, the 12D active checklist). Falls back
+    /// to the full summary if the prefix is not there, so this can never return
+    /// a blank line.
+    func shortTargetSummary(distanceUnit: DistanceUnit) -> String {
+        let full = summary(distanceUnit: distanceUnit)
+        let prefix = "\(kind.label) · "
+        guard full.hasPrefix(prefix) else { return full }
+        return String(full.dropFirst(prefix.count))
+    }
+
     /// Compact form for nesting inside a group summary: "1m work", "5 km work".
     /// Only the leading target is used — a group line is a shape, not a spec.
     func shortSummary(distanceUnit: DistanceUnit) -> String {

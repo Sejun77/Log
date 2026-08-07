@@ -215,6 +215,12 @@ enum RoutineDuplicator {
             targetDistanceMeters: src.targetDistanceMeters,
             targetDistanceUnitRaw: src.targetDistanceUnitRaw
         )
+        // Structured Cardio Slice 12C. `Data` is a value type, so this is an
+        // independent copy: editing the duplicate's plan cannot reach back into
+        // the source. Copied raw rather than decode → re-encode, so a payload
+        // this build would normalize (or cannot parse at all) survives
+        // duplication byte-for-byte instead of being silently rewritten.
+        p.cardioSegmentsData = src.cardioSegmentsData
         ctx.insert(p)
         p.techniquePlans = src.techniquePlans.map { copyTechnique($0, in: ctx) }
         // WarmupScheme is mutated in place per-prescription

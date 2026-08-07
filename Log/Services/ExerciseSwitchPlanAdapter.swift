@@ -84,6 +84,13 @@ enum ExerciseSwitchPlanAdapter {
         /// mode the field has no landing place and the target is cleared.
         var targetDistanceMeters: Double?
         var targetDistanceUnitRaw: String?
+        /// Structured Cardio Slice 12D — the reset source's own segment plan,
+        /// encoded. Only ever applied when the switched-in exercise is
+        /// `.cardio`; every other mode has nowhere to put it, so the plan is
+        /// cleared rather than carried. `appDefaults` supplies none — the app
+        /// has no notion of a default structured plan, and inventing one would
+        /// be programming a session on the user's behalf.
+        var cardioSegmentsData: Data?
 
         /// True when the reset source carries its own effort target. When
         /// false, the pre-switch RIR/RPE is preserved instead — effort applies
@@ -103,7 +110,8 @@ enum ExerciseSwitchPlanAdapter {
             tempo: String? = nil,
             slotNotes: String? = nil,
             targetDistanceMeters: Double? = nil,
-            targetDistanceUnitRaw: String? = nil
+            targetDistanceUnitRaw: String? = nil,
+            cardioSegmentsData: Data? = nil
         ) {
             self.sets = sets
             self.repMin = repMin
@@ -118,6 +126,7 @@ enum ExerciseSwitchPlanAdapter {
             self.slotNotes = slotNotes
             self.targetDistanceMeters = targetDistanceMeters
             self.targetDistanceUnitRaw = targetDistanceUnitRaw
+            self.cardioSegmentsData = cardioSegmentsData
         }
 
         /// The app-default reset source for a slot of the given tracking mode,
@@ -192,6 +201,15 @@ enum ExerciseSwitchPlanAdapter {
         /// carrying "5 km, 142 bpm" onto a bench press, or onto a *different*
         /// cardio machine after an explicit Reset, attaches measurements to an
         /// exercise that did not produce them.
+        ///
+        /// Structured Cardio Slice 12D reuses this flag for the segment
+        /// **checklist ticks**, because the question is identical — "does the
+        /// slot's session-scoped cardio progress state still describe what is
+        /// being done?" — and its truth table is identical too. A second flag
+        /// with the same value would only be one more thing to keep in step.
+        /// The ticks are additionally reconciled against the post-switch plan
+        /// by the caller, so a Keep that preserved the plan keeps its ticks and
+        /// a Reset onto a different plan drops the ones that no longer exist.
         var keepCardioDrafts: Bool = false
         /// The tracking mode of the switched-in exercise. Carried on the
         /// outcome so `adaptedSnapshot` can apply mode-specific rules — chiefly
@@ -266,6 +284,15 @@ enum ExerciseSwitchPlanAdapter {
         if staysCardio {
             plan.targetDistanceMeters = current?.targetDistanceMeters
             plan.targetDistanceUnitRaw = current?.targetDistanceUnitRaw
+            // Structured Cardio Slice 12D. Same rule, same reason: a segment
+            // plan is programming for a cardio bout, so it survives exactly
+            // where the distance target does. Copied as the raw payload, so a
+            // plan this build would normalize is not silently rewritten by a
+            // switch. Dropping it on every other combination is what stops a
+            // treadmill's warm-up/work/cool-down riding along on a bench press
+            // — and the routine slot still holds it, so switching back
+            // restores it ("hidden but intact").
+            plan.cardioSegmentsData = current?.cardioSegmentsData
         }
 
         // Always preserved — valid under either tracking type.
@@ -340,6 +367,11 @@ enum ExerciseSwitchPlanAdapter {
         if newMode == .cardio {
             plan.targetDistanceMeters = resetSource.targetDistanceMeters
             plan.targetDistanceUnitRaw = resetSource.targetDistanceUnitRaw
+            // Structured Cardio Slice 12D — the replacement plan, if the reset
+            // source has one. `appDefaults` never does, so the common Reset
+            // lands on an unstructured cardio slot and the checklist
+            // disappears, which is what "start over" should mean.
+            plan.cardioSegmentsData = resetSource.cardioSegmentsData
         }
 
         plan.sets = resetSource.sets
@@ -469,6 +501,11 @@ enum ExerciseSwitchPlanAdapter {
         // next resume.
         payload.targetDistanceMeters = plan.targetDistanceMeters
         payload.targetDistanceUnitRaw = plan.targetDistanceUnitRaw
+        // Slice 12D — written unconditionally for exactly the reason above.
+        // `base` is the *replaced* exercise's snapshot: leaving its segments
+        // alone would let tier-2 resolution put a treadmill plan back on screen
+        // after a resume, on a slot the switch had already cleared.
+        payload.cardioSegmentsData = plan.cardioSegmentsData
         payload.equipment = equipment
         payload.setupNotes = setupNotes
         return payload

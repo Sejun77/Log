@@ -2,6 +2,18 @@ import SwiftUI
 
 // MARK: - Edit Session Plan Sheet
 
+/// Structured Cardio Slice 12D — **segment editing is deliberately not here.**
+///
+/// The sheet edits the plan through per-field bindings, so a slot's
+/// `cardioSegmentsData` passes through it untouched: opening Edit Plan, changing
+/// the target distance, and closing it leaves the structured plan exactly as the
+/// session started with. Authoring segments stays in the routine editor
+/// (`CardioSegmentPlanEditor`), which owns add / reorder / delete and the
+/// per-segment sheet.
+///
+/// Building a second segment editor inside the active workout would duplicate
+/// that screen onto the highest-risk surface in the app for a mid-session need
+/// nobody has reported yet. Deferred to 12E/12F, gated on that report.
 struct EditSessionPlanSheet: View {
     @Binding var plan: SessionPlan
     /// Immutable session-snapshot effort fields for this slot (nil when the
