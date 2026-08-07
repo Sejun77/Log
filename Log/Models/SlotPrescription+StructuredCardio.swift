@@ -54,3 +54,38 @@ extension SlotPrescription {
     /// decoding when a view only needs to decide between two labels.
     var hasStructuredCardioPlan: Bool { structuredCardioPlan != nil }
 }
+
+// ======================================================
+// MARK: - PlannedPrescriptionSnapshot ↔ CardioSegmentPlan
+// ======================================================
+
+extension PlannedPrescriptionSnapshot {
+
+    /// The plan this workout was **started with**, decoded.
+    ///
+    /// Structured Cardio Slice 12E — History's only read path. Deliberately the
+    /// frozen snapshot rather than the live `SlotPrescription`: a routine edited
+    /// after the workout must not rewrite what that workout says it planned,
+    /// which is the same snapshot-immutability invariant Equipment & Setup
+    /// already relies on.
+    ///
+    /// Byte-for-byte the same tolerance as the routine-side accessor — nil
+    /// payload, empty plan, and unreadable payload all read as nil — so a
+    /// corrupt column costs the Planned section and never the History row.
+    ///
+    /// Nil is also what makes History's visibility rule structural: only a
+    /// cardio slot can author segments (`CardioRoutineRules.showsCardioSegments`
+    /// is true for `.cardio` alone), and the switch adapter writes nil onto any
+    /// snapshot it adapts to a non-cardio mode. So a strength item and a timed
+    /// hold read nil here without History having to ask what tracking mode the
+    /// item was.
+    var structuredCardioPlan: CardioSegmentPlan? {
+        guard let cardioSegmentsData else { return nil }
+        guard
+            let plan = try? JSONDecoder().decode(
+                CardioSegmentPlan.self, from: cardioSegmentsData),
+            !plan.isEmpty
+        else { return nil }
+        return plan
+    }
+}

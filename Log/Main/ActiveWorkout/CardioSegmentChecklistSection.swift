@@ -109,7 +109,7 @@ struct CardioSegmentChecklistSection: View {
     }
 
     /// One expanded segment. The whole row is the tap target — a bare checkbox
-    /// glyph is a small thing to hit mid-bout, which §14.4 of the design flags
+    /// glyph is a small thing to hit mid-bout, which §15.4 of the design flags
     /// as the open usability question.
     private func row(for resolved: ResolvedCardioSegment) -> some View {
         let isChecked = checkedIDs.contains(resolved.id)

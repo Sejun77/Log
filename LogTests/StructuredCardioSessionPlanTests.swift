@@ -235,7 +235,7 @@ final class StructuredCardioSessionPlanTests: SwiftDataTestHarness {
         rx.setStructuredCardioPlan(try repeatedPlan())
 
         XCTAssertEqual(frozen.cardioSegmentsData, session.cardioSegmentsData)
-        XCTAssertEqual(frozen.structuredPlanForTest?.expandedCount, 3)
+        XCTAssertEqual(frozen.structuredCardioPlan?.expandedCount, 3)
         XCTAssertEqual(session.structuredCardioPlan?.expandedCount, 3)
         XCTAssertEqual(
             rx.structuredCardioPlan?.expandedCount, 10,
@@ -762,16 +762,7 @@ extension CardioSegmentPlan {
     }
 }
 
-extension PlannedPrescriptionSnapshot {
-    /// The frozen plan, decoded. The app reads this through
-    /// `PrescriptionSnapshotPayload`; the tests need it directly to assert that
-    /// the model row itself froze the right thing.
-    fileprivate var structuredPlanForTest: CardioSegmentPlan? {
-        guard let cardioSegmentsData,
-            let plan = try? JSONDecoder().decode(
-                CardioSegmentPlan.self, from: cardioSegmentsData),
-            !plan.isEmpty
-        else { return nil }
-        return plan
-    }
-}
+// `PlannedPrescriptionSnapshot.structuredPlanForTest` was removed in Slice
+// 12E: History needs to decode the frozen plan for real, so the accessor now
+// ships in `SlotPrescription+StructuredCardio.swift` as
+// `PlannedPrescriptionSnapshot.structuredCardioPlan` and these tests use it.

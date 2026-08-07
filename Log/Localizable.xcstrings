@@ -3062,6 +3062,18 @@
         }
       }
     },
+    "Planned" : {
+      "comment" : "Structured Cardio Slice 12E: History section label for the structured cardio plan the workout was started with",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "계획"
+          }
+        }
+      }
+    },
     "Plate" : {
       "extractionState" : "stale",
       "localizations" : {

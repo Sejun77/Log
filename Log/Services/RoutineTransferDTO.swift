@@ -141,8 +141,74 @@ struct RoutineTransferSlotPrescriptionDTO: Codable, Equatable {
     // `schemaVersion` bump — nothing about an older document became invalid.
     var targetDistanceMeters: Double? = nil
     var targetDistanceUnitRaw: String? = nil
+    /// Structured cardio segment plan (Slice 12E). Optional with a nil default,
+    /// exactly like the two keys above: a document exported before this key
+    /// existed decodes it as nil via synthesized `decodeIfPresent`, the
+    /// synthesized encoder omits the key entirely when nil (so a routine
+    /// without segments exports byte-identically to before), and the
+    /// memberwise-init call sites that do not pass it keep compiling.
+    ///
+    /// **No `schemaVersion` bump** — the design says so explicitly, and the
+    /// reason is `validateSupportedSchemaVersion`: it *rejects* a document
+    /// whose version exceeds the reader's, so bumping would make every older
+    /// build refuse a routine wholesale rather than import it minus its
+    /// segments. Nothing about an older document became invalid, which is the
+    /// same reasoning Slices 5 and 9 recorded when they added their fields.
+    ///
+    /// Carried as a nested structure rather than the stored `Data` blob: the
+    /// transfer format is human-readable JSON that people inspect and
+    /// hand-edit, and a base64 column inside it would be opaque to exactly the
+    /// audience the format exists for.
+    var cardioSegments: RoutineTransferCardioSegmentsDTO? = nil
     var techniquePlans: [RoutineTransferTechniquePlanDTO]
     var warmupScheme: RoutineTransferWarmupSchemeDTO?
+}
+
+// MARK: - Structured cardio segments
+
+/// Transparent wrapper around `CardioSegmentPlan` for the transfer document.
+///
+/// The plan is already `Codable`, and its own decoder is the tolerant Slice 12B
+/// one — unknown segment kinds read as `.work`, an unknown HR zone drops that
+/// field, out-of-range counts clamp, a segment with no target is dropped, and
+/// the group list is truncated to the expansion budget. So the payload survives
+/// a round trip losslessly (**including each segment's `id` and the group's
+/// `repeatCount`**, which is what lets a repeat authored by a future build
+/// transfer today) and degrades sanely rather than failing.
+///
+/// The wrapper exists for one case the plan's own decoder cannot cover: a value
+/// of the **wrong JSON shape** entirely — a string, a number, a hand-edited
+/// mess. `CardioSegmentPlan.init(from:)` would throw there, and because this is
+/// a field inside a synthesized `Codable` struct, that throw would fail the
+/// decode of the whole document and the recipient would lose the entire routine
+/// over one bad key. Absorbing it here means a malformed plan imports as **no
+/// plan**, and everything else about the routine arrives intact — the failure
+/// mode the rest of this format already chooses (unknown enum raws are
+/// preserved, not rejected).
+struct RoutineTransferCardioSegmentsDTO: Codable, Equatable {
+
+    /// nil when the incoming value could not be read as a plan at all.
+    var plan: CardioSegmentPlan?
+
+    init(plan: CardioSegmentPlan?) {
+        self.plan = plan
+    }
+
+    init(from decoder: Decoder) throws {
+        plan = try? CardioSegmentPlan(from: decoder)
+    }
+
+    /// Encodes the plan **in place** (no wrapper object), so the document reads
+    /// as `"cardioSegments": { "version": 1, "groups": [...] }` rather than
+    /// carrying an implementation detail of this type into the wire format.
+    func encode(to encoder: Encoder) throws {
+        guard let plan else {
+            var container = encoder.singleValueContainer()
+            try container.encodeNil()
+            return
+        }
+        try plan.encode(to: encoder)
+    }
 }
 
 // MARK: - TechniquePlan

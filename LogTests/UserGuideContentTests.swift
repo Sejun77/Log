@@ -136,6 +136,45 @@ final class UserGuideContentTests: XCTestCase {
             "The Korean guide must not imply a tick is a logged result")
     }
 
+    /// Structured Cardio Slice 12E — History now shows the planned segments,
+    /// so the guide says so. The sentence that matters is the one drawing the
+    /// line between *planned* and *performed*: a user who read the Planned
+    /// section as a record of which segments they completed would be misled
+    /// about what the app observed.
+    func testGuideExplainsThePlannedSectionInHistory() throws {
+        let en = try XCTUnwrap(
+            section(heading: "Duration Exercises and Cardio", in: english)?.outro)
+        XCTAssertTrue(
+            en.contains(
+                "After the workout, History shows that plan again under "
+                    + "Planned, above the logged sets."),
+            "English History wording drifted from USER_GUIDE.md")
+        XCTAssertTrue(
+            en.contains(
+                "These are planned segments only — not a record of which ones "
+                    + "you did."),
+            "The guide must not present the Planned section as what was done")
+        XCTAssertTrue(
+            en.contains(
+                "Routines you export and import carry their structured "
+                    + "segments with them"),
+            "English transfer wording drifted from USER_GUIDE.md")
+
+        let ko = try XCTUnwrap(
+            section(heading: "시간 기반 운동과 유산소 운동", in: korean)?.outro)
+        XCTAssertTrue(
+            ko.contains("운동을 마치면 기록 탭에서 기록된 세트 위에 계획 항목으로"),
+            "Korean History wording drifted from USER_GUIDE.md")
+        XCTAssertTrue(
+            ko.contains(
+                "여기에는 계획된 구간만 표시되며, 어떤 구간을 수행했는지에 대한 "
+                    + "기록은 아닙니다."),
+            "The Korean guide must not present Planned as what was done")
+        XCTAssertTrue(
+            ko.contains("루틴을 내보내고 가져올 때는 구성한 구간도 함께 이동하며"),
+            "Korean transfer wording drifted from USER_GUIDE.md")
+    }
+
     /// The limits the guide quotes must be the limits the app enforces.
     func testGuideQuotesTheRealLimits() throws {
         let en = try XCTUnwrap(

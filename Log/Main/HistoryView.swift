@@ -702,6 +702,7 @@ private struct WorkoutDetailView: View {
                                 name: exerciseName(for: item)
                             )
                             equipmentAndSetupRows(for: item)
+                            plannedCardioRows(for: item)
                             setLogList(for: item)
                         }
                     } header: {
@@ -710,6 +711,7 @@ private struct WorkoutDetailView: View {
                 } else if let item = group.items.first {
                     Section {
                         equipmentAndSetupRows(for: item)
+                        plannedCardioRows(for: item)
                         setLogList(for: item)
                     } header: {
                         Text(exerciseName(for: item))
@@ -777,6 +779,88 @@ private struct WorkoutDetailView: View {
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// Structured Cardio Slice 12E — the **Planned** block for one history
+    /// item: the segment plan this workout was started with.
+    ///
+    /// Read exclusively from the immutable `plannedPrescriptionSnapshot`, never
+    /// from the live routine, so editing the routine afterwards cannot rewrite
+    /// what an old workout says it planned — the same rule Equipment & Setup
+    /// above already follows.
+    ///
+    /// Rendered only when that frozen snapshot decodes to a non-empty plan.
+    /// That single condition is also the cardio gate: only a cardio slot can
+    /// author segments, so a strength item and a timed hold decode nil and add
+    /// zero rows, exactly as before this slice. A corrupt payload decodes nil
+    /// too — the section disappears, the History row does not.
+    ///
+    /// **Plan only.** No ticks, no checkmarks, no completion state: the active
+    /// checklist's ticks are session-scoped draft state that never reached this
+    /// workout, and presenting anything here as "done" would claim the app
+    /// observed something it did not. The logged result stays the aggregate
+    /// cardio `SetLog` rendered by `setLogList` below, untouched.
+    @ViewBuilder
+    private func plannedCardioRows(for item: WorkoutItem) -> some View {
+        if let plan = item.plannedPrescriptionSnapshot?.structuredCardioPlan {
+            let rows = CardioPlannedHistory.rows(
+                for: plan, distanceUnit: distanceUnit)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: DSSpacing.sm) {
+                    Text("Planned")
+                        .font(.dsCaption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: DSSpacing.sm)
+                    // Verbatim — assembled from numbers and units, like every
+                    // other composed plan summary in the app.
+                    Text(
+                        CardioPlannedHistory.summary(
+                            for: plan, distanceUnit: distanceUnit)
+                    )
+                    .font(.dsCaption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                }
+
+                ForEach(rows) { row in
+                    plannedCardioRow(row)
+                }
+            }
+        }
+    }
+
+    /// One planned segment: "Warm-up · 5m", or "Work · 1m   Round 2/5".
+    ///
+    /// The kind goes through `LocalizedStringKey` (so it reads in Korean) and
+    /// the targets are concatenated verbatim after it, which keeps a row on one
+    /// line without splitting it into two `Text`s that could wrap apart.
+    @ViewBuilder
+    private func plannedCardioRow(_ row: CardioPlannedSegmentRow) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: DSSpacing.sm) {
+            (Text(LocalizedStringKey(row.kindLabelKey))
+                + Text(verbatim: row.targetText.isEmpty ? "" : " · ")
+                + Text(verbatim: row.targetText))
+                .font(.dsBodySecondary.monospacedDigit())
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: DSSpacing.sm)
+
+            // Only ever present on a repeated group — no plan the current
+            // editor writes has one, so a flat plan shows no round column.
+            // Reuses the key the active checklist introduced in 12D.
+            if let round = row.round, let roundCount = row.roundCount {
+                Text("Round \(round)/\(roundCount)")
+                    .font(.dsCaption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if let note = row.note {
+            Text(note)
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
     }
 
