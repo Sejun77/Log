@@ -138,6 +138,28 @@ enum SessionPlanResolver {
             meters: snapshot?.targetDistanceMeters, displayUnit: displayUnit)
     }
 
+    /// Resolve the planned **structured cardio** plan. Walks
+    /// `sessionPlan` → `snapshot` → `nil`, matching every other helper here.
+    ///
+    /// There is no tier-3 template fallback, for the same reason
+    /// `plannedTargetDistance` has none: `PlanSetTemplate` carries reps and
+    /// duration, and a structured plan cannot be invented from either.
+    ///
+    /// Both tiers decode through their own tolerant accessor, so an
+    /// unreadable payload at either tier resolves to "no structured plan"
+    /// rather than throwing — and tier 1 falling through on a corrupt payload
+    /// is deliberate: the frozen snapshot is the better answer, not a crash.
+    ///
+    /// Nil is the normal case: every strength slot, every timed hold, and every
+    /// cardio slot programmed without segments.
+    static func plannedCardioSegments(
+        sessionPlan: SessionPlan?,
+        snapshot: PrescriptionSnapshotPayload?
+    ) -> CardioSegmentPlan? {
+        if let plan = sessionPlan?.structuredCardioPlan { return plan }
+        return snapshot?.structuredCardioPlan
+    }
+
     /// Resolve the planned rest-after-exercise. Walks
     /// `sessionPlan.restSecondsAfterExercise > 0` →
     /// `snapshot.restSecondsAfterExercise > 0` → `nil`. Used only on

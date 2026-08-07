@@ -31,7 +31,43 @@ struct SessionPlan: Codable, Equatable {
     // restores with nil rather than failing to decode.
     var targetDistanceMeters: Double? = nil
     var targetDistanceUnitRaw: String? = nil
+    // Structured Cardio Slice 12D — the session's copy of the slot's segment
+    // plan, held as the encoded payload for the same reasons
+    // `PrescriptionSnapshotPayload.cardioSegmentsData` is (a plan this build
+    // would normalize rides through untouched; the decode is tolerant and
+    // happens at the read site).
+    //
+    // `Data` is `Codable` as base64, so this persists with the rest of the plan
+    // through `AppState.sessionPlansJSON` and survives Save & Exit and a cold
+    // resume. A `SessionPlan` persisted by an earlier build decodes with nil
+    // here, because synthesized `Codable` reads an `Optional` with
+    // `decodeIfPresent` — the same compatibility the Slice 5 target-distance
+    // fields rely on.
+    //
+    // **Plan only.** Nothing here affects the aggregate duration / distance /
+    // target-distance logic, the set count, or what a `SetLog` records; the
+    // bout is still logged as one aggregate set (`STRUCTURED_CARDIO_DESIGN.md`
+    // §2.6).
+    var cardioSegmentsData: Data? = nil
     var slotNotes: String?
+
+    /// The session's structured cardio plan, decoded, or nil when this slot has
+    /// none.
+    ///
+    /// Same "one representation of no structure" rule as
+    /// `SlotPrescription.structuredCardioPlan`: a nil payload, an empty plan,
+    /// and an unreadable payload all read as nil, so no view checks three
+    /// states and a corrupt payload costs the checklist rather than the
+    /// session.
+    var structuredCardioPlan: CardioSegmentPlan? {
+        guard let cardioSegmentsData else { return nil }
+        guard
+            let plan = try? JSONDecoder().decode(
+                CardioSegmentPlan.self, from: cardioSegmentsData),
+            !plan.isEmpty
+        else { return nil }
+        return plan
+    }
 
     /// The plan's target distance, validated, or nil when none is set.
     ///
@@ -130,6 +166,12 @@ struct SessionPlan: Codable, Equatable {
         self.usesDuration = snapshot.usesDuration
         self.targetDistanceMeters = snapshot.targetDistanceMeters
         self.targetDistanceUnitRaw = snapshot.targetDistanceUnitRaw
+        // Carried verbatim. Unlike tempo (dropped here when the snapshot is
+        // duration-based) there is no stale-state case to filter: a snapshot
+        // that carries segments came from a slot that had them, and the
+        // checklist's own visibility gate is the slot's live tracking mode, not
+        // this field.
+        self.cardioSegmentsData = snapshot.cardioSegmentsData
         self.slotNotes = notes
     }
 }

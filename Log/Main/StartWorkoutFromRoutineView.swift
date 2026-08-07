@@ -158,8 +158,34 @@ struct PrescriptionSnapshotPayload {
     // carries nil and behaves exactly as before.
     var targetDistanceMeters: Double? = nil
     var targetDistanceUnitRaw: String? = nil
+    // Structured Cardio Slice 12D — the slot's segment plan, carried through
+    // the session plan as the **encoded** payload rather than a decoded value
+    // type. Two reasons: a payload this build would normalize (or cannot parse)
+    // rides through the session unchanged, exactly as `RoutineDuplicator`
+    // copies it; and the decode happens once per read site, through the single
+    // tolerant accessor below, so a corrupt column can never throw into the
+    // plan-build path. nil for every non-cardio slot and for every cardio slot
+    // without a structured plan — the overwhelming majority.
+    var cardioSegmentsData: Data? = nil
     var equipment: String?
     var setupNotes: String?
+
+    /// The frozen structured cardio plan, decoded, or nil when this slot has
+    /// none.
+    ///
+    /// Mirrors `SlotPrescription.structuredCardioPlan` field-for-field,
+    /// including its "one representation of no structure" rule: a nil column,
+    /// an empty plan, and an unreadable payload all read as nil. A corrupt
+    /// payload therefore costs the checklist, never the session.
+    var structuredCardioPlan: CardioSegmentPlan? {
+        guard let cardioSegmentsData else { return nil }
+        guard
+            let plan = try? JSONDecoder().decode(
+                CardioSegmentPlan.self, from: cardioSegmentsData),
+            !plan.isEmpty
+        else { return nil }
+        return plan
+    }
 
     /// Phase 10-E: equipment + setup are sourced from the linked
     /// `Exercise` rather than from the slot. The captured values are
@@ -189,6 +215,7 @@ struct PrescriptionSnapshotPayload {
         self.usesDuration = source.usesDuration
         self.targetDistanceMeters = source.targetDistanceMeters
         self.targetDistanceUnitRaw = source.targetDistanceUnitRaw
+        self.cardioSegmentsData = source.cardioSegmentsData
         self.equipment = exercise?.equipmentType
         self.setupNotes = exercise?.setupDefaults
     }
@@ -213,6 +240,7 @@ struct PrescriptionSnapshotPayload {
             usesDuration: usesDuration,
             targetDistanceMeters: targetDistanceMeters,
             targetDistanceUnitRaw: targetDistanceUnitRaw,
+            cardioSegmentsData: cardioSegmentsData,
             equipment: equipment,
             setupNotes: setupNotes
         )
@@ -254,6 +282,11 @@ extension PrescriptionSnapshotPayload {
         // the conservative reading until then.
         targetDistanceMeters: Double? = nil,
         targetDistanceUnitRaw: String? = nil,
+        // Slice 12D note: the exercise-switch adapter builds payloads through
+        // this init too, and `adaptedSnapshot` writes the field explicitly from
+        // the adapted plan — so a switched slot never inherits the replaced
+        // exercise's segments by omission.
+        cardioSegmentsData: Data? = nil,
         equipment: String? = nil,
         setupNotes: String? = nil
     ) {
@@ -275,6 +308,7 @@ extension PrescriptionSnapshotPayload {
         self.usesDuration = usesDuration
         self.targetDistanceMeters = targetDistanceMeters
         self.targetDistanceUnitRaw = targetDistanceUnitRaw
+        self.cardioSegmentsData = cardioSegmentsData
         self.equipment = equipment
         self.setupNotes = setupNotes
     }
@@ -299,6 +333,7 @@ extension PrescriptionSnapshotPayload {
         self.usesDuration = snapshot.usesDuration
         self.targetDistanceMeters = snapshot.targetDistanceMeters
         self.targetDistanceUnitRaw = snapshot.targetDistanceUnitRaw
+        self.cardioSegmentsData = snapshot.cardioSegmentsData
         self.equipment = snapshot.equipment
         self.setupNotes = snapshot.setupNotes
     }

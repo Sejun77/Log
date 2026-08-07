@@ -407,14 +407,7 @@ extension CardioSegmentKind {
     }
 }
 
-extension CardioSegment {
-    /// The segment's targets without its kind — for a row that already shows
-    /// the kind on its own line. Falls back to an em dash so a row is never
-    /// blank (unreachable in practice: a segment always has a target).
-    func shortTargetSummary(distanceUnit: DistanceUnit) -> String {
-        let full = summary(distanceUnit: distanceUnit)
-        let prefix = "\(kind.label) · "
-        guard full.hasPrefix(prefix) else { return full }
-        return String(full.dropFirst(prefix.count))
-    }
-}
+// `CardioSegment.shortTargetSummary` moved to `StructuredCardioPlan.swift` in
+// Slice 12D: the active-workout checklist renders the same kind-less target
+// line, and a summary shared by two features belongs beside the other
+// summaries rather than in one feature's editor.

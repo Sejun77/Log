@@ -1,9 +1,11 @@
 # Structured Cardio — Design
 
-**Status:** design complete (Slice 12A). **Slices 12B and 12C shipped** — the
-value types exist, a cardio routine slot can carry a segment plan, and the
-routing editor authors it. Nothing is shown during a workout, in History, or in
-any export yet (see §11 and §12). Companion to `CARDIO_SYSTEM_DESIGN.md`, which covers Phase 1
+**Status:** design complete (Slice 12A). **Slices 12B, 12C and 12D shipped** —
+the value types exist, a cardio routine slot can carry a segment plan, the
+routine editor authors it, and the workout now shows it as a read-only
+checklist. **Logging is unchanged: one aggregate cardio `SetLog` per bout.**
+Nothing appears in History or in any export yet (see §11–§13).
+Companion to `CARDIO_SYSTEM_DESIGN.md`, which covers Phase 1
 (Slices 1–11, shipped).
 
 **Scope:** how Log programs a cardio bout that has *shape* — warm-up, work,
@@ -490,7 +492,7 @@ means the only slice that touches the schema does nothing else.
 |---|---|---|---|
 | **12B** ✅ | Pure `CardioSegment` / `CardioSegmentGroup` / `CardioSegmentPlan`, validation, bounds, `expandedSegments()`, summary text. No UI, no persistence — **shipped, see §11** | No | Yes (pure) |
 | **12C** ✅ | `cardioSegmentsData` on `SlotPrescription` + `PlannedPrescriptionSnapshot`; `CardioRoutineRules.showsCardioSegments`; routine editor Segments screen; localization of the kind labels — **shipped, see §12** | **Yes** (2 additive optional columns) | **Yes** — schema slice |
-| **12D** | `SessionPlan` carry-through, snapshot at session start, active-workout checklist + tick persistence, switch-adapter rules. Logging path untouched | No | Yes — session/ownership |
+| **12D** ✅ | `SessionPlan` carry-through, snapshot at session start, active-workout checklist + tick persistence, switch-adapter rules. Logging path untouched — **shipped, see §13** | No | Yes — session/ownership |
 | **12E** | History detail "Planned" section; routine transfer payload; compatibility fixtures | No | Yes — transfer/compat |
 | **12F** | *Conditional.* Repeat-group UI; then, only if justified, per-segment actuals | Only if actuals ship | Yes |
 
@@ -728,7 +730,201 @@ the app — there is no whole phrase to translate.
 
 ---
 
-## 13. Open questions for beta feedback
+## 13. Slice 12D — as built
+
+**Shipped:** the plan reaches the workout, and the workout shows it.
+No schema change, no migration, and **not one line of the logging path**.
+
+| File | |
+|---|---|
+| `Log/Main/StartWorkoutFromRoutineView.swift` | `cardioSegmentsData` + `structuredCardioPlan` on `PrescriptionSnapshotPayload`; carried in all three of its initializers and in `toModel()` |
+| `Log/Models/Entities.swift` | `cardioSegmentsData` parameter on `PlannedPrescriptionSnapshot.init` and its `SlotPrescription` convenience init — the column existed already |
+| `Log/Models/SessionPlan.swift` | `cardioSegmentsData` + `structuredCardioPlan` |
+| `Log/Services/SessionPlanResolver.swift` | `plannedCardioSegments(sessionPlan:snapshot:)` |
+| `Log/Services/ExerciseSwitchPlanAdapter.swift` | `ResetSource.cardioSegmentsData`; keep/reset rules; `adaptedSnapshot` writes the field |
+| `Log/Services/CardioSegmentCheckStore.swift` | **new** — per-workout tick persistence |
+| `Log/Main/ActiveWorkout/CardioSegmentChecklistSection.swift` | **new** — the checklist |
+| `Log/Main/ActiveWorkoutView.swift` | resolution gate, section placement, tick state + rehydrate/reconcile/clear |
+| `Log/Services/StructuredCardioPlan.swift` | `CardioSegment.shortTargetSummary` moved here from the 12C editor — two features render it now |
+
+### Carry-through
+
+The plan travels the §3.4 fan-out as far as the workout needs it:
+
+```
+SlotPrescription.cardioSegmentsData
+  → PrescriptionSnapshotPayload.cardioSegmentsData     (plan build / resume)
+      → PlannedPrescriptionSnapshot.cardioSegmentsData (frozen at session start)
+      → SessionPlan.cardioSegmentsData                 (session's editable copy)
+          → SessionPlanResolver.plannedCardioSegments  (session plan → snapshot)
+```
+
+**Carried as the encoded payload, never decoded and re-encoded.** A plan this
+build would normalize — an out-of-range `repeatCount`, a kind it has never heard
+of — rides through the session byte-for-byte, exactly as
+`RoutineDuplicator.copyPrescription` copies it. Decoding happens at the read
+site, through accessors that are identical in all three places
+(`SlotPrescription`, `PrescriptionSnapshotPayload`, `SessionPlan`) and identical
+in behaviour: **nil payload, empty plan, and unreadable payload all read as
+nil.** A corrupt payload costs the checklist, never the session.
+
+`SessionPlan` is `Codable` and `Data` encodes as base64, so the plan persists
+through `AppState.sessionPlansJSON` for free. A `SessionPlan` written by an
+older build decodes with nil here — synthesized `Codable` reads an `Optional`
+with `decodeIfPresent`, the same compatibility the Slice 5 target-distance
+fields rely on.
+
+**The snapshot column finally has a writer.** 12C added
+`PlannedPrescriptionSnapshot.cardioSegmentsData` and wrote nothing to it; the
+session-start path fills it now, so a workout keeps showing the plan it was
+started with even after the routine is edited mid-session.
+
+### What did *not* change
+
+This is the claim the slice turns on, and it is pinned by
+`testAStructuredPlanDoesNotChangeAnyOtherResolvedTarget`:
+
+- set count, duration target, distance target and the Plan-card summary resolve
+  **identically** with and without segments;
+- no extra sets, no extra `SetLog` rows, no change to `appendTimeSetLog`;
+- a 5 × (1/2) plan still resolves to `sets: 1` — one bout with shape.
+
+### The checklist
+
+A **Cardio Plan** section between the Plan card and the Sets section, rendered
+only when the slot's *live* exercise is cardio **and** its resolved plan has
+segments. Strength slots, timed holds, and unstructured cardio slots construct
+nothing, so "no new UI for everyone else" is structural rather than a matter of
+testing every path.
+
+```
+Cardio Plan
+  ▾ 3 segments · 30m                                    1/3
+    ✓  Warm-up      5m
+    ○  Work        20m · 1%
+    ○  Cool-down    5m
+  A checklist for this bout. Ticks are not saved to your history.
+```
+
+- Rows are `plan.expandedSegments()` in order — the pure 12B function, so
+  repeats flatten with no second implementation.
+- Each row: tick, kind (localized), kind-less target summary, note. `Round 2/5`
+  appears only on a repeated group, so a flat plan — every plan until 12F —
+  renders exactly as it would without repeats.
+- **Read-only except the ticks.** No target editing, no timer, no automatic
+  progression, no gate on the Log button: the aggregate set logs from the
+  duration and Details fields exactly as before, whether nothing or everything
+  is ticked.
+- The whole row is the tap target, not just the glyph (§14.4's open question).
+- Bounded for free: `expandedSegments()` cannot exceed
+  `CardioPlanLimits.maxExpandedSegments` (60), because construction *and*
+  decoding enforce it.
+
+**Deviation from §4.3, deliberate:** the section starts **expanded**, not
+collapsed. §4.3 wanted it collapsed because it sketched the disclosure inline
+above the cardio entry row, where a long plan would push the duration field and
+Log button off screen. As its own List section above Sets, a long plan simply
+scrolls — and a checklist you must open before every tick is worse than one you
+scroll past. The summary row is still the disclosure control for anyone who
+disagrees.
+
+### Tick persistence
+
+`CardioSegmentCheckStore` — a sibling of `ParentDraftStore` /
+`DropWeightDraftStore`, not a field on either.
+
+| | |
+|---|---|
+| Key | `"cardioSegmentChecks_<workoutUUID>"` → `[String: [String]]` |
+| Per slot | `slotID.uuidString` → the ticked `ResolvedCardioSegment.id`s |
+| Written | on every toggle, like the cardio draft binding — no commit point to miss |
+| Cleared | workout finish/discard (`unlockAndDismiss`), and per slot on a switch |
+
+Its own key rather than `ParentDraftStore`'s because a tick is **per slot, not
+per set** — a structured plan describes one bout, and the app logs one aggregate
+set for it, so there is no set index to key on. Keeping it separate also makes
+the guarantee structural: **there is no code path from this store to a `SetLog`,
+a `WorkoutItem`, or a `Workout`.** History cannot imply the app observed a
+segment it did not.
+
+Ids are `"<segment uuid>#<round>"`, so ticking round 1 leaves round 2 unticked,
+and reordering the plan carries a tick with its segment rather than leaving it
+on whatever moved into that row.
+
+**Orphans are ignored, never repaired.** Every read filters the stored ids
+against the live expanded plan (`checked(slotID:in:)`), so a tick naming a
+segment that no longer exists — an edited routine, a reset plan, a slot switched
+away from cardio — stops rendering and stops counting. The resume path prunes
+them on disk too, so they cannot accumulate. `checked(slotID:in: nil)` is empty,
+which is what makes "no plan ⇒ no checklist state" fall out rather than needing
+its own rule.
+
+### Exercise switch
+
+The §7.5 table, implemented — the plan follows `targetDistanceMeters` exactly:
+
+| Switch | Segment plan | Ticks |
+|---|---|---|
+| cardio → cardio, **Keep** | kept | kept (every id still matches) |
+| cardio → cardio, **Reset** | the reset source's (app defaults carry none) | cleared |
+| cardio → timed hold / strength | dropped from the session plan | cleared |
+| strength / timed hold → cardio | none seeded | none to keep |
+
+`Outcome.keepCardioDrafts` gates the ticks as well as the typed metrics: the
+question ("does this slot's session-scoped cardio state still describe what is
+being done?") and the truth table are identical, and a second flag with the same
+value would only be one more thing to keep in step. The ticks are then
+reconciled against the post-switch resolved plan, so Keep preserves them by
+*matching* rather than by assertion.
+
+`adaptedSnapshot` writes `cardioSegmentsData` **unconditionally** from the
+adapted plan, for the same reason it does for the distance target: `base` is the
+*replaced* exercise's snapshot, so leaving it alone is precisely how a cleared
+plan would reappear via tier-2 resolution on the next resume.
+
+The routine's stored plan is never touched by a switch — "hidden but intact", so
+switching back restores it.
+
+### Active Edit Plan
+
+Unchanged, and deliberately so. The sheet edits through per-field bindings, so
+`cardioSegmentsData` passes through it untouched — open it, change the target
+distance, close it, and the structured plan is exactly what the session started
+with. Existing target-distance behaviour is unaffected.
+
+Segments are **not** editable there: authoring lives in
+`CardioSegmentPlanEditor`, and building a second segment editor on the app's
+highest-risk screen for a mid-session need nobody has reported is how that
+screen regresses. Deferred, gated on a report.
+
+`isSessionPlanDirty` deliberately does **not** compare segments, so
+"Finish + Update slot prescription" never writes them back. Nothing in the
+workout can change them, and after a cardio → strength switch the routine slot
+must keep the plan it authored (§7.5).
+
+### Localization
+
+Three new keys, Korean included: the section header, the footer, and the
+`Round %lld/%lld` badge. The four segment kind names come from
+`CardioSegmentKind.label` rendered through `LocalizedStringKey` — the same
+single source 12C introduced. Composed summaries ("3 segments · 30m") stay
+verbatim, matching `SessionPlan.primarySummary` and the 12C editor.
+
+### Deferred to 12E and later
+
+- **History**: no structured-cardio display anywhere — not in the row summary,
+  not in the detail. The frozen snapshot now *carries* the plan, which is what
+  12E's "Planned" section will read; nothing renders it yet.
+- **Routine transfer**, CSV/export/import: unchanged, no segment payload.
+- **Charts**: unchanged — `CardioProgressAnalytics` sums `SetLog` fields and
+  segments are not `SetLog`s.
+- **Per-segment actuals** (12F, gated), **repeat authoring UI** (12F),
+  **per-segment timers** (§4.5), and every §10 non-goal.
+- **In-workout segment editing** (above).
+
+---
+
+## 14. Open questions for beta feedback
 
 1. Do users want segments on the **routine slot** (programming, reusable) or
    ad-hoc on **the session** (today's plan only)? This design says the slot; the

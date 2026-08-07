@@ -105,6 +105,37 @@ final class UserGuideContentTests: XCTestCase {
             "Korean cardio detail wording drifted from USER_GUIDE.md")
     }
 
+    /// Structured Cardio Slice 12D — the checklist is now visible during a
+    /// workout, so the guide describes it. The sentence that matters most is
+    /// the one that says a tick is **not** a record: a user who thinks the app
+    /// saved their segments would be misled about what History contains.
+    func testGuideExplainsTheStructuredCardioChecklist() throws {
+        let en = try XCTUnwrap(
+            section(heading: "Duration Exercises and Cardio", in: english)?.outro)
+        XCTAssertTrue(
+            en.contains(
+                "During the workout the slot shows them as a Cardio Plan "
+                    + "checklist above the set row"),
+            "English structured-cardio wording drifted from USER_GUIDE.md")
+        XCTAssertTrue(
+            en.contains(
+                "the ticks are not saved to your history, nothing has to be "
+                    + "ticked before you log, and the bout is still recorded as "
+                    + "one cardio set"),
+            "The guide must not imply a tick is a logged result")
+
+        let ko = try XCTUnwrap(
+            section(heading: "시간 기반 운동과 유산소 운동", in: korean)?.outro)
+        XCTAssertTrue(
+            ko.contains("운동 중에는 세트 행 위에 유산소 계획 체크리스트로 표시되며"),
+            "Korean structured-cardio wording drifted from USER_GUIDE.md")
+        XCTAssertTrue(
+            ko.contains(
+                "체크 표시는 기록에 저장되지 않고, 기록하기 전에 모든 구간을 "
+                    + "체크할 필요도 없으며"),
+            "The Korean guide must not imply a tick is a logged result")
+    }
+
     /// The limits the guide quotes must be the limits the app enforces.
     func testGuideQuotesTheRealLimits() throws {
         let en = try XCTUnwrap(

@@ -852,11 +852,16 @@ final class PlannedPrescriptionSnapshot {
 
     /// Structured Cardio Slice 12C — frozen copy of the slot's segment plan.
     ///
-    /// The column lands with the editor (12C) rather than with its first reader
-    /// (12D) on purpose: 12C is the one schema-touching slice in the structured
-    /// cardio plan, and adding this later would make a second one. **Nothing
-    /// writes or reads it yet** — session snapshotting is 12D — so a workout
-    /// started today snapshots nil, exactly as before.
+    /// The column landed with the editor (12C) rather than with its first
+    /// reader (12D) on purpose: 12C was the one schema-touching slice in the
+    /// structured cardio plan, and adding this later would have made a second
+    /// one. **Slice 12D is what fills it**: session start now freezes the
+    /// slot's plan here, so the in-workout checklist keeps showing the plan the
+    /// session was started with even after the routine is edited.
+    ///
+    /// Stored as the encoded payload, never re-encoded from a decoded value:
+    /// a plan this build would normalize survives the session byte-for-byte,
+    /// exactly as `RoutineDuplicator` copies it.
     var cardioSegmentsData: Data? = nil
 
     /// The tempo History / session detail may display for this frozen snapshot.
@@ -893,6 +898,7 @@ final class PlannedPrescriptionSnapshot {
         usesDuration: Bool = false,
         targetDistanceMeters: Double? = nil,
         targetDistanceUnitRaw: String? = nil,
+        cardioSegmentsData: Data? = nil,
         equipment: String? = nil,
         setupNotes: String? = nil
     ) {
@@ -914,6 +920,7 @@ final class PlannedPrescriptionSnapshot {
         self.usesDuration = usesDuration
         self.targetDistanceMeters = targetDistanceMeters
         self.targetDistanceUnitRaw = targetDistanceUnitRaw
+        self.cardioSegmentsData = cardioSegmentsData
         self.equipment = equipment
         self.setupNotes = setupNotes
     }
@@ -943,6 +950,8 @@ final class PlannedPrescriptionSnapshot {
             usesDuration: source.usesDuration,
             targetDistanceMeters: source.targetDistanceMeters,
             targetDistanceUnitRaw: source.targetDistanceUnitRaw,
+            // Raw, not decode → re-encode: see the property's note.
+            cardioSegmentsData: source.cardioSegmentsData,
             equipment: exercise?.equipmentType,
             setupNotes: exercise?.setupDefaults
         )

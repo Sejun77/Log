@@ -4,6 +4,9 @@
     "" : {
 
     },
+    "—" : {
+
+    },
     "· %@ %@" : {
       "localizations" : {
         "en" : {
@@ -316,6 +319,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 반복"
+          }
+        }
+      }
+    },
+    "A checklist for this bout. Ticks are not saved to your history." : {
+      "comment" : "Structured Cardio Slice 12D: footer of the active-workout cardio checklist, explaining that ticks are session progress only",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이번 운동을 위한 체크리스트입니다. 체크 표시는 기록에 저장되지 않습니다."
           }
         }
       }
@@ -927,6 +942,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "유산소"
+          }
+        }
+      }
+    },
+    "Cardio Plan" : {
+      "comment" : "Structured Cardio Slice 12D: active-workout section header for the planned cardio segment checklist",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "유산소 계획"
           }
         }
       }
@@ -3625,6 +3652,18 @@
     },
     "RIR" : {
 
+    },
+    "Round %lld/%lld" : {
+      "comment" : "Structured Cardio Slice 12D: which round of a repeated cardio segment group a checklist row is, e.g. Round 2/5",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld 라운드"
+          }
+        }
+      }
     },
     "Rounds" : {
       "localizations" : {

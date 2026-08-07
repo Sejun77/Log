@@ -180,6 +180,20 @@ struct ActiveWorkoutView: View {
     // shown at all.
     @State private var cardioSlotIDs: Set<UUID> = []
 
+    // Structured Cardio Slice 12D — ticked checklist segments, keyed by
+    // routineSlotID → the `ResolvedCardioSegment.id`s the user has checked off.
+    //
+    // **Session-scoped progress, never a result.** It is persisted only to
+    // `CardioSegmentCheckStore` (UserDefaults, per workout) so Save & Exit and
+    // a cold resume restore the ticks; nothing here reaches `SetLog`,
+    // `WorkoutItem`, or `Workout`. The bout is still logged as one aggregate
+    // cardio set from the duration + Details fields.
+    //
+    // Empty for every slot without a structured plan, which is every strength
+    // slot, every timed hold, and every cardio slot programmed without
+    // segments.
+    @State private var cardioSegmentChecksBySlotID: [UUID: Set<String>] = [:]
+
     /// Whether this slot shows the combined RIR/RPE effort control. Delegates
     /// to `WorkoutEffortTargetResolver.isEffortApplicable`, which owns the
     /// product rule, so the three display sites (per-set row labels, Plan card
@@ -206,6 +220,114 @@ struct ActiveWorkoutView: View {
             }
         }
         cardioSlotIDs = ids
+    }
+
+    /// Structured Cardio Slice 12D — the resolved segment plan for a slot, or
+    /// nil when it has none.
+    ///
+    /// Gated on `cardioSlotIDs` before anything is decoded, so the checklist
+    /// can only ever appear on a slot whose **live** exercise is cardio. That
+    /// matters after a switch: the routine's stored plan and a frozen snapshot
+    /// may both still carry segments for the exercise that was replaced, and
+    /// the tracking mode — not the payload — is what decides whether they mean
+    /// anything now.
+    ///
+    /// Resolution below that gate is the standard two-tier walk (session plan →
+    /// frozen snapshot), and both tiers decode tolerantly: a corrupt payload
+    /// resolves to nil, exactly like a slot that never had a plan.
+    private func structuredCardioPlan(
+        for exercise: PlanExercise
+    ) -> CardioSegmentPlan? {
+        let slotID = exercise.routineSlotID
+        guard cardioSlotIDs.contains(slotID) else { return nil }
+        return SessionPlanResolver.plannedCardioSegments(
+            sessionPlan: sessionPlans[slotID],
+            snapshot: exercise.prescriptionSnapshot)
+    }
+
+    /// Per-workout store for the checklist ticks. Nil until the workout exists,
+    /// exactly like `parentDraftStore`.
+    private var cardioSegmentCheckStore: CardioSegmentCheckStore? {
+        workout.map { CardioSegmentCheckStore(workoutID: $0.id) }
+    }
+
+    /// Binding for one slot's ticked segments. Writes through to the store on
+    /// every toggle, mirroring how the cardio draft binding persists on every
+    /// keystroke — so Save & Exit, a force-quit, and a cold resume all restore
+    /// the same ticks without a commit point to miss.
+    private func cardioSegmentChecksBinding(
+        slotID: UUID
+    ) -> Binding<Set<String>> {
+        Binding(
+            get: { cardioSegmentChecksBySlotID[slotID] ?? [] },
+            set: { newValue in
+                cardioSegmentChecksBySlotID[slotID] = newValue
+                cardioSegmentCheckStore?.save(
+                    slotID: slotID, checked: newValue)
+            }
+        )
+    }
+
+    /// Restore ticks on resume, dropping any that no longer name a segment in
+    /// the slot's resolved plan.
+    ///
+    /// Runs after `refreshCardioSlots()` so the cardio gate is current. Orphans
+    /// — from a routine whose plan was edited between sessions, or a slot
+    /// switched away from cardio in a previous process — are dropped in memory
+    /// and rewritten out of the store, so they cannot accumulate.
+    private func rehydrateCardioSegmentChecks() {
+        guard let store = cardioSegmentCheckStore else { return }
+        let persisted = store.loadAll()
+        guard !persisted.isEmpty else { return }
+
+        var restored: [UUID: Set<String>] = [:]
+        for block in plan.blocks {
+            for ex in block.exercises {
+                let slotID = ex.routineSlotID
+                guard persisted[slotID] != nil else { continue }
+                let live = store.checked(
+                    slotID: slotID, in: structuredCardioPlan(for: ex))
+                if live.isEmpty {
+                    store.clear(slotID: slotID)
+                } else {
+                    restored[slotID] = live
+                    // Rewrite so a partially-orphaned entry is pruned on disk
+                    // too, not just in memory.
+                    store.save(slotID: slotID, checked: live)
+                }
+            }
+        }
+        cardioSegmentChecksBySlotID = restored
+    }
+
+    /// Reconcile a slot's ticks with its post-switch plan.
+    ///
+    /// One rule covers all four switch directions, because the plan already
+    /// encodes them (`ExerciseSwitchPlanAdapter`): keep the ticks whose segment
+    /// is still in the slot's resolved plan, drop the rest.
+    ///
+    ///  * cardio → cardio, **Keep** — the plan was preserved, so every tick
+    ///    still matches and every tick survives.
+    ///  * cardio → cardio, **Reset** — the plan is the reset source's (normally
+    ///    none), so mismatched ticks go.
+    ///  * cardio → strength / timed hold — the adapter cleared the plan and the
+    ///    cardio gate is false, so the resolved plan is nil and every tick goes.
+    ///  * strength / timed hold → cardio — there were no ticks to keep, and the
+    ///    checklist appears only if the new plan has segments.
+    private func reconcileCardioSegmentChecks(slotID: UUID) {
+        guard let (bi, ei) = findSlotIndex(in: plan, routineSlotID: slotID)
+        else { return }
+        let resolved = structuredCardioPlan(
+            for: plan.blocks[bi].exercises[ei])
+        let kept = cardioSegmentCheckStore?
+            .checked(slotID: slotID, in: resolved) ?? []
+        if kept.isEmpty {
+            cardioSegmentChecksBySlotID[slotID] = nil
+            cardioSegmentCheckStore?.clear(slotID: slotID)
+        } else {
+            cardioSegmentChecksBySlotID[slotID] = kept
+            cardioSegmentCheckStore?.save(slotID: slotID, checked: kept)
+        }
     }
 
     /// Binding for one set's cardio draft. Writes straight through to
@@ -1305,6 +1427,11 @@ struct ActiveWorkoutView: View {
         dropWeightDraftStore?.clearAll()
         // Clear persisted parent working-set drafts as well
         parentDraftStore?.clearAll()
+        // Structured Cardio Slice 12D — and the checklist ticks. They are
+        // session progress, not a result: finishing must leave no trace of them
+        // anywhere, and there is nowhere else they could be, since they were
+        // never written to a SetLog or a WorkoutItem.
+        cardioSegmentCheckStore?.clearAll()
 
         // Fully terminate timers for this workout
         rest.stop()
@@ -1667,6 +1794,28 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    /// Structured Cardio Slice 12D — the read-only segment checklist.
+    ///
+    /// Renders nothing at all unless the slot's live exercise is cardio **and**
+    /// its resolved plan has segments, so a strength slot, a timed hold, and an
+    /// unstructured cardio slot each see exactly what they saw before this
+    /// slice. Placed below the Plan card and above Sets: it describes the same
+    /// prescription the card summarizes, and keeping it out of the Sets section
+    /// leaves the duration control and Log button where they were.
+    @ViewBuilder
+    private func cardioSegmentChecklistSection(
+        for exercise: PlanExercise
+    ) -> some View {
+        if let segmentPlan = structuredCardioPlan(for: exercise) {
+            CardioSegmentChecklistSection(
+                plan: segmentPlan,
+                distanceUnit: distanceUnit,
+                checkedIDs: cardioSegmentChecksBinding(
+                    slotID: exercise.routineSlotID)
+            )
+        }
+    }
+
     /// Equipment / Setup section. Equipment stays a read-only row sourced
     /// from the session-start snapshot for non-swapped slots (Phase 10).
     /// Setup notes read the live `Exercise.setupDefaults` (snapshot only as
@@ -2011,6 +2160,11 @@ struct ActiveWorkoutView: View {
 
                     // --- Plan summary (compact) + edit via sheet ---
                     planSummarySection(for: exercise)
+
+                    // --- Structured cardio checklist (Slice 12D) ---
+                    // Cardio slots with a segment plan only; everything else
+                    // renders nothing here.
+                    cardioSegmentChecklistSection(for: exercise)
 
                     // --- Equipment & Setup ---
                     // Equipment: prescriptionSnapshot.equipment captured at
@@ -2368,6 +2522,12 @@ struct ActiveWorkoutView: View {
                 //     stored metrics win over any stale draft.
                 refreshCardioSlots()
                 rehydrateCardioDrafts()
+                // 3b) Structured Cardio Slice 12D — restore the checklist
+                //     ticks. After (3a) so the cardio gate and the session
+                //     plans are both current; ticks that no longer name a
+                //     segment in the slot's resolved plan are dropped here
+                //     rather than rendered.
+                rehydrateCardioSegmentChecks()
 
                 // Persist active state for cold-restart resume
                 markAppStateActive()
@@ -2967,8 +3127,21 @@ struct ActiveWorkoutView: View {
         if !keepCardioDrafts {
             cardioDraftsBySlotID[slotID] = nil
             parentDraftStore?.clearCardio(slotID: slotID)
+            // Structured Cardio Slice 12D — the checklist ticks go with them,
+            // on the same verdict. An explicit Reset means start over, and a
+            // switch off cardio leaves the ticks describing a bout the slot is
+            // no longer doing. The routine's stored segment plan is untouched
+            // either way ("hidden but intact"), so switching back and re-ticking
+            // is always possible.
+            cardioSegmentChecksBySlotID[slotID] = nil
+            cardioSegmentCheckStore?.clear(slotID: slotID)
         }
         refreshCardioSlots()
+        // Then reconcile against whatever plan the slot now resolves to. For
+        // cardio → cardio "Keep" this is what preserves the ticks (the plan was
+        // preserved, so every id still matches); for every other direction the
+        // clear above already emptied them and this is a no-op.
+        reconcileCardioSegmentChecks(slotID: slotID)
         // Seeding deliberately does NOT happen here. It needs this slot's
         // cardio prefill to have been re-pointed at the switched-in exercise
         // first — otherwise it would seed from the *replaced* exercise's

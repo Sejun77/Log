@@ -108,6 +108,16 @@ and every target re-reads in the new unit; the distance itself does not change.
 A cardio slot starts at one set with no rest, and does not show warm-up steps,
 techniques, tempo, or the effort target, because those describe reps and weight.
 
+A cardio slot can also carry a plan made of segments — a warm-up, the work, a
+recovery, a cool-down. Open the slot's Structured Cardio row in the Prescription
+section and add them; each segment can have its own time, distance, incline,
+resistance, heart-rate zone, and note. During the workout the slot shows them as
+a Cardio Plan checklist above the set row, and you can tick segments off as you
+go. Ticks are kept if you Save & Exit and come back. It is a checklist, not a
+log: the ticks are not saved to your history, nothing has to be ticked before
+you log, and the bout is still recorded as one cardio set from the duration and
+Details fields.
+
 When you start the workout, the cardio set row fills in what you did last time:
 distance, incline or decline, and resistance. A distance you ran in a different
 unit is converted, so what you see is always in your current Settings unit. Average heart rate, heart-rate
