@@ -6,8 +6,9 @@ authors it, the workout shows it as a read-only checklist, completed History
 shows what was planned, and routine transfer carries it. **Logging is unchanged:
 one aggregate cardio `SetLog` per bout**, and History still reports that
 aggregate as the result. Only 12F (repeat UI, and per-segment actuals if the
-gate is met) remains — see §11–§14. Companion to `CARDIO_SYSTEM_DESIGN.md`,
-which covers Phase 1 (Slices 1–11, shipped).
+gate is met) remains, and is **deferred past this archive/TestFlight build** —
+see §16 for the shipped scope and §17 for what 12F holds. Companion to
+`CARDIO_SYSTEM_DESIGN.md`, which covers Phase 1 (Slices 1–11, shipped).
 
 **Scope:** how Log programs a cardio bout that has *shape* — warm-up, work,
 recovery, cool-down, and eventually intervals — without becoming a running app.
@@ -133,7 +134,7 @@ columns):
 |---|---|---|
 | `SlotPrescription` | `cardioSegmentsData: Data?` | the editable plan |
 | `PlannedPrescriptionSnapshot` | `cardioSegmentsData: Data?` | frozen at session start; what History shows |
-| `SessionPlan` (in-memory, `Codable`) | `cardioSegments: CardioSegmentPlan?` | the session's editable copy |
+| `SessionPlan` (in-memory, `Codable`) | ~~`cardioSegments: CardioSegmentPlan?`~~ **as built:** `cardioSegmentsData: Data?` | the session's editable copy. Shipped as the encoded payload so an unparseable plan rides through the session untouched instead of being rewritten; decoded at the read site by `structuredCardioPlan` (§13) |
 | `WorkoutItem` | *(none needed)* | the snapshot already hangs off the item |
 
 Two new optional columns, both `nil`-default. That is **lightweight migration
@@ -495,7 +496,7 @@ means the only slice that touches the schema does nothing else.
 | **12C** ✅ | `cardioSegmentsData` on `SlotPrescription` + `PlannedPrescriptionSnapshot`; `CardioRoutineRules.showsCardioSegments`; routine editor Segments screen; localization of the kind labels — **shipped, see §12** | **Yes** (2 additive optional columns) | **Yes** — schema slice |
 | **12D** ✅ | `SessionPlan` carry-through, snapshot at session start, active-workout checklist + tick persistence, switch-adapter rules. Logging path untouched — **shipped, see §13** | No | Yes — session/ownership |
 | **12E** ✅ | History detail "Cardio Plan" section; routine transfer payload; compatibility fixtures — **shipped, see §14** | No | Yes — transfer/compat |
-| **12F** | *Conditional.* Repeat-group UI; then, only if justified, per-segment actuals | Only if actuals ship | Yes |
+| **12F** ⏸️ | *Conditional — **deferred**, see §17.* Repeat-group UI; then, only if justified, per-segment actuals | Only if actuals ship | Yes |
 
 **12F gate.** Repeat UI ships when a tester asks for intervals twice. Per-segment
 actuals ship only if all three hold: (a) structured cardio is in real use, (b)
@@ -1165,3 +1166,67 @@ heading was renamed to match the checklist.
    it theoretical? This is the deciding input for 12F.
 4. Is a checklist without a timer usable mid-run, or does the tick target need to
    be bigger / at the top of the screen?
+
+---
+
+## 16. Current shipped scope, and what is deferred
+
+**Structured cardio is complete at the planned-segment + aggregate-logging
+level.** 12B–12E shipped; 12F is deferred past this archive/TestFlight build.
+
+### What ships
+
+| | |
+|---|---|
+| **Authoring** | A cardio routine slot carries an optional ordered segment plan — warm-up / work / recovery / cool-down, each with duration, distance, incline, resistance, HR zone and note. Editor: routine slot → **Structured Cardio** (§12) |
+| **During the workout** | A read-only **Cardio Plan** checklist directly above the set rows, listing the expanded segments. Ticking is progress, not a result (§13) |
+| **Tick persistence** | Session-scoped only: `CardioSegmentCheckStore`, per workout, restored through Save & Exit and cold resume, **dropped when the workout finishes** |
+| **After the workout** | History shows a **Cardio Plan** section built from the plan frozen at session start (§14) |
+| **Transfer** | Routine export/import carries the plan; `schemaVersion` unchanged, old documents still import (§14) |
+| **Logging** | **One aggregate cardio `SetLog` per bout**, exactly as Phase 1 — distance, duration, calories, HR, zone, incline, resistance |
+
+### Four claims worth restating, because each is a thing the app must never do
+
+1. **`repeatCount` exists everywhere except the editor.** The field is in the
+   payload, the decoder, the expansion, the checklist, History and the transfer
+   document, and is round-trip-tested. Only the **authoring UI** is deferred: the
+   12C editor writes exactly one group with `repeatCount == 1`. A repeated plan
+   written by a future build — or by hand, or arriving in a transfer document —
+   reads and renders correctly *today*. That is the whole point of §1.1: design
+   the payload for repeats now, expose repeats later, and migrate nothing.
+2. **Segment-level actual logging does not exist.** No per-segment result is
+   stored, derived or displayed anywhere. A segment is a target and only a
+   target (§2.6). The additive path when it ships is `segmentActualsData: Data?`
+   on `SetLog` — one row, an optional breakdown inside it — so totals stay the
+   source of truth for every existing reader.
+3. **Checklist ticks are draft-only and never appear in History.** They live in
+   one per-workout `UserDefaults` key, they are cleared on finish/discard, and
+   there is no code path from that store to a `SetLog`, a `WorkoutItem` or a
+   `Workout`. History renders the *plan*; `CardioPlannedSegmentRow` has no
+   completion field and nothing to populate one from. A tick is not a
+   measurement, and History must never imply the app observed something it did
+   not (§4.4).
+4. **Charts and every other reader still use aggregate `SetLog` fields.**
+   `CardioProgressAnalytics` sums `SetLog`; segments are not `SetLog`s, so the
+   Slice 11 charts produce identical points with and without a plan. The same
+   holds for History row summaries, cardio prefill, and both CSV exports. The
+   honest cost is unchanged and stated once in §5: a 5 × (1/2) session charts as
+   one average pace, which understates the hard efforts.
+
+## 17. Deferred after archive/TestFlight (12F)
+
+Deferred means **decided, not forgotten**: none of it is blocked, and none of it
+requires reworking what shipped.
+
+| Deferred | Status |
+|---|---|
+| **Repeat authoring UI** | Everything below the UI already handles `repeatCount`. Ships when a tester asks for intervals twice |
+| **Segment-level actual logging** | Gated on §9's three criteria — real use, testers reporting the aggregate-pace problem, *and* a design pass answering what it does to History rows, charts, prefill and CSV. Absent the third, it does not start |
+| **Segment-level analytics and charts** | Nothing to chart until actuals exist |
+| **Segment-level CSV / History export** | Same dependency. Both CSVs stay aggregate by design (§6) |
+| **Automatic / live segment progression** | A per-segment timer is the feature that turns a gym log into an interval-timer app (§4.5). The treadmill has a clock |
+| **In-workout segment editing** | Authoring stays in the routine editor; a second editor on the active screen is how the highest-risk screen regresses (§13) |
+
+Every §10 non-goal — GPS, route maps, HealthKit, Apple Watch, automatic
+tracking of any kind, sensor streaming, training-plan engines, VO₂ max — remains
+a non-goal and is not part of 12F.

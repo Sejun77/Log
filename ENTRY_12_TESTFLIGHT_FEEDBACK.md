@@ -294,6 +294,28 @@ own, not a beta patch. Logging cardio as duration + notes keeps the data
 capturable now without freezing a schema that a proper cardio phase would want
 to change.
 
+> **Resolved since this entry was written — the cardio phase shipped.** Every
+> metric listed above now has a dedicated field, plus HR zone, and the phase went
+> further than the deferral anticipated: Settings-only distance units, cardio
+> routine targets, exercise-switch compatibility, previous-performance prefill,
+> CSV and routine-transfer support, a catalogue v3 seed with a one-time assisted
+> migration prompt, cardio History charts, and structured cardio **planned
+> segments** — a routine-authored plan that shows as a Cardio Plan checklist
+> during the workout and in History afterwards. Slices 1–12E, recorded in
+> `docs/CARDIO_SYSTEM_DESIGN.md` and `docs/STRUCTURED_CARDIO_DESIGN.md`.
+>
+> The prediction that it needed "a phase of its own, not a beta patch" held. So
+> did the schema caution: every column landed additive and nil-defaulted, with no
+> `SchemaMigrationPlan` written.
+>
+> **Still deferred (Slice 12F):** repeat/interval authoring UI, per-segment
+> actual logging and the analytics, charts and export that depend on it,
+> automatic or live segment progression, and every GPS / HealthKit / Apple Watch
+> non-goal. A cardio bout is still logged as **one aggregate set**.
+>
+> The historical text above is left as written — it records what testers were
+> told at the time.
+
 ---
 
 ## What I Learned
