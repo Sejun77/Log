@@ -58,8 +58,15 @@ struct RootTabView: View {
 
     // MARK: - Tabs
 
+    // Each tab's content root carries a stable `screen_*` accessibility
+    // identifier so UI tests can assert which screen rendered without matching
+    // localized titles (the app ships `ko` as well as `en`). Identifiers set
+    // inside `.tabItem` are dropped by SwiftUI and never reach the tab-bar
+    // button, so LogUITests selects tabs by index and verifies the destination
+    // with these identifiers instead.
     private var routinesTab: some View {
         RoutinesView(resumeNavigationTrigger: $triggerResumeNavigation)
+            .accessibilityIdentifier("screen_routines")
             .tag(Tab.routines)
             .tabItem {
                 Label("Routines", systemImage: "list.bullet.rectangle")
@@ -68,6 +75,7 @@ struct RootTabView: View {
 
     private var exercisesTab: some View {
         ExercisesView()
+            .accessibilityIdentifier("screen_exercises")
             .tag(Tab.exercises)
             .tabItem {
                 Label("Exercises", systemImage: "dumbbell")
@@ -76,6 +84,7 @@ struct RootTabView: View {
 
     private var historyTab: some View {
         HistoryView()
+            .accessibilityIdentifier("screen_history")
             .tag(Tab.history)
             .tabItem {
                 Label("History", systemImage: "calendar")
@@ -84,6 +93,7 @@ struct RootTabView: View {
 
     private var settingsTab: some View {
         SettingsView()
+            .accessibilityIdentifier("screen_settings")
             .tag(Tab.settings)
             .tabItem {
                 Label("Settings", systemImage: "gear")
