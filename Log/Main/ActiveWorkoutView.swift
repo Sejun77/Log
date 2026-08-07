@@ -2161,11 +2161,6 @@ struct ActiveWorkoutView: View {
                     // --- Plan summary (compact) + edit via sheet ---
                     planSummarySection(for: exercise)
 
-                    // --- Structured cardio checklist (Slice 12D) ---
-                    // Cardio slots with a segment plan only; everything else
-                    // renders nothing here.
-                    cardioSegmentChecklistSection(for: exercise)
-
                     // --- Equipment & Setup ---
                     // Equipment: prescriptionSnapshot.equipment captured at
                     // session start (Phase 10) for non-swapped slots. Setup:
@@ -2185,6 +2180,16 @@ struct ActiveWorkoutView: View {
                                 .font(.dsBody)
                         }
                     }
+
+                    // --- Structured cardio checklist (Slice 12D) ---
+                    // Deliberately the LAST thing before the set rows: it is
+                    // the plan you read while the bout is running, so it
+                    // belongs against the rows you tick it beside — not up by
+                    // the Plan card, where Equipment & Setup pushed it a
+                    // scroll away from them. Cardio slots with a segment plan
+                    // only; everything else renders nothing here, so no other
+                    // section moved.
+                    cardioSegmentChecklistSection(for: exercise)
 
                     // --- Sets section ---
                     Section {
@@ -2938,6 +2943,23 @@ struct ActiveWorkoutView: View {
             : (planEx.isTimeBased ? .timedHold : .strength)
         let newMode = newEx.trackingMode
 
+        // Structured Cardio Slice 12D note — why **Reset** always drops the
+        // segment plan today, and why that is not a bug:
+        //
+        // A structured plan is a property of the *routine slot*
+        // (`SlotPrescription.cardioSegmentsData`), not of an `Exercise` — there
+        // is no such column on the exercise, because the same treadmill is
+        // programmed differently in different routines. So a switched-in
+        // exercise brings no plan with it, and `ResetSource.appDefaults`
+        // deliberately supplies none, exactly as it supplies no target
+        // distance (Slice 6): "reset" means the values a freshly-authored slot
+        // for this exercise would have, and inventing a session structure the
+        // user never wrote would be programming on their behalf.
+        //
+        // The adapter *does* apply a reset source's plan when one is supplied
+        // (pinned by the 12D reset tests), so the day a caller has a real
+        // replacement plan to offer — a routine-slot-sourced reset — the
+        // checklist will show it with no change here.
         let outcome = ExerciseSwitchPlanAdapter.outcome(
             choice: resetPlan ? .resetPlan : .keepCurrentPlan,
             current: sessionPlans[slotID],
@@ -2950,6 +2972,13 @@ struct ActiveWorkoutView: View {
         swapExercise(
             planExercise: planEx, with: newEx,
             keepCardioDrafts: outcome.keepCardioDrafts)
+
+        // The switch has just deleted this slot's logged sets (and possibly a
+        // superset partner's, via the round-order cascade). A rest counting
+        // down from one of those sets is now counting down from nothing, so
+        // stop it before it fires a notification for an exercise the slot no
+        // longer holds.
+        cancelStaleRestAfterExerciseSwitch()
 
         // A) After reset+swap, if the new exercise has no templates and the
         //    (now-empty) session plan has no sets, auto-open the Edit Plan
@@ -2964,6 +2993,41 @@ struct ActiveWorkoutView: View {
 
         pendingSwapNewExercise = nil
         exerciseToSwapIndex = nil
+    }
+
+    /// Stop a rest timer that the just-committed exercise switch orphaned.
+    ///
+    /// The bug this closes: log a set, then switch that slot's exercise. The
+    /// switch deletes the slot's `WorkoutItem` and every `SetLog` under it, but
+    /// nothing told the rest timer — so the clock kept running, the Live
+    /// Activity kept counting, and the scheduled local notification fired for a
+    /// set that no longer existed on an exercise that was no longer there.
+    ///
+    /// The rest's owning slot comes from `AppState.activeRestSlotID` — the same
+    /// value `startRestWithPersistence` writes and `restoreStableRestID` reads
+    /// back on a cold resume — so this works identically after a relaunch. The
+    /// decision itself is the pure `shouldCancelRestAfterExerciseSwitch`, which
+    /// asks only whether the resting slot still has a logged set: a rest
+    /// belonging to an untouched slot survives, so logging without switching is
+    /// completely unaffected.
+    ///
+    /// `rest.stop()` cancels the pending **and** delivered notification for the
+    /// stable id and returns the Live Activity to its neutral session state —
+    /// the existing cancellation path, reused rather than reimplemented. Rest
+    /// *rules* (prescription rest, `RestPlanner`) are untouched: this only ends
+    /// a rest that already lost its set.
+    private func cancelStaleRestAfterExerciseSwitch() {
+        let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
+        guard
+            shouldCancelRestAfterExerciseSwitch(
+                isRestRunning: rest.isRunning,
+                restSlotID: appState.activeRestSlotID,
+                loggedSetsBySlotID: loggedByExercise)
+        else { return }
+
+        rest.stop()
+        clearPersistedRestState()
+        showRestOverlay = false
     }
 
     /// Write an `ExerciseSwitchPlanAdapter.Outcome` into the slot's live state.

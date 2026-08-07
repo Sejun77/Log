@@ -791,11 +791,16 @@ This is the claim the slice turns on, and it is pinned by
 
 ### The checklist
 
-A **Cardio Plan** section between the Plan card and the Sets section, rendered
-only when the slot's *live* exercise is cardio **and** its resolved plan has
-segments. Strength slots, timed holds, and unstructured cardio slots construct
-nothing, so "no new UI for everyone else" is structural rather than a matter of
-testing every path.
+A **Cardio Plan** section **immediately above the Sets section** — after the
+Plan card, Equipment & Setup, and Warmup — rendered only when the slot's *live*
+exercise is cardio **and** its resolved plan has segments. Strength slots, timed
+holds, and unstructured cardio slots construct nothing, so "no new UI for
+everyone else" is structural rather than a matter of testing every path, and no
+other section moved to make room.
+
+The position is the point: it is the plan you read *while the bout is running*,
+so it belongs against the rows you tick it beside. Sitting up by the Plan card
+put Equipment & Setup between the checklist and the set it describes.
 
 ```
 Cardio Plan
@@ -803,8 +808,15 @@ Cardio Plan
     ✓  Warm-up      5m
     ○  Work        20m · 1%
     ○  Cool-down    5m
-  A checklist for this bout. Ticks are not saved to your history.
 ```
+
+**No explanatory footer.** An earlier revision carried "A checklist for this
+bout. Ticks are not saved to your history." under the section; it was removed
+before merge, along with its localization key. It described the app's internals
+on the one screen where the user is mid-workout and not reading, and the
+behaviour it claimed is enforced in code rather than by the caption
+(`CardioSegmentCheckStore` is the only writer, and it cannot reach a `SetLog`).
+The User Guide is where it is explained.
 
 - Rows are `plan.expandedSegments()` in order — the pure 12B function, so
   repeats flatten with no second implementation.
@@ -870,6 +882,23 @@ The §7.5 table, implemented — the plan follows `targetDistanceMeters` exactly
 | cardio → timed hold / strength | dropped from the session plan | cleared |
 | strength / timed hold → cardio | none seeded | none to keep |
 
+**Why Reset always drops the plan today — and why that is correct.** A
+structured plan belongs to the routine *slot*, not to an `Exercise`: there is no
+`cardioSegmentsData` on `Exercise`, because the same treadmill is programmed
+differently in different routines. A switched-in exercise therefore brings no
+plan with it, and `ResetSource.appDefaults` deliberately supplies none — the
+same rule that makes Reset drop the target distance (Slice 6). "Reset" means the
+values a freshly-authored slot for this exercise would have, and inventing a
+session structure the user never wrote would be programming on their behalf.
+
+The adapter *does* apply a reset source's plan whenever one is supplied, so the
+day a caller has a real replacement to offer the checklist will show it with no
+change to the adapter. Both directions are pinned through the resolver — the
+same two-tier read the view's visibility gate uses, so a stale tier-2 payload
+cannot resurrect a dropped plan:
+`testResetToCardioWithAStructuredSourcePlanShowsTheReplacementPlan` and
+`testResetToCardioWithoutASourcePlanHidesTheChecklist`.
+
 `Outcome.keepCardioDrafts` gates the ticks as well as the typed metrics: the
 question ("does this slot's session-scoped cardio state still describe what is
 being done?") and the truth table are identical, and a second flag with the same
@@ -884,6 +913,23 @@ plan would reappear via tier-2 resolution on the next resume.
 
 The routine's stored plan is never touched by a switch — "hidden but intact", so
 switching back restores it.
+
+**Stale rest, fixed with the switch (not a structured-cardio bug, but found
+here).** A switch deletes the slot's `WorkoutItem` and every `SetLog` under it,
+and the superset cascade can clear a partner's too — but nothing told the rest
+timer, so a rest started by the just-logged set kept running and fired a
+notification for a set that no longer existed. `performPendingSwap` now ends it
+via the pure `shouldCancelRestAfterExerciseSwitch`, which asks **"does the
+resting slot still have a logged set"** rather than "was this slot switched".
+That framing covers the cascade case for free and leaves normal rest untouched:
+a rest on a slot that still has its logs keeps running, so logging without
+switching is unaffected. The rest's owner comes from `AppState.activeRestSlotID`
+(so it works after a cold resume); an unattributable rest is left alone, and
+`rest.stop()` — the existing cancellation path — cancels the pending and
+delivered notification and returns the Live Activity to neutral. Rest *rules*
+(prescription rest, `RestPlanner`) are untouched. This applies to every
+tracking mode, not just cardio, because the defect was never cardio-specific;
+cardio simply surfaces it every time, since a cardio slot prescribes no rest.
 
 ### Active Edit Plan
 

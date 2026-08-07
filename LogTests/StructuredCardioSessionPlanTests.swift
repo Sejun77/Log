@@ -577,6 +577,115 @@ final class StructuredCardioSessionPlanTests: SwiftDataTestHarness {
         XCTAssertEqual(after.structuredCardioPlan?.expandedCount, 3)
     }
 
+    // MARK: - 7a. Reset, resolved the way the checklist sees it
+
+    /// What the view's visibility gate actually reads after a switch: the
+    /// adapted session plan **and** the adapted snapshot, through
+    /// `plannedCardioSegments`. Asserting on `outcome.sessionPlan` alone would
+    /// miss a stale tier-2 payload resurrecting a plan the switch dropped.
+    private func resolvedPlanAfterSwitch(
+        _ choice: Adapter.Choice,
+        from oldMode: TrackingMode,
+        to newMode: TrackingMode,
+        current: SessionPlan?,
+        resetSource: Adapter.ResetSource? = nil
+    ) -> CardioSegmentPlan? {
+        let outcome = switchOutcome(
+            choice, from: oldMode, to: newMode, current: current,
+            resetSource: resetSource)
+        var base = PrescriptionSnapshotPayload.empty
+        base.cardioSegmentsData = current?.cardioSegmentsData
+        return SessionPlanResolver.plannedCardioSegments(
+            sessionPlan: outcome.sessionPlan,
+            snapshot: Adapter.adaptedSnapshot(
+                from: outcome, base: base, equipment: nil, setupNotes: nil))
+    }
+
+    /// **Reset onto a cardio exercise whose source carries a plan → that plan
+    /// is what the checklist shows.**
+    func testResetToCardioWithAStructuredSourcePlanShowsTheReplacementPlan()
+        throws
+    {
+        var source = Adapter.ResetSource.appDefaults(for: .cardio)
+        source.cardioSegmentsData = try encoded(repeatedPlan())
+
+        let resolved = try XCTUnwrap(
+            resolvedPlanAfterSwitch(
+                .resetPlan, from: .cardio, to: .cardio,
+                current: try structuredCardioSessionPlan(),
+                resetSource: source))
+
+        XCTAssertEqual(resolved.expandedCount, 10)
+        XCTAssertEqual(
+            resolved.groups.first?.repeatCount, 5,
+            "the replacement plan, not the one the slot had")
+    }
+
+    /// **Reset onto a cardio exercise with no source plan → no checklist.**
+    ///
+    /// This is the reviewed "the plan disappears" observation, and it is
+    /// correct: a structured plan lives on the routine *slot*, not on an
+    /// `Exercise`, so a switched-in exercise brings none, and
+    /// `ResetSource.appDefaults` deliberately supplies none — the same rule
+    /// that makes Reset drop the target distance (Slice 6).
+    func testResetToCardioWithoutASourcePlanHidesTheChecklist() throws {
+        XCTAssertNil(
+            resolvedPlanAfterSwitch(
+                .resetPlan, from: .cardio, to: .cardio,
+                current: try structuredCardioSessionPlan()),
+            "no source plan means no checklist — expected, not a regression")
+    }
+
+    /// Pins the reason: app defaults carry no structured plan, by design.
+    func testAppDefaultsCarryNoStructuredPlanForAnyMode() {
+        for mode in [TrackingMode.cardio, .strength, .timedHold] {
+            XCTAssertNil(
+                Adapter.ResetSource.appDefaults(for: mode).cardioSegmentsData,
+                "app defaults never invent a session structure (\(mode))")
+        }
+    }
+
+    /// The Keep counterpart, resolved the same way — so the pair of
+    /// expectations the review asked about is asserted against one code path.
+    func testKeepOnCardioToCardioStillResolvesToTheSamePlan() throws {
+        let current = try structuredCardioSessionPlan()
+
+        let resolved = try XCTUnwrap(
+            resolvedPlanAfterSwitch(
+                .keepCurrentPlan, from: .cardio, to: .cardio, current: current))
+
+        XCTAssertEqual(resolved, current.structuredCardioPlan)
+    }
+
+    /// A corrupt payload behaves as no plan on the reset path too — the gate
+    /// the checklist reads must never throw.
+    func testResetWithACorruptSourcePayloadResolvesAsNoPlan() throws {
+        var source = Adapter.ResetSource.appDefaults(for: .cardio)
+        source.cardioSegmentsData = Data("{{{".utf8)
+
+        XCTAssertNil(
+            resolvedPlanAfterSwitch(
+                .resetPlan, from: .cardio, to: .cardio,
+                current: try structuredCardioSessionPlan(),
+                resetSource: source))
+    }
+
+    /// Reset must still clear the cardio drafts and the target distance — the
+    /// Slice 5/6 behaviour the structured plan rides alongside.
+    func testResetStillClearsTargetDistanceAndCardioDrafts() throws {
+        var source = Adapter.ResetSource.appDefaults(for: .cardio)
+        source.cardioSegmentsData = try encoded(flatPlan())
+
+        let outcome = switchOutcome(
+            .resetPlan, from: .cardio, to: .cardio,
+            current: try structuredCardioSessionPlan(), resetSource: source)
+
+        XCTAssertNil(outcome.sessionPlan.targetDistanceMeters)
+        XCTAssertFalse(
+            outcome.keepCardioDrafts,
+            "an explicit Reset discards typed metrics and ticks alike")
+    }
+
     /// Tier 2 must agree with tier 1 after a switch. Leaving the replaced
     /// exercise's segments on the snapshot is exactly how a cleared plan would
     /// reappear on the next resume.

@@ -62,12 +62,13 @@ struct CardioSegmentChecklistSection: View {
             }
         } header: {
             Text("Cardio Plan")
-        } footer: {
-            Text(
-                "A checklist for this bout. Ticks are not saved to your history."
-            )
-            .font(.dsCaption)
         }
+        // No explanatory footer. "Ticks are not saved to your history" is a
+        // statement about the app's internals, and the active screen is the
+        // one place a user is not reading. The behaviour it described is
+        // unchanged and enforced in code (`CardioSegmentCheckStore` is the only
+        // writer, and it cannot reach a `SetLog`); the User Guide is where it
+        // is explained.
     }
 
     // MARK: - Rows
