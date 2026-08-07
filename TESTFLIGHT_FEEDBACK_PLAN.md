@@ -96,7 +96,13 @@ the end.
 - [ ] Check History
 - [ ] Check the progress charts
 - [ ] *(optional)* Switch an exercise during a workout
-- [ ] *(optional)* Log a cardio exercise (duration-based), with the details in notes
+- [ ] *(optional)* Log a cardio exercise — duration, then open **Details** to add
+      distance, heart rate, calories, incline, or resistance
+- [ ] *(optional)* Set a distance target on a cardio routine slot, and check the
+      distance unit (km / mi) in Settings
+- [ ] *(optional)* Build a **Structured Cardio** plan on a cardio slot (warm-up /
+      work / cool-down), tick it off during the workout, then look for the
+      **Cardio Plan** section in History afterwards
 - [ ] *(optional)* Try the Korean UI
 - [ ] *(optional)* Try an uneven superset (different set counts per exercise), if comfortable
 
@@ -160,9 +166,48 @@ Testers should know this going in:
 - UI polish may continue during and after this beta.
 - Broader distribution is deferred until this small beta is useful and settled.
 - Korean translations are new and may need refinement.
-- Cardio is supported as duration-based logging only. Details like distance,
-  speed, incline, resistance, or heart-rate zone go in notes; there are no
-  dedicated cardio fields yet.
+- Cardio ~~is supported as duration-based logging only~~ **now has dedicated
+  fields** (see below); the "details go in notes" limitation above applied to the
+  first beta build only.
+
+### Cardio, as it stands
+
+What testers can use:
+
+- **Dedicated cardio exercises** — Time-based + Cardio, with Walking, Treadmill
+  Run/Walk, Stationary Bike, Elliptical, Stair Climber and Rowing Machine seeded.
+  If you used an earlier build, the app offers **once** to convert the cardio
+  exercises you already have; declining changes nothing.
+- **Logging** — duration, plus optional distance, average heart rate, heart-rate
+  zone, calories, incline/decline and resistance under **Details**. Pace and
+  speed are derived as you type.
+- **Distance unit** — chosen once in Settings (km / mi) and used everywhere.
+  Changing it re-reads every existing number; nothing stored changes.
+- **Routine targets** — a cardio slot can carry a target distance, and starts at
+  one set with no rest.
+- **Prefill** — a cardio set starts from what you did last time (distance,
+  incline, resistance), never from that session's *results* (heart rate, zone,
+  calories).
+- **History** — a per-bout summary line, plus distance / duration / pace /
+  calories / average-heart-rate series in the Progression chart.
+- **Structured cardio** — a cardio slot can carry a planned segment list
+  (warm-up / work / recovery / cool-down). It shows as a **Cardio Plan**
+  checklist during the workout, the ticks survive Save & Exit, and completed
+  History shows the plan the workout was started with.
+- **Routine transfer** — exported/imported routines keep their structured
+  segments; routine files from older builds still import.
+
+Known deferrals — please don't report these as bugs:
+
+- **Repeat / interval authoring** (`5 × (1 min hard / 2 min easy)`) has no editor
+  yet. A plan is an ordered list of segments.
+- **Per-segment results.** The checklist is a plan you tick, not a log: ticks are
+  not saved to History, and a bout is recorded as **one cardio set**. So an
+  interval session charts as one average pace.
+- **No GPS, route maps, HealthKit, Apple Watch, or automatic tracking** of any
+  kind. Every number is one you enter.
+- **No segment-level charts, analytics, or CSV columns** — the exports and charts
+  are per-bout.
 
 ---
 

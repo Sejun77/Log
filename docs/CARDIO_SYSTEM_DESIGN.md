@@ -1,12 +1,23 @@
 # Cardio System Design
 
-**Status:** design only — no app code written for this document.
-**Date:** 2026-08-02
+**Status:** ✅ **shipped — Slices 1 through 12E.** Written as a design document
+and kept as the record of what was built and why; the implementation notes under
+each section say what each slice settled.
+**Date:** 2026-08-02 (design); last updated after Slice 12E.
 **Supersedes:** the "structured cardio metrics" entry under Deferred Feedback in
 `ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
 **Companion:** [`STRUCTURED_CARDIO_DESIGN.md`](STRUCTURED_CARDIO_DESIGN.md) —
-structured cardio (segments and intervals), design-complete as Slice 12A,
-unimplemented. This document covers Phase 1, Slices 1–11, all shipped.
+structured cardio (planned segments), shipped through Slice 12E. This document
+covers Phase 1, Slices 1–11.
+
+**Current milestone scope.** Cardio is complete at the **aggregate-logging**
+level: a bout is programmed with a duration, a distance target and an optional
+planned segment structure, and it is logged as **one aggregate cardio `SetLog`**
+carrying distance, duration, calories, heart rate, HR zone, incline and
+resistance. Everything downstream — History summaries, the Slice 11 charts, CSV,
+prefill — reads that one row. **Slice 12F is deferred** (repeat authoring UI,
+per-segment actuals and the analytics that would depend on them); see
+`STRUCTURED_CARDIO_DESIGN.md` §17.
 
 ---
 
@@ -1290,6 +1301,11 @@ distance:
   rep-structured; the duration filter already removes most, and the rest are
   noise on a treadmill.
 - **Tempo** — suppressed, as it already was for every duration slot.
+- **Structured Cardio** — added by Slice 12C, shown only for `.cardio`: an
+  optional ordered list of planned segments (warm-up / work / recovery /
+  cool-down), each with its own duration, distance, incline, resistance, HR zone
+  and note. Optional and nil by default, so a cardio slot that ignores it behaves
+  exactly as it did in Phase 1. See `STRUCTURED_CARDIO_DESIGN.md`.
 
 All four suppressions are display-only; see the Slice 5 implementation notes.
 
@@ -1354,8 +1370,19 @@ Rules:
   the compatibility guarantee for every existing cardio log.**
 - Pace/speed are computed at render; a row with distance but no duration (or
   vice versa) simply omits the derived segment.
-- Distance displays in the row's own `distanceUnitRaw`, not the current global
-  setting, so history does not shift meaning when the user changes units.
+- ~~Distance displays in the row's own `distanceUnitRaw`, not the current global
+  setting, so history does not shift meaning when the user changes units.~~
+  **Reversed before the Settings slice merged** — History converts to the
+  Settings unit like every other surface, so a list cannot mix `3.1 mi` and
+  `5 km` rows. `distanceMeters` is what was recorded and never moves; the unit is
+  a lens, and it belongs to the reader. See §2.37.
+
+**Cardio Plan (Slice 12E).** A completed cardio item whose frozen snapshot
+carries a structured plan also renders a read-only **Cardio Plan** block above
+its logged rows, showing the segments the workout was *started with*. It is the
+plan, never a record of which segments were done: the active checklist's ticks
+are session-scoped draft state and never reach a workout. See
+`STRUCTURED_CARDIO_DESIGN.md` §14.
 
 ### 3.4 Charts
 
@@ -1708,21 +1735,32 @@ independently committable, additive-first.
 | 12B | ✅ Structured cardio **pure value types** — `StructuredCardioPlan.swift`: segments, groups, bounds, expansion, summaries. No persistence, no UI, no export | Pure-first, exactly like Slice 1: the type is proven before anything depends on it |
 | 12C | ✅ Structured cardio **persistence + routine authoring** — `cardioSegmentsData` on `SlotPrescription`/`PlannedPrescriptionSnapshot`, the Structured Cardio editor, duplication. Nothing in-workout, in History, or in any export | The one schema-touching slice of the structured plan; additive optional columns, lightweight migration verified on a real store |
 | 12D | ✅ Structured cardio **in the workout** — `SessionPlan` carry-through, the frozen session snapshot, the read-only Cardio Plan checklist, tick persistence, exercise-switch rules. **Logging is untouched: still one aggregate cardio `SetLog`** | No schema change; the plan the user authored in 12C finally does something during a workout, without the log gaining a single row |
-| 12E | ✅ Structured cardio **after the workout** — History "Planned" section from the frozen snapshot, additive `cardioSegments` on the routine transfer payload (no `schemaVersion` bump). Planned segments only; no tick state, no per-segment actuals, no CSV or chart change | Reads what 12C/12D already froze; History rows, cardio metrics and the Slice 11 charts all still come from the aggregate `SetLog` |
+| 12E | ✅ Structured cardio **after the workout** — History "Cardio Plan" section from the frozen snapshot, additive `cardioSegments` on the routine transfer payload (no `schemaVersion` bump). Planned segments only; no tick state, no per-segment actuals, no CSV or chart change | Reads what 12C/12D already froze; History rows, cardio metrics and the Slice 11 charts all still come from the aggregate `SetLog` |
+| 12F | ⏸️ **Deferred** — repeat authoring UI; per-segment actuals and the analytics, charts and export that would depend on them | Not blocked and not abandoned: gated on beta feedback (§15 of `STRUCTURED_CARDIO_DESIGN.md`). Everything below the UI already carries `repeatCount`, so the interval editor is additive whenever it ships |
 
 Slices 1–8 are Phase 1. Slice 6 is the one most tempting to defer and the one
 most likely to reintroduce a known bug; it ships with Phase 1 or Phase 1 does not
 ship.
 
+**Slices 1–12E are shipped**, which is the whole of cardio at the
+aggregate-logging level. 12F is the only remaining item and is deliberately
+deferred past this archive/TestFlight build.
+
 ---
 
 ## 9. Open questions
 
-Resolve before Slice 1, not during:
+Written to be resolved before Slice 1. All but two now are; the survivors are
+questions **for testers**, not for implementation, and are the input that
+decides whether 12F ships.
 
-1. **Default sets for a cardio slot: 1, or `AppSettings.defaultSets`?** This
-   document assumes 1. If users build interval-ish cardio out of multiple sets
-   today, that assumption is wrong and should be checked against beta feedback.
+1. ~~**Default sets for a cardio slot: 1, or `AppSettings.defaultSets`?**~~
+   **Resolved: 1**, shipped in Slice 5 (`CardioRoutineRules.defaultSets`). The
+   "interval-ish cardio out of multiple sets" worry it raised is answered by
+   structured cardio rather than by set count: an interval session is one bout
+   with shape, and the segment plan is where that shape lives
+   (`STRUCTURED_CARDIO_DESIGN.md` §2.6). Whether users reach for it is question
+   3 there.
 2. ~~**Is the assisted migration prompt worth its complexity?**~~ **Resolved:
    yes, and it cost less than feared.** Slice 10 shipped it as one service
    (~130 lines, no UI of its own) plus a four-string `.alert`, because the
@@ -1739,7 +1777,10 @@ Resolve before Slice 1, not during:
    real session pace, and distance sits one tap away in the same picker. The
    secondary-axis mitigation is still the fix if beta feedback says it misleads.
 4. **Should `hrZone` and `avgHeartRate` both exist?** They serve different
-   equipment. If beta testers only ever use one, drop the other in Slice 3.
+   equipment. **Still open, and now a tester question rather than a Slice 3
+   one:** both shipped — on the active Details row, in History summaries, in
+   CSV, and as chart metrics — so dropping either is no longer free. If beta
+   feedback shows only one is ever used, retiring the other is its own slice.
 5. ~~**Should decline (negative incline) be supported?**~~ **Resolved: yes.**
    `inclinePercent` accepts `[-30, 100]`. Settled during Slice 1, before any
    cardio UI existed, so the entry field is built signed rather than retrofitted.
