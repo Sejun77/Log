@@ -118,6 +118,15 @@ log: the ticks are not saved to your history, nothing has to be ticked before
 you log, and the bout is still recorded as one cardio set from the duration and
 Details fields.
 
+After the workout, History shows that plan again under Cardio Plan, above the
+logged sets. It is the plan the workout was started with, so editing the routine
+later never changes what an older workout says it planned. These are planned
+segments only — not a record of which ones you did. Your ticks are not shown,
+and what was logged stays the single cardio set with its distance, duration,
+pace, calories, and heart rate. Routines you export and import carry their
+structured segments with them; older routine files without them still import as
+before.
+
 When you start the workout, the cardio set row fills in what you did last time:
 distance, incline or decline, and resistance. A distance you ran in a different
 unit is converted, so what you see is always in your current Settings unit. Average heart rate, heart-rate

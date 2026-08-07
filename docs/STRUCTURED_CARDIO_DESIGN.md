@@ -1,12 +1,13 @@
 # Structured Cardio — Design
 
-**Status:** design complete (Slice 12A). **Slices 12B, 12C and 12D shipped** —
-the value types exist, a cardio routine slot can carry a segment plan, the
-routine editor authors it, and the workout now shows it as a read-only
-checklist. **Logging is unchanged: one aggregate cardio `SetLog` per bout.**
-Nothing appears in History or in any export yet (see §11–§13).
-Companion to `CARDIO_SYSTEM_DESIGN.md`, which covers Phase 1
-(Slices 1–11, shipped).
+**Status:** design complete (Slice 12A). **Slices 12B–12E shipped** — the value
+types exist, a cardio routine slot can carry a segment plan, the routine editor
+authors it, the workout shows it as a read-only checklist, completed History
+shows what was planned, and routine transfer carries it. **Logging is unchanged:
+one aggregate cardio `SetLog` per bout**, and History still reports that
+aggregate as the result. Only 12F (repeat UI, and per-segment actuals if the
+gate is met) remains — see §11–§14. Companion to `CARDIO_SYSTEM_DESIGN.md`,
+which covers Phase 1 (Slices 1–11, shipped).
 
 **Scope:** how Log programs a cardio bout that has *shape* — warm-up, work,
 recovery, cool-down, and eventually intervals — without becoming a running app.
@@ -371,7 +372,7 @@ render — the same rule the cardio Details row already follows.
 | Surface | Change |
 |---|---|
 | History **row** summary | **None.** Aggregate duration/distance/pace, exactly as Slice 3 built it |
-| History **detail** | Adds a read-only **Planned** section from the frozen snapshot, labelled as the plan — never presented as what happened |
+| History **detail** | Adds a read-only **Cardio Plan** section from the frozen snapshot, labelled as the plan — never presented as what happened |
 | Slice 11 **charts** | **None.** `CardioProgressAnalytics` sums `SetLog` fields; segments are not `SetLog`s |
 | Pace / distance / duration aggregation | **None.** Session totals, unchanged |
 | Calories / heart rate | **None.** Still per-bout aggregates |
@@ -493,7 +494,7 @@ means the only slice that touches the schema does nothing else.
 | **12B** ✅ | Pure `CardioSegment` / `CardioSegmentGroup` / `CardioSegmentPlan`, validation, bounds, `expandedSegments()`, summary text. No UI, no persistence — **shipped, see §11** | No | Yes (pure) |
 | **12C** ✅ | `cardioSegmentsData` on `SlotPrescription` + `PlannedPrescriptionSnapshot`; `CardioRoutineRules.showsCardioSegments`; routine editor Segments screen; localization of the kind labels — **shipped, see §12** | **Yes** (2 additive optional columns) | **Yes** — schema slice |
 | **12D** ✅ | `SessionPlan` carry-through, snapshot at session start, active-workout checklist + tick persistence, switch-adapter rules. Logging path untouched — **shipped, see §13** | No | Yes — session/ownership |
-| **12E** | History detail "Planned" section; routine transfer payload; compatibility fixtures | No | Yes — transfer/compat |
+| **12E** ✅ | History detail "Cardio Plan" section; routine transfer payload; compatibility fixtures — **shipped, see §14** | No | Yes — transfer/compat |
 | **12F** | *Conditional.* Repeat-group UI; then, only if justified, per-segment actuals | Only if actuals ship | Yes |
 
 **12F gate.** Repeat UI ships when a tester asks for intervals twice. Per-segment
@@ -827,7 +828,7 @@ The User Guide is where it is explained.
   progression, no gate on the Log button: the aggregate set logs from the
   duration and Details fields exactly as before, whether nothing or everything
   is ticked.
-- The whole row is the tap target, not just the glyph (§14.4's open question).
+- The whole row is the tap target, not just the glyph (§15.4's open question).
 - Bounded for free: `expandedSegments()` cannot exceed
   `CardioPlanLimits.maxExpandedSegments` (60), because construction *and*
   decoding enforce it.
@@ -958,9 +959,11 @@ verbatim, matching `SessionPlan.primarySummary` and the 12C editor.
 
 ### Deferred to 12E and later
 
+*(All of the History and transfer items below shipped in 12E — see §14.)*
+
 - **History**: no structured-cardio display anywhere — not in the row summary,
   not in the detail. The frozen snapshot now *carries* the plan, which is what
-  12E's "Planned" section will read; nothing renders it yet.
+  12E's "Cardio Plan" section will read; nothing renders it yet.
 - **Routine transfer**, CSV/export/import: unchanged, no segment payload.
 - **Charts**: unchanged — `CardioProgressAnalytics` sums `SetLog` fields and
   segments are not `SetLog`s.
@@ -970,7 +973,189 @@ verbatim, matching `SessionPlan.primarySummary` and the 12C editor.
 
 ---
 
-## 14. Open questions for beta feedback
+## 14. Slice 12E — as built
+
+**Shipped:** the plan becomes visible after the workout, and shareable with the
+routine. No schema change, no migration, no `schemaVersion` bump, and — again —
+nothing touching the logging path.
+
+| File | |
+|---|---|
+| `Log/Models/SlotPrescription+StructuredCardio.swift` | `PlannedPrescriptionSnapshot.structuredCardioPlan` — History's only read path |
+| `Log/Services/CardioPlannedHistory.swift` | **new** — pure row/summary builder for the Cardio Plan section |
+| `Log/Main/HistoryView.swift` | the Cardio Plan block, in both the singleton and superset render paths |
+| `Log/Services/CardioHistorySummary.swift` | `inclineText` / `resistanceText` exposed, so planned and logged lines share one vocabulary |
+| `Log/Services/RoutineTransferDTO.swift` | `cardioSegments` on the prescription DTO + `RoutineTransferCardioSegmentsDTO` |
+| `Log/Services/RoutineTransfer.swift` | export mapping |
+| `Log/Services/RoutineTransferImport.swift` | import mapping |
+
+### History: the Cardio Plan section
+
+A **Cardio Plan** block inside each exercise's History section, between
+Equipment & Setup and the logged set rows:
+
+```
+Cardio Plan                                     3 segments · 21m · 2 km
+Warm-up                                                             10m
+2 km · 0% incline · level 5 · Z1 · Easy
+Recovery                                                             1m
+Z1
+Cool-down                                                           10m
+Z1
+```
+
+**Labelled "Cardio Plan", not "Planned".** The pre-merge label was accurate and
+too vague — it named the *tense* of the section rather than what was in it. The
+active checklist already calls the same list Cardio Plan, so History now uses
+the same words for the same thing, and "plan" is unambiguous that these are
+programmed segments rather than per-segment results. The key is the one 12D
+introduced, so this cost no new localization.
+
+**Row shape mirrors the logged set row it sits above.** Kind on the left, one
+headline value on the right, detail underneath — the same three type styles
+(`.dsBody` label, `.dsBodySecondary.monospacedDigit()` trailing value,
+`.dsCaption` metadata, `spacing: 2`) `setLogList` uses, so planned and performed
+values line up in one column and the eye lands in the same places reading
+either. The only difference is what the numbers *mean*, and the header says
+which.
+
+- `primaryTargetText` is the segment's **leading** target — its duration, or
+  whatever it does carry when it has none, so the headline column is never
+  blank. It holds the position a logged row gives its duration.
+- `secondaryText` is everything else on one line, joined with the same
+  separator the logged metric lines use.
+- **The note is part of that metadata line, never its own.** One rule, no length
+  threshold: a short note reads as one more piece of detail instead of a
+  detached fragment, and a long one wraps inside the same typography rather than
+  switching style mid-row.
+- Incline and resistance use the **logged row's vocabulary** ("0% incline",
+  "level 5") via `CardioHistorySummary.inclineText` / `.resistanceText`, now the
+  single source of those localized words. The compact forms ("1%", "L8") stay in
+  the routine editor and the active checklist, where brevity earns its place;
+  History sits two rows above the logged metric line, and naming the same
+  quantity differently there would read as two unrelated things. Duration keeps
+  the plan's own "10m" rather than the logged `"1800s"` — a *target* of 1800s is
+  not how anyone programs a session.
+- Rows come from the pure `CardioPlannedHistory.rows(for:distanceUnit:)`, which
+  expands through the same 12B `expandedSegments()` the active checklist uses —
+  one implementation, so History and the workout can never disagree about what
+  the plan says. Bounded by construction at 60 rows.
+- The kind travels as a **localization key** (`CardioSegmentKind.label`) and is
+  rendered through `LocalizedStringKey`, so the section reads in Korean. The
+  targets are verbatim, like every other composed plan summary.
+- A repeated group shows `Round 2/5` beside the kind, reusing the key 12D
+  introduced. No plan the current editor writes has one, so today every row
+  renders without it.
+- Distances follow `AppSettings.distanceUnit` at render time, so switching
+  km ↔ mi re-reads History's planned rows exactly as it re-reads its logged ones.
+
+**Planned is not performed.** There is no tick, no checkmark, and no completion
+state — `CardioPlannedSegmentRow` has nowhere to put one, and there would be
+nothing to put there anyway: the active checklist's ticks live in
+`CardioSegmentCheckStore` (per-workout `UserDefaults`, dropped on finish) and
+were never part of any workout record. History must never imply the app observed
+something it did not (§4.4).
+
+**Nothing about the aggregate changed.** Distance, duration, pace, speed,
+calories, HR, incline and resistance still come from the aggregate `SetLog` via
+`CardioHistorySummary`, the row summary is untouched, and the Slice 11 charts
+still sum `SetLog` fields — segments are not `SetLog`s. The Planned block is
+purely additive above rows it does not touch.
+
+**Visibility is structural.** The section renders only when the frozen snapshot
+decodes to a non-empty plan, and that one condition is also the cardio gate:
+only a cardio slot can author segments (`showsCardioSegments` is true for
+`.cardio` alone), and 12D's switch adapter writes nil onto any snapshot it
+adapts to a non-cardio mode. So a strength item and a timed hold decode nil and
+add zero rows without History ever asking what tracking mode the item was. A
+corrupt payload decodes nil too — it costs the Cardio Plan section, never the
+History row.
+
+### Source of truth
+
+```
+SlotPrescription.cardioSegmentsData          ← the routine editor writes (12C)
+  → PlannedPrescriptionSnapshot              ← frozen at session start (12D)
+      → SessionPlan → the active checklist   ← what you tick (12D)
+      → History "Cardio Plan"                ← what you planned (12E)
+```
+
+History reads the **frozen snapshot**, never the live routine. Reprogram the
+routine tomorrow and last week's workout still reports the plan it was started
+with — the same snapshot-immutability invariant Equipment & Setup relies on, and
+`Data` being a value type is what makes it structural rather than careful.
+
+### Routine transfer
+
+An additive optional `cardioSegments` on
+`RoutineTransferSlotPrescriptionDTO`, carrying the plan as **nested JSON**
+rather than the stored `Data` blob — the transfer format is human-readable and
+hand-edited, and a base64 column inside it would be opaque to exactly the
+audience it exists for:
+
+```json
+"cardioSegments": {
+  "version": 1,
+  "groups": [{ "id": "…", "repeatCount": 1, "segments": [ … ] }]
+}
+```
+
+Round-trips losslessly: kind, **segment `id`**, `repeatCount`, duration,
+distance, incline (sign included), resistance, HR zone, and note. `repeatCount`
+has no editor yet, so transfer is the only place it is proven to survive — which
+is precisely why 12B put it in the payload on day one.
+
+**`schemaVersion` stays 1.** `validateSupportedSchemaVersion` *rejects* a
+document whose version exceeds the reader's, so bumping would make every older
+build refuse a routine wholesale rather than import it minus its segments —
+the same reasoning Slices 5 and 9 recorded. Round-trip rules: old file → new
+build decodes nil; new file → old build silently drops segments and imports
+everything else; new → new is lossless. A routine with no plan omits the key
+entirely, so its document is byte-identical to before this slice.
+
+**Export decodes; import re-normalizes.** Export goes through
+`structuredCardioPlan`, so a stored column this build cannot parse exports as
+*no plan* rather than shipping corruption to someone else's device — deliberately
+unlike `RoutineDuplicator`, which copies raw because duplication stays inside one
+store. Import writes through `setStructuredCardioPlan`, so an absent key, a
+malformed value, and a plan whose every segment normalized away all land as the
+single representation of "no structure".
+
+**A bad key costs the plan, not the routine.** `RoutineTransferCardioSegmentsDTO`
+is a transparent wrapper whose decoder absorbs a wrong-shaped value
+(`try? CardioSegmentPlan(from:)`). Without it, one hand-edited key would throw
+out of the synthesized decoder and the recipient would lose the entire routine.
+Contents that are merely *wrong* — an unknown kind, an over-range repeat — are
+repaired by the 12B decoder, matching how this format already preserves rather
+than rejects unknown enum raws.
+
+**Transfer carries authoring data only.** Tick state is not in the format, and
+there is no code path to it: the document is built from the `Routine`, which has
+never seen a tick.
+
+### Localization
+
+**No new keys.** The section reuses `Cardio Plan` ("유산소 계획") from 12D, and
+the round badge and the four kind names reuse the keys 12C/12D introduced. A
+`Planned` key was added and then removed again during pre-merge polish, when the
+heading was renamed to match the checklist.
+
+### Deferred to 12F
+
+- **Repeat authoring UI** — the payload, the decoder, the expansion, the
+  checklist, History and now transfer all handle `repeatCount`; only the editor
+  pins it to 1.
+- **Per-segment actuals**, still gated on §9's three criteria. The additive path
+  remains `segmentActualsData: Data?` on `SetLog`.
+- **Segment-level charts** — nothing to chart until actuals exist.
+- **Per-segment timers** (§4.5), in-workout segment editing (§13), and every
+  §10 non-goal.
+- **Workout History CSV and Exercise CSV**: unchanged, by design (§6). The
+  export describes what was performed, and aggregates already cover it.
+
+---
+
+## 15. Open questions for beta feedback
 
 1. Do users want segments on the **routine slot** (programming, reusable) or
    ad-hoc on **the session** (today's plan only)? This design says the slot; the

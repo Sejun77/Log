@@ -296,6 +296,16 @@ extension RoutineTransfer {
                 ? nil
                 : DistanceUnit.from(raw: dto.targetDistanceUnitRaw)?.rawValue)
         ctx.insert(p)
+        // Structured Cardio Slice 12E — same "re-normalized rather than
+        // trusted" rule as the distance above. The plan arriving here has
+        // already been through the Slice 12B decoder (bad segments dropped,
+        // counts clamped, unknown kinds read as `.work`), and
+        // `setStructuredCardioPlan` clears the column for a nil or empty plan
+        // rather than storing an empty payload — so an absent key, a malformed
+        // value, and a plan whose every segment normalized away all land as the
+        // one representation of "no structure", exactly as a slot authored
+        // without segments would.
+        p.setStructuredCardioPlan(dto.cardioSegments?.plan)
         p.techniquePlans = dto.techniquePlans
             .sorted { $0.order < $1.order }
             .map { makeTechnique($0, in: ctx) }

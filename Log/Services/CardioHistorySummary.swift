@@ -171,22 +171,34 @@ enum CardioHistorySummary {
         return "\(formatted) /\(unit.symbol)"
     }
 
+    private static func inclineSegment(_ metrics: CardioMetrics) -> String? {
+        metrics.inclinePercent.flatMap(inclineText(percent:))
+    }
+
+    private static func resistanceSegment(_ metrics: CardioMetrics) -> String? {
+        metrics.resistanceLevel.flatMap(resistanceText(level:))
+    }
+
     /// Incline carries a localized word because a bare "3%" is ambiguous next
     /// to the other numeric segments. Decline renders with its sign ("-3%
     /// incline") rather than a separate word, keeping one key instead of two.
-    private static func inclineSegment(_ metrics: CardioMetrics) -> String? {
-        guard let percent = metrics.inclinePercent,
-            let formatted = signedNumber(percent)
-        else { return nil }
+    ///
+    /// Takes the value rather than a `CardioMetrics` so the History **Planned**
+    /// section (Slice 12E) can format a *target* with the same words a logged
+    /// metric uses — a planned line and a performed line sitting two rows apart
+    /// must not name the same quantity differently. This is the single source of
+    /// that vocabulary.
+    static func inclineText(percent: Double) -> String? {
+        guard let formatted = signedNumber(percent) else { return nil }
         let label = NSLocalizedString(
             "incline", comment: "History cardio summary: treadmill grade")
         return "\(formatted)% \(label)"
     }
 
     /// Machine levels are unitless, so the number alone would be meaningless.
-    private static func resistanceSegment(_ metrics: CardioMetrics) -> String? {
-        guard let level = metrics.resistanceLevel,
-            let formatted = CardioDerived.formatDistance(value: level)
+    /// Shared with the Planned section for the reason above.
+    static func resistanceText(level: Double) -> String? {
+        guard let formatted = CardioDerived.formatDistance(value: level)
         else { return nil }
         let label = NSLocalizedString(
             "level", comment: "History cardio summary: machine resistance level")

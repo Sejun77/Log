@@ -702,6 +702,7 @@ private struct WorkoutDetailView: View {
                                 name: exerciseName(for: item)
                             )
                             equipmentAndSetupRows(for: item)
+                            plannedCardioRows(for: item)
                             setLogList(for: item)
                         }
                     } header: {
@@ -710,6 +711,7 @@ private struct WorkoutDetailView: View {
                 } else if let item = group.items.first {
                     Section {
                         equipmentAndSetupRows(for: item)
+                        plannedCardioRows(for: item)
                         setLogList(for: item)
                     } header: {
                         Text(exerciseName(for: item))
@@ -775,6 +777,110 @@ private struct WorkoutDetailView: View {
                 Text(setup)
                     .font(.dsBody)
                     .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Structured Cardio Slice 12E — the **Planned** block for one history
+    /// item: the segment plan this workout was started with.
+    ///
+    /// Read exclusively from the immutable `plannedPrescriptionSnapshot`, never
+    /// from the live routine, so editing the routine afterwards cannot rewrite
+    /// what an old workout says it planned — the same rule Equipment & Setup
+    /// above already follows.
+    ///
+    /// Rendered only when that frozen snapshot decodes to a non-empty plan.
+    /// That single condition is also the cardio gate: only a cardio slot can
+    /// author segments, so a strength item and a timed hold decode nil and add
+    /// zero rows, exactly as before this slice. A corrupt payload decodes nil
+    /// too — the section disappears, the History row does not.
+    ///
+    /// **Plan only.** No ticks, no checkmarks, no completion state: the active
+    /// checklist's ticks are session-scoped draft state that never reached this
+    /// workout, and presenting anything here as "done" would claim the app
+    /// observed something it did not. The logged result stays the aggregate
+    /// cardio `SetLog` rendered by `setLogList` below, untouched.
+    @ViewBuilder
+    private func plannedCardioRows(for item: WorkoutItem) -> some View {
+        if let plan = item.plannedPrescriptionSnapshot?.structuredCardioPlan {
+            let rows = CardioPlannedHistory.rows(
+                for: plan, distanceUnit: distanceUnit)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: DSSpacing.sm) {
+                    // "Cardio Plan", not "Planned": the same words the active
+                    // workout checklist uses for the same list, and unambiguous
+                    // that these are programmed cardio segments rather than
+                    // per-segment results. Reuses the 12D key.
+                    Text("Cardio Plan")
+                        .font(.dsCaption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: DSSpacing.sm)
+                    // Verbatim — assembled from numbers and units, like every
+                    // other composed plan summary in the app.
+                    Text(
+                        CardioPlannedHistory.summary(
+                            for: plan, distanceUnit: distanceUnit)
+                    )
+                    .font(.dsCaption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                }
+
+                ForEach(rows) { row in
+                    plannedCardioRow(row)
+                }
+            }
+        }
+    }
+
+    /// One planned segment, laid out exactly like a logged set row above it:
+    ///
+    ///     Warm-up                                                    10m
+    ///     2 km · 0% incline · level 5 · Z1 · Easy
+    ///
+    /// Same three type styles as `setLogList`'s rows — `.dsBody` primary label,
+    /// `.dsBodySecondary.monospacedDigit()` trailing value, `.dsCaption`
+    /// metadata line, `spacing: 2` between them — so the eye lands in the same
+    /// places whether it is reading the plan or the result. The only difference
+    /// is what the values *mean*, and the section header says which.
+    ///
+    /// The note is part of the metadata line rather than a line of its own: a
+    /// short note reads as one more piece of detail instead of a detached
+    /// fragment, and a long one wraps in the same typography rather than
+    /// switching style mid-row.
+    @ViewBuilder
+    private func plannedCardioRow(_ row: CardioPlannedSegmentRow) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(LocalizedStringKey(row.kindLabelKey))
+                    .font(.dsBody)
+
+                // Only ever present on a repeated group — no plan the current
+                // editor writes has one, so a flat plan shows no round label.
+                // Reuses the key the active checklist introduced in 12D.
+                if let round = row.round, let roundCount = row.roundCount {
+                    Text("Round \(round)/\(roundCount)")
+                        .font(.dsCaption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                // The leading target holds the position a logged row gives its
+                // duration, so planned and performed values line up in one
+                // column down the section.
+                if !row.primaryTargetText.isEmpty {
+                    Text(row.primaryTargetText)
+                        .font(.dsBodySecondary.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !row.secondaryText.isEmpty {
+                Text(row.secondaryText)
+                    .font(.dsCaption.monospacedDigit())
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

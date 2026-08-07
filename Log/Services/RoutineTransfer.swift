@@ -159,6 +159,16 @@ enum RoutineTransfer {
             usesDuration: p.usesDuration,
             targetDistanceMeters: p.targetDistanceMeters,
             targetDistanceUnitRaw: p.targetDistanceUnitRaw,
+            // Structured Cardio Slice 12E. Exported through the decoding
+            // accessor rather than as the raw column, which differs
+            // deliberately from `RoutineDuplicator`: duplication stays inside
+            // one store, where preserving a payload verbatim is the safe
+            // choice, but transfer crosses to someone else's device — so a
+            // column this build cannot parse exports as **no plan** instead of
+            // shipping corruption onward. A slot with no plan leaves the key
+            // out of the document entirely.
+            cardioSegments: p.structuredCardioPlan.map(
+                RoutineTransferCardioSegmentsDTO.init(plan:)),
             techniquePlans: p.techniquePlans
                 .sorted { $0.order < $1.order }
                 .map(techniqueDTO),
