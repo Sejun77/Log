@@ -445,14 +445,15 @@ block. Duration stays the primary trailing value so the eye lands in the same
 place on every row:
 
 ```
-2. Working Set                                        2700s
+2. Cardio Set                                         2700s
 6.2 km · 7:15 /km
 3% incline · level 8
 142 bpm · Z3 · 410 kcal
 ```
 
-(The row label read "2. Working" when this patch shipped; the post-merge polish
-below replaced it.)
+(The row label read "2. Working" when this patch shipped, then "2. Working Set"
+after the post-merge polish below. The pre-archive polish renamed the cardio
+case again — see §3.3.)
 
 Line 1 is what was covered, line 2 how the machine was set, line 3 the body's
 response. An empty group produces no line, so a duration-only row is still a
@@ -496,15 +497,15 @@ Three more issues found after the merge, fixed before Slice 5 starts.
 
 | Stored `SetKind` | History row | Active-workout row |
 |---|---|---|
-| `.working` | "1. Working Set" | *(no label)* |
+| `.working` | "1. Working Set" (cardio: "1. Cardio Set") | *(no label)* |
 | `.warmup` | "1. Warm-up Set" | "Warmup" |
 | `.dropset` | "1. Drop Set" | "Drop Set" |
 
-The label is a function of `SetLog.kind` and `SetLog.indexInExercise` and of
-**nothing else** — not the exercise, not its tracking mode, not what the set
-recorded. The rule lives in `SetKind.historyRowLabel` (the vocabulary) and
-`HistorySetRowLabel` (the numbering), pulled out of `HistoryView` so it is
-assertable without a SwiftUI host.
+The label is a function of `SetLog.kind` and `SetLog.indexInExercise`, plus the
+single cardio exception added by the pre-archive polish — not what the set
+recorded. The rule lives in `SetKind.historyRowLabel` (the kind vocabulary) and
+`HistorySetRowLabel` (the numbering and the cardio name), pulled out of
+`HistoryView` so it is assertable without a SwiftUI host.
 
 > **Cardio is deliberately not special-cased.** An interim patch gave cardio
 > rows a neutral "1. Set", on the reasoning that a cardio bout might be a
@@ -515,6 +516,14 @@ assertable without a SwiftUI host.
 > cooldown kinds yet; when it gets them they arrive as `SetKind` cases and every
 > row label follows for free. Until then a cardio `.working` set is a working
 > set, exactly like a plank's and a bench press's.
+>
+> **Revisited in the pre-archive polish.** Structured cardio (Slices 12C–12E)
+> put a Cardio Plan directly above these rows, spending *Warm-up / Work /
+> Recovery / Cool-down* on planned segments — so "Working Set" started reading
+> as the plan's *Work* segment. The cardio row now reads **"1. Cardio Set"**.
+> The reasoning above still holds where it was aimed: the fix is a rendered
+> **name**, not a stored kind, so `SetKind` is untouched and the neutral "1.
+> Set" stays rejected. See §3.3.
 
 **The active-workout row labels are untouched.** `SetKind.activeRowLabel` is a
 separate, intentionally different vocabulary: mid-workout the surrounding row
@@ -1376,6 +1385,20 @@ Rules:
   Settings unit like every other surface, so a list cannot mix `3.1 mi` and
   `5 km` rows. `distanceMeters` is what was recorded and never moves; the unit is
   a lens, and it belongs to the reader. See §2.37.
+
+**The logged row is a "Cardio Set" (pre-archive polish).** A cardio bout is one
+aggregate entry for the whole effort, and the Cardio Plan block above it already
+uses *Warm-up / Work / Recovery / Cool-down* for planned segments — so labelling
+the logged row "Working Set" invited it to be read as the plan's *Work* segment,
+as though the other segments had rows of their own. History now draws the line
+in its vocabulary: **Cardio Plan** is what was planned, **Cardio Set** is what
+was logged. Strength and timed-hold rows are unchanged ("Working Set").
+
+Display only. The stored `SetKind` is still `.working`, there are no
+cardio-specific set kinds, and no cardio warm-up / recovery / cool-down
+`SetLog`s exist. `HistorySetRowLabel.isCardio(_:)` resolves cardio-ness from the
+live `Exercise`, falling back to the frozen snapshot's `targetDistanceMeters` /
+`cardioSegmentsData` (both cardio-only) when the exercise has been deleted.
 
 **Cardio Plan (Slice 12E).** A completed cardio item whose frozen snapshot
 carries a structured plan also renders a read-only **Cardio Plan** block above

@@ -81,77 +81,13 @@ Limits and behavior:
 - duration exercises do not show reps, weight, or tempo
 - leaving a field empty means it is not set
 
-To track an exercise as cardio, open it in Exercises, turn on Time-based, then
-turn on Cardio.
+Cardio exercises also let you record details such as distance, calories, heart
+rate, incline or decline, resistance, and heart-rate zone. In routines, cardio
+exercises can have a target distance and an optional Cardio Plan. To make your
+own cardio exercise, open the exercise, turn on Time-based, then turn on Cardio.
 
-During a workout, a cardio set still logs with duration alone. Tap Details on
-the set row to also record:
-
-- distance, in the unit you chose in Settings
-- average heart rate
-- heart-rate zone
-- calories
-- incline or decline
-- resistance
-
-Every one of these is optional, and pace and speed are worked out for you once a
-distance and a duration are entered. Enter the details before tapping Log — to
-change them afterwards, tap Undo and log the set again.
-
-Distance is always entered in the unit you chose in Settings, shown beside the
-field. There is no unit picker on the set row.
-
-In a routine, a cardio slot can also carry a target distance. Open the slot's
-Prescription section and enter it — the unit is whichever one you chose in
-Settings, and the field shows it beside the number. Change the unit in Settings
-and every target re-reads in the new unit; the distance itself does not change.
-A cardio slot starts at one set with no rest, and does not show warm-up steps,
-techniques, tempo, or the effort target, because those describe reps and weight.
-
-A cardio slot can also carry a plan made of segments — a warm-up, the work, a
-recovery, a cool-down. Open the slot's Structured Cardio row in the Prescription
-section and add them; each segment can have its own time, distance, incline,
-resistance, heart-rate zone, and note. During the workout the slot shows them as
-a Cardio Plan checklist above the set row, and you can tick segments off as you
-go. Ticks are kept if you Save & Exit and come back. It is a checklist, not a
-log: the ticks are not saved to your history, nothing has to be ticked before
-you log, and the bout is still recorded as one cardio set from the duration and
-Details fields.
-
-After the workout, History shows that plan again under Cardio Plan, above the
-logged sets. It is the plan the workout was started with, so editing the routine
-later never changes what an older workout says it planned. These are planned
-segments only — not a record of which ones you did. Your ticks are not shown,
-and what was logged stays the single cardio set with its distance, duration,
-pace, calories, and heart rate. Routines you export and import carry their
-structured segments with them; older routine files without them still import as
-before.
-
-When you start the workout, the cardio set row fills in what you did last time:
-distance, incline or decline, and resistance. A distance you ran in a different
-unit is converted, so what you see is always in your current Settings unit. Average heart rate, heart-rate
-zone, and calories are never filled in, because those are results of that
-session rather than settings you chose. If you have not done the exercise
-before, the routine's target distance fills in the distance instead — either
-way, the target stays visible in the plan.
-
-Change any of it freely: what gets logged is what you actually did, and your
-edits are kept if you Save & Exit and come back. If you clear a field, it stays
-cleared.
-
-Cardio exercises are grouped under the Cardio body part. The app includes
-Walking, Treadmill Run, Treadmill Walk, Stationary Bike, Elliptical, Stair
-Climber, and Rowing Machine, already set up as cardio, and you can add your own
-the same way.
-
-If you used the app before cardio tracking existed, the exercises you already
-have in the Cardio category are still tracked by time alone. The app offers once
-to update them: tap Mark as Cardio to switch them over, or Not Now to leave them
-as they are. Nothing changes unless you tap Mark as Cardio, and either way your
-names, notes, setup, routines, and workout history stay exactly as they are.
-Only exercises in the Cardio category are offered — a plank or a wall sit is
-never included. You can also turn Cardio on for any exercise yourself at any
-time.
+A Cardio Plan is only a guide/checklist. Your workout is still saved as one
+Cardio Set using the duration and Details you log.
 
 ## Rest Timer
 
@@ -188,11 +124,10 @@ Use History to review:
 The Progression chart plots one point per session for the exercise you choose.
 A strength exercise offers e1RM, volume, best weight, and reps. A cardio
 exercise offers distance, duration, pace, calories, and average heart rate
-instead — e1RM and volume are not offered, because there is no weight to work
-them out from. Distance and pace use the unit you chose in Settings and re-read
-the moment you change it; what you recorded never changes. Pace comes from the
-session's totals, so a session with no distance, or no duration, has no pace
-point, and the rosette marks your fastest session rather than your slowest.
+instead — e1RM and volume need a weight, so they are not offered.
+
+Cardio history shows your logged cardio results and any Cardio Plan that was
+planned for the session.
 
 ## Settings
 
@@ -208,13 +143,6 @@ You can:
 - import or export exercises
 - import routines
 - export workout history
-
-Settings is the only place the cardio distance unit is chosen — no distance
-field anywhere in the app has a unit picker of its own. Change it here and every
-target distance, and every distance you enter during a workout, uses the new
-unit. History converts too: a run you logged in miles shows in km, pace
-included, once you switch to km. Only the way distances are shown changes —
-nothing you have recorded is altered.
 
 ---
 
@@ -301,26 +229,13 @@ nothing you have recorded is altered.
 - 시간 기반 운동에서는 반복 횟수, 중량, 템포가 표시되지 않습니다.
 - 값을 비워 두면 설정되지 않은 상태로 처리됩니다.
 
-운동을 유산소로 기록하려면 운동 탭에서 해당 운동을 열고 시간 기반을 켠 다음 유산소를
+유산소 운동에서는 거리, 칼로리, 심박수, 경사 / 내리막, 저항, 심박 존 같은 세부 정보도
+기록할 수 있습니다. 루틴에서는 유산소 운동에 목표 거리와 유산소 계획을 설정할 수
+있습니다. 직접 유산소 운동을 만들려면 해당 운동을 열고 시간 기반을 켠 다음 유산소를
 켜세요.
 
-운동 중에도 유산소 세트는 시간만으로 기록할 수 있습니다. 세트 행의 세부 정보를 누르면
-아래 항목도 함께 기록할 수 있습니다.
-
-- 거리 (km 또는 mi)
-- 평균 심박수
-- 심박 존
-- 칼로리
-- 경사 / 내리막
-- 저항
-
-모두 선택 사항이며, 거리와 시간을 입력하면 페이스와 속도는 자동으로 계산됩니다. 세부
-정보는 기록을 누르기 전에 입력하세요. 기록한 뒤에 값을 바꾸려면 취소를 누르고 세트를
-다시 기록하면 됩니다.
-
-유산소 운동은 유산소 부위로 묶여 있습니다. 앱에는 걷기, 트레드밀 러닝, 트레드밀
-걷기, 실내 자전거, 일립티컬, 스텝밀, 로잉 머신이 시간 기반 운동으로 포함되어 있으며,
-같은 방식으로 직접 추가할 수도 있습니다.
+유산소 계획은 안내용 체크리스트일 뿐입니다. 운동은 기록한 시간과 세부 정보를 바탕으로
+유산소 세트 하나로 저장됩니다.
 
 ## 휴식 타이머
 
@@ -356,11 +271,10 @@ nothing you have recorded is altered.
 
 진행 그래프는 선택한 운동에 대해 세션마다 한 점씩 표시합니다. 근력 운동에서는
 e1RM, 볼륨, 최고 중량, 반복 횟수를 볼 수 있습니다. 유산소 운동에서는 대신 거리,
-시간, 페이스, 칼로리, 평균 심박수를 볼 수 있습니다. 중량이 없어 계산할 수 없는
-e1RM과 볼륨은 표시되지 않습니다. 거리와 페이스는 설정에서 선택한 단위를 따르며,
-단위를 바꾸면 즉시 다시 표시됩니다. 기록된 값 자체는 변하지 않습니다. 페이스는
-세션 전체 합계로 계산하므로 거리나 시간이 없는 세션에는 페이스 점이 표시되지
-않으며, 기록 표시는 가장 느린 세션이 아니라 가장 빠른 세션에 붙습니다.
+시간, 페이스, 칼로리, 평균 심박수를 볼 수 있습니다. e1RM과 볼륨은 중량이 있어야
+계산할 수 있어 표시되지 않습니다.
+
+유산소 기록에는 기록한 유산소 결과와 그 세션에 계획했던 유산소 계획이 표시됩니다.
 
 ## 설정
 
@@ -370,11 +284,9 @@ e1RM과 볼륨은 표시되지 않습니다. 거리와 페이스는 설정에서
 
 - 중량 단위 선택: lb 또는 kg
 - 유산소 거리 단위 선택: km 또는 mi
-- 운동 강도 방식 선택: RIR 또는 RPE -체중 설정
+- 운동 강도 방식 선택: RIR 또는 RPE
+- 체중 설정
 - 기본 세트 수, 반복 범위, 휴식 시간 설정
 - 운동 가져오기 / 내보내기
 - 루틴 가져오기
 - 운동 기록 내보내기
-
-거리 단위는 새로 입력하는 유산소 기록에만 적용됩니다. 이미 저장된 운동과 루틴은 저장
-당시의 단위를 유지하므로, mi로 기록한 러닝은 나중에 km로 바꾸어도 계속 mi로 표시됩니다.

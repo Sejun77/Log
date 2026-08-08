@@ -7,9 +7,14 @@ import XCTest
 /// means the two languages and the two copies can drift silently.
 ///
 /// These tests pin the properties that matter for testers: the English and
-/// Korean guides stay structurally aligned, and the sentences the repo guide
-/// also carries — in particular the beta's cardio wording — are present
-/// verbatim in both.
+/// Korean guides stay structurally aligned, the sentences the repo guide also
+/// carries are present verbatim in both, and the cardio answer stays short.
+///
+/// That last one needs its own guard. The cardio section has twice been walked
+/// back from a wall of text, because every slice that shipped a cardio behavior
+/// also wanted to explain it. `testCardioSectionStaysShort` caps its length and
+/// `testRemovedImplementationPhrasesStayGone` names the sentences that keep
+/// coming back, so the next round of growth fails a test instead of a review.
 final class UserGuideContentTests: XCTestCase {
 
     private var english: [GuideSection] { UserGuideView.englishGuide }
@@ -65,114 +70,191 @@ final class UserGuideContentTests: XCTestCase {
             section(heading: "시간 기반 운동과 유산소 운동", in: korean))
     }
 
-    /// The exact wording agreed for the cardio answer. It appears in
-    /// `USER_GUIDE.md` and here; if the in-app copy is reworded the guide has
-    /// to be rewritten with it.
+    /// Every word of one guide, so a phrase can be hunted across the whole
+    /// document rather than only in the section it was last seen in. Deleted
+    /// prose has a habit of reappearing one section over.
+    private func allText(of guide: [GuideSection]) -> String {
+        guide
+            .flatMap { [$0.heading, $0.intro ?? "", $0.outro ?? ""] + $0.items }
+            .joined(separator: "\n\n")
+    }
+
+    /// The cardio answer is two short paragraphs. It has twice grown into a
+    /// wall of text by accretion — eleven paragraphs at its worst, most of them
+    /// explaining *why the app behaves as it does* rather than what to do — so
+    /// the length is pinned, not just the wording.
+    func testCardioSectionStaysShort() throws {
+        let en = try XCTUnwrap(
+            section(heading: "Duration Exercises and Cardio", in: english)?.outro)
+        let ko = try XCTUnwrap(
+            section(heading: "시간 기반 운동과 유산소 운동", in: korean)?.outro)
+
+        for (language, outro) in [("English", en), ("Korean", ko)] {
+            let paragraphs = outro.components(separatedBy: "\n\n")
+            XCTAssertLessThanOrEqual(
+                paragraphs.count, 2,
+                "\(language) cardio guidance grew back past two paragraphs")
+        }
+    }
+
+    /// Implementation detail that has been deleted from the guide and must not
+    /// come back — anywhere in it, in either language.
     ///
-    /// > **Superseded by Cardio Slice 4.** The beta answer — "details like
-    /// > distance, speed, incline, resistance, or heart-rate zone can be
-    /// > written in notes" — was true only while there was nowhere else to put
-    /// > them. Slice 4 shipped the Details section on the active-workout cardio
-    /// > row, so the guide now describes that instead. The historical sentence
-    /// > is preserved in `ENTRY_12_TESTFLIGHT_FEEDBACK.md` as the record of what
-    /// > beta testers were told at the time, and is deliberately not rewritten
-    /// > there.
-    func testCardioWordingMatchesTheDocumentedSentence() throws {
+    /// Each of these answered a question no user asked: how prefill picks its
+    /// values, what a tick does and does not persist, how the one-time cardio
+    /// migration prompt behaves, when a unit conversion is recomputed. They
+    /// document the build, not the app.
+    func testRemovedImplementationPhrasesStayGone() {
+        let removed = [
+            // Checklist persistence internals.
+            "the ticks are not saved",
+            "nothing has to be ticked",
+            // Prefill internals.
+            "heart rate, heart-rate zone, and calories are not filled in",
+            // One-time migration prompt.
+            "nothing changes unless you accept",
+            // Unit-conversion internals.
+            "Changing the unit changes only how distances are shown",
+            "re-read",
+            // Snapshot immutability.
+            "frozen snapshot",
+            // Chart edge cases — which sessions plot no pace point, and which
+            // end of an inverted scale the record marker sits on. True, and
+            // nothing a user needs told.
+            "has no pace point",
+            "rosette",
+            "페이스 점이 표시되지",
+            "가장 빠른 세션에 붙습니다",
+            // Earlier rounds of the same cleanup.
+            "there is no unit picker on the set row",
+            "editing the routine later never changes",
+            "Save & Exit",
+            "older routine files without them still import as before",
+        ]
+
+        for (language, guide) in [("English", english), ("Korean", korean)] {
+            let text = allText(of: guide)
+            for phrase in removed {
+                XCTAssertFalse(
+                    text.localizedCaseInsensitiveContains(phrase),
+                    "\(language) guide: implementation detail is back — "
+                        + "\"\(phrase)\"")
+            }
+        }
+    }
+
+    /// The whole cardio answer, verbatim. Three claims carry it, and each is
+    /// something a user cannot work out from the UI alone:
+    ///
+    /// 1. which details a cardio exercise can record;
+    /// 2. how to turn an exercise of your own into a cardio one;
+    /// 3. that a Cardio Plan is **only a guide** and the workout is saved as
+    ///    **one Cardio Set**, not a row per segment.
+    ///
+    /// Everything else the section used to say — how prefill behaves, what
+    /// History freezes, how units convert — is either visible in the app or was
+    /// never guidance.
+    func testCardioWordingIsTheShortAgreedVersion() throws {
         let en = try XCTUnwrap(
             section(heading: "Duration Exercises and Cardio", in: english)?.outro)
-        XCTAssertTrue(
-            en.contains(
-                "To track an exercise as cardio, open it in Exercises, turn on "
-                    + "Time-based, then turn on Cardio."),
+        XCTAssertEqual(
+            en,
+            "Cardio exercises also let you record details such as distance, "
+                + "calories, heart rate, incline or decline, resistance, and "
+                + "heart-rate zone. In routines, cardio exercises can have a "
+                + "target distance and an optional Cardio Plan. To make your "
+                + "own cardio exercise, open the exercise, turn on Time-based, "
+                + "then turn on Cardio."
+                + "\n\n"
+                + "A Cardio Plan is only a guide/checklist. Your workout is "
+                + "still saved as one Cardio Set using the duration and "
+                + "Details you log.",
             "English cardio wording drifted from USER_GUIDE.md")
-        XCTAssertTrue(
-            en.contains(
-                "Every one of these is optional, and pace and speed are worked "
-                    + "out for you once a distance and a duration are entered."),
-            "English cardio detail wording drifted from USER_GUIDE.md")
 
         let ko = try XCTUnwrap(
             section(heading: "시간 기반 운동과 유산소 운동", in: korean)?.outro)
-        XCTAssertTrue(
-            ko.contains(
-                "운동을 유산소로 기록하려면 운동 탭에서 해당 운동을 열고 시간 "
-                    + "기반을 켠 다음 유산소를 켜세요."),
+        XCTAssertEqual(
+            ko,
+            "유산소 운동에서는 거리, 칼로리, 심박수, 경사 / 내리막, 저항, 심박 존 "
+                + "같은 세부 정보도 기록할 수 있습니다. 루틴에서는 유산소 운동에 "
+                + "목표 거리와 유산소 계획을 설정할 수 있습니다. 직접 유산소 운동을 "
+                + "만들려면 해당 운동을 열고 시간 기반을 켠 다음 유산소를 켜세요."
+                + "\n\n"
+                + "유산소 계획은 안내용 체크리스트일 뿐입니다. 운동은 기록한 시간과 "
+                + "세부 정보를 바탕으로 유산소 세트 하나로 저장됩니다.",
             "Korean cardio wording drifted from USER_GUIDE.md")
-        XCTAssertTrue(
-            ko.contains(
-                "모두 선택 사항이며, 거리와 시간을 입력하면 페이스와 속도는 "
-                    + "자동으로 계산됩니다."),
-            "Korean cardio detail wording drifted from USER_GUIDE.md")
     }
 
-    /// Structured Cardio Slice 12D — the checklist is now visible during a
-    /// workout, so the guide describes it. The sentence that matters most is
-    /// the one that says a tick is **not** a record: a user who thinks the app
-    /// saved their segments would be misled about what History contains.
-    func testGuideExplainsTheStructuredCardioChecklist() throws {
+    /// The one action the section must not lose again. It was dropped in the
+    /// round that cut the section to two paragraphs and added back on review:
+    /// nothing else in the guide says how an exercise becomes a cardio one, and
+    /// the two toggles are not discoverable in the order they must be used.
+    func testGuideSaysHowToMakeAnExerciseCardio() throws {
         let en = try XCTUnwrap(
             section(heading: "Duration Exercises and Cardio", in: english)?.outro)
         XCTAssertTrue(
             en.contains(
-                "During the workout the slot shows them as a Cardio Plan "
-                    + "checklist above the set row"),
-            "English structured-cardio wording drifted from USER_GUIDE.md")
-        XCTAssertTrue(
-            en.contains(
-                "the ticks are not saved to your history, nothing has to be "
-                    + "ticked before you log, and the bout is still recorded as "
-                    + "one cardio set"),
-            "The guide must not imply a tick is a logged result")
+                "To make your own cardio exercise, open the exercise, turn on "
+                    + "Time-based, then turn on Cardio."),
+            "The guide no longer says how to make an exercise cardio")
 
         let ko = try XCTUnwrap(
             section(heading: "시간 기반 운동과 유산소 운동", in: korean)?.outro)
         XCTAssertTrue(
-            ko.contains("운동 중에는 세트 행 위에 유산소 계획 체크리스트로 표시되며"),
-            "Korean structured-cardio wording drifted from USER_GUIDE.md")
-        XCTAssertTrue(
             ko.contains(
-                "체크 표시는 기록에 저장되지 않고, 기록하기 전에 모든 구간을 "
-                    + "체크할 필요도 없으며"),
-            "The Korean guide must not imply a tick is a logged result")
+                "직접 유산소 운동을 만들려면 해당 운동을 열고 시간 기반을 켠 다음 "
+                    + "유산소를 켜세요."),
+            "The Korean guide no longer says how to make an exercise cardio")
     }
 
-    /// Structured Cardio Slice 12E — History now shows the planned segments,
-    /// so the guide says so. The sentence that matters is the one drawing the
-    /// line between *planned* and *performed*: a user who read the Planned
-    /// section as a record of which segments they completed would be misled
-    /// about what the app observed.
-    func testGuideExplainsThePlannedSectionInHistory() throws {
+    /// Both languages must make the same two claims. Korean has previously
+    /// been left carrying detail English had already dropped.
+    func testCardioPlanIsCalledAGuideInBothLanguages() throws {
         let en = try XCTUnwrap(
             section(heading: "Duration Exercises and Cardio", in: english)?.outro)
-        XCTAssertTrue(
-            en.contains(
-                "After the workout, History shows that plan again under "
-                    + "Cardio Plan, above the logged sets."),
-            "English History wording drifted from USER_GUIDE.md")
-        XCTAssertTrue(
-            en.contains(
-                "These are planned segments only — not a record of which ones "
-                    + "you did."),
-            "The guide must not present the Planned section as what was done")
-        XCTAssertTrue(
-            en.contains(
-                "Routines you export and import carry their structured "
-                    + "segments with them"),
-            "English transfer wording drifted from USER_GUIDE.md")
+        XCTAssertTrue(en.contains("A Cardio Plan is only a guide/checklist."))
+        XCTAssertTrue(en.contains("saved as one Cardio Set"))
 
         let ko = try XCTUnwrap(
             section(heading: "시간 기반 운동과 유산소 운동", in: korean)?.outro)
+        XCTAssertTrue(ko.contains("유산소 계획은 안내용 체크리스트일 뿐입니다."))
+        XCTAssertTrue(ko.contains("유산소 세트 하나로 저장됩니다"))
+    }
+
+    /// One sentence in the History section, naming the only thing the
+    /// surrounding text does not already imply: that the *planned* Cardio Plan
+    /// is kept alongside the result. The metric-by-metric list it replaced
+    /// simply repeated the Progression paragraph above it.
+    func testCheckingHistoryDescribesCardioInOneSentence() throws {
+        let en = try XCTUnwrap(
+            section(heading: "Checking History", in: english)?.outro)
         XCTAssertTrue(
-            ko.contains("운동을 마치면 기록 탭에서 기록된 세트 위에 유산소 계획 항목으로"),
-            "Korean History wording drifted from USER_GUIDE.md")
+            en.contains(
+                "Cardio history shows your logged cardio results and any "
+                    + "Cardio Plan that was planned for the session."),
+            "English cardio History wording drifted from USER_GUIDE.md")
+
+        let ko = try XCTUnwrap(
+            section(heading: "기록 확인하기", in: korean)?.outro)
         XCTAssertTrue(
             ko.contains(
-                "여기에는 계획된 구간만 표시되며, 어떤 구간을 수행했는지에 대한 "
-                    + "기록은 아닙니다."),
-            "The Korean guide must not present Planned as what was done")
-        XCTAssertTrue(
-            ko.contains("루틴을 내보내고 가져올 때는 구성한 구간도 함께 이동하며"),
-            "Korean transfer wording drifted from USER_GUIDE.md")
+                "유산소 기록에는 기록한 유산소 결과와 그 세션에 계획했던 유산소 "
+                    + "계획이 표시됩니다."),
+            "Korean cardio History wording drifted from USER_GUIDE.md")
+    }
+
+    /// Settings lists its units as bullets and says nothing more. The trailing
+    /// paragraph that explained which surfaces a distance-unit change reaches
+    /// is gone in both languages — the bullet already tells a user the setting
+    /// exists, which is all the guide owes them.
+    func testSettingsHasNoTrailingUnitsParagraph() throws {
+        let en = try XCTUnwrap(section(heading: "Settings", in: english))
+        let ko = try XCTUnwrap(section(heading: "설정", in: korean))
+
+        XCTAssertNil(en.outro, "The Settings units paragraph is back (English)")
+        XCTAssertNil(ko.outro, "The Settings units paragraph is back (Korean)")
+        XCTAssertTrue(en.items.contains("choose distance unit for cardio: km or mi"))
+        XCTAssertTrue(ko.items.contains("유산소 거리 단위 선택: km 또는 mi"))
     }
 
     /// The limits the guide quotes must be the limits the app enforces.
