@@ -237,29 +237,6 @@
 			productReference = 9EA7436D2FBAA9EB00E1ACB8 /* LogTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		9EAB719C2E5AB9FE00D6BF44 /* LogUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 9EA7440A2FBB000000E1ACB8 /* Build configuration list for PBXNativeTarget "LogUITests" */;
-			buildPhases = (
-				9EA744032FBB000000E1ACB8 /* Sources */,
-				9EA744042FBB000000E1ACB8 /* Frameworks */,
-				9EA744052FBB000000E1ACB8 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				9EA744072FBB000000E1ACB8 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				9EA744022FBB000000E1ACB8 /* LogUITests */,
-			);
-			name = LogUITests;
-			packageProductDependencies = (
-			);
-			productName = LogUITests;
-			productReference = 9EA744012FBB000000E1ACB8 /* LogUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 		9EAB712C2E5AAB9300D6BF44 /* Log */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9EAB713A2E5AAB9400D6BF44 /* Build configuration list for PBXNativeTarget "Log" */;
@@ -285,6 +262,29 @@
 			productReference = 9EAB712D2E5AAB9300D6BF44 /* Log.app */;
 			productType = "com.apple.product-type.application";
 		};
+		9EAB719C2E5AB9FE00D6BF44 /* LogUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9EA7440A2FBB000000E1ACB8 /* Build configuration list for PBXNativeTarget "LogUITests" */;
+			buildPhases = (
+				9EA744032FBB000000E1ACB8 /* Sources */,
+				9EA744042FBB000000E1ACB8 /* Frameworks */,
+				9EA744052FBB000000E1ACB8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9EA744072FBB000000E1ACB8 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9EA744022FBB000000E1ACB8 /* LogUITests */,
+			);
+			name = LogUITests;
+			packageProductDependencies = (
+			);
+			productName = LogUITests;
+			productReference = 9EA744012FBB000000E1ACB8 /* LogUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -302,13 +302,13 @@
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = 9EAB712C2E5AAB9300D6BF44;
 					};
-					9EAB719C2E5AB9FE00D6BF44 = {
-						CreatedOnToolsVersion = 26.5;
-						TestTargetID = 9EAB712C2E5AAB9300D6BF44;
-					};
 					9EAB712C2E5AAB9300D6BF44 = {
 						CreatedOnToolsVersion = 16.4;
 						LastSwiftMigration = 1640;
+					};
+					9EAB719C2E5AB9FE00D6BF44 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 9EAB712C2E5AAB9300D6BF44;
 					};
 				};
 			};
@@ -424,7 +424,8 @@
 				CODE_SIGN_ENTITLEMENTS = RestLiveActivityWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = 89X2V95K75;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RestLiveActivityWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RestLiveActivityWidget;
@@ -458,7 +459,8 @@
 				CODE_SIGN_ENTITLEMENTS = RestLiveActivityWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = 89X2V95K75;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RestLiveActivityWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RestLiveActivityWidget;
@@ -710,7 +712,8 @@
 				CODE_SIGN_ENTITLEMENTS = Log/Log.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = 89X2V95K75;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Log/Info.plist;
@@ -751,7 +754,8 @@
 				CODE_SIGN_ENTITLEMENTS = Log/Log.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = 89X2V95K75;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Log/Info.plist;
