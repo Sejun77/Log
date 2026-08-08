@@ -946,6 +946,18 @@
         }
       }
     },
+    "Cardio Set" : {
+      "comment" : "History row label for the single aggregate cardio entry",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "유산소 세트"
+          }
+        }
+      }
+    },
     "Chest" : {
       "extractionState" : "stale",
       "localizations" : {

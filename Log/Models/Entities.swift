@@ -103,12 +103,18 @@ enum SetKind: String, Codable, CaseIterable {
     /// context of the workout that produced it, so the one that says nothing is
     /// the ambiguous one.
     ///
-    /// This is the only thing a History row label depends on. It is read from
-    /// the *stored set kind*, never from the exercise — a cardio working set, a
-    /// timed hold's working set and a barbell working set are all working sets,
-    /// and the app has no cardio-specific set kinds to distinguish. If cardio
-    /// ever gains structured warm-up / cooldown sets, they arrive as `SetKind`
-    /// cases here and every row label follows for free.
+    /// The kind vocabulary, and nothing else: this reads the *stored set kind*
+    /// and never the exercise. A timed hold's working set and a barbell working
+    /// set are both working sets, and the app has no cardio-specific set kinds
+    /// to distinguish. If cardio ever gains structured warm-up / cooldown sets,
+    /// they arrive as `SetKind` cases here and every row label follows for free.
+    ///
+    /// The one exercise-dependent exception lives one level up, in
+    /// `HistorySetRowLabel`: a cardio bout's `.working` set reads "Cardio Set",
+    /// because a cardio row is one aggregate entry rather than a set in the
+    /// strength sense and the Cardio Plan above it already spends the word
+    /// *Work* on a planned segment. That is a naming decision about a rendered
+    /// row, not a set kind, so it does not belong in this enum.
     ///
     /// Display-only — does not affect the persisted `rawValue`.
     var historyRowLabel: String {

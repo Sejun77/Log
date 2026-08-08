@@ -5,19 +5,32 @@ import XCTest
 
 /// The History set-row label.
 ///
-/// One rule, no exceptions: **number, then the stored set kind's name.** A row
-/// reads "1. Working Set", "1. Warm-up Set" or "1. Drop Set", and which one it
-/// is depends on `SetLog.kind` alone.
+/// The rule: **number, then the name of what was logged.** A strength or
+/// timed-hold row reads "1. Working Set", "1. Warm-up Set" or "1. Drop Set",
+/// and which one it is depends on `SetLog.kind` alone. A cardio row reads
+/// **"1. Cardio Set"**.
 ///
-/// The exercise is deliberately not consulted. An earlier patch gave cardio its
-/// own neutral "Set" label; that special case is gone — the app stores set kind
-/// on the set, and cardio has no cardio-specific kinds to distinguish, so a
-/// cardio working set is a working set. Most of this file exists to keep it
-/// that way: the same assertions run across strength, timed-hold and cardio
-/// exercises and expect identical output.
+/// ### Why cardio is the one exception
+///
+/// A cardio bout is one aggregate entry for the whole effort, not a set in the
+/// strength sense — and the Cardio Plan block rendered directly above these
+/// rows already spends the words *Warm-up*, *Work*, *Recovery* and *Cool-down*
+/// on planned segments. "Working Set" beside that plan read as the plan's
+/// *Work* segment, implying the other segments were logged somewhere too. They
+/// are not.
+///
+/// This is a naming decision about a rendered row and nothing more: the stored
+/// `SetKind` is untouched, cardio still persists `.working`, and there are no
+/// cardio-specific set kinds. `SetKind.historyRowLabel` therefore stays the
+/// pure kind vocabulary and the exception lives in `HistorySetRowLabel`.
+///
+/// > An earlier patch gave cardio a neutral "1. Set" and was reverted for
+/// > saying *less* than the app knew. "Cardio Set" is the opposite move: it
+/// > names the thing precisely rather than declining to name it.
 ///
 /// The active-workout row labels (`SetKind.activeRowLabel`) are a separate,
-/// intentionally different vocabulary and are pinned here as *unchanged*.
+/// intentionally different vocabulary and are pinned here as *unchanged* — a
+/// `.working` set draws no label mid-workout, cardio included.
 @MainActor
 final class HistorySetRowLabelTests: SwiftDataTestHarness {
 
@@ -45,8 +58,8 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
         makeExercise(name: "Treadmill Run", timeBased: true, cardio: true)
     }
 
-    /// One item per tracking mode, so a single assertion can prove the label
-    /// does not vary with the exercise.
+    /// One item per tracking mode, so a single assertion can prove which part
+    /// of the label varies with the exercise and which part does not.
     private func allTrackingModeItems() -> [(TrackingMode, WorkoutItem)] {
         [strengthExercise(), timedHoldExercise(), cardioExercise()].map {
             ($0.trackingMode, makeItem($0))
@@ -78,13 +91,17 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
         return item
     }
 
+    /// Renders an item's rows the way `HistoryView` does — cardio-ness resolved
+    /// from the item, not passed in by the test — so these assertions cover the
+    /// production path rather than a convenient parameterization of it.
     private func labels(_ item: WorkoutItem) -> [String] {
-        item.setLogs
+        let isCardio = HistorySetRowLabel.isCardio(item)
+        return item.setLogs
             .sorted { $0.indexInExercise < $1.indexInExercise }
-            .map { HistorySetRowLabel.text(for: $0) }
+            .map { HistorySetRowLabel.text(for: $0, isCardio: isCardio) }
     }
 
-    // MARK: - 1–3. Working sets, whatever the exercise
+    // MARK: - 1–3. Working sets
 
     func testStrengthWorkingRowsUseWorkingSet() {
         let item = makeItem(strengthExercise())
@@ -94,6 +111,9 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
         XCTAssertEqual(labels(item), ["1. Working Set", "2. Working Set"])
     }
 
+    /// A timed hold is not cardio. "Working Set" is the right word for a plank:
+    /// it is a set, performed for time instead of reps, and it carries no plan
+    /// whose vocabulary it could collide with.
     func testTimedHoldWorkingRowsUseWorkingSet() {
         let item = makeItem(timedHoldExercise())
         makeLog(into: item, index: 0, durationSeconds: 60)
@@ -102,13 +122,13 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
         XCTAssertEqual(labels(item), ["1. Working Set", "2. Working Set"])
     }
 
-    func testCardioWorkingRowsUseWorkingSet() {
+    func testCardioRowsUseCardioSet() {
         let item = makeItem(cardioExercise())
         makeLog(into: item, index: 0, durationSeconds: 1_800,
                 metrics: CardioMetrics(distanceMeters: 5_000))
         makeLog(into: item, index: 1, durationSeconds: 600)
 
-        XCTAssertEqual(labels(item), ["1. Working Set", "2. Working Set"])
+        XCTAssertEqual(labels(item), ["1. Cardio Set", "2. Cardio Set"])
     }
 
     // MARK: - 4. Warm-up sets
@@ -132,8 +152,12 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
 
         XCTAssertEqual(HistorySetRowLabel.number(for: first), 1)
         XCTAssertEqual(HistorySetRowLabel.number(for: fourth), 4)
-        XCTAssertEqual(HistorySetRowLabel.text(for: first), "1. Warm-up Set")
-        XCTAssertEqual(HistorySetRowLabel.text(for: fourth), "4. Warm-up Set")
+        XCTAssertEqual(
+            HistorySetRowLabel.text(for: first, isCardio: false),
+            "1. Warm-up Set")
+        XCTAssertEqual(
+            HistorySetRowLabel.text(for: fourth, isCardio: false),
+            "4. Warm-up Set")
     }
 
     // MARK: - 5. Drop sets
@@ -143,7 +167,8 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
         let log = makeLog(
             into: item, index: 0, kind: .dropset, reps: 12, weight: 8)
 
-        XCTAssertEqual(HistorySetRowLabel.text(for: log), "1. Drop Set")
+        XCTAssertEqual(
+            HistorySetRowLabel.text(for: log, isCardio: false), "1. Drop Set")
     }
 
     /// The dropset row reuses the same key the active workout already uses, so
@@ -153,27 +178,60 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
             SetKind.dropset.historyRowLabel, SetKind.dropset.activeRowLabel)
     }
 
-    // MARK: - 6. Cardio is not special-cased
+    // MARK: - 6. Cardio names its aggregate row, and only that row
 
-    /// The whole point of this patch: identical set logs produce identical
-    /// labels under a strength, a timed-hold and a cardio exercise.
-    func testLabelDoesNotDependOnTrackingMode() {
+    /// The exception is scoped to `.working`. Cardio has no warm-up or drop
+    /// `SetLog`s — structured warm-up, recovery and cool-down are *planned
+    /// segments*, never logged rows — but if one ever reached History it would
+    /// still name its stored kind rather than being relabelled.
+    func testCardioDoesNotRenameOtherSetKinds() {
+        let item = makeItem(cardioExercise())
+        let warmup = makeLog(into: item, index: -1, kind: .warmup)
+        let drop = makeLog(into: item, index: 0, kind: .dropset)
+
+        XCTAssertEqual(
+            HistorySetRowLabel.text(for: warmup, isCardio: true),
+            "1. Warm-up Set")
+        XCTAssertEqual(
+            HistorySetRowLabel.text(for: drop, isCardio: true), "1. Drop Set")
+    }
+
+    /// Only the *name* varies with the exercise. The number is computed from
+    /// the set alone, so identical logs number identically under every mode.
+    func testNumberingDoesNotDependOnTrackingMode() {
         for kind in SetKind.allCases {
-            var rendered: [TrackingMode: String] = [:]
-            for (mode, item) in allTrackingModeItems() {
+            var numbers: Set<Int> = []
+            for (_, item) in allTrackingModeItems() {
                 let index = kind == .warmup ? -1 : 0
                 let log = makeLog(into: item, index: index, kind: kind)
-                rendered[mode] = HistorySetRowLabel.text(for: log)
+                numbers.insert(HistorySetRowLabel.number(for: log))
             }
             XCTAssertEqual(
-                Set(rendered.values).count, 1,
-                "\(kind) label varies by tracking mode: \(rendered)")
+                numbers.count, 1,
+                "\(kind) numbering varies by tracking mode: \(numbers)")
         }
     }
 
-    /// Recorded cardio metrics must not change the label either — an earlier
-    /// design inferred cardio-ness from them.
-    func testRecordedMetricsDoNotChangeTheLabel() {
+    /// Strength and timed hold share one label; cardio is the only mode that
+    /// differs. Pins the blast radius of the exception.
+    func testOnlyCardioChangesTheWorkingRowName() {
+        var rendered: [TrackingMode: String] = [:]
+        for (mode, item) in allTrackingModeItems() {
+            let log = makeLog(into: item, index: 0)
+            rendered[mode] = HistorySetRowLabel.text(
+                for: log, isCardio: HistorySetRowLabel.isCardio(item))
+        }
+
+        XCTAssertEqual(rendered[.strength], "1. Working Set")
+        XCTAssertEqual(rendered[.timedHold], "1. Working Set")
+        XCTAssertEqual(rendered[.cardio], "1. Cardio Set")
+    }
+
+    /// Recorded metrics must not decide the label — an earlier design inferred
+    /// cardio-ness from them, so a duration-only bout read differently from the
+    /// one beside it. The exercise decides; a bout logged with nothing but a
+    /// duration is still a Cardio Set.
+    func testRecordedMetricsDoNotDecideTheLabel() {
         let item = makeItem(cardioExercise())
         let withMetrics = makeLog(
             into: item, index: 0, durationSeconds: 900,
@@ -183,15 +241,69 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
 
         XCTAssertTrue(withMetrics.hasCardioMetrics)
         XCTAssertFalse(withoutMetrics.hasCardioMetrics)
-        XCTAssertEqual(
-            HistorySetRowLabel.text(for: withMetrics), "1. Working Set")
-        XCTAssertEqual(
-            HistorySetRowLabel.text(for: withoutMetrics), "2. Working Set")
+        XCTAssertEqual(labels(item), ["1. Cardio Set", "2. Cardio Set"])
     }
 
-    /// History survives exercise deletion (`exerciseNameSnapshot`). With no
-    /// live `Exercise` at all the label is unchanged, because it never read one.
-    func testLabelSurvivesExerciseDeletion() {
+    /// The mirror image: metrics on a *strength* item cannot promote its rows
+    /// to Cardio Sets.
+    func testStrengthItemWithStrayMetricsStillReadsAsWorkingSet() {
+        let item = makeItem(strengthExercise())
+        makeLog(into: item, index: 0, reps: 8, weight: 60,
+                metrics: CardioMetrics(distanceMeters: 100))
+
+        XCTAssertEqual(labels(item), ["1. Working Set"])
+    }
+
+    // MARK: - 6b. Resolving cardio-ness when the exercise is gone
+
+    func testCardioIsResolvedFromTheLiveExercise() {
+        XCTAssertTrue(HistorySetRowLabel.isCardio(makeItem(cardioExercise())))
+        XCTAssertFalse(HistorySetRowLabel.isCardio(makeItem(strengthExercise())))
+        XCTAssertFalse(
+            HistorySetRowLabel.isCardio(makeItem(timedHoldExercise())))
+    }
+
+    /// History outlives the exercises it records. With the exercise deleted the
+    /// frozen prescription snapshot answers instead: a target distance is
+    /// authorable on a cardio slot and nowhere else.
+    func testDeletedExerciseFallsBackToTheTargetDistanceSnapshot() {
+        let item = makeItem(cardioExercise())
+        makeLog(into: item, index: 0, durationSeconds: 600,
+                metrics: CardioMetrics(distanceMeters: 1_200))
+        let snapshot = PlannedPrescriptionSnapshot()
+        context.insert(snapshot)
+        snapshot.targetDistanceMeters = 5_000
+        item.plannedPrescriptionSnapshot = snapshot
+
+        item.exercise = nil
+
+        XCTAssertEqual(labels(item), ["1. Cardio Set"])
+    }
+
+    /// A structured plan is the other cardio-only trace on the snapshot.
+    func testDeletedExerciseFallsBackToTheStructuredPlanSnapshot() throws {
+        let item = makeItem(cardioExercise())
+        makeLog(into: item, index: 0, durationSeconds: 1_500)
+        let snapshot = PlannedPrescriptionSnapshot()
+        context.insert(snapshot)
+        snapshot.cardioSegmentsData = try JSONEncoder().encode(
+            CardioSegmentPlan(groups: [
+                CardioSegmentGroup(segments: [
+                    CardioSegment(kind: .work, durationSeconds: 1_500)
+                ])
+            ]))
+        item.plannedPrescriptionSnapshot = snapshot
+
+        item.exercise = nil
+
+        XCTAssertEqual(labels(item), ["1. Cardio Set"])
+    }
+
+    /// With no exercise and no cardio trace on the snapshot there is nothing to
+    /// read, and the row falls back to the kind it stored. Guessing from the
+    /// metrics is what the previous design did, and it is why two rows holding
+    /// the same data could read differently.
+    func testDeletedExerciseWithNoSnapshotEvidenceReadsAsWorkingSet() {
         let item = makeItem(cardioExercise())
         makeLog(into: item, index: 0, durationSeconds: 600,
                 metrics: CardioMetrics(distanceMeters: 1_200))
@@ -201,8 +313,8 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
         XCTAssertEqual(labels(item), ["1. Working Set"])
     }
 
-    /// The neutral cardio label the previous patch introduced is gone; nothing
-    /// in History renders a bare "Set" any more.
+    /// The neutral label the reverted patch introduced stays gone: no row
+    /// renders a bare "Set".
     func testNoRowRendersTheBareNeutralLabel() {
         for kind in SetKind.allCases {
             XCTAssertNotEqual(kind.historyRowLabel, "Set")
@@ -223,6 +335,14 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
         XCTAssertEqual(SetKind.dropset.historyRowLabel, "Drop Set")
     }
 
+    /// The cardio name is not a `SetKind` and must not become one — the model
+    /// stores `.working` for a cardio bout and nothing about that changed.
+    func testCardioSetIsNotASetKind() {
+        XCTAssertFalse(
+            SetKind.allCases.map(\.historyRowLabel).contains("Cardio Set"))
+        XCTAssertNil(SetKind(rawValue: "cardio"))
+    }
+
     /// An unparseable `kindRaw` resolves to `.working` (`SetLog.kind`'s
     /// fallback), so a corrupt row still renders a sensible label instead of
     /// echoing raw storage back at the user.
@@ -231,14 +351,18 @@ final class HistorySetRowLabelTests: SwiftDataTestHarness {
         let log = makeLog(into: item, index: 0, reps: 5, weight: 50)
         log.kindRaw = "not-a-kind"
 
-        XCTAssertEqual(HistorySetRowLabel.text(for: log), "1. Working Set")
+        XCTAssertEqual(
+            HistorySetRowLabel.text(for: log, isCardio: false),
+            "1. Working Set")
     }
 
     // MARK: - 7. Active-workout labels are untouched
 
     /// The active workout has never shown "Working": `.working` returns nil so
     /// the row draws no kind label at all. This is History-only, and this test
-    /// is what fails if a future edit tries to unify the two vocabularies.
+    /// is what fails if a future edit tries to unify the two vocabularies — or
+    /// tries to stamp "Cardio Set" onto the active row, where the surrounding
+    /// context already says what the exercise is.
     func testActiveWorkoutRowLabelsAreUnchanged() {
         XCTAssertNil(SetKind.working.activeRowLabel)
         XCTAssertEqual(SetKind.warmup.activeRowLabel, "Warmup")

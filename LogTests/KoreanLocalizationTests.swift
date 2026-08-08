@@ -268,6 +268,10 @@ final class KoreanLocalizationTests: XCTestCase {
         "Pace (min/mi)",
         "Working Set",
         "Warm-up Set",
+        // Pre-archive polish — the History label for the single aggregate
+        // cardio entry. Not a `SetKind`: the row stores `.working` and is
+        // renamed at render, so it needs its own key.
+        "Cardio Set",
         // Slice 5 — the routine editor's cardio distance target. The unit
         // shown beside it is language-neutral, like every other unit symbol.
         "Target distance",
@@ -315,6 +319,11 @@ final class KoreanLocalizationTests: XCTestCase {
             XCTAssertEqual(kind.historyRowLabel, key)
             XCTAssertEqual(localized(key, in: ko), korean)
         }
+
+        // The cardio aggregate row is renamed at render, not stored, so it has
+        // no `SetKind` to loop over — but it is the same row vocabulary and
+        // must be translated alongside the rest.
+        XCTAssertEqual(localized("Cardio Set", in: ko), "유산소 세트")
     }
 
     func testCardioDetailsStringsLocalizeToKorean() throws {

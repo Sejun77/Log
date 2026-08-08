@@ -908,6 +908,10 @@ private struct WorkoutDetailView: View {
                 : (1, b.indexInExercise, b.subIndex ?? -1)
             return ka < kb
         }
+        // Whether these rows read as cardio ("1. Cardio Set") or as ordinary
+        // sets ("1. Working Set"). Resolved once per item, not per row: every
+        // row under one item belongs to the same exercise.
+        let itemIsCardio = HistorySetRowLabel.isCardio(item)
         if logs.isEmpty {
             Text("No sets logged")
                 .font(.dsBodySecondary)
@@ -930,7 +934,10 @@ private struct WorkoutDetailView: View {
                         // Passed as a `String` (not an interpolated literal) so
                         // it renders verbatim — the helper has already resolved
                         // the localized kind name it contains.
-                        Text(HistorySetRowLabel.text(for: log))
+                        Text(
+                            HistorySetRowLabel.text(
+                                for: log, isCardio: itemIsCardio)
+                        )
                         .font(.dsBody)
                         Spacer()
 
