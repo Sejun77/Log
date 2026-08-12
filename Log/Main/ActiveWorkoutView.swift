@@ -106,10 +106,17 @@ struct ActiveWorkoutView: View {
     /// Technique snapshot tapped for read-only detail; drives the detail sheet.
     @State private var techniqueDetailSnap: TechniquePlanSnapshot? = nil
 
-    @StateObject private var setTimer = RestTimer()
+    /// Duration-based set countdown. Owns a **separate** persistence namespace
+    /// from `rest`; sharing one made a running duration set rehydrate into the
+    /// rest timer on foreground and present the "Rest" overlay.
+    @StateObject private var setTimer = RestTimer(
+        namespace: RestTimer.Namespace.set
+    )
     @State private var showSetOverlay = false
 
-    @StateObject private var rest = RestTimer()
+    @StateObject private var rest = RestTimer(
+        namespace: RestTimer.Namespace.rest
+    )
 
     // Phase 5.2 — keyed by routineSlotID (per-slot identity).
     // The "ByExerciseID" suffix is legacy naming; the value is a per-slot
@@ -2506,6 +2513,12 @@ struct ActiveWorkoutView: View {
                 rest.resumeIfScheduled()
                 rest.syncNow()
 
+                // Same rehydration for the duration countdown, from its own
+                // namespace. Reads UserDefaults only — no notification is
+                // scheduled or rescheduled for set mode.
+                setTimer.resumeIfScheduled()
+                setTimer.syncNow()
+
                 // 0) initialize session plans from snapshots
                 initializeSessionPlans()
                 // 0a) overlay persisted session plans (cold resume — takes precedence)
@@ -2545,6 +2558,7 @@ struct ActiveWorkoutView: View {
 
                 // ensure overlay shows if a rest is already running in background
                 showRestOverlay = rest.isRunning
+                showSetOverlay = setTimer.isRunning
             }
             .onChange(of: rest.isRunning) { _, running in
                 if !running {
@@ -2571,6 +2585,17 @@ struct ActiveWorkoutView: View {
                 rest.ensureActivityStartedForSession()
                 rest.syncNow()
                 showRestOverlay = rest.isRunning
+
+                // The duration timer's 1 Hz ticker is suspended while
+                // backgrounded, so `remaining` is stale by exactly the time
+                // spent away. Re-anchor it to wall clock here, the same way
+                // rest does — otherwise the toolbar "Duration: Ns" text
+                // resumes counting from where it froze. Set mode drives no
+                // notification and no Live Activity, so this only affects the
+                // in-app countdown and its own overlay.
+                setTimer.handleLifecycleDidBecomeActive()
+                setTimer.syncNow()
+                showSetOverlay = setTimer.isRunning
             }
             .task {
                 await AppNotificationService.requestAuthorizationIfNeeded()

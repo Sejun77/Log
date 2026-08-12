@@ -58,4 +58,53 @@ final class SessionElapsedFormatTests: XCTestCase {
         // 10.9s elapsed → still "00:10" (Int truncation, matches old behavior)
         XCTAssertEqual(formatSessionElapsed(start: start, now: now(plus: 10.9)), "00:10")
     }
+
+    // MARK: - Background / foreground catch-up
+
+    /// The clock is a pure function of (start, now) — `SessionClockView` feeds
+    /// it `TimelineView`'s date — so a gap with no ticks in between produces
+    /// the full elapsed time, not the pre-gap value. This is what makes the
+    /// toolbar clock correct on foreground without any resync call.
+    func testElapsedSpansAGapWithNoIntermediateTicks() {
+        // 12s in, app backgrounds; 2 minutes later it returns.
+        let beforeBackground = formatSessionElapsed(
+            start: start,
+            now: now(plus: 12)
+        )
+        XCTAssertEqual(beforeBackground, "00:12")
+
+        let onForeground = formatSessionElapsed(
+            start: start,
+            now: now(plus: 12 + 120)
+        )
+        XCTAssertEqual(
+            onForeground,
+            "02:12",
+            "Elapsed time did not include the backgrounded interval"
+        )
+    }
+
+    /// A gap long enough to cross the MM:SS → H:MM:SS boundary still resolves
+    /// from wall clock alone.
+    func testLongBackgroundGapCrossesHourBoundary() {
+        XCTAssertEqual(
+            formatSessionElapsed(start: start, now: now(plus: 30)),
+            "00:30"
+        )
+        XCTAssertEqual(
+            formatSessionElapsed(start: start, now: now(plus: 30 + 3600)),
+            "1:00:30"
+        )
+    }
+
+    /// Same input always yields the same output regardless of how many times
+    /// it is evaluated — no accumulated counter state.
+    func testFormattingIsStateless() {
+        let first = formatSessionElapsed(start: start, now: now(plus: 754))
+        _ = formatSessionElapsed(start: start, now: now(plus: 1))
+        let second = formatSessionElapsed(start: start, now: now(plus: 754))
+
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first, "12:34")
+    }
 }

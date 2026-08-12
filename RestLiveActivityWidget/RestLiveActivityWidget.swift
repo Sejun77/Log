@@ -8,13 +8,17 @@ struct RestLiveActivityWidget: Widget {
         ActivityConfiguration(for: RestActivityAttributes.self) { context in
             // LOCK SCREEN / BANNER
             HStack(alignment: .center, spacing: 12) {
-                // LOCK SCREEN / BANNER (left side: Rest)
-                VStack(spacing: 2) {
-                    Text("Rest")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                // LEFT: Rest countdown — rendered ONLY while a rest is
+                // actually running. This activity is also started neutrally to
+                // carry the session clock (`ensureActivityStartedForSession`),
+                // and the column used to sit there reading "Rest —" for the
+                // whole workout, labeling session time as rest.
+                if context.state.endDate > Date() {
+                    VStack(spacing: 2) {
+                        Text("Rest")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
 
-                    if context.state.endDate > Date() {
                         Text(
                             timerInterval: Date.now...context.state.endDate,
                             countsDown: true
@@ -23,20 +27,12 @@ struct RestLiveActivityWidget: Widget {
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
-                    } else {
-                        Text("—")
-                            .font(
-                                .system(.title2, design: .rounded).weight(.bold)
-                            )
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(maxWidth: .infinity, alignment: .center)
 
-                // Vertical divider (Divider inside HStack is vertical)
-                Divider()
+                    // Vertical divider (Divider inside HStack is vertical)
+                    Divider()
+                }
 
                 // RIGHT: Global workout timer (elapsed since sessionStart)
                 VStack(spacing: 2) {
