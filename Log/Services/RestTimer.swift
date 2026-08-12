@@ -4,22 +4,48 @@ import Foundation
 import UIKit
 import UserNotifications
 
-private enum RestStoreKey {
-    static let endDate = "restTimer.endDate"
-    static let total = "restTimer.total"
-    static let mode = "restTimer.mode"
+/// UserDefaults keys for **one** `RestTimer` instance.
+///
+/// These were previously three global constants, which meant the two live
+/// `RestTimer` instances (`rest` and `setTimer` in `ActiveWorkoutView`) read
+/// and wrote the same slots. A running duration set would therefore be
+/// rehydrated into the *rest* timer on foreground, surfacing the duration
+/// countdown behind the "Rest" overlay. Keys are now namespaced per instance;
+/// the rest namespace keeps the original key strings so already-persisted
+/// rest state still rehydrates across this change.
+private struct RestStoreKeys {
+    let endDate: String
+    let total: String
+    let mode: String
+
+    init(namespace: String) {
+        endDate = "\(namespace).endDate"
+        total = "\(namespace).total"
+        mode = "\(namespace).mode"
+    }
 }
 
 extension RestTimer {
     enum Mode: String { case rest, set }
 
+    /// Persistence namespaces. One per live `RestTimer` instance — never share.
+    enum Namespace {
+        /// Real between-sets rest. Original key prefix, kept for continuity.
+        static let rest = "restTimer"
+        /// Duration-based set ("Duration") countdown.
+        static let set = "setTimer"
+
+        static let all = [rest, set]
+    }
+
     func resumeIfScheduled() {
         let ud = UserDefaults.standard
+        let keys = storeKeys
         guard
-            let endTs = ud.object(forKey: RestStoreKey.endDate)
+            let endTs = ud.object(forKey: keys.endDate)
                 as? TimeInterval,
-            let total = ud.object(forKey: RestStoreKey.total) as? Int,
-            let modeStr = ud.string(forKey: RestStoreKey.mode),
+            let total = ud.object(forKey: keys.total) as? Int,
+            let modeStr = ud.string(forKey: keys.mode),
             let mode = Mode(rawValue: modeStr)
         else { return }
 
@@ -51,28 +77,38 @@ extension RestTimer {
     private func persistState() {
         guard let end = endDate else { return }
         let ud = UserDefaults.standard
-        ud.set(end.timeIntervalSince1970, forKey: RestStoreKey.endDate)
-        ud.set(total, forKey: RestStoreKey.total)
-        ud.set(mode.rawValue, forKey: RestStoreKey.mode)
+        let keys = storeKeys
+        ud.set(end.timeIntervalSince1970, forKey: keys.endDate)
+        ud.set(total, forKey: keys.total)
+        ud.set(mode.rawValue, forKey: keys.mode)
     }
 
     private func clearPersistence() {
         let ud = UserDefaults.standard
-        ud.removeObject(forKey: RestStoreKey.endDate)
-        ud.removeObject(forKey: RestStoreKey.total)
-        ud.removeObject(forKey: RestStoreKey.mode)
+        let keys = storeKeys
+        ud.removeObject(forKey: keys.endDate)
+        ud.removeObject(forKey: keys.total)
+        ud.removeObject(forKey: keys.mode)
     }
 
-    /// Clears persisted rest state (UserDefaults) and cancels any
+    /// Clears persisted timer state (UserDefaults) and cancels any
     /// scheduled/delivered notifications with the given IDs.
     /// Safe to call from any context (does not require a RestTimer instance).
+    ///
+    /// Clears **every** namespace by default: workout-end / discard paths must
+    /// not leave a stale duration countdown behind for the next session to
+    /// rehydrate. Only rest schedules notifications, so the ID handling below
+    /// is unchanged.
     static func clearPersistedStateAndNotifications(
+        namespaces: [String] = Namespace.all,
         cancelNotificationIDs: [String] = []
     ) {
         let ud = UserDefaults.standard
-        ud.removeObject(forKey: RestStoreKey.endDate)
-        ud.removeObject(forKey: RestStoreKey.total)
-        ud.removeObject(forKey: RestStoreKey.mode)
+        for keys in namespaces.map(RestStoreKeys.init(namespace:)) {
+            ud.removeObject(forKey: keys.endDate)
+            ud.removeObject(forKey: keys.total)
+            ud.removeObject(forKey: keys.mode)
+        }
 
         if !cancelNotificationIDs.isEmpty {
             let center = UNUserNotificationCenter.current()
@@ -100,6 +136,26 @@ final class RestTimer: ObservableObject {
     @Published private(set) var isRunning: Bool = false
     @Published private(set) var total: Int = 0
     private var mode: Mode = .rest
+
+    /// Role of the countdown currently running, or `nil` when idle.
+    ///
+    /// Rest-specific presentation — the "Rest" overlay title, the rest
+    /// notification, the Live Activity — must key off this rather than
+    /// assuming any running `RestTimer` is a rest.
+    var runningMode: Mode? { isRunning ? mode : nil }
+
+    /// UserDefaults namespace owned by this instance. Two instances must never
+    /// share one, or each will rehydrate the other's countdown on foreground.
+    let storeNamespace: String
+    private var storeKeys: RestStoreKeys
+
+    /// - Parameter namespace: persistence namespace, defaulting to the rest
+    ///   timer's original key prefix so existing rest state keeps rehydrating.
+    ///   Pass `Namespace.set` for the duration-set timer.
+    init(namespace: String = Namespace.rest) {
+        self.storeNamespace = namespace
+        self.storeKeys = RestStoreKeys(namespace: namespace)
+    }
 
     // Foreground ticker (suspends in background; corrected via wall-clock on resume)
     private var ticker: AnyCancellable?
