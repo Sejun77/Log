@@ -235,6 +235,11 @@ Deferred means decided, not forgotten.
 
 ## Final Pre-TestFlight Polish
 
+Done:
+
+- Removed a stale "Rest after" preview label that could appear from legacy
+  routine data before starting a workout.
+
 TODO:
 
 - Add remaining fixes completed before upload
