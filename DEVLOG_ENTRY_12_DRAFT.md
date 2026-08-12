@@ -200,7 +200,7 @@ _As of the 2026-08-12 verification run. To be re-run and updated before upload._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 1,946 tests, 0 failures** — 1,944 unit tests plus 2 UI
+- **Full scheme passes: 1,968 tests, 0 failures** — 1,966 unit tests plus 2 UI
   tests.
 - **Release build succeeds.**
 - **Manual regression completed** on device: routines, logging, exercise
@@ -242,6 +242,8 @@ Done:
   routine data before starting a workout.
 - Fixed a background/foreground timer issue where a duration countdown could
   reopen as a Rest overlay instead of catching up as duration.
+- Added a confirmation before switching exercises when the switch would remove
+  already logged sets.
 
 TODO:
 
