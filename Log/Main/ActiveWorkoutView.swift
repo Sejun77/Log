@@ -54,6 +54,11 @@ struct ActiveWorkoutView: View {
     @State private var swapPickerItem: SwapPickerItem? = nil
     @State private var pendingSwapNewExercise: Exercise? = nil
     @State private var showSwapPlanChoice = false
+    /// Second-stage destructive confirmation, shown only when the pending
+    /// switch would delete logged sets. Nil impact = nothing to warn about.
+    @State private var showSwapDestructiveConfirm = false
+    @State private var pendingSwapImpact: ExerciseSwitchDeletionImpact? = nil
+    @State private var pendingSwapResetPlan = false
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
 
     @Environment(\.modelContext) private var ctx
@@ -2647,14 +2652,40 @@ struct ActiveWorkoutView: View {
                 titleVisibility: .visible
             ) {
                 Button("Keep current plan") {
-                    performPendingSwap(resetPlan: false)
+                    requestPendingSwap(resetPlan: false)
                 }
                 Button("Reset plan for this slot") {
-                    performPendingSwap(resetPlan: true)
+                    requestPendingSwap(resetPlan: true)
                 }
                 Button("Cancel", role: .cancel) {
-                    pendingSwapNewExercise = nil
-                    exerciseToSwapIndex = nil
+                    cancelPendingSwap()
+                }
+            }
+            // Second stage: only presented when the switch would destroy logged
+            // work. Both plan choices route through it, and Cancel returns the
+            // slot to exactly its pre-switch state — nothing has been applied
+            // at this point, because `performPendingSwap` has not run yet.
+            .confirmationDialog(
+                ExerciseSwitchConfirmationCopy.title,
+                isPresented: $showSwapDestructiveConfirm,
+                titleVisibility: .visible
+            ) {
+                Button(
+                    ExerciseSwitchConfirmationCopy.confirmButton,
+                    role: .destructive
+                ) {
+                    let reset = pendingSwapResetPlan
+                    pendingSwapImpact = nil
+                    performPendingSwap(resetPlan: reset)
+                }
+                Button("Cancel", role: .cancel) {
+                    cancelPendingSwap()
+                }
+            } message: {
+                if let message = ExerciseSwitchConfirmationCopy.message(
+                    for: pendingSwapImpact ?? ExerciseSwitchDeletionImpact()
+                ) {
+                    Text(message)
                 }
             }
             .sheet(
@@ -2929,6 +2960,61 @@ struct ActiveWorkoutView: View {
                     sp.slotNotes?.isEmpty == true ? nil : sp.slotNotes
             }
         }
+    }
+
+    /// How many logged sets the pending switch would delete.
+    ///
+    /// Reads the block's **pre-switch** state and defers the arithmetic to
+    /// `exerciseSwitchDeletionImpact`, which reuses the same
+    /// `supersetLogsToInvalidate` helper the post-swap cascade runs — so the
+    /// count in the confirmation and the sets actually removed come from one
+    /// rule, not two.
+    private func pendingSwapDeletionImpact() -> ExerciseSwitchDeletionImpact {
+        guard let idx = exerciseToSwapIndex,
+            let block = currentBlock,
+            idx < block.exercises.count
+        else { return ExerciseSwitchDeletionImpact() }
+
+        var setCounts: [UUID: Int] = [:]
+        for ex in block.exercises {
+            setCounts[ex.routineSlotID] = effectiveSetCount(
+                for: ex, resolvedTemplates: ex.templates
+            )
+        }
+
+        return exerciseSwitchDeletionImpact(
+            slotID: block.exercises[idx].routineSlotID,
+            isSuperset: block.isSuperset,
+            slotOrder: block.exercises.map(\.routineSlotID),
+            setCounts: setCounts,
+            loggedBySlot: loggedByExercise
+        )
+    }
+
+    /// Gate the deferred swap behind a destructive confirmation when it would
+    /// delete logged sets; otherwise apply it immediately, exactly as before.
+    ///
+    /// Applies to **both** plan choices and to every tracking mode — the gate is
+    /// a function of logged sets alone, which is what the switch destroys.
+    private func requestPendingSwap(resetPlan: Bool) {
+        let impact = pendingSwapDeletionImpact()
+        guard impact.requiresConfirmation else {
+            performPendingSwap(resetPlan: resetPlan)
+            return
+        }
+        pendingSwapImpact = impact
+        pendingSwapResetPlan = resetPlan
+        showSwapDestructiveConfirm = true
+    }
+
+    /// Abandon a pending switch. Nothing has been applied yet at either
+    /// confirmation stage, so clearing the pending state is the whole undo:
+    /// the exercise, session plan, logged sets, drafts, cardio details,
+    /// checklist ticks, and rest timer are all untouched.
+    private func cancelPendingSwap() {
+        pendingSwapNewExercise = nil
+        exerciseToSwapIndex = nil
+        pendingSwapImpact = nil
     }
 
     /// Execute the deferred swap after the user chose keep/reset plan.
