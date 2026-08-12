@@ -499,4 +499,47 @@ final class KoreanLocalizationTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Destructive exercise-switch confirmation
+
+    /// Exact keys produced by `ExerciseSwitchConfirmationCopy`. A Korean tester
+    /// meets these at the moment logged sets are about to be destroyed, so an
+    /// untranslated string here is the worst place for one.
+    private static let switchConfirmationKeys = [
+        "Switch exercise?",
+        "Switch and Remove Sets",
+        "Switching exercises will remove 1 logged set for this exercise.",
+        "Switching exercises will remove %lld logged sets for this exercise.",
+        "Switching exercises will remove 1 logged set from this block.",
+        "Switching exercises will remove %lld logged sets from this block.",
+    ]
+
+    func testSwitchConfirmationStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.switchConfirmationKeys {
+            XCTAssertNotEqual(
+                localized(key, in: ko), key,
+                "Switch confirmation string has no Korean translation: \(key)"
+            )
+        }
+    }
+
+    func testSwitchConfirmationStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.switchConfirmationKeys {
+            XCTAssertEqual(localized(key, in: en), key)
+        }
+    }
+
+    /// The plural forms must keep their `%lld` placeholder in Korean, or the
+    /// count renders as literal text.
+    func testKoreanSwitchConfirmationKeepsCountPlaceholder() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.switchConfirmationKeys where key.contains("%lld") {
+            XCTAssertTrue(
+                localized(key, in: ko).contains("%lld"),
+                "Korean translation dropped the count placeholder: \(key)"
+            )
+        }
+    }
 }
