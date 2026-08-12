@@ -662,12 +662,6 @@ struct StartWorkoutFromRoutineView: View {
                             .joined(separator: " + ")
                     )
                     .font(.dsBody)
-
-                    if let r = b.restAfterSeconds, r > 0 {
-                        Text("Rest after: \(r)s")
-                            .font(.dsBodySecondary)
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
         } header: {

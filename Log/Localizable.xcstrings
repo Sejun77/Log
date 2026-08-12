@@ -3525,16 +3525,6 @@
         }
       }
     },
-    "Rest after: %llds" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이후 휴식: %llds"
-          }
-        }
-      }
-    },
     "Rest before next block: %llds" : {
       "extractionState" : "stale",
       "localizations" : {
