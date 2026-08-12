@@ -9,7 +9,7 @@
 > the beta feedback log. If the public devlog numbering is separate, this stays
 > #12; otherwise renumber before publishing.
 
-**Date Range:** 2026-06-24 → 2026-08-08 _(end date to be updated if more work lands before upload)_
+**Date Range:** 2026-06-24 → 2026-08-12 _(end date to be updated if more work lands before upload)_
 
 Entry #11 ended with the app working for **my** workouts — the full loop, start to
 History, validated on a real device. This entry is about a different question:
@@ -191,7 +191,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_As of the 2026-08-08 verification run. To be re-run and updated before upload._
+_As of the 2026-08-12 verification run. To be re-run and updated before upload._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -200,12 +200,13 @@ _As of the 2026-08-08 verification run. To be re-run and updated before upload._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 1,929 tests, 0 failures** — 1,927 unit tests plus 2 UI
+- **Full scheme passes: 1,946 tests, 0 failures** — 1,944 unit tests plus 2 UI
   tests.
 - **Release build succeeds.**
 - **Manual regression completed** on device: routines, logging, exercise
   switching, cardio Details, the Cardio Plan checklist through Save & Exit and
-  Resume, History, and the charts.
+  Resume, History, the charts, and timer behavior across backgrounding and
+  reopening.
 - **Build 7 prepared for TestFlight — not yet uploaded.**
 
 The cardio work landed additively — new fields are optional and start empty — so
@@ -239,6 +240,8 @@ Done:
 
 - Removed a stale "Rest after" preview label that could appear from legacy
   routine data before starting a workout.
+- Fixed a background/foreground timer issue where a duration countdown could
+  reopen as a Rest overlay instead of catching up as duration.
 
 TODO:
 
