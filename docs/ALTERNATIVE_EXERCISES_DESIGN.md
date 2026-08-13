@@ -1051,3 +1051,65 @@ No prescription **value** is changed. Clamping durations, suppressing tempo on a
 duration target, and dropping a distance on a strength exercise are
 compatibility rules that belong to the adapter (Phase F); applying them here
 would silently rewrite what the user authored.
+
+---
+
+## 19. Phase C — as built
+
+**Shipped:** one additive column on `SlotPrescription`, one accessor file
+(`Log/Models/SlotPrescription+Alternatives.swift`), and
+`LogTests/SlotAlternativePersistenceTests.swift` (26 tests).
+
+**Not shipped, and not visible anywhere in the app:** no routine editor UI, no
+switch UI, no `SessionPlan` carry-through, no transfer/import/export, no
+duplication support, no History, no CSV. Nothing authors or reads alternatives
+yet — the column is nil for every existing and every newly-created
+prescription, and no code path outside the new accessors mentions it.
+
+### Storage
+
+```
+@Model final class SlotPrescription {
+    var alternativesData: Data? = nil   // NEW
+}
+```
+
+Exactly the shape §5.3 called for, and field-for-field the same decision as
+`cardioSegmentsData` (Slice 12C) and `targetDistanceMeters` (Slice 5):
+
+- **Additive optional, nil default** ⇒ SwiftData lightweight migration. No
+  custom migration plan, no `VersionedSchema`, no backfill.
+- **No new `@Model`** ⇒ no `LogApp.swift` `.modelContainer(for:)` change and no
+  `SwiftDataTestHarness` `Schema(...)` change. `SlotPrescription` is already in
+  both lists, so adding a property to it needs neither.
+- **Not in the initializer**, matching `cardioSegmentsData`: the column is set
+  through its accessor, never as a construction argument.
+
+### Accessors
+
+`SlotPrescription+Alternatives.swift`, mirroring
+`SlotPrescription+StructuredCardio.swift` method for method. The names are the
+ones §5.2 proposed.
+
+| API | Behavior |
+|---|---|
+| `var slotAlternatives: [SlotAlternative]` | The only intended read path. nil column, empty data, empty list, corrupt payload and a payload this build cannot parse all read as `[]`; a malformed alternative inside a valid payload is dropped and its siblings survive |
+| `func setSlotAlternatives(_:)` | Normalizes, then encodes. An empty list — and an encode failure — clear the column rather than storing an empty payload |
+| `func clearSlotAlternatives()` | Explicit clear, for call sites where `setSlotAlternatives([])` would read as an accident |
+| `var hasSlotAlternatives: Bool` | Any prepared alternative, **including disabled ones** — they are still prepared work and still shown in the editor (§8.7). "Does this slot have anything to offer *now*" is Phase F's question and filters on `isEnabled` plus whether the exercise still resolves |
+
+**No codec logic lives in the model layer.** Every rule is the Phase B
+`SlotAlternatives.decode` / `encode` / `normalize`, so the routine column, a
+future transfer document and the frozen session plan share one implementation
+rather than three. The practical consequence worth stating: normalization
+happens on **write**, so the stored payload is a fixed point — ordering is
+dense and stable, ids are unique, and re-writing what was just read produces
+byte-identical `Data`.
+
+### `RoutineDuplicator` — deliberately untouched
+
+`copyPrescription` copies fields explicitly, so a duplicated routine currently
+does **not** carry `alternativesData`. That is correct for this phase and costs
+nothing: no UI can author an alternative yet, so there is nothing to lose. The
+one-line copy plus the §12.1 fresh-`id` rule belongs to Phase H, where it can
+land with the transfer work and its own round-trip test.
