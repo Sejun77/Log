@@ -542,4 +542,56 @@ final class KoreanLocalizationTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Alternative Exercises (Phase D)
+
+    /// Every string the routine editor's Alternative Exercises screens
+    /// introduce. The three tools an alternative can carry (`Warmup`,
+    /// `Techniques`, `Structured Cardio`) are deliberately **not** here: the
+    /// summary reuses those existing keys rather than inventing a second name
+    /// for each, and they are already covered above.
+    private static let alternativeExerciseKeys = [
+        "Alternative Exercises",
+        "Add Alternative",
+        "No alternatives added",
+        "Alternatives appear when you switch this exercise during a workout.",
+        "Off",
+        "Enabled",
+        "This is already the slot's exercise.",
+    ]
+
+    func testAlternativeExerciseStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.alternativeExerciseKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Alternative Exercises string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testAlternativeExerciseStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.alternativeExerciseKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// The summary's presence flags reuse the prescription editor's own row
+    /// titles, so an alternative's subtitle is Korean end to end.
+    func testAlternativeSummaryFlagLabelsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in ["Warmup", "Techniques", "Structured Cardio", "None"] {
+            XCTAssertNotEqual(
+                localized(key, in: ko), key,
+                "Alternative summary flag has no Korean translation: \(key)"
+            )
+        }
+    }
 }

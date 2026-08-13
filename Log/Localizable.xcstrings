@@ -418,6 +418,18 @@
         }
       }
     },
+    "Add Alternative" : {
+      "comment" : "Alternative Exercises Phase D: button that opens the exercise picker to prepare a new alternative",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 추가"
+          }
+        }
+      }
+    },
     "Add an exercise or a superset." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -546,6 +558,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "모든 메인 세트"
+          }
+        }
+      }
+    },
+    "Alternatives appear when you switch this exercise during a workout." : {
+      "comment" : "Alternative Exercises Phase D: footer explaining where prepared alternatives are offered",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 중 이 운동을 교체할 때 대체 운동이 표시됩니다."
+          }
+        }
+      }
+    },
+    "Alternative Exercises" : {
+      "comment" : "Alternative Exercises Phase D: routine editor row and screen title for a slot's prepared alternative exercises",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동"
           }
         }
       }
@@ -1648,6 +1684,18 @@
         }
       }
     },
+    "Enabled" : {
+      "comment" : "Alternative Exercises Phase D: toggle controlling whether an alternative is offered when switching",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용"
+          }
+        }
+      }
+    },
     "End" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2526,6 +2574,18 @@
         }
       }
     },
+    "No alternatives added" : {
+      "comment" : "Alternative Exercises Phase D: empty state for the alternatives list",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가된 대체 운동 없음"
+          }
+        }
+      }
+    },
     "No analyzable working sets for this exercise." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2859,6 +2919,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "메모…"
+          }
+        }
+      }
+    },
+    "Off" : {
+      "comment" : "Alternative Exercises Phase D: marker on a disabled alternative row",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "꺼짐"
           }
         }
       }
@@ -4531,6 +4603,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이 운동은 진행 중인 운동에 포함되어 있어 편집할 수 없습니다."
+          }
+        }
+      }
+    },
+    "This is already the slot's exercise." : {
+      "comment" : "Alternative Exercises Phase D: authoring-time note when an alternative names the slot's own exercise",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이미 이 슬롯에 사용 중인 운동입니다."
           }
         }
       }

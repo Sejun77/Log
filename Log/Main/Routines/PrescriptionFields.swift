@@ -51,6 +51,11 @@ struct SlotPrescriptionSection: View {
     let isTimeBased: Bool
     var hideRestFields: Bool = false
     var hideSetsField: Bool = false
+    /// Alternative Exercises Phase D — false suppresses the `Alternative
+    /// Exercises` row. Set only by `SlotAlternativeDetailEditor`, which renders
+    /// this same section for a scratch slot: an alternative does not get
+    /// alternatives of its own.
+    var showsAlternatives: Bool = true
     /// Phase 5.2 — when true (routine is in use by an active workout),
     /// the Section's content is non-interactive but still visible /
     /// scrollable. Applied to the Section itself so the parent List's
@@ -152,6 +157,17 @@ struct SlotPrescriptionSection: View {
                             }
                         }
                     }
+                }
+
+                // Alternative Exercises Phase D — the bottom of the tools
+                // group, below warm-ups / techniques / Structured Cardio, and
+                // shown for every tracking mode: an alternative can replace a
+                // treadmill as readily as a bench press. Always visible, even
+                // at zero, because it is the only way to author the first one.
+                if showsAlternatives {
+                    AlternativeExercisesRow(
+                        prescription: prescription,
+                        slotExerciseID: re.exercise?.id)
                 }
             }
 
