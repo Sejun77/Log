@@ -13,7 +13,14 @@ struct PlanSetTemplate: Identifiable {
 }
 
 /// Value-type snapshot of one warmup step — no live SwiftData references.
-struct WarmupStepSnapshot: Codable {
+///
+/// `Equatable` is synthesized (Alternative Exercises Phase B): the snapshot is
+/// carried inside `AlternativePrescriptionPayload`, which is `Equatable` so the
+/// editor and a future session-plan dirty check can compare prepared plans by
+/// value. Declared here rather than in an extension because synthesis requires
+/// the conformance to sit with the declaration. Behavior-neutral — it adds a
+/// `==`, it changes no existing code path.
+struct WarmupStepSnapshot: Codable, Equatable {
     var order: Int
     var kind: WarmupStepKind
     var reps: Int?
@@ -26,7 +33,10 @@ struct WarmupStepSnapshot: Codable {
 }
 
 /// Value-type snapshot of one technique plan — no live SwiftData references.
-struct TechniquePlanSnapshot: Codable {
+///
+/// `Equatable` synthesized for the same reason as `WarmupStepSnapshot` above,
+/// and with the same behavior-neutrality.
+struct TechniquePlanSnapshot: Codable, Equatable {
     var order: Int
     var type: TechniqueType       // Codable via RawRepresentable
     var dropPercent: Double?      // stored as percentage, e.g. 20.0 = 20%

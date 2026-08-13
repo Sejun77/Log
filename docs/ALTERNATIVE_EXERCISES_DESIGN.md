@@ -948,3 +948,106 @@ The user's proposed MVP is close to right. Three refinements, all narrowing:
 plan" and "no plan." One prepared alternative per slot, applied through the
 existing adapter, fixes it. Everything above that — libraries, templates,
 history provenance, in-workout authoring — is a second feature.
+
+---
+
+## 18. Phase B — as built
+
+**Shipped:** `Log/Services/SlotAlternatives.swift` (one file, pure value types)
++ `LogTests/SlotAlternativesTests.swift` (37 tests). No schema change, no
+`alternativesData` column, no UI, no adapter change, no session carry-through,
+no transfer, no History, no CSV. Nothing in the app reads these types yet.
+
+One change outside the new file: `WarmupStepSnapshot` and
+`TechniquePlanSnapshot` in `StartWorkoutFromRoutineView.swift` gained
+`Equatable`. Synthesized conformance has to sit with the declaration, and both
+are carried inside an `Equatable` payload. Behavior-neutral — it adds a `==`
+and changes no existing code path.
+
+### Types
+
+| Type | Responsibility |
+|---|---|
+| `AlternativePrescriptionPayload` | The prepared plan: `PrescriptionSnapshotPayload`'s field set, plus `warmupSteps`, `techniques`, `cardioSegments`, `slotNotes` |
+| `SlotAlternative` | `id` / `order` / `isEnabled` / `exerciseID` / `exerciseName` / `note` / `prescription`, exactly as §4.3 and §5.2 |
+| `SlotAlternativesPayload` | The encoded root: `version` (1) + `alternatives` |
+| `SlotAlternativeDecodingError` | Typed refusal reason for one alternative. `Equatable`; never surfaces to a caller — the payload decoder catches it and drops the element |
+| `SlotAlternatives` | The codec namespace: `decode(from:)`, `encode(_:)`, `normalize(_:idGenerator:)` |
+
+### Reuse
+
+`WarmupStepSnapshot`, `TechniquePlanSnapshot` and `CardioSegmentPlan` are reused
+verbatim, the cardio plan nested as a structure rather than a blob per §5.2.
+
+`PrescriptionSnapshotPayload` is **mirrored, not embedded** — three reasons, all
+mechanical: it is not `Codable`; it carries `equipment` / `setupNotes`, which are
+definition-level data resolved from the `Exercise` (Phase 10-E) and must not be
+frozen into an authoring payload; and it holds structured cardio as an opaque
+`Data` blob, which §5.2 rejects for this payload. Every field the two share
+keeps the same name, so the Phase F bridge is a field-for-field copy.
+
+### Decoding rules
+
+The §5.3 / §8.7 tolerance, made specific:
+
+| Input | Result |
+|---|---|
+| nil `Data`, empty `Data`, corrupt bytes, non-object JSON | `[]` |
+| Valid payload, empty `alternatives` | `[]` |
+| Alternative with no `exerciseID` | that alternative dropped, siblings kept |
+| Alternative whose `prescription` is unreadable | dropped |
+| Alternative whose `prescription` key is present but `{}` | **kept**, with an all-nil plan |
+| Alternative with a blank `exerciseName` | **kept** — the reference may still resolve |
+| One malformed warm-up step or technique | that element dropped, alternative kept |
+| Unknown keys at any level | ignored |
+| Unknown `version`, including a future one | decoded exactly like the current one |
+
+Two decisions the design did not settle:
+
+- **Which fields make an alternative "malformed."** Only `exerciseID` and a
+  readable `prescription`. Both are required because the value that would
+  result without them is actively *wrong* rather than merely incomplete: no
+  exercise reference is not an alternative at all (and inventing one is out of
+  scope), and an unreadable prescription would apply an **empty plan** on
+  switch — worse than not offering the row. Everything else falls back to a
+  default.
+- **`version` is not a gate.** Every field is optional at the wire level and
+  unknown keys are ignored, so "decode what you can" always yields at least the
+  alternatives a future build would recognize; rejecting on version would
+  discard readable prepared work for no gain. A payload this build genuinely
+  cannot parse fails `JSONDecoder` outright and resolves to `[]`. Re-encoding
+  always writes `currentVersion` — the value in hand is a v1 value whatever it
+  was read from.
+
+### Encoding rules
+
+- Empty list ⇒ `nil` `Data`, so Phase C's setter clears the column rather than
+  storing an empty payload (§5.2 "one representation of none").
+- `.sortedKeys`, so the same list always encodes to the same bytes.
+- Absent values are omitted rather than written as null, and empty
+  `warmupSteps` / `techniques` / an empty cardio plan are omitted entirely —
+  the common alternative encodes to a handful of keys. `usesDuration` is
+  written unconditionally: `false` is a positive assertion that the alternative
+  is rep-based.
+- The list is normalized before encoding, so `encode(decode(x)) == encode(x)`.
+
+### Normalization
+
+Deliberately minimal — §"do not over-normalize". `normalize(_:)` only:
+
+1. sorts by `order`, ties broken by incoming position (the sort is made stable
+   explicitly, since `sorted(by:)` is not),
+2. rewrites `order` to `0..<count` — it is positional metadata, not an authored
+   value, and dense is what an `.onMove` handler writes back,
+3. reissues **duplicate ids**, keeping the first occurrence's. Two rows sharing
+   an id break `Identifiable` diffing in a `ForEach`, but the prepared work is
+   still the user's, so duplicates are repaired rather than dropped. The
+   `idGenerator` parameter exists purely so tests can pin the reissued value,
+4. trims `exerciseName`, and collapses blank `note` / `tempo` / `slotNotes` to
+   nil,
+5. collapses an empty `CardioSegmentPlan` to nil.
+
+No prescription **value** is changed. Clamping durations, suppressing tempo on a
+duration target, and dropping a distance on a strength exercise are
+compatibility rules that belong to the adapter (Phase F); applying them here
+would silently rewrite what the user authored.
