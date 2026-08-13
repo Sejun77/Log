@@ -583,6 +583,51 @@ final class KoreanLocalizationTests: XCTestCase {
         }
     }
 
+    /// Every string the active workout's Prepared Alternatives sheet
+    /// introduces. A Korean user meets these mid-set, one tap from switching an
+    /// exercise, so an untranslated string here is expensive.
+    private static let preparedAlternativeKeys = [
+        "Prepared Alternatives",
+        "Other Options",
+        "Choose another exercise…",
+        "Exercise unavailable",
+    ]
+
+    func testPreparedAlternativeStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.preparedAlternativeKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Prepared Alternatives string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testPreparedAlternativeStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.preparedAlternativeKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// The switch flow's other two screens are already localized: the sheet
+    /// hands off to the existing picker and the existing destructive
+    /// confirmation, so a Korean switch is Korean end to end.
+    func testSwitchFlowHandoffStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in ["Pick Exercise", "Cancel", "Switch and Remove Sets"] {
+            XCTAssertNotEqual(
+                localized(key, in: ko), key,
+                "Switch flow string has no Korean translation: \(key)")
+        }
+    }
+
     /// The summary's presence flags reuse the prescription editor's own row
     /// titles, so an alternative's subtitle is Korean end to end.
     func testAlternativeSummaryFlagLabelsLocalizeToKorean() throws {

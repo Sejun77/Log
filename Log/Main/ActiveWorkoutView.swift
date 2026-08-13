@@ -50,6 +50,31 @@ struct ActiveWorkoutView: View {
         var id: Int { index }
     }
 
+    /// The plan a pending switch will apply. Mirrors
+    /// `ExerciseSwitchPlanAdapter.Choice`, but holds the whole
+    /// `SlotAlternative` rather than only its prescription, because the view
+    /// also needs the alternative's exercise reference to resolve the switch
+    /// target.
+    private enum PendingSwapPlan: Equatable {
+        case keepCurrentPlan
+        case resetPlan
+        case useAlternative(SlotAlternative)
+
+        /// True only for the explicit "start over" choice, which is the one
+        /// that may auto-open the Edit Plan sheet. A prepared alternative
+        /// arrives with a full plan, so it never should.
+        var isReset: Bool { self == .resetPlan }
+
+        var adapterChoice: ExerciseSwitchPlanAdapter.Choice {
+            switch self {
+            case .keepCurrentPlan: return .keepCurrentPlan
+            case .resetPlan: return .resetPlan
+            case .useAlternative(let alternative):
+                return .useAlternative(alternative.prescription)
+            }
+        }
+    }
+
     @State private var exerciseToSwapIndex: Int? = nil
     @State private var swapPickerItem: SwapPickerItem? = nil
     @State private var pendingSwapNewExercise: Exercise? = nil
@@ -58,7 +83,19 @@ struct ActiveWorkoutView: View {
     /// switch would delete logged sets. Nil impact = nothing to warn about.
     @State private var showSwapDestructiveConfirm = false
     @State private var pendingSwapImpact: ExerciseSwitchDeletionImpact? = nil
-    @State private var pendingSwapResetPlan = false
+    /// Which plan the pending switch will apply once every confirmation has
+    /// passed. Replaced the pre-F1 `Bool` when prepared alternatives became a
+    /// third answer to the same question — a `Bool` cannot carry the payload,
+    /// and a second parallel flag would let "reset" and "alternative" both be
+    /// true.
+    @State private var pendingSwapPlan: PendingSwapPlan = .keepCurrentPlan
+    /// Non-nil presents the Prepared Alternatives sheet (Phase F1). Only ever
+    /// set when the slot actually has an offer, so a slot without alternatives
+    /// keeps exactly its pre-F1 flow.
+    @State private var preparedAlternativesItem: SwapPickerItem? = nil
+    /// Set by the Prepared Alternatives sheet and consumed in its `onDismiss`.
+    @State private var pendingPreparedAlternative: SlotAlternative? = nil
+    @State private var pendingChooseAnotherExercise = false
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
 
     @Environment(\.modelContext) private var ctx
@@ -2167,8 +2204,16 @@ struct ActiveWorkoutView: View {
                     Section("Actions") {
                         Button {
                             exerciseToSwapIndex = currentExerciseIndex
-                            swapPickerItem = SwapPickerItem(
-                                index: currentExerciseIndex)
+                            // Phase F1 — prepared alternatives come first when
+                            // the slot has any; otherwise the picker opens
+                            // directly, exactly as it did before.
+                            if hasPreparedAlternatives(for: exercise) {
+                                preparedAlternativesItem = SwapPickerItem(
+                                    index: currentExerciseIndex)
+                            } else {
+                                swapPickerItem = SwapPickerItem(
+                                    index: currentExerciseIndex)
+                            }
                         } label: {
                             Label(
                                 "Switch Exercise",
@@ -2653,16 +2698,55 @@ struct ActiveWorkoutView: View {
                     }
                 }
             }
+            // Phase F1 — the slot's prepared alternatives, offered *before* the
+            // picker. Presented only when there is something to offer, so a
+            // slot without alternatives never sees this screen.
+            //
+            // Every action defers its work to `onDismiss` rather than acting
+            // inside the sheet: the destructive confirmation and the picker are
+            // both presented from this view, and starting one while a sheet is
+            // still dismissing is the race the existing swap flow already
+            // avoids this way.
+            .sheet(
+                item: $preparedAlternativesItem,
+                onDismiss: {
+                    if let alternative = pendingPreparedAlternative {
+                        pendingPreparedAlternative = nil
+                        applyPreparedAlternative(alternative)
+                    } else if pendingChooseAnotherExercise {
+                        pendingChooseAnotherExercise = false
+                        swapPickerItem = SwapPickerItem(
+                            index: exerciseToSwapIndex ?? currentExerciseIndex)
+                    } else {
+                        // Plain Cancel — nothing has been applied.
+                        cancelPendingSwap()
+                    }
+                }
+            ) { target in
+                if let block = currentBlock,
+                    target.index < block.exercises.count
+                {
+                    let slot = block.exercises[target.index]
+                    PreparedAlternativesSheet(
+                        currentExerciseName: slot.name,
+                        offers: preparedAlternativeOffers(for: slot),
+                        distanceUnit: distanceUnit,
+                        effortMetric: effortMetric,
+                        onPick: { pendingPreparedAlternative = $0 },
+                        onChooseAnother: { pendingChooseAnotherExercise = true }
+                    )
+                }
+            }
             .confirmationDialog(
                 "Session plan for this slot",
                 isPresented: $showSwapPlanChoice,
                 titleVisibility: .visible
             ) {
                 Button("Keep current plan") {
-                    requestPendingSwap(resetPlan: false)
+                    requestPendingSwap(.keepCurrentPlan)
                 }
                 Button("Reset plan for this slot") {
-                    requestPendingSwap(resetPlan: true)
+                    requestPendingSwap(.resetPlan)
                 }
                 Button("Cancel", role: .cancel) {
                     cancelPendingSwap()
@@ -2681,9 +2765,9 @@ struct ActiveWorkoutView: View {
                     ExerciseSwitchConfirmationCopy.confirmButton,
                     role: .destructive
                 ) {
-                    let reset = pendingSwapResetPlan
+                    let plan = pendingSwapPlan
                     pendingSwapImpact = nil
-                    performPendingSwap(resetPlan: reset)
+                    performPendingSwap(plan)
                 }
                 Button("Cancel", role: .cancel) {
                     cancelPendingSwap()
@@ -2969,6 +3053,63 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    // MARK: - Prepared alternatives (Phase F1)
+
+    /// The alternatives this slot can offer right now.
+    ///
+    /// Sourced from the slot's **frozen** `SessionPlan`, never from the
+    /// routine: the session offers what it froze at start, so editing the
+    /// routine mid-workout changes nothing here (§4.2). Filtering — disabled,
+    /// already-current, unavailable — is the pure `PreparedAlternatives`.
+    private func preparedAlternativeOffers(
+        for exercise: PlanExercise
+    ) -> [PreparedAlternativeOffer] {
+        PreparedAlternatives.offers(
+            from: sessionPlans[exercise.routineSlotID]?.alternatives ?? [],
+            currentExerciseID: exercise.currentExerciseID,
+            availableExerciseIDs: Set(allExercises.map(\.id)))
+    }
+
+    /// Whether the switch flow should open the Prepared Alternatives sheet
+    /// instead of going straight to the picker. False keeps the pre-F1 flow
+    /// exactly as it was.
+    private func hasPreparedAlternatives(for exercise: PlanExercise) -> Bool {
+        !preparedAlternativeOffers(for: exercise).isEmpty
+    }
+
+    /// The app-wide autoreg metric, for the sheet's summary lines. Nil when
+    /// autoreg is off, which omits the effort segment as everywhere else.
+    private var effortMetric: EffortMetric? {
+        switch autoregMode {
+        case .rir: return .rir
+        case .rpe: return .rpe
+        case .none: return nil
+        }
+    }
+
+    /// Resolve a picked alternative to a live `Exercise` and route it into the
+    /// **same** pending-switch pipeline the two plan choices use — so it
+    /// inherits the logged-set confirmation, the rest-timer cancellation, the
+    /// draft cleanup and the superset cascade without a second copy of any of
+    /// them.
+    ///
+    /// An unresolvable exercise cancels rather than proceeding. The sheet
+    /// already renders that alternative as a disabled `Exercise unavailable`
+    /// row, so this is only reachable if the library changed underneath the
+    /// open sheet.
+    private func applyPreparedAlternative(_ alternative: SlotAlternative) {
+        guard
+            let newEx = allExercises.first(where: {
+                $0.id == alternative.exerciseID
+            })
+        else {
+            cancelPendingSwap()
+            return
+        }
+        pendingSwapNewExercise = newEx
+        requestPendingSwap(.useAlternative(alternative))
+    }
+
     /// How many logged sets the pending switch would delete.
     ///
     /// Reads the block's **pre-switch** state and defers the arithmetic to
@@ -3003,14 +3144,14 @@ struct ActiveWorkoutView: View {
     ///
     /// Applies to **both** plan choices and to every tracking mode — the gate is
     /// a function of logged sets alone, which is what the switch destroys.
-    private func requestPendingSwap(resetPlan: Bool) {
+    private func requestPendingSwap(_ plan: PendingSwapPlan) {
         let impact = pendingSwapDeletionImpact()
         guard impact.requiresConfirmation else {
-            performPendingSwap(resetPlan: resetPlan)
+            performPendingSwap(plan)
             return
         }
         pendingSwapImpact = impact
-        pendingSwapResetPlan = resetPlan
+        pendingSwapPlan = plan
         showSwapDestructiveConfirm = true
     }
 
@@ -3025,7 +3166,7 @@ struct ActiveWorkoutView: View {
     }
 
     /// Execute the deferred swap after the user chose keep/reset plan.
-    private func performPendingSwap(resetPlan: Bool) {
+    private func performPendingSwap(_ pendingPlan: PendingSwapPlan) {
         guard let idx = exerciseToSwapIndex,
             let block = currentBlock,
             idx < block.exercises.count,
@@ -3079,7 +3220,7 @@ struct ActiveWorkoutView: View {
         // replacement plan to offer — a routine-slot-sourced reset — the
         // checklist will show it with no change here.
         let outcome = ExerciseSwitchPlanAdapter.outcome(
-            choice: resetPlan ? .resetPlan : .keepCurrentPlan,
+            choice: pendingPlan.adapterChoice,
             current: sessionPlans[slotID],
             oldMode: oldMode,
             newMode: newMode,
@@ -3101,7 +3242,7 @@ struct ActiveWorkoutView: View {
         // A) After reset+swap, if the new exercise has no templates and the
         //    (now-empty) session plan has no sets, auto-open the Edit Plan
         //    sheet so the user can immediately set sets/reps/rest.
-        if resetPlan, let swapped = currentExercise {
+        if pendingPlan.isReset, let swapped = currentExercise {
             let sc = effectiveSetCount(
                 for: swapped, resolvedTemplates: swapped.templates)
             if sc <= 1 && swapped.templates.isEmpty {
@@ -3201,23 +3342,33 @@ struct ActiveWorkoutView: View {
                 outcome.sessionPlan.slotNotes
 
             // Warm-ups survive a same-tracking-type switch as authored; a
-            // tracking-type change or a reset clears them.
-            if !outcome.keepWarmupSteps {
+            // tracking-type change or a reset clears them. A prepared
+            // alternative answers a third question — **replace** them with the
+            // ones it carries (Phase F1) — including with an empty list, which
+            // is what an alternative authored without a warm-up means.
+            if let replacement = outcome.replacementWarmupSteps {
+                plan.blocks[bi].exercises[ei].warmupStepsSnapshot = replacement
+            } else if !outcome.keepWarmupSteps {
                 plan.blocks[bi].exercises[ei].warmupStepsSnapshot = []
             }
 
-            if outcome.keepTechniques {
-                plan.blocks[bi].exercises[ei].techniquePlansSnapshot =
-                    ExerciseSwitchPlanAdapter.retainedTechniques(
-                        from: plan.blocks[bi].exercises[ei]
-                            .techniquePlansSnapshot,
-                        isBodyweight: isBodyweightEquipment(
-                            newExercise.equipmentType),
-                        usesDuration: newExercise.isTimeBased
-                    )
-            } else {
-                plan.blocks[bi].exercises[ei].techniquePlansSnapshot = []
-            }
+            // Same three-way rule for techniques, and the retention filter runs
+            // on all of them: a prepared alternative cannot introduce a
+            // combination the routine editor would have rejected on the
+            // switched-in exercise (a Drop Set onto a bodyweight movement, a
+            // rep-count technique onto a duration target).
+            let techniqueSource =
+                outcome.replacementTechniques
+                ?? (outcome.keepTechniques
+                    ? plan.blocks[bi].exercises[ei].techniquePlansSnapshot
+                    : [])
+            plan.blocks[bi].exercises[ei].techniquePlansSnapshot =
+                ExerciseSwitchPlanAdapter.retainedTechniques(
+                    from: techniqueSource,
+                    isBodyweight: isBodyweightEquipment(
+                        newExercise.equipmentType),
+                    usesDuration: newExercise.isTimeBased
+                )
         }
 
         persistSessionPlans()
