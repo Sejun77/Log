@@ -488,6 +488,41 @@ enum SlotAlternatives {
         return result
     }
 
+    // MARK: Duplication
+
+    /// Copies a slot's alternatives for a **duplicated routine**, reissuing
+    /// every `id` (Phase H1, design §12.1).
+    ///
+    /// An alternative's `id` identifies a piece of prepared work *within a
+    /// slot*, and the duplicate's slots already get fresh `slotID`s. Sharing
+    /// ids across two routines would make their alternatives indistinguishable
+    /// to any future feature that keys on one (per-alternative usage stats, a
+    /// "last used" marker), so they are reissued here for the same reason
+    /// `RoutineDuplicator` reissues everything else it copies.
+    ///
+    /// **Everything else is preserved verbatim**, including:
+    ///
+    ///  - `exerciseID` — duplication *shares* definition-level exercises by
+    ///    design, exactly as the slot's own `Exercise` reference is shared,
+    ///  - `order` and `isEnabled` — a disabled alternative copies as disabled,
+    ///  - the whole prescription, down to the `CardioSegment` ids inside a
+    ///    Cardio Plan. Those are **not** reissued: `RoutineDuplicator` copies
+    ///    the slot's own `cardioSegmentsData` as raw bytes, so its segment ids
+    ///    are shared with the original, and an alternative's plan behaves the
+    ///    same way. One rule for segment identity, not two.
+    ///
+    /// `idGenerator` is injectable so tests can pin the reissued values.
+    static func duplicated(
+        _ alternatives: [SlotAlternative],
+        idGenerator: () -> UUID = UUID.init
+    ) -> [SlotAlternative] {
+        alternatives.map { alternative in
+            var copy = alternative
+            copy.id = idGenerator()
+            return copy
+        }
+    }
+
     // MARK: Shared helpers
 
     /// Trim, and treat a blank string as absent. The app's existing note rule.

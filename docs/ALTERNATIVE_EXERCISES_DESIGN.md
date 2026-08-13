@@ -1401,3 +1401,46 @@ The slot keeps its alternatives (Phase E's carry-across in
 the one now in the slot. `persistSessionPlans` runs on the switch, so Save &
 Exit → Resume restores the applied prescription *and* the list, and the session
 never re-reads the routine.
+
+---
+
+## 23. Phase H1 — as built
+
+**Shipped:** duplicating a routine now duplicates each slot's prepared
+alternatives. This closes the gap §19 recorded when Phase C deliberately left
+`RoutineDuplicator` alone.
+
+**Still deferred:** transfer / import / export (§12.2), History provenance
+(§11 keeps it out of MVP), `USER_GUIDE.md`, and the Phase J regression pass.
+
+### What happens
+
+`RoutineDuplicator.copyPrescription` gains one statement:
+
+```
+p.setSlotAlternatives(SlotAlternatives.duplicated(src.slotAlternatives))
+```
+
+Unlike the `cardioSegmentsData` line above it, this one **cannot** copy the
+column raw: §12.1 requires fresh alternative ids in the duplicate, and that
+means decode → reissue → encode. Going through the Phase C accessors rather
+than the bytes is what makes that safe — a corrupt payload decodes to `[]`, so
+the duplicate simply has no alternatives rather than inheriting a half-readable
+blob, and the write normalizes exactly as every other write does.
+
+`SlotAlternatives.duplicated(_:idGenerator:)` is the whole helper: it reissues
+`id` and touches nothing else. `idGenerator` is injectable so a test can pin the
+new value.
+
+### Identity
+
+| Field | Duplicate | Why |
+|---|---|---|
+| `id` | **New** | It identifies prepared work *within a slot*, and the duplicate's slots already get fresh `slotID`s. Sharing it would make two routines' alternatives indistinguishable to any future per-alternative feature |
+| `exerciseID` | **Shared** | Definition-level. Duplication copies programming, not the library — the same reason the slot's own `Exercise` reference is shared |
+| `CardioSegment.id` inside an alternative's plan | **Shared** | Consistency with the primary slot: the duplicator copies `cardioSegmentsData` as raw bytes, so those segment ids are shared already. One rule for segment identity, not two |
+| `order`, `isEnabled`, `note`, whole payload | **Preserved** | A disabled alternative duplicates as disabled |
+
+Value semantics make the two routines independent for free: editing either
+side's alternatives afterwards leaves the other untouched, both directions
+tested.
