@@ -634,6 +634,25 @@ final class SlotPrescription {
     /// what 100% of them are.
     var cardioSegmentsData: Data? = nil
 
+    /// Alternative Exercises Phase C — the slot's prepared alternatives
+    /// (replacement exercise + its own full prescription), JSON-encoded.
+    ///
+    /// Same `Data?`-column reasoning as `cardioSegmentsData` above, and for the
+    /// same reasons (`ALTERNATIVE_EXERCISES_DESIGN.md` §5.1): alternatives are
+    /// never queried independently, so a `@Model` graph would buy nothing and
+    /// cost cascade rules across four levels, ordering discipline, deep-copy in
+    /// `RoutineDuplicator`, and an orphan sweep. The payload is additionally
+    /// *already* the value type the session plan will freeze, so there is no
+    /// model → value mapping layer to write.
+    ///
+    /// Read and written **only** through `slotAlternatives` /
+    /// `setSlotAlternatives` (see `SlotPrescription+Alternatives.swift`), which
+    /// normalize on both sides through the Phase B codec, so a corrupt payload
+    /// degrades to "no alternatives" instead of reaching a view. Optional /
+    /// nil-default: every existing prescription migrates lightweightly and
+    /// reads as having none, which is what 100% of them are.
+    var alternativesData: Data? = nil
+
     /// The tempo this prescription may actually display.
     ///
     /// Tempo describes eccentric/concentric rep phases and is meaningless for a
