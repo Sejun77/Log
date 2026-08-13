@@ -301,6 +301,23 @@ enum WorkoutResumeService {
                                 },
                             techniquePlansSnapshot: techniquePlansSnapshot,
                             warmupStepsSnapshot: warmupStepsSnapshot,
+                            // Alternative Exercises Phase E — mirrors
+                            // `makePlan`: the slot's prepared alternatives are
+                            // re-read from the routine template here, exactly
+                            // as warm-ups and techniques above are.
+                            //
+                            // This is a **fallback**, not the session's truth.
+                            // `ActiveWorkoutView` overlays the alternatives
+                            // persisted with the slot's `SessionPlan`
+                            // (`restoreSessionPlansFromAppState`, which runs
+                            // after `initializeSessionPlans`), so a routine
+                            // edited mid-session cannot rewrite what the
+                            // session offers. The template read only matters
+                            // for a cold resume of a session that never
+                            // persisted a plan — the same shape the warm-up and
+                            // technique snapshots already have.
+                            alternativesSnapshot: re.prescription?
+                                .slotAlternatives ?? [],
                             // Phase 6.C1 — mirror makePlan(from:)'s block snapshot
                             sourceBlockSlotID: b.slotID,
                             sourceBlockIsSuperset: b.isSuperset,

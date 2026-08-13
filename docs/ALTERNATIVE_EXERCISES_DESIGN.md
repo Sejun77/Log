@@ -1227,3 +1227,72 @@ prescription and the sibling alternatives are untouched.
 - The count row and the summaries read the payload on every render (a JSON
   decode per row). Fine for an authoring screen with a handful of rows; if the
   switch sheet ever renders this hot, cache at the call site.
+
+---
+
+## 21. Phase E — as built
+
+**Shipped:** the freeze. Starting a workout copies each slot's prepared
+alternatives into the session, and they survive Save & Exit, a cold resume, and
+an exercise switch.
+
+**Still inert.** Nothing reads them: no switch sheet, no `Choice.useAlternative`,
+no `ResetSource` fields, no Start Workout preview change, no History, no CSV, no
+duplication, no transfer, no schema change, no user-guide change. This phase
+carries data and nothing else.
+
+### The three hops
+
+```
+SlotPrescription.alternativesData        authoring truth (Phase C)
+        │  frozen by StartWorkoutFromRoutineView.makePlan(from:)
+        ▼
+PlanExercise.alternativesSnapshot        [SlotAlternative], default []
+        │  copied by ActiveWorkoutView.initializeSessionPlans()
+        ▼
+SessionPlan.alternatives                 persisted in AppState.sessionPlansJSON
+```
+
+`WorkoutResumeService.planFromRoutine` mirrors `makePlan` and re-reads the
+routine, exactly as it already does for warm-ups and techniques — but that read
+is a **fallback**, not the session's truth: `restoreSessionPlansFromAppState`
+runs after `initializeSessionPlans` and overlays the persisted `SessionPlan`, so
+a routine edited mid-session cannot rewrite what the session holds. The template
+read only matters for a cold resume of a session that never persisted a plan
+(the JSON is written on plan edits and switches, not at start).
+
+### The field, and why it is optional
+
+```
+struct SessionPlan {
+    var alternativesSnapshot: [SlotAlternative]? = nil   // stored
+    var alternatives: [SlotAlternative] { get set }      // nil / [] collapse
+}
+```
+
+The obvious `var alternatives: [SlotAlternative] = []` is wrong here, and
+subtly: **synthesized `Decodable` calls `decode`, not `decodeIfPresent`, for a
+non-optional property even when it has a default value.** Every `SessionPlan`
+persisted by every earlier build lacks this key, so that shape would throw
+`keyNotFound` on resume and take the user's entire in-session plan — every
+edited set count, rest and note — down with it. `Optional` decodes with
+`decodeIfPresent`; the computed `alternatives` restores the non-optional API and
+collapses nil / missing / empty to `[]`, the same "one representation of none"
+rule the routine-side accessor uses. Writing an empty list stores nil, so a slot
+with no alternatives encodes byte-identically to before this phase.
+
+### A switch keeps the slot's alternatives
+
+`applySwitchOutcome` replaces the slot's `SessionPlan` wholesale with the
+adapter's output, which would have discarded the frozen list on the first
+switch. Alternatives belong to the **slot**, not to the exercise currently in
+it — after Bench Press → Machine Chest Press, the prepared DB Bench Press is
+still prepared — so they are carried across the replacement (three lines, no
+visible effect until Phase F). The adapter itself is untouched.
+
+### Testability note
+
+`makePlan(from:)` became `static` (it read no view state). That is what lets the
+freeze be tested against the real start path instead of a copy of it reproduced
+in the test file, which is how `CardioDistanceOnlyTargetTests` had to do it.
+Behavior is unchanged; the three call sites now say `Self.makePlan(from:)`.
