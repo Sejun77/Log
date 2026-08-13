@@ -1113,3 +1113,117 @@ does **not** carry `alternativesData`. That is correct for this phase and costs
 nothing: no UI can author an alternative yet, so there is nothing to lose. The
 one-line copy plus the §12.1 fresh-`id` rule belongs to Phase H, where it can
 land with the transfer work and its own round-trip test.
+
+---
+
+## 20. Phase D — as built
+
+**Shipped:** authoring. A routine slot can now add, edit, reorder, delete,
+enable and disable alternatives, each with a full prescription.
+
+**Still inert.** Nothing reads an alternative outside the routine editor: no
+session freeze, no switch sheet, no adapter case, no Start Workout preview
+change, no duplication, no transfer, no History, no CSV, no schema change. A
+user who authors alternatives today sees them only where they authored them —
+which is why `USER_GUIDE.md` is deliberately not updated yet.
+
+### Files
+
+| File | Role |
+|---|---|
+| `Log/Services/SlotAlternativeSummary.swift` | Pure row wording |
+| `Log/Models/AlternativeDraft.swift` | `AlternativeDraftStore` (the scratch slot) + `SlotAlternativeAuthoring` (list operations) |
+| `Log/Main/Routines/SlotAlternativesEditor.swift` | The row, the list screen, the detail editor |
+| `Log/Main/Routines/PrescriptionFields.swift` | +8 lines: the row, and a `showsAlternatives` flag |
+| `Log/Localizable.xcstrings` | 7 new keys, Korean |
+
+### Placement
+
+One navigation row at the bottom of the slot's tools group — after `Warmup`
+and `Techniques`, above `Slot notes` — reading `Alternative Exercises   2 ›`,
+or `None` when there are none. Shown for **every** tracking mode: an
+alternative replaces a treadmill as readily as a bench press. Always visible,
+because it is the only way to author the first one.
+
+### The editor: full reuse, no fallback
+
+§6.4 approach A worked, and the reduced fallback was not needed. The detail
+screen renders the **existing** `SlotPrescriptionSection` — the same editor the
+routine slot itself uses — bound to a scratch `RoutineExercise` /
+`SlotPrescription` / `WarmupScheme` / `TechniquePlan` graph. So an alternative
+is authored with every rule the app already enforces (cardio gating, tempo
+suppression on duration, technique conflict filtering, distance-unit handling,
+duration ceilings), and every child editor — `WarmupSchemeEditor`,
+`TechniquePlanEditor`, `CardioSegmentPlanEditor` — is reached unchanged.
+
+Editable: sets, reps or duration, rest between sets and after exercise, effort
+(mode + values), tempo, warm-up scheme, techniques, target distance, structured
+cardio plan, slot notes — plus the alternative's own enabled flag and usage
+note. That is the full §17 MVP field list.
+
+### How the scratch slot cannot leak
+
+§6.4 flagged this as the phase's real risk: an inserted-then-deleted scratch
+graph is the orphan-row bug class `BackfillService.purgeOrphanSetTemplates`
+exists to clean up.
+
+The scratch graph is built in its **own in-memory `ModelContainer`**, and the
+detail screen injects that container's context into the prescription section's
+subtree with a single `.environment(\.modelContext, store.context)`. Every
+insert those editors make lands in the throwaway store. The deletion is not
+made reliable — it is made unnecessary: there is no code path by which a
+scratch object reaches the user's database, not a forgotten delete, not an
+early return, not a crash mid-edit. The one invariant that keeps it true is
+that the draft never holds an app-store object: the scratch `Exercise` is a
+copy of the picked exercise's definition fields. Two tests assert the app store
+gains no `SlotPrescription` / `Exercise` / `RoutineExercise` / `WarmupScheme` /
+`WarmupStep` / `TechniquePlan` row while a draft is built and edited.
+
+### Seeding
+
+A new alternative is seeded from **the app's defaults for the picked
+exercise's tracking mode** (§6.3) by running the real
+`makeDefaultPrescription` factory inside a throwaway draft store — so "an
+alternative's defaults" and "a new routine slot's defaults" cannot drift apart.
+It is never seeded from the primary slot's plan; §6.3's `Copy from current
+plan` secondary action is **not** in this phase.
+
+### Commit model
+
+Immediate, like every other routine-editor screen, and therefore **no Cancel**:
+adding one here would make this the only place in the app where backing out
+discards an edit. Metadata (enabled, note) commits on change; the prescription
+commits whenever the draft's payload value changes, which is what a back-swipe
+or a push into a child editor is safe under. Every write goes through
+`SlotAlternativeAuthoring` → `setSlotAlternatives`, so it is normalized, and it
+replaces exactly one alternative addressed by `id` — the slot's own
+prescription and the sibling alternatives are untouched.
+
+### Deviations from the design sketch
+
+- **Presence flags use the app's existing words.** §6.2 sketched
+  `· warm-ups · techniques · Cardio Plan`; the summary says
+  `· Warmup · Techniques · Structured Cardio`, reusing the exact row titles the
+  prescription editor one screen up already uses (and their existing Korean).
+  A second name for the same tool in the same screen would be worse than a
+  slightly longer line.
+- **The zero state reads `None`, not a hidden row.** Matching the Warmup /
+  Techniques / Structured Cardio rows beside it.
+- **Same-exercise alternatives are allowed and warned**, per §8.5: authoring one
+  shows `This is already the slot's exercise.` The switch sheet hides it —
+  Phase F/G.
+
+### Known limitations for later phases
+
+- A technique's `repMin` / `repMax` / `durationSeconds` do not survive the
+  payload round trip, because `TechniquePlanSnapshot` has no such fields. That
+  is the same loss the session freeze already takes when it snapshots a
+  routine's own techniques, so an alternative carries exactly what a slot
+  carries into a workout — but if those fields ever matter, the snapshot type
+  is where to add them.
+- An alternative whose exercise was deleted still opens in the editor, using
+  the stored `exerciseName` and a tracking mode inferred from the payload. The
+  disabled-row treatment (§8.7) belongs to the switch sheet, Phase G.
+- The count row and the summaries read the payload on every render (a JSON
+  decode per row). Fine for an authoring screen with a handful of rows; if the
+  switch sheet ever renders this hot, cache at the call site.
