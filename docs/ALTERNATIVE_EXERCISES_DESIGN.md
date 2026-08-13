@@ -1296,3 +1296,108 @@ visible effect until Phase F). The adapter itself is untouched.
 freeze be tested against the real start path instead of a copy of it reproduced
 in the test file, which is how `CardioDistanceOnlyTargetTests` had to do it.
 Behavior is unchanged; the three call sites now say `Self.makePlan(from:)`.
+
+---
+
+## 22. Phase F1 — as built
+
+**Shipped:** the feature works. A prepared alternative can be applied mid-workout
+in one tap, and it brings its whole plan — warm-ups, techniques, distance,
+Cardio Plan, note — with it.
+
+**Still outstanding:** duplication (Phase H), transfer/import/export (Phase H),
+History provenance (deferred — §11 keeps it out of MVP), `USER_GUIDE.md` (a
+final docs slice, once duplication and transfer land), and the full manual
+regression pass (Phase J).
+
+### The flow
+
+```
+Switch Exercise
+   │
+   ├─ slot has an offerable alternative ─▶ Prepared Alternatives sheet
+   │        ├─ tap one ──────────────────▶ requestPendingSwap(.useAlternative)
+   │        └─ Choose another exercise… ─▶ ┐
+   │                                        │
+   └─ no offerable alternative ────────────▶ existing picker
+                                             └─▶ existing Keep / Reset dialog
+                                                  └─▶ requestPendingSwap(.keep/.reset)
+                                                            │
+                                                            ▼
+                                          existing logged-set confirmation
+                                                            │
+                                                            ▼
+                                                  performPendingSwap
+```
+
+The sheet is a sheet, not a `confirmationDialog`, for the reason §8.1 gives: an
+alternative needs a name, a summary, a note and a disabled state to be worth
+tapping, and a dialog is a stack of button titles.
+
+§8.1's sketch put `Keep Current Plan` / `Reset to Defaults` in the sheet's
+`Other Options`, which cannot work — both answer "what plan should the exercise
+you just picked use?", and no exercise has been picked yet. `Choose another
+exercise…` leads to today's picker, and *that* path still ends in today's
+two-option dialog, exactly as §8.1's own prose says. The existing dialog and its
+two strings are untouched.
+
+**A slot with nothing to offer sees no new screen.** The picker opens directly
+and the flow is byte-identical to pre-F1 — a UX rule and a test.
+
+### What is offered
+
+`PreparedAlternatives.offers(from:currentExerciseID:availableExerciseIDs:)`, a
+pure function over the slot's **frozen** `SessionPlan` list (never the routine's
+current one):
+
+| Case | Behavior |
+|---|---|
+| `isEnabled == false` | Hidden. Still listed, with `Off`, in the routine editor |
+| `exerciseID == the slot's current exercise` | Hidden. Includes the alternative the user *just applied*, which correctly drops out while its siblings stay switchable. No mid-workout warning — the authoring screen already gave one (§8.5) |
+| Exercise deleted from the library | **Shown, disabled**, reading `Exercise unavailable` (§8.7). A `List` row makes this clean, so the design's preferred treatment was implementable; the frozen `exerciseName` is what makes the row legible |
+| Otherwise | Offered, in authored order, with the same summary the routine editor shows |
+
+### What applying one does
+
+`ExerciseSwitchPlanAdapter.Choice.useAlternative(AlternativePrescriptionPayload)`
+routes to the **existing** `resetPlan` branch with a richer source
+(`ResetSource.alternative(_:)`). There is no second application path:
+
+- **Set count, rep/duration range, rests, tempo, note** — from the alternative,
+  through the reset branch's existing mode gating.
+- **Effort** — from the alternative, *always*, via the new
+  `ResetSource.replacesEffortTarget`: an alternative authored with no effort
+  target must not inherit "RIR 2" from the exercise it replaced. A progression
+  (start/end) rides on `Outcome.appliedAlternative` into `adaptedSnapshot`,
+  because a `SessionPlan` carries only a single value and would drop it.
+- **Warm-ups and techniques** — `Outcome.replacementWarmupSteps` /
+  `replacementTechniques`, the design's §9.1 shape as computed views over
+  `appliedAlternative`. They **replace** rather than survive, including with an
+  empty list, and are still run through `retainedTechniques` so an alternative
+  cannot introduce a combination the routine editor would have rejected.
+- **Distance and Cardio Plan** — from the alternative, and only when the
+  switched-in exercise is cardio *today*. That is the same gate a reset uses, so
+  an alternative whose exercise was later edited into another mode degrades
+  instead of smuggling a stale field through (§8.4).
+- **Everything else** — drafts, checklist ticks, templates, the superset
+  cascade, the rest-timer cancellation — is the existing switch path, unchanged.
+
+The one adapter-adjacent change at the call site: `applySwitchOutcome` now reads
+the three-way warm-up/technique rule (replace / keep / clear) instead of the
+two-way one.
+
+### Destructive confirmation
+
+Inherited, not re-implemented. A prepared alternative calls the same
+`requestPendingSwap` as the two plan choices, so the logged-set gate, its copy,
+its superset partner count and its Cancel semantics are literally the same code.
+Nothing is applied until the confirmation passes — cancelling clears the pending
+state and leaves exercise, plan, logged sets, drafts and rest timer untouched.
+
+### After the switch
+
+The slot keeps its alternatives (Phase E's carry-across in
+`applySwitchOutcome`), so a second switch can offer the rest of the list — minus
+the one now in the slot. `persistSessionPlans` runs on the switch, so Save &
+Exit → Resume restores the applied prescription *and* the list, and the session
+never re-reads the routine.

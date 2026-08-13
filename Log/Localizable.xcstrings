@@ -1005,6 +1005,18 @@
         }
       }
     },
+    "Choose another exercise…" : {
+      "comment" : "Alternative Exercises Phase F1: switch sheet action opening the full exercise picker",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다른 운동 선택…"
+          }
+        }
+      }
+    },
     "Choose Exercise" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1843,6 +1855,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 슬롯"
+          }
+        }
+      }
+    },
+    "Exercise unavailable" : {
+      "comment" : "Alternative Exercises Phase F1: shown on a prepared alternative whose exercise was deleted from the library",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동을 찾을 수 없음"
           }
         }
       }
@@ -2988,6 +3012,18 @@
         }
       }
     },
+    "Other Options" : {
+      "comment" : "Alternative Exercises Phase F1: switch sheet section header above 'Choose another exercise…'",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기타 옵션"
+          }
+        }
+      }
+    },
     "Other…" : {
       "localizations" : {
         "ko" : {
@@ -3153,6 +3189,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "원판"
+          }
+        }
+      }
+    },
+    "Prepared Alternatives" : {
+      "comment" : "Alternative Exercises Phase F1: switch sheet section header listing the slot's prepared alternatives",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "준비된 대체 운동"
           }
         }
       }

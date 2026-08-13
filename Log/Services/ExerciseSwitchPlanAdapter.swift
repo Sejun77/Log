@@ -53,6 +53,19 @@ enum ExerciseSwitchPlanAdapter {
     enum Choice: Equatable {
         case keepCurrentPlan
         case resetPlan
+        /// Alternative Exercises Phase F1 — apply a prepared alternative's
+        /// prescription (`ALTERNATIVE_EXERCISES_DESIGN.md` §9.1).
+        ///
+        /// Routes to the **same** `resetPlan` path as `.resetPlan`, because the
+        /// semantics are identical — *replace the plan from a supplied source,
+        /// adapted to the new mode*. What differs is only the source's
+        /// richness: `appDefaults` has no warm-ups, techniques, distance,
+        /// segments or note; a prepared alternative has all five, because the
+        /// user authored them.
+        ///
+        /// The payload rides on the choice rather than on `ResetSource` so a
+        /// caller cannot ask for an alternative and forget to supply one.
+        case useAlternative(AlternativePrescriptionPayload)
     }
 
     /// The app's default / reset prescription source for a slot.
@@ -96,6 +109,25 @@ enum ExerciseSwitchPlanAdapter {
         /// false, the pre-switch RIR/RPE is preserved instead — effort applies
         /// to both tracking types, so a switch should never silently drop it.
         var providesEffortTarget: Bool { rir != nil || rpe != nil }
+
+        /// True when the source's prescription is **complete and
+        /// authoritative**, so its effort target replaces the pre-switch one
+        /// even when it is empty (Phase F1).
+        ///
+        /// `appDefaults` leaves this false: with autoreg off it has no opinion
+        /// about effort, and inheriting the slot's is the kinder reading. A
+        /// prepared alternative is the opposite case — the user authored the
+        /// whole plan, so an alternative deliberately written with no effort
+        /// target must not silently inherit "RIR 2" from the exercise it
+        /// replaced.
+        var replacesEffortTarget: Bool = false
+
+        /// Whether this source decides the slot's post-switch effort target.
+        /// Reading through one property keeps the plan and the snapshot
+        /// projection from ever disagreeing about who won.
+        var ownsEffortTarget: Bool {
+            providesEffortTarget || replacesEffortTarget
+        }
 
         init(
             sets: Int? = nil,
@@ -169,6 +201,51 @@ enum ExerciseSwitchPlanAdapter {
             // the replaced exercise.
             return source
         }
+
+        /// The reset source for a **prepared alternative** (Phase F1).
+        ///
+        /// The thing `appDefaults` cannot be: a real, authored replacement
+        /// plan. Every field maps straight across, including the three the app
+        /// has no default for — target distance, structured cardio, and the
+        /// slot note — because the user wrote them for *this* exercise.
+        ///
+        /// Mode gating is unchanged and still belongs to `resetPlan`: a
+        /// distance or a segment plan on this source lands only when the
+        /// switched-in exercise is actually cardio, and a tempo only when it is
+        /// not duration-based. So an alternative authored before its exercise
+        /// was edited into another tracking mode degrades exactly the way a
+        /// reset does, rather than smuggling a stale field through.
+        ///
+        /// Warm-ups, techniques and the effort-progression pair are **not**
+        /// here: `ResetSource` is `SessionPlan`-shaped and a `SessionPlan` has
+        /// no field for any of them. They ride on `Outcome.appliedAlternative`
+        /// instead, which is where the caller applies them.
+        static func alternative(
+            _ payload: AlternativePrescriptionPayload
+        ) -> ResetSource {
+            var source = ResetSource()
+            source.sets = payload.sets
+            source.repMin = payload.repMin
+            source.repMax = payload.repMax
+            source.restSecondsBetweenSets = payload.restSecondsBetweenSets
+            source.restSecondsAfterExercise = payload.restSecondsAfterExercise
+            source.durationMinSeconds = payload.durationMinSeconds
+            source.durationMaxSeconds = payload.durationMaxSeconds
+            source.rir = payload.rir
+            source.rpe = payload.rpe
+            source.tempo = payload.tempo
+            source.slotNotes = payload.slotNotes
+            source.targetDistanceMeters = payload.targetDistanceMeters
+            source.targetDistanceUnitRaw = payload.targetDistanceUnitRaw
+            // Encoded here rather than carried as a plan, because that is the
+            // shape the reset branch already applies — the same encoding
+            // `SlotPrescription.setStructuredCardioPlan` uses.
+            source.cardioSegmentsData = payload.cardioSegments.flatMap {
+                try? JSONEncoder().encode($0)
+            }
+            source.replacesEffortTarget = true
+            return source
+        }
     }
 
     // MARK: - Output
@@ -216,6 +293,39 @@ enum ExerciseSwitchPlanAdapter {
         /// that a cardio slot's snapshot must not retain effort-progression
         /// fields — without the caller having to pass the mode twice.
         var newMode: TrackingMode = .strength
+
+        /// The prepared alternative this outcome applied, or nil for
+        /// keep/reset (Phase F1).
+        ///
+        /// Carries exactly the parts of an authored prescription that a
+        /// `SessionPlan` has nowhere to put — warm-up steps, techniques, and
+        /// the effort-**progression** pair — so the caller applies one object
+        /// rather than reassembling five. Nil keeps every pre-F1 outcome
+        /// byte-identical, which is what lets the existing adapter suite pass
+        /// unmodified.
+        var appliedAlternative: AlternativePrescriptionPayload? = nil
+
+        /// Warm-up steps that **replace** the slot's, or nil to fall back to
+        /// `keepWarmupSteps`.
+        ///
+        /// The distinction matters: `keepWarmupSteps` is a verdict about the
+        /// steps the slot already has ("may they survive?"), and a prepared
+        /// alternative needs the other question answered ("use these
+        /// instead"). An alternative that carries none returns `[]` — it
+        /// authored no warm-up, so the slot gets none, rather than inheriting
+        /// the replaced exercise's ramp.
+        var replacementWarmupSteps: [WarmupStepSnapshot]? {
+            appliedAlternative?.warmupSteps
+        }
+
+        /// Techniques that **replace** the slot's, or nil to fall back to
+        /// `keepTechniques`. Still filtered by
+        /// `retainedTechniques(from:isBodyweight:usesDuration:)` at the call
+        /// site, so an alternative cannot introduce a combination the routine
+        /// editor would have rejected.
+        var replacementTechniques: [TechniquePlanSnapshot]? {
+            appliedAlternative?.techniques
+        }
     }
 
     // MARK: - Adaptation
@@ -260,6 +370,18 @@ enum ExerciseSwitchPlanAdapter {
                 newMode: newMode,
                 resetSource: resetSource
             )
+        case .useAlternative(let payload):
+            // The reset branch, with a richer source — no second code path.
+            // The `resetSource` argument is deliberately ignored: the choice
+            // carries its own, so a caller cannot pair "use this alternative"
+            // with somebody else's plan.
+            var outcome = resetPlan(
+                current: current,
+                newMode: newMode,
+                resetSource: .alternative(payload)
+            )
+            outcome.appliedAlternative = payload
+            return outcome
         }
     }
 
@@ -395,7 +517,7 @@ enum ExerciseSwitchPlanAdapter {
         if newMode == .cardio {
             plan.rir = nil
             plan.rpe = nil
-        } else if resetSource.providesEffortTarget {
+        } else if resetSource.ownsEffortTarget {
             plan.rir = resetSource.rir
             plan.rpe = resetSource.rpe
         } else {
@@ -415,8 +537,11 @@ enum ExerciseSwitchPlanAdapter {
             keepTechniques: false,
             // Only when the reset source actually replaced the effort target;
             // when it had none the pre-switch effort (including a progression)
-            // was preserved above and must stay intact.
-            clearsEffortProgression: resetSource.providesEffortTarget,
+            // was preserved above and must stay intact. A prepared alternative
+            // always owns the effort target, so the replaced exercise's
+            // progression is always cleared before the alternative's own is
+            // written in `adaptedSnapshot`.
+            clearsEffortProgression: resetSource.ownsEffortTarget,
             // An explicit Reset discards typed cardio metrics along with
             // everything else the user is asking to start over from.
             keepCardioDrafts: false,
@@ -482,6 +607,20 @@ enum ExerciseSwitchPlanAdapter {
             payload.rirEnd = nil
             payload.rpeStart = nil
             payload.rpeEnd = nil
+        }
+        // Phase F1 — a prepared alternative's own effort mode. Written after
+        // the clear above (which removed the *replaced* exercise's), and only
+        // for a mode that can display one: a progression authored on an
+        // alternative would otherwise be dropped entirely, because `SessionPlan`
+        // carries a single rir/rpe and has nowhere to put start/end.
+        if let alternative = outcome.appliedAlternative,
+            outcome.newMode != .cardio
+        {
+            payload.effortModeRaw = alternative.effortModeRaw
+            payload.rirStart = alternative.rirStart
+            payload.rirEnd = alternative.rirEnd
+            payload.rpeStart = alternative.rpeStart
+            payload.rpeEnd = alternative.rpeEnd
         }
         payload.sets = plan.sets
         payload.repMin = plan.repMin
