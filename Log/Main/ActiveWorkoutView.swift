@@ -1698,11 +1698,18 @@ struct ActiveWorkoutView: View {
                 let key = ex.routineSlotID
                 guard sessionPlans[key] == nil else { continue }
                 if let snap = ex.prescriptionSnapshot {
+                    // Alternative Exercises Phase E — the slot's frozen
+                    // alternatives move from the plan into the session's own
+                    // copy here, which is what `persistSessionPlans` writes and
+                    // `restoreSessionPlansFromAppState` reads back. Nothing
+                    // reads them yet; the switch sheet is Phase F.
                     sessionPlans[key] = SessionPlan(
-                        from: snap, notes: ex.templateNotesSnapshot)
+                        from: snap, notes: ex.templateNotesSnapshot,
+                        alternatives: ex.alternativesSnapshot)
                 } else {
                     var p = SessionPlan()
                     p.slotNotes = ex.templateNotesSnapshot
+                    p.alternatives = ex.alternativesSnapshot
                     sessionPlans[key] = p
                 }
             }
@@ -3167,7 +3174,17 @@ struct ActiveWorkoutView: View {
         slotID: UUID,
         newExercise: Exercise
     ) {
-        sessionPlans[slotID] = outcome.sessionPlan
+        // Alternative Exercises Phase E — the adapter builds a fresh
+        // `SessionPlan` for the switched-in exercise, but a slot's prepared
+        // alternatives belong to the **slot**, not to the exercise currently in
+        // it: after switching Bench Press → Machine Chest Press, the DB Bench
+        // Press the user prepared is still prepared. Carry them across the
+        // wholesale replacement so the frozen list survives a switch. No
+        // visible effect yet — nothing reads them until Phase F — but without
+        // this line the freeze would silently die on the first switch.
+        var applied = outcome.sessionPlan
+        applied.alternatives = sessionPlans[slotID]?.alternatives ?? []
+        sessionPlans[slotID] = applied
 
         // Phase 6.C1 follow-up — slot identity is `routineSlotID`, not
         // `PlanExercise.id` (which is `Exercise.id` and collides when a

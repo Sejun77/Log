@@ -381,6 +381,20 @@ struct PlanExercise: Identifiable {
     // Warmup steps snapshotted at plan-build time (read-only; no live SwiftData references)
     var warmupStepsSnapshot: [WarmupStepSnapshot] = []
 
+    /// Alternative Exercises Phase E — the slot's prepared alternatives,
+    /// frozen at plan-build time like the two snapshots above (§4.2).
+    ///
+    /// The freeze is what makes editing a routine mid-workout safe: the
+    /// session offers what the slot had when it started, not what the routine
+    /// says now. Optional-free and defaulted to `[]`, so every existing
+    /// construction site — the resume rebuilds, the test fixtures — keeps
+    /// compiling and keeps meaning "no alternatives".
+    ///
+    /// Nothing reads this yet: `ActiveWorkoutView.initializeSessionPlans`
+    /// copies it into the slot's `SessionPlan` (which is what persists across
+    /// Save & Exit), and the switch sheet that will offer them is Phase F.
+    var alternativesSnapshot: [SlotAlternative] = []
+
     // Phase 6.C1: source-block snapshot fields. Denormalized onto
     // PlanExercise at plan-build time so the single populator
     // `populateSnapshotFields(on:from:)` can copy them onto WorkoutItem
@@ -483,7 +497,14 @@ struct StartWorkoutFromRoutineView: View {
 
     // MARK: - Plan Builder
 
-    private func makePlan(from routine: Routine) -> WorkoutPlan {
+    /// Builds the frozen `WorkoutPlan` a session runs on.
+    ///
+    /// `static` (Alternative Exercises Phase E): the body reads nothing but its
+    /// `routine` argument, and being callable without a view is what lets the
+    /// freeze — prescription snapshot, warm-ups, techniques, and now
+    /// alternatives — be tested against the real start path instead of a
+    /// look-alike reproduced in the test file. Behavior is unchanged.
+    static func makePlan(from routine: Routine) -> WorkoutPlan {
         let blocks: [PlanBlock] = routine.blocks
             .sorted { $0.order < $1.order }
             .compactMap { b -> PlanBlock? in
@@ -571,6 +592,14 @@ struct StartWorkoutFromRoutineView: View {
                             },
                             techniquePlansSnapshot: techniquePlansSnapshot,
                             warmupStepsSnapshot: warmupStepsSnapshot,
+                            // Alternative Exercises Phase E — the slot's
+                            // prepared alternatives, frozen here and read from
+                            // the session's own copy thereafter (§4.2). Decoded
+                            // through the tolerant Phase C accessor, so a
+                            // corrupt payload costs the alternatives and never
+                            // the workout.
+                            alternativesSnapshot: re.prescription?
+                                .slotAlternatives ?? [],
                             // Phase 6.C1 — block snapshot for History grouping
                             sourceBlockSlotID: b.slotID,
                             sourceBlockIsSuperset: b.isSuperset,
@@ -610,10 +639,10 @@ struct StartWorkoutFromRoutineView: View {
         .scrollContentBackground(.hidden)
         .background(DSColor.bg.ignoresSafeArea())
         .onAppear {
-            cachedPlan = makePlan(from: routine)
+            cachedPlan = Self.makePlan(from: routine)
         }
         .onChange(of: routine) {
-            cachedPlan = makePlan(from: routine)
+            cachedPlan = Self.makePlan(from: routine)
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -625,7 +654,7 @@ struct StartWorkoutFromRoutineView: View {
                         ActiveWorkoutView(plan: plan)
                     } else {
                         // Fallback (shouldn't happen once onAppear ran)
-                        ActiveWorkoutView(plan: makePlan(from: routine))
+                        ActiveWorkoutView(plan: Self.makePlan(from: routine))
                     }
                 } label: {
                     Label("Start", systemImage: "play.fill")
