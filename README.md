@@ -287,7 +287,7 @@ Testing will likely focus on:
 - progress charts
 - Korean-language usability (translations that are confusing or clipped)
 
-The detailed beta plan — tester instructions, testing tasks, feedback questions, and the feedback log — lives in [`TESTFLIGHT_FEEDBACK_PLAN.md`](TESTFLIGHT_FEEDBACK_PLAN.md).
+The detailed beta plan — tester instructions, testing tasks, feedback questions, and the feedback log — lives in [`docs/TESTFLIGHT_FEEDBACK_PLAN.md`](docs/TESTFLIGHT_FEEDBACK_PLAN.md).
 
 Log stores workout data locally on the device and does not collect or transmit personal data. See [`PRIVACY.md`](PRIVACY.md) for details.
 
@@ -368,6 +368,27 @@ Possible future work includes:
 - additional UI polish
 - improved Active Workout visual hierarchy
 - continued fixes based on real workout use
+
+---
+
+## Documentation
+
+Project documentation lives in [`docs/`](docs/). `README.md` and `PRIVACY.md`
+stay at the repository root.
+
+| Document | What it covers |
+| --- | --- |
+| [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) | User guide (English + 한국어). Mirrored in-app under Settings → Help → User Guide |
+| [`docs/TESTFLIGHT_FEEDBACK_PLAN.md`](docs/TESTFLIGHT_FEEDBACK_PLAN.md) | Beta plan: tester instructions, testing tasks, feedback questions |
+| [`docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`](docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md) | Entry #12 devlog draft — TestFlight beta, Korean support, external feedback |
+| [`docs/ENTRY_11_DESIGN_RELEASE_PLAN.md`](docs/ENTRY_11_DESIGN_RELEASE_PLAN.md) | Entry #11 design & release plan |
+| [`docs/ENTRY_11_MINIMAL_DESIGN_DIRECTION.md`](docs/ENTRY_11_MINIMAL_DESIGN_DIRECTION.md) | Working UI design direction |
+| [`docs/ENTRY_11_WORKOUT_TESTING_NOTES.md`](docs/ENTRY_11_WORKOUT_TESTING_NOTES.md) | Real-device workout testing record |
+| [`docs/REFACTOR_PLAN.md`](docs/REFACTOR_PLAN.md) | Architecture v2 refactor blueprint |
+| [`docs/REMAINING_WORK_PLAN.md`](docs/REMAINING_WORK_PLAN.md) | Still-open work extracted from the refactor plan |
+| [`docs/ALTERNATIVE_EXERCISES_DESIGN.md`](docs/ALTERNATIVE_EXERCISES_DESIGN.md) | Alternative Exercises design + as-built notes |
+| [`docs/CARDIO_SYSTEM_DESIGN.md`](docs/CARDIO_SYSTEM_DESIGN.md) | Cardio system design |
+| [`docs/STRUCTURED_CARDIO_DESIGN.md`](docs/STRUCTURED_CARDIO_DESIGN.md) | Structured Cardio Plan design |
 
 ---
 

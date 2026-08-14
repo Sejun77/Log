@@ -1564,3 +1564,18 @@ guide, the SwiftData schema, and every project/signing setting. The editor and
 the active workout simply see imported alternatives as ordinary authored ones —
 tested end to end: an imported routine duplicates its alternatives with fresh
 ids, and starting a workout from it freezes them into the session plan.
+
+---
+
+## 25. Final status
+
+Alternative Exercises are usable end to end: authored in the routine editor,
+persisted on the slot prescription, frozen into the session at start, offered
+and applied mid-workout under Prepared Alternatives (with the destructive
+confirmation and Save & Exit / Resume behavior intact), copied by routine
+duplication, and carried by routine transfer export/import.
+
+**Remaining:** the final manual regression pass on device, devlog finalization
+(`ENTRY_12_TESTFLIGHT_FEEDBACK.md`), and TestFlight build prep. The user guide
+(`USER_GUIDE.md` + `UserGuideView.swift`, EN + KO) is no longer outstanding —
+§19 and the Phase H1/H2 notes above predate it and are left as written.

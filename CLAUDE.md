@@ -168,5 +168,5 @@ C) Performance
 ---
 
 ## Primary References
-- Follow REFACTOR_PLAN.md as the blueprint.
+- Follow docs/REFACTOR_PLAN.md as the blueprint.
 - If a plan section conflicts with code reality, propose a plan update first.

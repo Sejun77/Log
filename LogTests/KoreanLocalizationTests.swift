@@ -639,4 +639,34 @@ final class KoreanLocalizationTests: XCTestCase {
             )
         }
     }
+
+    /// The Settings → Help → User Guide path itself, plus the info-button
+    /// label that sits beside it in the design system.
+    ///
+    /// These went untranslated while the guide *content* was fully localized,
+    /// which is the worst version of the bug: a Korean tester is told to open
+    /// 설정 → 도움말 → 사용자 가이드 and finds two English rows on the way to a
+    /// Korean document.
+    private static let guideAndHelpKeys = [
+        "Help",
+        "User Guide",
+        "More information",
+    ]
+
+    func testGuideAndHelpStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.guideAndHelpKeys {
+            XCTAssertNotEqual(
+                localized(key, in: ko), key,
+                "Guide/help string has no Korean translation: \(key)"
+            )
+        }
+    }
+
+    func testGuideAndHelpStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.guideAndHelpKeys {
+            XCTAssertEqual(localized(key, in: en), key)
+        }
+    }
 }
