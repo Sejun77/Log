@@ -71,8 +71,15 @@ Send something short like this with the TestFlight invite:
 > 5. Tell me anything that felt confusing, annoying, or broken — even small
 >    things. "I didn't know what this button did" is very useful.
 >
+> If anything is unclear, there's a short user guide in the app under
+> Settings → Help → User Guide.
+>
 > This is a personal project, not a finished App Store app, so rough edges are
 > expected. Honest feedback is the whole point.
+
+The same guide is on GitHub at
+`https://github.com/Sejun77/Log/blob/main/docs/USER_GUIDE.md` (English +
+한국어), if a tester would rather read it before installing.
 
 For Korean-speaking testers, add: *"The app is available in Korean — feel free
 to test in Korean and tell me if any wording is confusing or cut off."*
@@ -105,6 +112,39 @@ the end.
       **Cardio Plan** section in History afterwards
 - [ ] *(optional)* Try the Korean UI
 - [ ] *(optional)* Try an uneven superset (different set counts per exercise), if comfortable
+
+### Alternative Exercises
+
+New in this build: a routine exercise can hold prepared replacement exercises,
+each with its own plan, offered when you switch exercises mid-workout.
+
+- [ ] Open or create a routine
+- [ ] Open an exercise in the routine
+- [ ] Tap **Alternative Exercises**
+- [ ] Tap **Add Alternative** and pick a replacement exercise
+- [ ] Edit its plan — sets, reps, rest, warm-ups, techniques, target distance,
+      Cardio Plan, or notes
+- [ ] Start a workout from that routine
+- [ ] Tap **Switch Exercise** and confirm **Prepared Alternatives** appears
+- [ ] Apply the prepared alternative, and check the exercise *and* its plan
+      update correctly
+- [ ] Log a set, then try switching again
+- [ ] Confirm the app warns you before removing logged sets
+- [ ] Tap **Cancel** once, and confirm the logged set is still there
+- [ ] Try again, confirm the switch, and check it works as expected
+- [ ] *(optional)* Try a cardio alternative
+- [ ] Duplicate the routine and confirm the alternatives came with it
+- [ ] Export the routine, import it back, and confirm the alternatives survived
+
+What to report:
+
+- missing or incorrect alternatives
+- confusing **Prepared Alternatives** wording
+- sets disappearing when you did not expect it
+- problems with the switch confirmation
+- cardio alternative issues
+- clipped Korean text, awkward Korean wording, or English text still showing
+  while the phone is set to Korean
 
 ---
 

@@ -2133,7 +2133,14 @@
       }
     },
     "Help" : {
-
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "도움말"
+          }
+        }
+      }
     },
     "History" : {
       "extractionState" : "manual",
@@ -2555,7 +2562,14 @@
       }
     },
     "More information" : {
-
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가 정보"
+          }
+        }
+      }
     },
     "Name" : {
       "localizations" : {
@@ -4912,7 +4926,14 @@
       }
     },
     "User Guide" : {
-
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용자 가이드"
+          }
+        }
+      }
     },
     "Volume" : {
       "localizations" : {

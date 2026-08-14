@@ -64,6 +64,49 @@ When switching exercises during a workout, the app keeps compatible plan details
 and may prefill input fields from the new exercise's previous performance, but
 the workout plan itself remains controlled by the selected switch option.
 
+## Alternative Exercises
+
+Alternative exercises are replacement exercises you prepare ahead of time and
+save inside a routine exercise. They help when equipment is busy or unavailable,
+a movement feels uncomfortable that day, or you simply want a planned backup.
+
+To prepare one:
+
+1. Open a routine.
+2. Open an exercise in the routine.
+3. Tap Alternative Exercises.
+4. Tap Add Alternative and choose the replacement exercise.
+5. Set up its own plan.
+
+Each alternative keeps its own plan, including:
+
+- sets
+- reps or duration
+- rest
+- effort
+- tempo
+- warm-ups
+- techniques
+- cardio target distance
+- Cardio Plan
+- notes
+
+To use one during a workout:
+
+1. Start a workout from the routine.
+2. Tap Switch Exercise.
+3. Choose an item under Prepared Alternatives.
+
+Applying an alternative switches the exercise and applies the plan you prepared
+for it. If the switch would remove sets you already logged, the app asks you to
+confirm first, and Cancel leaves the workout exactly as it was.
+
+An alternative turned Off stays saved in the routine editor but is not offered
+during a workout. An alternative that matches the exercise you are already doing
+is not offered either. If its exercise has been deleted, it appears as Exercise
+unavailable and cannot be applied. Duplicating, exporting, or importing a
+routine keeps its alternatives.
+
 ## Duration Exercises and Cardio
 
 Some exercises are tracked by time instead of reps, such as a plank hold, a wall
@@ -211,6 +254,48 @@ You can:
 운동 중 다른 운동으로 교체할 때, 앱은 호환되는 계획 정보는 유지하고 새 운동의 이전
 기록을 입력 칸에 미리 채울 수 있습니다. 하지만 실제 운동 계획은 사용자가 선택한 교체
 옵션에 따라 결정됩니다.
+
+## 대체 운동
+
+대체 운동은 미리 준비해서 루틴의 운동 안에 저장해 두는 교체용 운동입니다. 기구가
+사용 중이거나 없을 때, 그날 동작이 불편할 때, 또는 미리 대비책을 정해 두고 싶을 때
+유용합니다.
+
+준비하는 방법:
+
+1. 루틴을 엽니다.
+2. 루틴 안의 운동을 엽니다.
+3. 대체 운동을 누릅니다.
+4. 대체 운동 추가를 누르고 교체할 운동을 선택합니다.
+5. 해당 운동의 계획을 설정합니다.
+
+각 대체 운동은 자체 계획을 가집니다:
+
+- 세트 수
+- 반복 횟수 또는 시간
+- 휴식
+- 운동 강도
+- 템포
+- 워밍업
+- 운동 기법
+- 유산소 목표 거리
+- 유산소 계획
+- 메모
+
+운동 중에 사용하는 방법:
+
+1. 해당 루틴에서 운동을 시작합니다.
+2. 운동 교체를 누릅니다.
+3. 준비된 대체 운동에서 항목을 선택합니다.
+
+대체 운동을 적용하면 운동이 교체되고 미리 준비해 둔 계획이 함께 적용됩니다. 이미
+기록한 세트가 삭제되는 경우에는 앱이 먼저 확인을 요청하며, 취소를 누르면 운동은
+그대로 유지됩니다.
+
+끄기로 설정한 대체 운동은 루틴 편집 화면에는 그대로 남지만 운동 중에는 표시되지
+않습니다. 지금 하고 있는 운동과 같은 대체 운동도 표시되지 않습니다. 해당 운동이
+삭제된 경우에는 사용할 수 없는 운동으로 표시되며 적용할 수 없습니다. 루틴을
+복제하거나 내보내기/가져오기를 해도 대체 운동은 그대로 유지됩니다.
 
 ## 시간 기반 운동과 유산소 운동
 
