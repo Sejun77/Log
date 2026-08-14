@@ -162,6 +162,164 @@ struct RoutineTransferSlotPrescriptionDTO: Codable, Equatable {
     var cardioSegments: RoutineTransferCardioSegmentsDTO? = nil
     var techniquePlans: [RoutineTransferTechniquePlanDTO]
     var warmupScheme: RoutineTransferWarmupSchemeDTO?
+    /// Prepared alternative exercises for this slot (Alternative Exercises
+    /// Phase H2, design §12.2). Optional with a nil default, exactly like
+    /// `cardioSegments` above: a document exported before this key existed
+    /// decodes it as nil via synthesized `decodeIfPresent`, the synthesized
+    /// encoder omits the key entirely when nil (so a slot with no alternatives
+    /// exports byte-identically to before), and the memberwise-init call sites
+    /// that do not pass it keep compiling.
+    ///
+    /// **No `schemaVersion` bump**, for the reason spelled out on
+    /// `cardioSegments`: `validateSupportedSchemaVersion` *rejects* a document
+    /// whose version exceeds the reader's, so bumping would make every older
+    /// build refuse a routine wholesale rather than import it minus its
+    /// alternatives. Nothing about an older document became invalid — the same
+    /// reasoning Slices 5, 9 and 12E recorded.
+    var alternatives: RoutineTransferAlternativesDTO? = nil
+}
+
+// MARK: - Prepared alternatives
+
+/// Transparent wrapper around the slot's `[RoutineTransferAlternativeDTO]`.
+///
+/// Exists for the same reason `RoutineTransferCardioSegmentsDTO` does, one
+/// level deeper. A plain `[RoutineTransferAlternativeDTO]?` field inside a
+/// synthesized `Codable` struct fails the **whole document** on two inputs this
+/// format has to survive: a value of the wrong JSON shape (a string, a
+/// hand-edited mess) and a single malformed element. Both are absorbed here —
+///
+///  * a wrong-shaped value decodes as **no alternatives**,
+///  * a malformed element is **dropped and its siblings survive**,
+///
+/// which is exactly the tolerance `SlotAlternativesPayload` already gives the
+/// stored column (§5.3 / §8.7), so a payload behaves the same in a routine, in
+/// a transfer document, and in a frozen session plan. Losing prepared
+/// alternatives is a bad outcome; losing the recipient's whole routine over one
+/// bad key is a worse one.
+struct RoutineTransferAlternativesDTO: Codable, Equatable {
+
+    var alternatives: [RoutineTransferAlternativeDTO]
+
+    init(alternatives: [RoutineTransferAlternativeDTO]) {
+        self.alternatives = alternatives
+    }
+
+    init(from decoder: Decoder) throws {
+        let decoded = (try? [LenientAlternative](from: decoder)) ?? []
+        alternatives = decoded.compactMap(\.alternative)
+    }
+
+    /// Encodes the list **in place** (no wrapper object), so the document reads
+    /// as `"alternatives": [ { ... } ]` rather than carrying an implementation
+    /// detail of this type into the wire format.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(alternatives)
+    }
+
+    /// Turns a failed element decode into a dropped element. Each array element
+    /// gets its own decoder, so one failure cannot disturb the others — the
+    /// same shape `SlotAlternativesPayload.LenientAlternative` uses.
+    private struct LenientAlternative: Decodable {
+        let alternative: RoutineTransferAlternativeDTO?
+        init(from decoder: Decoder) throws {
+            alternative = try? RoutineTransferAlternativeDTO(from: decoder)
+        }
+    }
+}
+
+/// One prepared alternative, in transfer form.
+///
+/// Two deliberate differences from the stored `SlotAlternative`:
+///
+///  1. **No `id`.** The transfer format carries content only — no `id` /
+///     `slotID` / `PersistentIdentifier` anywhere else either — and §12.2
+///     requires imported alternatives to get fresh ids. Omitting the field
+///     makes that structural rather than a rule import has to remember.
+///  2. **No `exerciseID`.** A `UUID` pointing at the *sender's* exercise row is
+///     meaningless on the recipient's device. The reference travels as a name
+///     plus the same three resolution hints `RoutineTransferSlotDTO` carries,
+///     so import resolves or stub-creates through one rule for every exercise
+///     reference in the document. This is where the payload's `exerciseName`
+///     earns its place (§12.2).
+///
+/// The prescription is `AlternativePrescriptionPayload` itself rather than a
+/// mirrored DTO: it is already a pure `Codable` value type with a tolerant
+/// decoder, it nests `CardioSegmentPlan` as readable structure (not a blob),
+/// and reusing it means a field added to an alternative can never be forgotten
+/// here.
+struct RoutineTransferAlternativeDTO: Codable, Equatable {
+    var order: Int = 0
+    var isEnabled: Bool = true
+    /// Definition-level exercise reference, resolved by trimmed/case-insensitive
+    /// name on import — identical rule to `RoutineTransferSlotDTO`.
+    var exerciseName: String
+    var exerciseBodyPart: String? = nil
+    var exerciseEquipmentType: String? = nil
+    var exerciseIsTimeBased: Bool? = nil
+    /// "Why/when to use this", distinct from the prescription's slot note.
+    var note: String? = nil
+    var prescription: AlternativePrescriptionPayload = .init()
+}
+
+extension RoutineTransferAlternativeDTO {
+
+    private enum CodingKeys: String, CodingKey {
+        case order, isEnabled, exerciseName, exerciseBodyPart
+        case exerciseEquipmentType, exerciseIsTimeBased, note, prescription
+    }
+
+    /// Requires a **non-blank `exerciseName`** and a readable `prescription`;
+    /// everything else falls back to a default.
+    ///
+    /// Mirrors `SlotAlternative.init(from:)`, with the name standing in for the
+    /// id it replaces: an alternative with no exercise to switch to is not an
+    /// alternative, and §"do not invent exercise references" forbids the
+    /// obvious repair. Both cases throw, and the wrapper above drops the
+    /// element, so a malformed alternative costs itself and never its siblings.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        guard
+            let name = try? c.decode(String.self, forKey: .exerciseName),
+            !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { throw SlotAlternativeDecodingError.missingExerciseReference }
+
+        let prescription = try c.decode(
+            AlternativePrescriptionPayload.self, forKey: .prescription)
+
+        self.init(
+            order: (try? c.decodeIfPresent(Int.self, forKey: .order)) ?? 0,
+            isEnabled: (try? c.decodeIfPresent(Bool.self, forKey: .isEnabled))
+                ?? true,
+            exerciseName: name,
+            exerciseBodyPart: try? c.decodeIfPresent(
+                String.self, forKey: .exerciseBodyPart),
+            exerciseEquipmentType: try? c.decodeIfPresent(
+                String.self, forKey: .exerciseEquipmentType),
+            exerciseIsTimeBased: try? c.decodeIfPresent(
+                Bool.self, forKey: .exerciseIsTimeBased),
+            note: try? c.decodeIfPresent(String.self, forKey: .note),
+            prescription: prescription
+        )
+    }
+
+    /// The optional hints and the note are omitted when absent; `order`,
+    /// `isEnabled`, `exerciseName` and `prescription` are always written,
+    /// because each is a positive statement about the alternative.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(order, forKey: .order)
+        try c.encode(isEnabled, forKey: .isEnabled)
+        try c.encode(exerciseName, forKey: .exerciseName)
+        try c.encodeIfPresent(exerciseBodyPart, forKey: .exerciseBodyPart)
+        try c.encodeIfPresent(
+            exerciseEquipmentType, forKey: .exerciseEquipmentType)
+        try c.encodeIfPresent(
+            exerciseIsTimeBased, forKey: .exerciseIsTimeBased)
+        try c.encodeIfPresent(note, forKey: .note)
+        try c.encode(prescription, forKey: .prescription)
+    }
 }
 
 // MARK: - Structured cardio segments

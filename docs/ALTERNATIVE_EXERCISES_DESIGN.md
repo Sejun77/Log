@@ -1444,3 +1444,123 @@ new value.
 Value semantics make the two routines independent for free: editing either
 side's alternatives afterwards leaves the other untouched, both directions
 tested.
+
+---
+
+## 24. Phase H2 — as built
+
+**Shipped:** routine transfer now carries prepared alternatives. Export writes
+them into the document, import restores them onto the new routine's slots, and
+a document written before this slice imports exactly as it did before. This
+closes §12.2.
+
+**Still deferred:** `USER_GUIDE.md`, the final Phase J regression pass,
+`REMAINING_WORK_PLAN.md` Entry #12, and TestFlight build prep. History
+provenance (§11) stays out of MVP, and the CSV formats are untouched (§12.3).
+
+### Wire format
+
+One additive optional key on `RoutineTransferSlotPrescriptionDTO`:
+
+```
+var alternatives: RoutineTransferAlternativesDTO? = nil
+```
+
+**No `schemaVersion` bump.** `validateSupportedSchemaVersion` *rejects* a
+document whose version exceeds the reader's, so bumping would make every older
+build refuse a whole routine rather than import it minus its alternatives —
+nothing about an older document became invalid. That is the reasoning Slices 5,
+9 and 12E each recorded, and the reason an app that predates this slice can
+still read a routine exported by one that doesn't.
+
+`RoutineTransferAlternativesDTO` is a transparent wrapper that encodes the list
+**in place** (`"alternatives": [ … ]`), for the reason
+`RoutineTransferCardioSegmentsDTO` exists one level up: a plain array field
+inside a synthesized `Codable` struct fails the *whole document* on a
+wrong-shaped value or a single malformed element. Here a wrong-shaped value
+reads as no alternatives, and a malformed element is dropped while its siblings
+survive — the tolerance `SlotAlternativesPayload` already gives the stored
+column (§5.3 / §8.7). §12.2 sketched a bare `[RoutineTransferAlternativeDTO]?`;
+the wrapper is what actually delivers the failure behavior that bullet asks for.
+
+`RoutineTransferAlternativeDTO` carries `order`, `isEnabled`, `exerciseName` +
+the three resolution hints, `note`, and the prescription as
+`AlternativePrescriptionPayload` **itself** rather than a mirrored DTO — it is
+already a pure `Codable` value type with a tolerant decoder that nests
+`CardioSegmentPlan` as readable structure, so reusing it means a field added to
+an alternative can never be forgotten in the transfer path. Two fields are
+deliberately absent: `id` and `exerciseID` (below).
+
+### Export
+
+`RoutineTransfer.export(_:exercises:exportedAt:appVersion:)` gained one
+parameter — the exercise library, used *only* to turn an alternative's stored
+`exerciseID` into a name plus hints. A slot's own exercise needs no lookup (it
+is a live relationship); an alternative holds a bare `UUID`, and a `UUID` from
+the sender's store means nothing on the recipient's device. Still read-only and
+`ModelContext`-free; the parameter defaults to empty, and `RoutinesView` passes
+the fetched library at the one export call site.
+
+- Alternatives are read through the **decoding accessor** (`slotAlternatives`),
+  not the raw column: a payload this build cannot parse exports as *no
+  alternatives* rather than shipping corruption to someone else's device. This
+  is the same choice `cardioSegments` makes, and the deliberate difference from
+  `RoutineDuplicator`, which stays inside one store.
+- A slot with no alternatives **omits the key entirely**, so a routine that
+  never used the feature exports byte-identically to before.
+- Order, `isEnabled`, the note and every prescription field travel verbatim —
+  sets, rep range, duration range, rests, effort mode + values, tempo, target
+  distance + unit, warm-up snapshots, technique snapshots, the structured
+  Cardio Plan, and the alternative's slot notes.
+- An alternative whose `exerciseID` no longer resolves falls back to the
+  `exerciseName` frozen on it at authoring time (no hints); if that is blank
+  too the alternative is dropped, mirroring the empty-name sentinel a deleted
+  slot exercise exports.
+
+### Import
+
+Materialization goes through `setSlotAlternatives(_:)`, never the column, so
+Phase B normalization (stable order, dense `order`, unique ids, trimmed
+strings) is the one implementation governing authoring, duplication and import
+alike. An empty, absent or corrupt list all end as a **nil `alternativesData`**
+— one representation of "no alternatives".
+
+- A document without the key imports precisely as before: no alternatives, no
+  error, the rest of the slot unchanged.
+- A malformed element (no `exerciseName`, a blank one, or an unreadable
+  `prescription`) is dropped and its siblings survive; the survivors are
+  re-densified to `0..<count`.
+- A malformed `cardioSegments` *inside* a valid alternative costs the plan, not
+  the alternative.
+- The target distance is **re-normalized rather than trusted**, exactly like the
+  primary prescription's on this path: an imported document is outside data, and
+  an impossible distance must land as "no target" instead of reaching a
+  formatter. An unparseable unit is dropped with the distance it belonged to.
+
+### Identity
+
+| Field | Import | Why |
+|---|---|---|
+| `SlotAlternative.id` | **Fresh** | The wire format carries no id at all (content only, like every other level of the document), so freshness is structural rather than a rule import must remember. An imported routine must not share authored alternative identity with the sender's copy (§12.2) |
+| `exerciseID` | **Remapped** to the recipient's row | The reference travels as a name and resolves through the document's single exercise-resolution rule — link an existing library row (trimmed, case-insensitive), or stub-create a custom one from the exported hints, deduped within the batch. An alternative naming the slot's own exercise links to that one row, not a copy of it |
+| `exerciseName` | The **resolved row's** name | So the frozen display fallback agrees with the library it now points at |
+| `CardioSegment.id` inside an alternative's plan | **Preserved** | Consistency with the primary slot, whose plan already round-trips its segment ids on this path. One rule for segment identity, not two |
+| `order`, `isEnabled`, `note`, whole payload | **Preserved** | A disabled alternative imports as disabled |
+
+Because every reference resolves or stub-creates, an imported alternative always
+resolves — the "exercise unavailable" row (§8.7) belongs to a *later* deletion,
+not to import. Nothing invents an exercise reference, and nothing crashes over a
+missing one.
+
+`RoutineTransfer.preview` counts alternative exercises too, in the same
+slot-then-alternatives order the import visits them, so the preview's "will be
+created" list stays an accurate promise rather than an undercount.
+
+### Not touched
+
+Active-workout switch behavior, `ExerciseSwitchPlanAdapter`, `SessionPlan`, the
+routine editor UI, `RoutineDuplicator`, History, both CSV formats, the user
+guide, the SwiftData schema, and every project/signing setting. The editor and
+the active workout simply see imported alternatives as ordinary authored ones —
+tested end to end: an imported routine duplicates its alternatives with fresh
+ids, and starting a workout from it freezes them into the session plan.
