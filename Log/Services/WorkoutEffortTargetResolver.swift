@@ -24,6 +24,13 @@ enum WorkoutEffortTargetResolver {
         var rirEnd: Double?
         var rpeStart: Double?
         var rpeEnd: Double?
+        /// Custom per-set target lists, in the same comma-separated form the
+        /// model columns store (see `SlotPrescription.customRIRTargetsRaw`).
+        /// Carried raw rather than decoded so a `Fields` is a faithful copy of
+        /// what the snapshot holds, and the single tolerant decode happens
+        /// here at the read site.
+        var customRIRTargetsRaw: String?
+        var customRPETargetsRaw: String?
 
         init(
             effortModeRaw: String? = nil,
@@ -32,7 +39,9 @@ enum WorkoutEffortTargetResolver {
             rirStart: Double? = nil,
             rirEnd: Double? = nil,
             rpeStart: Double? = nil,
-            rpeEnd: Double? = nil
+            rpeEnd: Double? = nil,
+            customRIRTargetsRaw: String? = nil,
+            customRPETargetsRaw: String? = nil
         ) {
             self.effortModeRaw = effortModeRaw
             self.rir = rir
@@ -41,6 +50,8 @@ enum WorkoutEffortTargetResolver {
             self.rirEnd = rirEnd
             self.rpeStart = rpeStart
             self.rpeEnd = rpeEnd
+            self.customRIRTargetsRaw = customRIRTargetsRaw
+            self.customRPETargetsRaw = customRPETargetsRaw
         }
     }
 
@@ -74,12 +85,14 @@ enum WorkoutEffortTargetResolver {
         workingSetCount: Int
     ) -> [Double] {
         guard let metric = metric(for: autoregMode) else { return [] }
-        let t = resolvedTriple(fields, metric: metric)
+        let t = resolvedValues(fields, metric: metric)
         return EffortTargetResolver.resolve(
+            metric: metric,
             mode: derivedMode(fields),
             single: t.single,
             start: t.start,
             end: t.end,
+            custom: t.custom,
             setCount: workingSetCount
         )
     }
@@ -91,15 +104,25 @@ enum WorkoutEffortTargetResolver {
     /// so a snapshot stored under one metric summarizes correctly in the other.
     /// Used by the active-workout Plan card so its summary matches the per-set
     /// rows and the block summary.
-    static func summary(fields: Fields, autoregMode: AutoregMode) -> String? {
+    ///
+    /// - Parameter workingSetCount: when known, fits a `.custom` list to the
+    ///   slot's set count so the card states exactly what the rows show. `nil`
+    ///   summarizes the frozen list as stored.
+    static func summary(
+        fields: Fields,
+        autoregMode: AutoregMode,
+        workingSetCount: Int? = nil
+    ) -> String? {
         guard let metric = metric(for: autoregMode) else { return nil }
-        let t = resolvedTriple(fields, metric: metric)
+        let t = resolvedValues(fields, metric: metric)
         return EffortTargetResolver.summary(
             metric: metric,
             mode: derivedMode(fields),
             single: t.single,
             start: t.start,
-            end: t.end
+            end: t.end,
+            custom: t.custom,
+            setCount: workingSetCount
         )
     }
 
@@ -190,18 +213,20 @@ enum WorkoutEffortTargetResolver {
     /// sites now read this, so "what the plan says" and "what the rows say" are
     /// the same question with one answer.
     ///
-    /// **Progression is not overlaid.** In-session progression editing is still
-    /// deferred, so a `.progression` snapshot keeps its start/end pair verbatim
-    /// and the session's single value — which the sheet does not let the user
-    /// set in that mode — is ignored rather than silently downgrading the ramp
-    /// to a flat single target.
+    /// **Progression and custom are not overlaid.** In-session editing of
+    /// either is still deferred, so a `.progression` snapshot keeps its
+    /// start/end pair and a `.custom` snapshot keeps its authored per-set list
+    /// verbatim; the session's single value — which the sheet does not let the
+    /// user set in those modes — is ignored rather than silently flattening the
+    /// frozen targets into one repeated number.
     static func effectiveFields(
         snapshot: Fields?,
         sessionRIR: Double?,
         sessionRPE: Double?
     ) -> Fields {
         let base = snapshot ?? Fields()
-        guard derivedMode(base) != .progression else { return base }
+        let mode = derivedMode(base)
+        guard mode != .progression, mode != .custom else { return base }
 
         // `.single` when the session carries a value, `.none` when it does not
         // — stated explicitly rather than left to derivation, so clearing the
@@ -216,6 +241,11 @@ enum WorkoutEffortTargetResolver {
         fields.rirEnd = nil
         fields.rpeStart = nil
         fields.rpeEnd = nil
+        // Cleared for the same reason as the start/end pair: the overlay
+        // asserts a flat single target, and a stale custom list left behind
+        // would outrank it the moment anything re-derived the mode.
+        fields.customRIRTargetsRaw = nil
+        fields.customRPETargetsRaw = nil
         return fields
     }
 
@@ -253,25 +283,47 @@ enum WorkoutEffortTargetResolver {
         }
     }
 
-    /// Active-metric (single, start, end) values, falling back to the opposite
-    /// metric via `10 - x` when the active field is nil — the single source of
-    /// the paired-fallback rule shared by `perSetValues` and `summary`.
-    private static func resolvedTriple(
+    /// Active-metric (single, start, end, custom) values, falling back to the
+    /// opposite metric via `10 - x` when the active field is nil — the single
+    /// source of the paired-fallback rule shared by `perSetValues` and
+    /// `summary`.
+    ///
+    /// The custom list follows the same rule one level up: the active metric's
+    /// list wins, and only an **empty** one (nil column, or a column this build
+    /// cannot parse) falls back to the mirrored opposite list.
+    private static func resolvedValues(
         _ f: Fields, metric: EffortMetric
-    ) -> (single: Double?, start: Double?, end: Double?) {
+    ) -> (single: Double?, start: Double?, end: Double?, custom: [Double]) {
         let convert: (Double) -> Double = { 10 - $0 }
+        let activeRaw: String?
+        let pairedRaw: String?
+        switch metric {
+        case .rir:
+            activeRaw = f.customRIRTargetsRaw
+            pairedRaw = f.customRPETargetsRaw
+        case .rpe:
+            activeRaw = f.customRPETargetsRaw
+            pairedRaw = f.customRIRTargetsRaw
+        }
+        var custom = EffortTargetList.decode(activeRaw)
+        if custom.isEmpty {
+            custom = EffortTargetList.decode(pairedRaw).map(convert)
+        }
+
         switch metric {
         case .rir:
             return (
                 f.rir ?? f.rpe.map(convert),
                 f.rirStart ?? f.rpeStart.map(convert),
-                f.rirEnd ?? f.rpeEnd.map(convert)
+                f.rirEnd ?? f.rpeEnd.map(convert),
+                custom
             )
         case .rpe:
             return (
                 f.rpe ?? f.rir.map(convert),
                 f.rpeStart ?? f.rirStart.map(convert),
-                f.rpeEnd ?? f.rirEnd.map(convert)
+                f.rpeEnd ?? f.rirEnd.map(convert),
+                custom
             )
         }
     }
@@ -288,7 +340,9 @@ extension WorkoutEffortTargetResolver.Fields {
             rirStart: payload.rirStart,
             rirEnd: payload.rirEnd,
             rpeStart: payload.rpeStart,
-            rpeEnd: payload.rpeEnd
+            rpeEnd: payload.rpeEnd,
+            customRIRTargetsRaw: payload.customRIRTargetsRaw,
+            customRPETargetsRaw: payload.customRPETargetsRaw
         )
     }
 
@@ -303,7 +357,9 @@ extension WorkoutEffortTargetResolver.Fields {
             rirStart: prescription.rirStart,
             rirEnd: prescription.rirEnd,
             rpeStart: prescription.rpeStart,
-            rpeEnd: prescription.rpeEnd
+            rpeEnd: prescription.rpeEnd,
+            customRIRTargetsRaw: prescription.customRIRTargetsRaw,
+            customRPETargetsRaw: prescription.customRPETargetsRaw
         )
     }
 }

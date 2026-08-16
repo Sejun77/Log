@@ -1789,7 +1789,10 @@ struct ActiveWorkoutView: View {
             sessionRIR: sp.rir,
             sessionRPE: sp.rpe)
         return WorkoutEffortTargetResolver.summary(
-            fields: fields, autoregMode: autoregMode)
+            fields: fields, autoregMode: autoregMode,
+            // Fits a frozen custom list to the session's set count, so the card
+            // states exactly the targets the rows below it show.
+            workingSetCount: sp.sets)
     }
 
     /// Compact plan summary row with "Edit Plan" sheet trigger.

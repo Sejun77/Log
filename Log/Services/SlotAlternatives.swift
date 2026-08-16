@@ -78,6 +78,16 @@ struct AlternativePrescriptionPayload: Codable, Equatable {
     var rirEnd: Double? = nil
     var rpeStart: Double? = nil
     var rpeEnd: Double? = nil
+    /// Custom per-set effort targets for the `.custom` effort mode, one list
+    /// per metric and kept mirrored (`10 - x`) exactly as the slot's own
+    /// columns are. Carried as decoded arrays rather than the model's
+    /// comma-separated string: this payload is JSON that people read and
+    /// hand-edit in a transfer document, and `[2, 1.5, 1, 0]` is the shape that
+    /// audience expects — the same choice `cardioSegments` makes one field
+    /// down. Carried verbatim; this type asserts no relationship between them
+    /// and `rir` / `rpe`.
+    var customRIRTargets: [Double]? = nil
+    var customRPETargets: [Double]? = nil
     var durationMinSeconds: Int? = nil
     var durationMaxSeconds: Int? = nil
     var usesDuration: Bool = false
@@ -104,11 +114,29 @@ struct AlternativePrescriptionPayload: Codable, Equatable {
     /// a distance on a strength exercise are compatibility rules that belong to
     /// the adapter (Phase F), and applying them here would silently rewrite
     /// what the user authored in the editor.
+    /// A custom target list, or nil when it is absent, empty, or unusable.
+    /// Round-tripped through `EffortTargetList` so a payload and a slot column
+    /// accept exactly the same values.
+    private static func normalizedTargets(_ values: [Double]?) -> [Double]? {
+        guard let values, EffortTargetList.encode(values) != nil else {
+            return nil
+        }
+        return values
+    }
+
     func normalized() -> AlternativePrescriptionPayload {
         var copy = self
         copy.tempo = SlotAlternatives.trimmedOrNil(tempo)
         copy.slotNotes = SlotAlternatives.trimmedOrNil(slotNotes)
         if let plan = copy.cardioSegments, plan.isEmpty { copy.cardioSegments = nil }
+        // An empty custom list is "no custom targets", which is what a nil
+        // field already means — one representation, so a payload authored
+        // without them encodes exactly as it did before this field existed.
+        // A list carrying an unusable value is refused whole by
+        // `EffortTargetList`, and re-encoding through it here is what stops a
+        // hand-edited document from smuggling one onto a session plan.
+        copy.customRIRTargets = Self.normalizedTargets(customRIRTargets)
+        copy.customRPETargets = Self.normalizedTargets(customRPETargets)
         return copy
     }
 }
@@ -119,6 +147,7 @@ extension AlternativePrescriptionPayload {
         case sets, repMin, repMax, restSecondsBetweenSets
         case restSecondsAfterExercise, rir, rpe, tempo
         case effortModeRaw, rirStart, rirEnd, rpeStart, rpeEnd
+        case customRIRTargets, customRPETargets
         case durationMinSeconds, durationMaxSeconds, usesDuration
         case targetDistanceMeters, targetDistanceUnitRaw
         case warmupSteps, techniques, cardioSegments, slotNotes
@@ -152,6 +181,10 @@ extension AlternativePrescriptionPayload {
             rirEnd: try? c.decodeIfPresent(Double.self, forKey: .rirEnd),
             rpeStart: try? c.decodeIfPresent(Double.self, forKey: .rpeStart),
             rpeEnd: try? c.decodeIfPresent(Double.self, forKey: .rpeEnd),
+            customRIRTargets: try? c.decodeIfPresent(
+                [Double].self, forKey: .customRIRTargets),
+            customRPETargets: try? c.decodeIfPresent(
+                [Double].self, forKey: .customRPETargets),
             durationMinSeconds: try? c.decodeIfPresent(
                 Int.self, forKey: .durationMinSeconds),
             durationMaxSeconds: try? c.decodeIfPresent(
@@ -194,6 +227,8 @@ extension AlternativePrescriptionPayload {
         try c.encodeIfPresent(rirEnd, forKey: .rirEnd)
         try c.encodeIfPresent(rpeStart, forKey: .rpeStart)
         try c.encodeIfPresent(rpeEnd, forKey: .rpeEnd)
+        try c.encodeIfPresent(customRIRTargets, forKey: .customRIRTargets)
+        try c.encodeIfPresent(customRPETargets, forKey: .customRPETargets)
         try c.encodeIfPresent(durationMinSeconds, forKey: .durationMinSeconds)
         try c.encodeIfPresent(durationMaxSeconds, forKey: .durationMaxSeconds)
         // Written unconditionally: `false` is a positive assertion that the

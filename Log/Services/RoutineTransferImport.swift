@@ -333,6 +333,15 @@ extension RoutineTransfer {
             rirEnd: dto.rirEnd,
             rpeStart: dto.rpeStart,
             rpeEnd: dto.rpeEnd,
+            // Re-normalized rather than trusted, the same rule the distance
+            // below follows: `EffortTargetList.encode` refuses a list carrying
+            // a value the app's steppers cannot produce, so a hand-edited or
+            // corrupt list lands as "no custom targets" and the slot degrades
+            // to the progression / single values it still carries.
+            customRIRTargetsRaw: EffortTargetList.encode(
+                dto.customRIRTargets ?? []),
+            customRPETargetsRaw: EffortTargetList.encode(
+                dto.customRPETargets ?? []),
             durationMinSeconds: dto.durationMinSeconds,
             durationMaxSeconds: dto.durationMaxSeconds,
             usesDuration: dto.usesDuration,

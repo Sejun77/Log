@@ -165,14 +165,30 @@ struct EditSessionPlanSheet: View {
                 Text("Progression editing during workout is not available yet.")
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
+            // Read-only for the same reason `.progression` is: the sheet edits
+            // one value, and a per-set list has nowhere to land on a
+            // `SessionPlan`. Offering a single stepper here would silently
+            // flatten the targets the user authored per set, so the frozen list
+            // is shown instead and the rows keep displaying it.
+            case .custom:
+                effortReadOnlyRow(snapshotSummary ?? "—")
+                Text(
+                    "Per-set effort editing during workout is not available yet."
+                )
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
             }
         }
     }
 
-    /// Snapshot effort summary in the current autoreg metric (paired fallback).
+    /// Snapshot effort summary in the current autoreg metric (paired fallback),
+    /// fitted to the session's set count so a frozen custom list reads exactly
+    /// as the rows behind the sheet render it.
     private var snapshotSummary: String? {
         snapshotEffort.flatMap {
-            WorkoutEffortTargetResolver.summary(fields: $0, autoregMode: autoregMode)
+            WorkoutEffortTargetResolver.summary(
+                fields: $0, autoregMode: autoregMode,
+                workingSetCount: plan.sets)
         }
     }
 

@@ -131,12 +131,30 @@ final class ActiveWorkoutEffortTargetResolverTests: XCTestCase {
 
     // MARK: - Formatting
 
-    func testFormattingDropsTrailingZeroAndKeepsHalf() {
-        // 2 not 2.0; 1.5 stays 1.5 (progression 2 → 1 over 3 → 2, 1.5, 1).
+    func testFormattingDropsTrailingZero() {
+        // 2, not 2.0. The interior of RIR 2 → 1 over 3 sets rounds *up* to 2
+        // under the final progression rules — an automatic ramp never invents a
+        // half step (it used to read "2, 1.5, 1").
         let labels = Resolver.perSetLabels(
             fields: Fields(effortModeRaw: "progression", rirStart: 2, rirEnd: 1),
             autoregMode: .rir, workingSetCount: 3)
-        XCTAssertEqual(labels, ["RIR 2", "RIR 1.5", "RIR 1"])
+        XCTAssertEqual(labels, ["RIR 2", "RIR 2", "RIR 1"])
+    }
+
+    /// A half step the user typed is still rendered as one — it just has to
+    /// come from an endpoint or a custom target, never from the generator.
+    func testFormattingKeepsAnAuthoredHalfStep() {
+        XCTAssertEqual(
+            Resolver.perSetLabels(
+                fields: Fields(effortModeRaw: "single", rir: 1.5),
+                autoregMode: .rir, workingSetCount: 2),
+            ["RIR 1.5", "RIR 1.5"])
+        XCTAssertEqual(
+            Resolver.perSetLabels(
+                fields: Fields(
+                    effortModeRaw: "custom", customRIRTargetsRaw: "2,1.5,0"),
+                autoregMode: .rir, workingSetCount: 3),
+            ["RIR 2", "RIR 1.5", "RIR 0"])
     }
 
     // MARK: - Numeric values (routine editor preview basis)
@@ -174,13 +192,98 @@ final class ActiveWorkoutEffortTargetResolverTests: XCTestCase {
             [2, 2, 2])
     }
 
-    func testPerSetValues_HalfStepRetained() {
-        // 2 → 1 over 3 sets = 2, 1.5, 1 (numeric, pre-formatting).
+    func testPerSetValues_ProgressionInteriorsAreWholeNumbers() {
+        // 2 → 1 over 3 sets = 2, 2, 1 (numeric, pre-formatting): the interior
+        // rounds up for RIR, so no half step is generated and the ramp never
+        // gets harder earlier than the endpoints imply.
         XCTAssertEqual(
             Resolver.perSetValues(
                 fields: Fields(effortModeRaw: "progression", rirStart: 2, rirEnd: 1),
                 autoregMode: .rir, workingSetCount: 3),
-            [2, 1.5, 1])
+            [2, 2, 1])
+    }
+
+    // MARK: - Custom per-set targets
+
+    func testPerSetValues_CustomTargetsResolveVerbatim() {
+        XCTAssertEqual(
+            Resolver.perSetValues(
+                fields: Fields(
+                    effortModeRaw: "custom", customRIRTargetsRaw: "2,1.5,1,0"),
+                autoregMode: .rir, workingSetCount: 4),
+            [2, 1.5, 1, 0])
+    }
+
+    /// A custom list stored under one metric renders in the other through the
+    /// same `10 - x` fallback the single value and the start/end pair use.
+    func testPerSetValues_CustomPairedFallback() {
+        XCTAssertEqual(
+            Resolver.perSetValues(
+                fields: Fields(
+                    effortModeRaw: "custom", customRIRTargetsRaw: "2,1.5,1,0"),
+                autoregMode: .rpe, workingSetCount: 4),
+            [8, 8.5, 9, 10])
+    }
+
+    func testPerSetValues_CustomFitsTheSetCount() {
+        let fields = Fields(
+            effortModeRaw: "custom", customRIRTargetsRaw: "2,1,0")
+        XCTAssertEqual(
+            Resolver.perSetValues(
+                fields: fields, autoregMode: .rir, workingSetCount: 5),
+            [2, 1, 0, 0, 0])
+        XCTAssertEqual(
+            Resolver.perSetValues(
+                fields: fields, autoregMode: .rir, workingSetCount: 2),
+            [2, 1])
+    }
+
+    func testEffortModeDerivesCustom() {
+        XCTAssertEqual(
+            Resolver.effortMode(
+                for: Fields(
+                    effortModeRaw: "custom", customRIRTargetsRaw: "2,1,0")),
+            .custom)
+    }
+
+    func testSummary_CustomListsEveryTarget() {
+        XCTAssertEqual(
+            Resolver.summary(
+                fields: Fields(
+                    effortModeRaw: "custom", customRIRTargetsRaw: "2,1.5,1,0"),
+                autoregMode: .rir),
+            "RIR 2/1.5/1/0")
+    }
+
+    /// A custom snapshot keeps its authored list through `effectiveFields`:
+    /// the session's single override is not laid over it, exactly as a
+    /// progression is left alone.
+    func testEffectiveFieldsDoesNotOverlayCustomTargets() {
+        let snapshot = Fields(
+            effortModeRaw: "custom", customRIRTargetsRaw: "2,1.5,1,0")
+        let effective = Resolver.effectiveFields(
+            snapshot: snapshot, sessionRIR: 4, sessionRPE: 6)
+        XCTAssertEqual(effective, snapshot)
+        XCTAssertEqual(
+            Resolver.perSetValues(
+                fields: effective, autoregMode: .rir, workingSetCount: 4),
+            [2, 1.5, 1, 0])
+    }
+
+    /// The converse: a single-mode snapshot still takes the session override,
+    /// and any stale custom list is cleared with the start/end pair so it can
+    /// never outrank the value the user just set.
+    func testEffectiveFieldsClearsStaleCustomTargetsOnOverlay() {
+        let effective = Resolver.effectiveFields(
+            snapshot: Fields(
+                effortModeRaw: "single", rir: 2, customRIRTargetsRaw: "2,1,0"),
+            sessionRIR: 3, sessionRPE: 7)
+        XCTAssertNil(effective.customRIRTargetsRaw)
+        XCTAssertNil(effective.customRPETargetsRaw)
+        XCTAssertEqual(
+            Resolver.perSetValues(
+                fields: effective, autoregMode: .rir, workingSetCount: 3),
+            [3, 3, 3])
     }
 
     func testPerSetValues_AutoregNoneEmpty() {

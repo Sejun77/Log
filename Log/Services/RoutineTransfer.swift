@@ -170,6 +170,15 @@ enum RoutineTransfer {
             rirEnd: p.rirEnd,
             rpeStart: p.rpeStart,
             rpeEnd: p.rpeEnd,
+            // Exported through the decoding accessor rather than the raw
+            // column, matching `cardioSegments` / `alternatives` below: a
+            // column this build cannot parse exports as "no custom targets"
+            // instead of shipping corruption to someone else's device. A slot
+            // without them leaves the keys out of the document entirely.
+            customRIRTargets: p.customRIRTargets.isEmpty
+                ? nil : p.customRIRTargets,
+            customRPETargets: p.customRPETargets.isEmpty
+                ? nil : p.customRPETargets,
             durationMinSeconds: p.durationMinSeconds,
             durationMaxSeconds: p.durationMaxSeconds,
             usesDuration: p.usesDuration,

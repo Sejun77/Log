@@ -159,6 +159,12 @@ struct PrescriptionSnapshotPayload {
     var rirEnd: Double?
     var rpeStart: Double?
     var rpeEnd: Double?
+    /// Custom per-set effort targets, carried in the same comma-separated form
+    /// the model columns store (see `SlotPrescription.customRIRTargetsRaw`), so
+    /// a `.custom` slot's authored list is frozen into the session and renders
+    /// on the active-workout rows unchanged by later routine edits.
+    var customRIRTargetsRaw: String? = nil
+    var customRPETargetsRaw: String? = nil
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool
@@ -220,6 +226,8 @@ struct PrescriptionSnapshotPayload {
         self.rirEnd = source.rirEnd
         self.rpeStart = source.rpeStart
         self.rpeEnd = source.rpeEnd
+        self.customRIRTargetsRaw = source.customRIRTargetsRaw
+        self.customRPETargetsRaw = source.customRPETargetsRaw
         self.durationMinSeconds = source.durationMinSeconds
         self.durationMaxSeconds = source.durationMaxSeconds
         self.usesDuration = source.usesDuration
@@ -245,6 +253,8 @@ struct PrescriptionSnapshotPayload {
             rirEnd: rirEnd,
             rpeStart: rpeStart,
             rpeEnd: rpeEnd,
+            customRIRTargetsRaw: customRIRTargetsRaw,
+            customRPETargetsRaw: customRPETargetsRaw,
             durationMinSeconds: durationMinSeconds,
             durationMaxSeconds: durationMaxSeconds,
             usesDuration: usesDuration,
@@ -282,6 +292,8 @@ extension PrescriptionSnapshotPayload {
         rirEnd: Double? = nil,
         rpeStart: Double? = nil,
         rpeEnd: Double? = nil,
+        customRIRTargetsRaw: String? = nil,
+        customRPETargetsRaw: String? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false,
@@ -313,6 +325,8 @@ extension PrescriptionSnapshotPayload {
         self.rirEnd = rirEnd
         self.rpeStart = rpeStart
         self.rpeEnd = rpeEnd
+        self.customRIRTargetsRaw = customRIRTargetsRaw
+        self.customRPETargetsRaw = customRPETargetsRaw
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
@@ -338,6 +352,8 @@ extension PrescriptionSnapshotPayload {
         self.rirEnd = snapshot.rirEnd
         self.rpeStart = snapshot.rpeStart
         self.rpeEnd = snapshot.rpeEnd
+        self.customRIRTargetsRaw = snapshot.customRIRTargetsRaw
+        self.customRPETargetsRaw = snapshot.customRPETargetsRaw
         self.durationMinSeconds = snapshot.durationMinSeconds
         self.durationMaxSeconds = snapshot.durationMaxSeconds
         self.usesDuration = snapshot.usesDuration

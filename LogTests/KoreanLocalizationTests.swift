@@ -640,6 +640,59 @@ final class KoreanLocalizationTests: XCTestCase {
         }
     }
 
+    // MARK: - Effort targets (RIR/RPE modes)
+
+    /// Every string the final effort-target system introduces, plus the four
+    /// it **reuses** rather than inventing new names for (`None`,
+    /// `Progression`, `Start`, `End`, `Set %lld`, `Effort`). A Korean lifter
+    /// meets these while programming a routine, so an untranslated row here
+    /// means an English word in the middle of a Korean form.
+    private static let effortTargetKeys = [
+        "Effort",
+        "None",
+        "Same Target",
+        "Progression",
+        "Custom Per Set",
+        "Start",
+        "End",
+        "Set %lld",
+        "Set targets: %@",
+        "Add at least one set to enter per-set targets.",
+        "Progression editing during workout is not available yet.",
+        "Per-set effort editing during workout is not available yet.",
+    ]
+
+    func testEffortTargetStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.effortTargetKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Effort target string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testEffortTargetStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.effortTargetKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// The per-set row label carries the set number; a translation that dropped
+    /// the placeholder would render every row as the same untitled stepper.
+    func testKoreanPerSetRowLabelKeepsTheNumberPlaceholder() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        XCTAssertTrue(localized("Set %lld", in: ko).contains("%lld"))
+        XCTAssertTrue(localized("Set targets: %@", in: ko).contains("%@"))
+    }
+
     /// The Settings → Help → User Guide path itself, plus the info-button
     /// label that sits beside it in the design system.
     ///

@@ -263,11 +263,12 @@ enum ExerciseSwitchPlanAdapter {
         /// new exercise's compatibility rules by
         /// `retainedTechniques(from:isBodyweight:usesDuration:)`.
         var keepTechniques: Bool
-        /// True when the snapshot's effort-**progression** fields
-        /// (`effortModeRaw`, `rir/rpeStart|End`) must be dropped because the
-        /// reset source replaced them with its own single effort target.
-        /// Keeping them would let a stale `"progression"` mode outrank the
-        /// freshly reset single value in `WorkoutEffortTargetResolver`.
+        /// True when the snapshot's multi-set effort fields (`effortModeRaw`,
+        /// `rir/rpeStart|End`, and the custom per-set lists) must be dropped
+        /// because the reset source replaced them with its own single effort
+        /// target. Keeping them would let a stale `"progression"` / `"custom"`
+        /// mode outrank the freshly reset single value in
+        /// `WorkoutEffortTargetResolver`.
         var clearsEffortProgression: Bool = false
         /// Cardio Slice 6 — whether the slot's typed cardio metric drafts
         /// (distance, heart rate, calories, incline, resistance, zone) survive.
@@ -607,6 +608,12 @@ enum ExerciseSwitchPlanAdapter {
             payload.rirEnd = nil
             payload.rpeStart = nil
             payload.rpeEnd = nil
+            // Cleared with the progression pair, and for the same reason: a
+            // leftover custom list would let `WorkoutEffortTargetResolver`
+            // still derive `.custom` from the *replaced* exercise's targets and
+            // paint them onto the switched-in one.
+            payload.customRIRTargetsRaw = nil
+            payload.customRPETargetsRaw = nil
         }
         // Phase F1 — a prepared alternative's own effort mode. Written after
         // the clear above (which removed the *replaced* exercise's), and only
@@ -621,6 +628,15 @@ enum ExerciseSwitchPlanAdapter {
             payload.rirEnd = alternative.rirEnd
             payload.rpeStart = alternative.rpeStart
             payload.rpeEnd = alternative.rpeEnd
+            // The alternative's own custom per-set list, encoded into the
+            // snapshot's storage form. Written here for the same reason the
+            // progression pair is: `SessionPlan` carries a single rir/rpe and
+            // has nowhere to put a per-set list, so an alternative authored
+            // with custom targets would otherwise apply as a flat target.
+            payload.customRIRTargetsRaw = EffortTargetList.encode(
+                alternative.customRIRTargets ?? [])
+            payload.customRPETargetsRaw = EffortTargetList.encode(
+                alternative.customRPETargets ?? [])
         }
         payload.sets = plan.sets
         payload.repMin = plan.repMin
