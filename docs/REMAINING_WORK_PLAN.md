@@ -1651,9 +1651,18 @@ All **keep optional / defer**, low refactor relevance:
 ### 3.12 Effort Target Modes follow-ups (§2.15 deferred — future)
 - **Source:** The §2.15 planning audit + implementation (2026-06-02) shipped **None /
   Single / Progression** (directional). These are the explicitly out-of-v1 ideas.
-- **Items (all future / not v1):**
-  - **Custom per-set effort editing** — set-by-set targets instead of a single value or a
-    start→end ramp (needs a per-set editing UX and storage beyond the start/end pair).
+- **Partly superseded (Build 9 scope):** custom per-set editing has since **shipped**, and
+  the progression rounding recorded in §2.15 changed. Progression no longer rounds to the
+  nearest **0.5**: endpoints are exact and interior sets round to **whole numbers** in the
+  metric's "easier" direction, so RIR 2 → 0 over 4 sets resolves to 2, 2, 1, 0 and
+  RPE 8 → 10 over 4 sets resolves to 8, 8, 9, 10. The dated §2.15 entries above are left as
+  written — they record the 2026-06-02 behavior. The remaining items below stay deferred.
+- **Items:**
+  - ~~**Custom per-set effort editing**~~ — ✅ **SHIPPED** as the **Custom Per Set** mode: a
+    per-set target list (half steps included, e.g. `2, 1.5, 1, 0`) stored as a
+    comma-separated column beside the start/end pair, fitted to the set count on write and
+    read, and preserved through routines, active workouts, Save & Exit / Resume,
+    Alternative Exercises, duplication, and routine transfer export/import.
   - **Flexible (non-directional) range mode** — e.g. `RIR 1–2` as a range rather than a
     direction; deliberately distinct from progression's arrow wording (`RIR 2 → 0`).
   - **Dropset effort labels** — per-drop effort targets in active-workout rows (v1 shows
@@ -1666,8 +1675,9 @@ All **keep optional / defer**, low refactor relevance:
   - **Superset block-row aggregate effort summary** — v1 intentionally omits effort from
     superset block-row subtitles (per-slot ambiguity); revisit only with a clear per-slot
     aggregate design.
-- **Recommendation:** **keep deferred** — each needs a design pass; v1 covers the common
-  directional case. The range mode and per-set editing are the most-requested next steps.
+- **Recommendation:** **keep the remaining items deferred** — each needs a design pass.
+  Per-set editing has shipped (above); the flexible range mode is now the most-requested
+  next step.
 - **Risk:** N/A while deferred. Range mode and per-set editing would be **additive**
   (new optional fields), consistent with the §2.15 no-destructive-migration rule.
 
