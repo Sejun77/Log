@@ -5,7 +5,7 @@
 > as of the last verified run and will be updated before publishing. See
 > **Final Pre-TestFlight Polish** near the end for what is still open.
 >
-> _Numbering note:_ the repo already uses `ENTRY_12_TESTFLIGHT_FEEDBACK.md` for
+> _Numbering note:_ the repo already uses `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md` for
 > the beta feedback log. If the public devlog numbering is separate, this stays
 > #12; otherwise renumber before publishing.
 
@@ -57,7 +57,7 @@ it onto other people's phones.
 
 Every one of these came from a tester, a crash report, or a reproduction of
 something a tester described. They're logged with severity and outcome in
-`ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
+`docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
 
 ---
 

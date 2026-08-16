@@ -93,7 +93,7 @@ Number who completed a workout: `[TBD]`
 ## Testing Tasks
 
 The checklist testers are asked to walk through (full version in
-`TESTFLIGHT_FEEDBACK_PLAN.md`):
+`docs/TESTFLIGHT_FEEDBACK_PLAN.md`):
 
 - Install the app through TestFlight
 - Open the app
@@ -112,6 +112,9 @@ The checklist testers are asked to walk through (full version in
 - _(optional)_ Try an uneven superset, if comfortable
 - _(optional)_ Prepare an alternative exercise on a routine exercise, then apply
   it mid-workout from Switch Exercise → Prepared Alternatives
+- _(optional)_ Set an effort target on a routine exercise — Same Target,
+  Progression, or Custom Per Set — and check the per-set targets during the
+  workout
 
 ---
 
@@ -175,7 +178,7 @@ Severity:
 - **Group:** Friends & Family Beta
 - **Severity:** P2
 - **Feedback:** A tester requested a user guide because the app was simple, but not fully intuitive for someone unfamiliar with training apps or workout terminology.
-- **Status:** Fixed. Added `USER_GUIDE.md` and an in-app User Guide under Settings → Help → User Guide.
+- **Status:** Fixed. Added `docs/USER_GUIDE.md` and an in-app User Guide under Settings → Help → User Guide.
 
 ### 2026-07-15 — Peer/family tester usability feedback
 
@@ -244,6 +247,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 - Added lightweight cardio support without a cardio data model. Cardio already existed as a canonical body part with the Korean translation 유산소; the built-in catalogue now seeds Walking, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine alongside the existing Treadmill Run, all duration-based. The catalogue version was bumped so existing installs pick the new names up, and the per-name dedupe means nothing is duplicated or overwritten. Distance, speed, incline, resistance / machine level, and heart-rate zone go in exercise or setup notes for now.
 - Added regression tests for routine startability, routine deletion, finish confirmation behavior, warm-up step insertion, and exercise-switch compatibility / resume consistency / draft-only prefill.
 - Added **Alternative Exercises**, built after the cardio system and on top of the exercise-switch work above. A routine exercise can now store prepared backup/replacement exercises, each carrying its own plan — sets, reps or duration, rest, effort, tempo, warm-ups, techniques, cardio target distance, Cardio Plan, and notes. The routine editor authors them; a workout started from that routine offers them mid-session under Switch Exercise → **Prepared Alternatives**, and applying one switches the exercise *and* applies the prescription prepared for it rather than adapting the replaced exercise's plan. The existing destructive confirmation still runs first when the switch would remove already-logged sets, and Cancel leaves the session untouched. Alternatives are frozen into the session at start, so editing the routine mid-workout cannot change what the active session offers, and they survive Save & Exit → Resume. Duplicating a routine copies them (with fresh alternative ids and shared exercise references), and routine transfer export/import carries them, resolving each alternative's exercise by name exactly as a slot's own exercise reference is resolved. Routine templates are still never mutated silently, and a routine that uses no alternatives sees no new screen and exports byte-identically to before.
+- **Redesigned RIR/RPE effort targets**, built after the Build 8 prep and the Alternative Exercises work above, and scoped to the **next build (Build 9)**. Automatic **Progression** no longer lands on awkward half-step targets by default: endpoints are exact, interior sets round to whole numbers in the direction the metric means "easier", and the ramp stays monotonic. RIR 2 → 0 over 4 sets now resolves to **2, 2, 1, 0**, and RPE 8 → 10 over 4 sets resolves to **8, 8, 9, 10**, instead of the half-step values the old nearest-0.5 interpolation produced. Alongside it, a third mode — **Custom Per Set** — lets a user type the exact target for every set, half steps included, such as **2, 1.5, 1, 0**; custom values are stored verbatim and are never rounded. The list is stored as a comma-separated column, fitted to the set count on both write and read (extra sets repeat the last authored target, removed sets truncate, earlier targets are never touched), and rejected whole rather than element-wise if a hand-edited document is malformed, so a bad entry can never shift a later set's target onto the wrong set. Custom targets preserve through routine editing, the active workout, Save & Exit → Resume, Alternative Exercises, routine duplication, and routine transfer export/import. Switching between modes seeds sensible values rather than discarding them, and the None / Same Target / Progression behavior that already shipped is unchanged for slots that do not opt into Custom Per Set.
+- Stopped the host app from requesting **notification authorization during XCTest-hosted runs**. The app already skipped the request under UI tests via the `--ui-testing` launch argument, but `LogTests` does not pass that argument, so the host app could raise a system permission dialog while XCTest was still establishing its connection to the runner — an occasional bootstrap flake that failed the run before any test executed. The launch gate now also checks `XCTestConfigurationFilePath` in the process environment, which XCTest sets only in a test-hosting process. Production launch behavior is unchanged: on device, TestFlight, App Store, or a normal Xcode Run the variable is absent and authorization is still requested exactly once per launch. UI test behavior is unchanged, and the in-workout authorization requests are untouched.
 
 Current validation status:
 
@@ -263,9 +268,16 @@ Current validation status:
 - User guide sync: tested so the English and Korean guides stay structurally aligned and both carry the cardio-in-notes wording that `docs/USER_GUIDE.md` uses.
 - Alternative Exercises: tested at every hop — the payload codec and its tolerance rules, slot persistence, routine-editor authoring, the session freeze (including that editing the routine mid-workout cannot change the active session), the offer rules, the switch adapter applying the prepared prescription, duplication with fresh ids, and transfer export/import round-trips including warm-ups, techniques, a Cardio Plan and older documents that predate the feature.
 - Alternative Exercises Korean coverage: tested so the authoring screen, the Prepared Alternatives sheet, the switch confirmation, and the summary flags all have Korean translations, and the English keys still render unchanged.
+- Custom / progression effort targets: tested at every hop — the per-set list
+  codec and its whole-list rejection rule, resizing against a changed set count,
+  the whole-number progression ramp (including the RIR 2 → 0 → 2, 2, 1, 0 and
+  RPE 8 → 10 → 8, 8, 9, 10 cases), mode transitions, slot persistence, the
+  active-workout targets, Save & Exit → Resume, alternative exercises carrying
+  custom targets, duplication, and transfer export/import round-trips.
 - Manual switch/restart/History re-check on device: completed.
-- Latest full test suite result: full scheme passes with **2,185 tests, 0
-  failures** — 2,183 unit tests plus 2 UI tests. Debug build succeeds and
+- Manual custom-effort regression on device: **pending.**
+- Latest full test suite result: full scheme passes with **2,282 tests, 0
+  failures** — 2,280 unit tests plus 2 UI tests. Debug build succeeds and
   Release build succeeds.
 
 ---
@@ -360,7 +372,12 @@ This section will be written once the beta phase has more complete feedback. It 
 
 **As of now:** Friends & Family Beta testing has started. Crash, usability, documentation, active-workout consistency, and exercise-switching issues have already been fixed, and the exercise-switching fix has passed both the automated test suite and manual device validation. Beta testing is still ongoing, so the phase result stays open until more tester feedback comes in.
 
-**Next build scope:** the cardio system and Alternative Exercises are both
-implemented and test-covered in the working tree, and are the headline items for
-the next TestFlight build. That build has **not** been uploaded yet — remaining
-work is the final manual regression pass on device and the build prep itself.
+**Build 8:** prepared and archived for TestFlight with the cardio system and
+Alternative Exercises as its headline items. No upload is recorded in this
+repository.
+
+**Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
+landed after Build 8 was prepared: whole-step automatic Progression and the new
+**Custom Per Set** mode. Both are implemented and test-covered. Build 9 has
+**not** been uploaded. Remaining work is the manual custom-effort regression
+pass on device (still pending) and the build prep itself.
