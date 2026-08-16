@@ -5,7 +5,7 @@ and kept as the record of what was built and why; the implementation notes under
 each section say what each slice settled.
 **Date:** 2026-08-02 (design); last updated after Slice 12E.
 **Supersedes:** the "structured cardio metrics" entry under Deferred Feedback in
-`ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
+`docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
 **Companion:** [`STRUCTURED_CARDIO_DESIGN.md`](STRUCTURED_CARDIO_DESIGN.md) —
 structured cardio (planned segments), shipped through Slice 12E. This document
 covers Phase 1, Slices 1–11.
@@ -1602,9 +1602,9 @@ warmup/techniques) · `SetRows` (new `CardioSetEntryRow`) · `ActiveWorkoutView`
 - Korean localization for every new string, including the HR zone labels
 
 **Docs needed**
-`USER_GUIDE.md` + `UserGuideView.swift` (EN + KO — cardio section rewritten from
+`docs/USER_GUIDE.md` + `UserGuideView.swift` (EN + KO — cardio section rewritten from
 "details in notes" to the real fields, with notes still offered for anything
-unstructured) · `ENTRY_12_TESTFLIGHT_FEEDBACK.md` (move structured metrics out of
+unstructured) · `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md` (move structured metrics out of
 Deferred, record what shipped) · this document (mark Phase 1 done) ·
 `REFACTOR_PLAN.md` slice entries
 
@@ -1649,7 +1649,7 @@ possibly a cardio-specific detail screen
 - empty and single-point series render without crashing
 
 **Docs needed**
-`USER_GUIDE.md` + `UserGuideView.swift` charts section (EN + KO) · this document
+`docs/USER_GUIDE.md` + `UserGuideView.swift` charts section (EN + KO) · this document
 
 **What must NOT be included in Phase 2**
 Predictive/fitness modelling · VO2 estimates · training-load or ACWR scores ·

@@ -873,7 +873,7 @@ SwiftData tests via `SwiftDataTestHarness` only where persistence is the subject
 | **F. Adapter + switch UI** | `Choice.useAlternative`, `ResetSource` fields, `Outcome` replacements, new switch sheet | `ExerciseSwitchPlanAdapter.swift`, `ActiveWorkoutView.swift` | 7–15, 28–34 | **High** — touches the most-tested logic in the app | No |
 | **G. Degradation polish** | Deleted/corrupt/disabled/same-exercise handling | switch sheet, editor | 31–32, 35 | Low | No |
 | **H. Duplication + transfer** | Duplicator copy, DTO, export/import | `RoutineDuplicator.swift`, `RoutineTransferDTO.swift`, `RoutineTransfer.swift`, `RoutineTransferImport.swift` | 19–23 | Medium | No |
-| **I. Docs + guide** | `USER_GUIDE.md` (EN + KO), design doc "as built" | docs | — | Low | No |
+| **I. Docs + guide** | `docs/USER_GUIDE.md` (EN + KO), design doc "as built" | docs | — | Low | No |
 | **J. Regression** | Full suite, manual plan, Korean pass | — | 36–37 + §14 | Low | No |
 
 **Suggested pre-phase:** the logged-sets confirmation (§8.6) as its own slice
@@ -1125,7 +1125,7 @@ enable and disable alternatives, each with a full prescription.
 session freeze, no switch sheet, no adapter case, no Start Workout preview
 change, no duplication, no transfer, no History, no CSV, no schema change. A
 user who authors alternatives today sees them only where they authored them —
-which is why `USER_GUIDE.md` is deliberately not updated yet.
+which is why `docs/USER_GUIDE.md` is deliberately not updated yet.
 
 ### Files
 
@@ -1306,7 +1306,7 @@ in one tap, and it brings its whole plan — warm-ups, techniques, distance,
 Cardio Plan, note — with it.
 
 **Still outstanding:** duplication (Phase H), transfer/import/export (Phase H),
-History provenance (deferred — §11 keeps it out of MVP), `USER_GUIDE.md` (a
+History provenance (deferred — §11 keeps it out of MVP), `docs/USER_GUIDE.md` (a
 final docs slice, once duplication and transfer land), and the full manual
 regression pass (Phase J).
 
@@ -1411,7 +1411,7 @@ alternatives. This closes the gap §19 recorded when Phase C deliberately left
 `RoutineDuplicator` alone.
 
 **Still deferred:** transfer / import / export (§12.2), History provenance
-(§11 keeps it out of MVP), `USER_GUIDE.md`, and the Phase J regression pass.
+(§11 keeps it out of MVP), `docs/USER_GUIDE.md`, and the Phase J regression pass.
 
 ### What happens
 
@@ -1454,7 +1454,7 @@ them into the document, import restores them onto the new routine's slots, and
 a document written before this slice imports exactly as it did before. This
 closes §12.2.
 
-**Still deferred:** `USER_GUIDE.md`, the final Phase J regression pass,
+**Still deferred:** `docs/USER_GUIDE.md`, the final Phase J regression pass,
 `REMAINING_WORK_PLAN.md` Entry #12, and TestFlight build prep. History
 provenance (§11) stays out of MVP, and the CSV formats are untouched (§12.3).
 
@@ -1576,6 +1576,6 @@ confirmation and Save & Exit / Resume behavior intact), copied by routine
 duplication, and carried by routine transfer export/import.
 
 **Remaining:** the final manual regression pass on device, devlog finalization
-(`ENTRY_12_TESTFLIGHT_FEEDBACK.md`), and TestFlight build prep. The user guide
-(`USER_GUIDE.md` + `UserGuideView.swift`, EN + KO) is no longer outstanding —
+(`docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`), and TestFlight build prep. The user guide
+(`docs/USER_GUIDE.md` + `UserGuideView.swift`, EN + KO) is no longer outstanding —
 §19 and the Phase H1/H2 notes above predate it and are left as written.

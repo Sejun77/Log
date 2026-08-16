@@ -7,6 +7,11 @@ to try, what questions to ask, and where to write down what comes back.
 
 **Status:** planned. TestFlight testing has not started yet.
 
+**Build for this round:** Build 9, the next tester round after Build 8. Build 8
+was prepared and archived with the cardio system and Alternative Exercises;
+Build 9 adds the redesigned RIR/RPE effort targets, including **Custom Per Set**.
+Build 9 has not been uploaded — this plan is what the round runs on once it is.
+
 ---
 
 ## Goal
@@ -77,7 +82,7 @@ Send something short like this with the TestFlight invite:
 > This is a personal project, not a finished App Store app, so rough edges are
 > expected. Honest feedback is the whole point.
 
-The same guide is on GitHub at
+The same guide is `docs/USER_GUIDE.md` in this repository, on GitHub at
 `https://github.com/Sejun77/Log/blob/main/docs/USER_GUIDE.md` (English +
 한국어), if a tester would rather read it before installing.
 
@@ -115,7 +120,8 @@ the end.
 
 ### Alternative Exercises
 
-New in this build: a routine exercise can hold prepared replacement exercises,
+New since the last tester round: a routine exercise can hold prepared
+replacement exercises,
 each with its own plan, offered when you switch exercises mid-workout.
 
 - [ ] Open or create a routine
@@ -145,6 +151,38 @@ What to report:
 - cardio alternative issues
 - clipped Korean text, awkward Korean wording, or English text still showing
   while the phone is set to Korean
+
+### Effort Targets
+
+New in this round: automatic RIR/RPE progression was cleaned up so it stops
+producing awkward half-step targets, and a routine exercise can now carry an
+exact target for every set.
+
+- [ ] Open a routine and open an exercise in it
+- [ ] Try **Same Target** — one RIR/RPE value used by every working set
+- [ ] Try **Progression** with RIR 2 → 0 over 4 sets, and confirm the sets show
+      **2, 2, 1, 0**
+- [ ] Try **Progression** with RPE 8 → 10 over 4 sets, and confirm the sets show
+      **8, 8, 9, 10**
+- [ ] Try **Custom Per Set** and enter exact targets such as **2, 1.5, 1, 0**
+- [ ] Leave the routine, reopen it, and confirm the custom targets are still
+      there
+- [ ] Start a workout from that routine and confirm each set shows the target you
+      set
+- [ ] Save & Exit, then Resume, and confirm the targets are still correct
+- [ ] Give an alternative exercise its own custom effort targets, apply it
+      mid-workout, and confirm its targets are used
+- [ ] Duplicate the routine, then export and import it, and confirm the custom
+      targets survive both
+
+What to report:
+
+- RIR/RPE targets that look awkward or wrong for the sets
+- custom effort targets not saving
+- targets in the active workout not matching the targets set in the routine
+- custom targets on an Alternative Exercise not applying when you switch to it
+- Korean wording issues on the effort target labels (동일 목표 / 프로그레션 /
+  세트별 지정) — confusing, clipped, or still in English
 
 ---
 
@@ -270,12 +308,12 @@ you figure out what to do, and did the core flow work?
 
 ## Next Steps
 
-1. Prepare a TestFlight build and internal notes.
+1. Prepare the Build 9 TestFlight build and internal notes.
 2. Invite the first small group of testers.
 3. Share tester instructions and the testing checklist.
 4. Collect feedback into the Feedback Log above.
 5. Triage feedback by severity (P0–P3).
 6. Fix clear P0/P1 issues; defer P2/P3 as appropriate.
-7. Record outcomes in `ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
+7. Record outcomes in `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
 
 TestFlight testing is planned but has not started yet.

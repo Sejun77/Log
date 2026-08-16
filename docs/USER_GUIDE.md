@@ -49,6 +49,28 @@ In the Exercises tab, you can organize the exercise list in different ways:
 4. Set the number of sets, rep range, rest time, and warm-up sets.
 5. Set effort level, tempo, techniques, and routine-specific notes as needed.
 
+## Effort Targets
+
+An effort target says how hard a working set should feel, written as RIR or RPE
+(choose which in Settings). A routine exercise can set targets three ways:
+
+- Same Target: one value for every working set.
+- Progression: a start value and an end value, spread across the sets. Targets
+  move in whole steps by default, so you get clean numbers instead of awkward
+  half steps. RIR 2 → 0 over 4 sets shows 2, 2, 1, 0. RPE 8 → 10 over 4 sets
+  shows 8, 8, 9, 10.
+- Custom Per Set: type the exact target for each set yourself, such as
+  2, 1.5, 1, 0.
+
+If you add sets, the last custom target repeats for the new ones. If you remove
+sets, the extra targets are dropped. Targets you already set are left as they
+are.
+
+Targets stay with the plan. They are saved in the routine, shown on the matching
+set during a workout, still there when you leave a workout and resume it later,
+used by alternative exercises, copied when you duplicate a routine, and kept when
+you export or import one.
+
 ## Completing a Workout
 
 1. Open a routine.
@@ -239,6 +261,24 @@ You can:
 3. 운동이나 슈퍼세트를 추가합니다.
 4. 세트 수, 반복 범위, 휴식 시간, 워밍업 세트를 설정합니다.
 5. 필요하면 운동 강도, 템포, 운동 기법, 루틴 전용 메모를 설정합니다.
+
+## 운동 강도 목표
+
+운동 강도 목표는 각 작업 세트를 얼마나 힘들게 수행할지 RIR 또는 RPE로 나타냅니다
+(설정에서 방식을 선택합니다). 루틴의 운동마다 세 가지 방식으로 설정할 수 있습니다.
+
+- 동일 목표: 모든 작업 세트에 같은 값을 사용합니다.
+- 프로그레션: 시작 값과 끝 값을 정하면 세트에 걸쳐 나누어 적용됩니다. 기본적으로
+  정수 단위로 변하므로 애매한 0.5 단위 값 대신 깔끔한 값이 표시됩니다. 4세트에서
+  RIR 2 → 0은 2, 2, 1, 0으로 표시되고, RPE 8 → 10은 8, 8, 9, 10으로 표시됩니다.
+- 세트별 지정: 2, 1.5, 1, 0처럼 각 세트의 목표 값을 직접 입력합니다.
+
+세트를 늘리면 마지막에 지정한 목표가 새 세트에 반복 적용되고, 세트를 줄이면 남는
+목표는 삭제됩니다. 이미 지정한 앞쪽 목표는 그대로 유지됩니다.
+
+설정한 목표는 계획과 함께 유지됩니다. 루틴에 저장되고, 운동 중에는 해당 세트에
+표시되며, 저장 후 종료와 이어서 하기에서도 복원되고, 대체 운동에도 적용되며, 루틴을
+복제하거나 내보내기 / 가져오기를 해도 그대로 유지됩니다.
 
 ## 운동 완료하기
 
