@@ -441,6 +441,17 @@
         }
       }
     },
+    "Add at least one set to enter per-set targets." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트별 목표를 입력하려면 세트를 1개 이상 추가하세요."
+          }
+        }
+      }
+    },
     "Add Exercise" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1212,6 +1223,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "사용자 지정 부분 반복 메모"
+          }
+        }
+      }
+    },
+    "Custom Per Set" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트별 지정"
           }
         }
       }
@@ -3164,6 +3186,17 @@
         }
       }
     },
+    "Per-set effort editing during workout is not available yet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 중에는 아직 세트별 강도를 편집할 수 없습니다."
+          }
+        }
+      }
+    },
     "Personal Record" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3919,6 +3952,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "저장하면 기록된 모든 세트가 유지됩니다. 삭제하면 운동이 영구적으로 삭제됩니다."
+          }
+        }
+      }
+    },
+    "Same Target" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "동일 목표"
           }
         }
       }

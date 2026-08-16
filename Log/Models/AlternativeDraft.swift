@@ -132,6 +132,12 @@ final class AlternativeDraftStore {
         p.rirEnd = payload.rirEnd
         p.rpeStart = payload.rpeStart
         p.rpeEnd = payload.rpeEnd
+        // Encoded through the codec on both sides, so the payload's array form
+        // and the slot's comma-separated column stay one value.
+        p.customRIRTargetsRaw = EffortTargetList.encode(
+            payload.customRIRTargets ?? [])
+        p.customRPETargetsRaw = EffortTargetList.encode(
+            payload.customRPETargets ?? [])
         p.durationMinSeconds = payload.durationMinSeconds
         p.durationMaxSeconds = payload.durationMaxSeconds
         p.usesDuration = payload.usesDuration
@@ -218,6 +224,10 @@ final class AlternativeDraftStore {
             rirEnd: p.rirEnd,
             rpeStart: p.rpeStart,
             rpeEnd: p.rpeEnd,
+            customRIRTargets: p.customRIRTargets.isEmpty
+                ? nil : p.customRIRTargets,
+            customRPETargets: p.customRPETargets.isEmpty
+                ? nil : p.customRPETargets,
             durationMinSeconds: p.durationMinSeconds,
             durationMaxSeconds: p.durationMaxSeconds,
             usesDuration: p.usesDuration,
@@ -311,6 +321,10 @@ final class AlternativeDraftStore {
             rirEnd: p.rirEnd,
             rpeStart: p.rpeStart,
             rpeEnd: p.rpeEnd,
+            customRIRTargets: p.customRIRTargets.isEmpty
+                ? nil : p.customRIRTargets,
+            customRPETargets: p.customRPETargets.isEmpty
+                ? nil : p.customRPETargets,
             durationMinSeconds: p.durationMinSeconds,
             durationMaxSeconds: p.durationMaxSeconds,
             usesDuration: p.usesDuration,

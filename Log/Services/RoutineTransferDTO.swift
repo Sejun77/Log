@@ -131,6 +131,28 @@ struct RoutineTransferSlotPrescriptionDTO: Codable, Equatable {
     var rirEnd: Double? = nil
     var rpeStart: Double? = nil
     var rpeEnd: Double? = nil
+    /// Custom per-set effort targets (`.custom` effort mode), one list per
+    /// metric. Optional with nil defaults for exactly the reasons the effort
+    /// keys above record: a document exported before these keys existed decodes
+    /// them as nil via synthesized `decodeIfPresent`, the synthesized encoder
+    /// omits them when nil (so a routine without custom targets exports
+    /// byte-identically to before), and the memberwise-init call sites that do
+    /// not pass them keep compiling.
+    ///
+    /// **No `schemaVersion` bump** — nothing about an older document became
+    /// invalid, and `validateSupportedSchemaVersion` *rejects* a document whose
+    /// version exceeds the reader's, so bumping would make every older build
+    /// refuse a routine wholesale rather than import it minus its custom
+    /// targets. Same reasoning Slices 5, 9, 12E and Phase H2 recorded.
+    ///
+    /// Carried as arrays rather than the model's comma-separated column: the
+    /// transfer format is human-readable JSON that people inspect and
+    /// hand-edit, and `[2, 1.5, 1, 0]` is the shape that audience expects.
+    /// Re-normalized on import through `EffortTargetList`, so a hand-edited
+    /// list with an impossible value lands as "no custom targets" rather than
+    /// reaching a formatter.
+    var customRIRTargets: [Double]? = nil
+    var customRPETargets: [Double]? = nil
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool

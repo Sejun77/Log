@@ -146,22 +146,31 @@ struct BlockPrescriptionSummary: Equatable {
         // block-row summary.
         let convert: (Double) -> Double = { 10 - $0 }
         let single, start, end: Double?
+        var custom: [Double]
         switch metric {
         case .rir:
             single = p.rir ?? p.rpe.map(convert)
             start = p.rirStart ?? p.rpeStart.map(convert)
             end = p.rirEnd ?? p.rpeEnd.map(convert)
+            custom = p.customRIRTargets
+            if custom.isEmpty { custom = p.customRPETargets.map(convert) }
         case .rpe:
             single = p.rpe ?? p.rir.map(convert)
             start = p.rpeStart ?? p.rirStart.map(convert)
             end = p.rpeEnd ?? p.rirEnd.map(convert)
+            custom = p.customRPETargets
+            if custom.isEmpty { custom = p.customRIRTargets.map(convert) }
         }
         return EffortTargetResolver.summary(
             metric: metric,
             mode: p.effortMode,
             single: single,
             start: start,
-            end: end
+            end: end,
+            // Fitted to the slot's set count, so the block row states exactly
+            // the targets the active workout's rows will show.
+            custom: custom,
+            setCount: p.sets
         )
     }
 

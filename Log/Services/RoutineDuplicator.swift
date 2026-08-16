@@ -203,6 +203,12 @@ enum RoutineDuplicator {
             rirEnd: src.rirEnd,
             rpeStart: src.rpeStart,
             rpeEnd: src.rpeEnd,
+            // Copied **verbatim** as the stored raw, for the same reason the
+            // cardio segment payload below is: duplication stays inside one
+            // store, so a column this build would normalize (or cannot parse)
+            // survives byte-for-byte rather than being silently rewritten.
+            customRIRTargetsRaw: src.customRIRTargetsRaw,
+            customRPETargetsRaw: src.customRPETargetsRaw,
             durationMinSeconds: src.durationMinSeconds,
             durationMaxSeconds: src.durationMaxSeconds,
             usesDuration: src.usesDuration,
