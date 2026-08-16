@@ -17,6 +17,13 @@ struct LogApp: App {
         ProcessInfo.processInfo.arguments.contains("--ui-testing")
     }
 
+    /// Returns true when the app is hosting an XCTest run (unit tests).
+    /// XCTest sets this environment variable in the host process.
+    private var isRunningTests: Bool {
+        ProcessInfo.processInfo
+            .environment["XCTestConfigurationFilePath"] != nil
+    }
+
     // MARK: - Init
 
     init() {
@@ -31,9 +38,13 @@ struct LogApp: App {
             BootstrapRoot()
                 // Global app font (Manrope) for all views.
                 .environment(\.font, .custom("Manrope-Regular", size: 16))
-                // Request notifications once, outside of UI tests.
+                // Request notifications once, outside of UI tests and
+                // XCTest-hosted runs (a system permission dialog can race
+                // the XCTest runner connection).
                 .task {
-                    if !isUITesting && !Self.didRequestNotifications {
+                    if !isUITesting && !isRunningTests
+                        && !Self.didRequestNotifications
+                    {
                         await AppNotificationService
                             .requestAuthorizationIfNeeded()
                         Self.didRequestNotifications = true

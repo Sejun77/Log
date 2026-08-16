@@ -13,7 +13,14 @@ struct PlanSetTemplate: Identifiable {
 }
 
 /// Value-type snapshot of one warmup step — no live SwiftData references.
-struct WarmupStepSnapshot: Codable {
+///
+/// `Equatable` is synthesized (Alternative Exercises Phase B): the snapshot is
+/// carried inside `AlternativePrescriptionPayload`, which is `Equatable` so the
+/// editor and a future session-plan dirty check can compare prepared plans by
+/// value. Declared here rather than in an extension because synthesis requires
+/// the conformance to sit with the declaration. Behavior-neutral — it adds a
+/// `==`, it changes no existing code path.
+struct WarmupStepSnapshot: Codable, Equatable {
     var order: Int
     var kind: WarmupStepKind
     var reps: Int?
@@ -26,7 +33,10 @@ struct WarmupStepSnapshot: Codable {
 }
 
 /// Value-type snapshot of one technique plan — no live SwiftData references.
-struct TechniquePlanSnapshot: Codable {
+///
+/// `Equatable` synthesized for the same reason as `WarmupStepSnapshot` above,
+/// and with the same behavior-neutrality.
+struct TechniquePlanSnapshot: Codable, Equatable {
     var order: Int
     var type: TechniqueType       // Codable via RawRepresentable
     var dropPercent: Double?      // stored as percentage, e.g. 20.0 = 20%
@@ -149,6 +159,12 @@ struct PrescriptionSnapshotPayload {
     var rirEnd: Double?
     var rpeStart: Double?
     var rpeEnd: Double?
+    /// Custom per-set effort targets, carried in the same comma-separated form
+    /// the model columns store (see `SlotPrescription.customRIRTargetsRaw`), so
+    /// a `.custom` slot's authored list is frozen into the session and renders
+    /// on the active-workout rows unchanged by later routine edits.
+    var customRIRTargetsRaw: String? = nil
+    var customRPETargetsRaw: String? = nil
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
     var usesDuration: Bool
@@ -210,6 +226,8 @@ struct PrescriptionSnapshotPayload {
         self.rirEnd = source.rirEnd
         self.rpeStart = source.rpeStart
         self.rpeEnd = source.rpeEnd
+        self.customRIRTargetsRaw = source.customRIRTargetsRaw
+        self.customRPETargetsRaw = source.customRPETargetsRaw
         self.durationMinSeconds = source.durationMinSeconds
         self.durationMaxSeconds = source.durationMaxSeconds
         self.usesDuration = source.usesDuration
@@ -235,6 +253,8 @@ struct PrescriptionSnapshotPayload {
             rirEnd: rirEnd,
             rpeStart: rpeStart,
             rpeEnd: rpeEnd,
+            customRIRTargetsRaw: customRIRTargetsRaw,
+            customRPETargetsRaw: customRPETargetsRaw,
             durationMinSeconds: durationMinSeconds,
             durationMaxSeconds: durationMaxSeconds,
             usesDuration: usesDuration,
@@ -272,6 +292,8 @@ extension PrescriptionSnapshotPayload {
         rirEnd: Double? = nil,
         rpeStart: Double? = nil,
         rpeEnd: Double? = nil,
+        customRIRTargetsRaw: String? = nil,
+        customRPETargetsRaw: String? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false,
@@ -303,6 +325,8 @@ extension PrescriptionSnapshotPayload {
         self.rirEnd = rirEnd
         self.rpeStart = rpeStart
         self.rpeEnd = rpeEnd
+        self.customRIRTargetsRaw = customRIRTargetsRaw
+        self.customRPETargetsRaw = customRPETargetsRaw
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
@@ -328,6 +352,8 @@ extension PrescriptionSnapshotPayload {
         self.rirEnd = snapshot.rirEnd
         self.rpeStart = snapshot.rpeStart
         self.rpeEnd = snapshot.rpeEnd
+        self.customRIRTargetsRaw = snapshot.customRIRTargetsRaw
+        self.customRPETargetsRaw = snapshot.customRPETargetsRaw
         self.durationMinSeconds = snapshot.durationMinSeconds
         self.durationMaxSeconds = snapshot.durationMaxSeconds
         self.usesDuration = snapshot.usesDuration
@@ -370,6 +396,20 @@ struct PlanExercise: Identifiable {
 
     // Warmup steps snapshotted at plan-build time (read-only; no live SwiftData references)
     var warmupStepsSnapshot: [WarmupStepSnapshot] = []
+
+    /// Alternative Exercises Phase E — the slot's prepared alternatives,
+    /// frozen at plan-build time like the two snapshots above (§4.2).
+    ///
+    /// The freeze is what makes editing a routine mid-workout safe: the
+    /// session offers what the slot had when it started, not what the routine
+    /// says now. Optional-free and defaulted to `[]`, so every existing
+    /// construction site — the resume rebuilds, the test fixtures — keeps
+    /// compiling and keeps meaning "no alternatives".
+    ///
+    /// Nothing reads this yet: `ActiveWorkoutView.initializeSessionPlans`
+    /// copies it into the slot's `SessionPlan` (which is what persists across
+    /// Save & Exit), and the switch sheet that will offer them is Phase F.
+    var alternativesSnapshot: [SlotAlternative] = []
 
     // Phase 6.C1: source-block snapshot fields. Denormalized onto
     // PlanExercise at plan-build time so the single populator
@@ -473,7 +513,14 @@ struct StartWorkoutFromRoutineView: View {
 
     // MARK: - Plan Builder
 
-    private func makePlan(from routine: Routine) -> WorkoutPlan {
+    /// Builds the frozen `WorkoutPlan` a session runs on.
+    ///
+    /// `static` (Alternative Exercises Phase E): the body reads nothing but its
+    /// `routine` argument, and being callable without a view is what lets the
+    /// freeze — prescription snapshot, warm-ups, techniques, and now
+    /// alternatives — be tested against the real start path instead of a
+    /// look-alike reproduced in the test file. Behavior is unchanged.
+    static func makePlan(from routine: Routine) -> WorkoutPlan {
         let blocks: [PlanBlock] = routine.blocks
             .sorted { $0.order < $1.order }
             .compactMap { b -> PlanBlock? in
@@ -561,6 +608,14 @@ struct StartWorkoutFromRoutineView: View {
                             },
                             techniquePlansSnapshot: techniquePlansSnapshot,
                             warmupStepsSnapshot: warmupStepsSnapshot,
+                            // Alternative Exercises Phase E — the slot's
+                            // prepared alternatives, frozen here and read from
+                            // the session's own copy thereafter (§4.2). Decoded
+                            // through the tolerant Phase C accessor, so a
+                            // corrupt payload costs the alternatives and never
+                            // the workout.
+                            alternativesSnapshot: re.prescription?
+                                .slotAlternatives ?? [],
                             // Phase 6.C1 — block snapshot for History grouping
                             sourceBlockSlotID: b.slotID,
                             sourceBlockIsSuperset: b.isSuperset,
@@ -600,10 +655,10 @@ struct StartWorkoutFromRoutineView: View {
         .scrollContentBackground(.hidden)
         .background(DSColor.bg.ignoresSafeArea())
         .onAppear {
-            cachedPlan = makePlan(from: routine)
+            cachedPlan = Self.makePlan(from: routine)
         }
         .onChange(of: routine) {
-            cachedPlan = makePlan(from: routine)
+            cachedPlan = Self.makePlan(from: routine)
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -615,7 +670,7 @@ struct StartWorkoutFromRoutineView: View {
                         ActiveWorkoutView(plan: plan)
                     } else {
                         // Fallback (shouldn't happen once onAppear ran)
-                        ActiveWorkoutView(plan: makePlan(from: routine))
+                        ActiveWorkoutView(plan: Self.makePlan(from: routine))
                     }
                 } label: {
                     Label("Start", systemImage: "play.fill")

@@ -51,6 +51,11 @@ struct SlotPrescriptionSection: View {
     let isTimeBased: Bool
     var hideRestFields: Bool = false
     var hideSetsField: Bool = false
+    /// Alternative Exercises Phase D — false suppresses the `Alternative
+    /// Exercises` row. Set only by `SlotAlternativeDetailEditor`, which renders
+    /// this same section for a scratch slot: an alternative does not get
+    /// alternatives of its own.
+    var showsAlternatives: Bool = true
     /// Phase 5.2 — when true (routine is in use by an active workout),
     /// the Section's content is non-interactive but still visible /
     /// scrollable. Applied to the Section itself so the parent List's
@@ -152,6 +157,17 @@ struct SlotPrescriptionSection: View {
                             }
                         }
                     }
+                }
+
+                // Alternative Exercises Phase D — the bottom of the tools
+                // group, below warm-ups / techniques / Structured Cardio, and
+                // shown for every tracking mode: an alternative can replace a
+                // treadmill as readily as a bench press. Always visible, even
+                // at zero, because it is the only way to author the first one.
+                if showsAlternatives {
+                    AlternativeExercisesRow(
+                        prescription: prescription,
+                        slotExerciseID: re.exercise?.id)
                 }
             }
 
@@ -361,11 +377,11 @@ private struct PrescriptionFields: View {
         switch autoregMode {
         case .rir:
             effortControls(
-                label: "RIR", metric: .rir, paths: Self.rirPaths,
+                label: "RIR", paths: Self.rirPaths,
                 range: 0...5, defaultValue: AppSettings.defaultRIR)
         case .rpe:
             effortControls(
-                label: "RPE", metric: .rpe, paths: Self.rpePaths,
+                label: "RPE", paths: Self.rpePaths,
                 range: 5...10, defaultValue: AppSettings.defaultRPE)
         case .none:
             EmptyView()
@@ -376,21 +392,24 @@ private struct PrescriptionFields: View {
     /// metric, kept mirrored (`10 - x`) so switching the app autoreg mode later
     /// surfaces a sensible converted value — exactly as the single stepper did.
     private struct EffortKeyPaths {
+        let metric: EffortMetric
         let single, start, end: ReferenceWritableKeyPath<SlotPrescription, Double?>
         let pairedSingle, pairedStart, pairedEnd:
             ReferenceWritableKeyPath<SlotPrescription, Double?>
     }
 
     private static let rirPaths = EffortKeyPaths(
+        metric: .rir,
         single: \.rir, start: \.rirStart, end: \.rirEnd,
         pairedSingle: \.rpe, pairedStart: \.rpeStart, pairedEnd: \.rpeEnd)
     private static let rpePaths = EffortKeyPaths(
+        metric: .rpe,
         single: \.rpe, start: \.rpeStart, end: \.rpeEnd,
         pairedSingle: \.rir, pairedStart: \.rirStart, pairedEnd: \.rirEnd)
 
     @ViewBuilder
     private func effortControls(
-        label: String, metric: EffortMetric, paths: EffortKeyPaths,
+        label: String, paths: EffortKeyPaths,
         range: ClosedRange<Double>, defaultValue: Double
     ) -> some View {
         Picker(
@@ -403,8 +422,18 @@ private struct PrescriptionFields: View {
             )
         ) {
             Text("None").tag(EffortMode.none)
-            Text("Single").tag(EffortMode.single)
+            Text("Same Target").tag(EffortMode.single)
             Text("Progression").tag(EffortMode.progression)
+            Text("Custom Per Set").tag(EffortMode.custom)
+        }
+        // Keep a custom list in step with the set count as the user edits it:
+        // added sets repeat the last authored target, removed sets truncate,
+        // and earlier targets are untouched. The resolver applies the same
+        // rule on read, so this is about what is *stored* matching what is
+        // *shown* — not about correctness of the display.
+        .onChange(of: prescription.sets ?? 0) { _, newCount in
+            prescription.resizeCustomEffortTargets(
+                to: newCount, metric: paths.metric)
         }
 
         switch prescription.effortMode {
@@ -417,15 +446,91 @@ private struct PrescriptionFields: View {
                 range: range, step: 0.5) { 10 - $0 }
         case .progression:
             doubleStepperRow(
-                "Start \(label)", active: doubleBinding(paths.start),
+                "\(String(localized: "Start")) \(label)",
+                active: doubleBinding(paths.start),
                 paired: doubleBinding(paths.pairedStart),
                 range: range, step: 0.5) { 10 - $0 }
             doubleStepperRow(
-                "End \(label)", active: doubleBinding(paths.end),
+                "\(String(localized: "End")) \(label)",
+                active: doubleBinding(paths.end),
                 paired: doubleBinding(paths.pairedEnd),
                 range: range, step: 0.5) { 10 - $0 }
             effortPreview
+        case .custom:
+            customEffortRows(
+                paths: paths, range: range, defaultValue: defaultValue)
         }
+    }
+
+    // MARK: - Custom per-set targets
+
+    /// One stepper per working set (`Set 1`, `Set 2`, …).
+    ///
+    /// Values are stored and displayed **verbatim** — half steps included —
+    /// because the whole point of this mode is that the user, not the
+    /// generator, decides each set's target. Nothing here rounds.
+    ///
+    /// Every row writes the **whole** list back through
+    /// `setCustomEffortTargets`, so the stored list is always exactly as long
+    /// as the set count and the opposite metric stays mirrored.
+    @ViewBuilder
+    private func customEffortRows(
+        paths: EffortKeyPaths, range: ClosedRange<Double>, defaultValue: Double
+    ) -> some View {
+        let count = max(0, prescription.sets ?? 0)
+        if count == 0 {
+            Text("Add at least one set to enter per-set targets.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            let values = displayedCustomTargets(
+                paths: paths, count: count, defaultValue: defaultValue)
+            ForEach(0..<count, id: \.self) { index in
+                Stepper(
+                    "\(String(localized: "Set \(index + 1)")): "
+                        + EffortTargetResolver.format(values[index]),
+                    value: Binding(
+                        get: { values[index] },
+                        set: { newValue in
+                            var updated = values
+                            updated[index] = newValue
+                            prescription.setCustomEffortTargets(
+                                updated, metric: paths.metric)
+                        }
+                    ),
+                    in: range,
+                    step: 0.5
+                )
+            }
+        }
+    }
+
+    /// The stored custom list for the active metric, through the same paired
+    /// `10 - x` fallback every other effort read applies.
+    private func customTargets(paths: EffortKeyPaths) -> [Double] {
+        prescription.effortState(metric: paths.metric).custom
+    }
+
+    /// The list the rows actually render: the stored list fitted to the set
+    /// count, or — when the column is empty or unreadable — a list seeded from
+    /// whatever the prescription still carries, so the editor always shows one
+    /// editable target per set rather than a blank section.
+    ///
+    /// The seed goes through the **same** transition the Custom mode switch
+    /// applies, so what the rows show before the first edit and what gets
+    /// stored on the switch cannot drift apart.
+    private func displayedCustomTargets(
+        paths: EffortKeyPaths, count: Int, defaultValue: Double
+    ) -> [Double] {
+        let stored = EffortTargetList.resized(
+            customTargets(paths: paths), to: count)
+        if !stored.isEmpty { return stored }
+        var seed = prescription.effortState(metric: paths.metric)
+        seed.custom = []
+        return EffortTargetModeTransition.applying(
+            .custom, to: seed, metric: paths.metric, setCount: count,
+            defaultValue: defaultValue
+        ).custom
     }
 
     /// Live "Set targets: 2 · 1 · 0" preview. Resolves through
@@ -457,38 +562,17 @@ private struct PrescriptionFields: View {
         )
     }
 
-    /// Apply a mode change with non-destructive seeding:
-    ///  - → None: keep stored values; the mode flag suppresses display.
-    ///  - → Single: if the single value is nil, seed from the start value
-    ///    (Progression → Single) else the AppSettings default.
-    ///  - → Progression: seed nil start/end from the current single value
-    ///    (or the default), so a fresh ramp starts flat at the single target.
-    /// The opposite metric is mirrored (`10 - x`) on every seed.
+    /// Apply a mode change, seeding the new mode from what the old one said.
+    ///
+    /// Both the rules (`EffortTargetModeTransition`) and the model adapter
+    /// (`SlotPrescription.applyEffortMode`) live outside the view, so the
+    /// picker owns no behavior of its own and the seeding is testable without
+    /// rendering anything.
     private func applyEffortMode(
         _ newMode: EffortMode, paths: EffortKeyPaths, defaultValue: Double
     ) {
-        let convert: (Double) -> Double = { 10 - $0 }
-        switch newMode {
-        case .none:
-            break
-        case .single:
-            if prescription[keyPath: paths.single] == nil {
-                let seed = prescription[keyPath: paths.start] ?? defaultValue
-                prescription[keyPath: paths.single] = seed
-                prescription[keyPath: paths.pairedSingle] = convert(seed)
-            }
-        case .progression:
-            let base = prescription[keyPath: paths.single] ?? defaultValue
-            if prescription[keyPath: paths.start] == nil {
-                prescription[keyPath: paths.start] = base
-                prescription[keyPath: paths.pairedStart] = convert(base)
-            }
-            if prescription[keyPath: paths.end] == nil {
-                prescription[keyPath: paths.end] = base
-                prescription[keyPath: paths.pairedEnd] = convert(base)
-            }
-        }
-        prescription.effortModeRaw = newMode.rawValue
+        prescription.applyEffortMode(
+            newMode, metric: paths.metric, defaultValue: defaultValue)
     }
 
     /// Exercise-duration field (6h bound). Writes are normalized by the row, so

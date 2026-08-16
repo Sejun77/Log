@@ -948,3 +948,634 @@ The user's proposed MVP is close to right. Three refinements, all narrowing:
 plan" and "no plan." One prepared alternative per slot, applied through the
 existing adapter, fixes it. Everything above that — libraries, templates,
 history provenance, in-workout authoring — is a second feature.
+
+---
+
+## 18. Phase B — as built
+
+**Shipped:** `Log/Services/SlotAlternatives.swift` (one file, pure value types)
++ `LogTests/SlotAlternativesTests.swift` (37 tests). No schema change, no
+`alternativesData` column, no UI, no adapter change, no session carry-through,
+no transfer, no History, no CSV. Nothing in the app reads these types yet.
+
+One change outside the new file: `WarmupStepSnapshot` and
+`TechniquePlanSnapshot` in `StartWorkoutFromRoutineView.swift` gained
+`Equatable`. Synthesized conformance has to sit with the declaration, and both
+are carried inside an `Equatable` payload. Behavior-neutral — it adds a `==`
+and changes no existing code path.
+
+### Types
+
+| Type | Responsibility |
+|---|---|
+| `AlternativePrescriptionPayload` | The prepared plan: `PrescriptionSnapshotPayload`'s field set, plus `warmupSteps`, `techniques`, `cardioSegments`, `slotNotes` |
+| `SlotAlternative` | `id` / `order` / `isEnabled` / `exerciseID` / `exerciseName` / `note` / `prescription`, exactly as §4.3 and §5.2 |
+| `SlotAlternativesPayload` | The encoded root: `version` (1) + `alternatives` |
+| `SlotAlternativeDecodingError` | Typed refusal reason for one alternative. `Equatable`; never surfaces to a caller — the payload decoder catches it and drops the element |
+| `SlotAlternatives` | The codec namespace: `decode(from:)`, `encode(_:)`, `normalize(_:idGenerator:)` |
+
+### Reuse
+
+`WarmupStepSnapshot`, `TechniquePlanSnapshot` and `CardioSegmentPlan` are reused
+verbatim, the cardio plan nested as a structure rather than a blob per §5.2.
+
+`PrescriptionSnapshotPayload` is **mirrored, not embedded** — three reasons, all
+mechanical: it is not `Codable`; it carries `equipment` / `setupNotes`, which are
+definition-level data resolved from the `Exercise` (Phase 10-E) and must not be
+frozen into an authoring payload; and it holds structured cardio as an opaque
+`Data` blob, which §5.2 rejects for this payload. Every field the two share
+keeps the same name, so the Phase F bridge is a field-for-field copy.
+
+### Decoding rules
+
+The §5.3 / §8.7 tolerance, made specific:
+
+| Input | Result |
+|---|---|
+| nil `Data`, empty `Data`, corrupt bytes, non-object JSON | `[]` |
+| Valid payload, empty `alternatives` | `[]` |
+| Alternative with no `exerciseID` | that alternative dropped, siblings kept |
+| Alternative whose `prescription` is unreadable | dropped |
+| Alternative whose `prescription` key is present but `{}` | **kept**, with an all-nil plan |
+| Alternative with a blank `exerciseName` | **kept** — the reference may still resolve |
+| One malformed warm-up step or technique | that element dropped, alternative kept |
+| Unknown keys at any level | ignored |
+| Unknown `version`, including a future one | decoded exactly like the current one |
+
+Two decisions the design did not settle:
+
+- **Which fields make an alternative "malformed."** Only `exerciseID` and a
+  readable `prescription`. Both are required because the value that would
+  result without them is actively *wrong* rather than merely incomplete: no
+  exercise reference is not an alternative at all (and inventing one is out of
+  scope), and an unreadable prescription would apply an **empty plan** on
+  switch — worse than not offering the row. Everything else falls back to a
+  default.
+- **`version` is not a gate.** Every field is optional at the wire level and
+  unknown keys are ignored, so "decode what you can" always yields at least the
+  alternatives a future build would recognize; rejecting on version would
+  discard readable prepared work for no gain. A payload this build genuinely
+  cannot parse fails `JSONDecoder` outright and resolves to `[]`. Re-encoding
+  always writes `currentVersion` — the value in hand is a v1 value whatever it
+  was read from.
+
+### Encoding rules
+
+- Empty list ⇒ `nil` `Data`, so Phase C's setter clears the column rather than
+  storing an empty payload (§5.2 "one representation of none").
+- `.sortedKeys`, so the same list always encodes to the same bytes.
+- Absent values are omitted rather than written as null, and empty
+  `warmupSteps` / `techniques` / an empty cardio plan are omitted entirely —
+  the common alternative encodes to a handful of keys. `usesDuration` is
+  written unconditionally: `false` is a positive assertion that the alternative
+  is rep-based.
+- The list is normalized before encoding, so `encode(decode(x)) == encode(x)`.
+
+### Normalization
+
+Deliberately minimal — §"do not over-normalize". `normalize(_:)` only:
+
+1. sorts by `order`, ties broken by incoming position (the sort is made stable
+   explicitly, since `sorted(by:)` is not),
+2. rewrites `order` to `0..<count` — it is positional metadata, not an authored
+   value, and dense is what an `.onMove` handler writes back,
+3. reissues **duplicate ids**, keeping the first occurrence's. Two rows sharing
+   an id break `Identifiable` diffing in a `ForEach`, but the prepared work is
+   still the user's, so duplicates are repaired rather than dropped. The
+   `idGenerator` parameter exists purely so tests can pin the reissued value,
+4. trims `exerciseName`, and collapses blank `note` / `tempo` / `slotNotes` to
+   nil,
+5. collapses an empty `CardioSegmentPlan` to nil.
+
+No prescription **value** is changed. Clamping durations, suppressing tempo on a
+duration target, and dropping a distance on a strength exercise are
+compatibility rules that belong to the adapter (Phase F); applying them here
+would silently rewrite what the user authored.
+
+---
+
+## 19. Phase C — as built
+
+**Shipped:** one additive column on `SlotPrescription`, one accessor file
+(`Log/Models/SlotPrescription+Alternatives.swift`), and
+`LogTests/SlotAlternativePersistenceTests.swift` (26 tests).
+
+**Not shipped, and not visible anywhere in the app:** no routine editor UI, no
+switch UI, no `SessionPlan` carry-through, no transfer/import/export, no
+duplication support, no History, no CSV. Nothing authors or reads alternatives
+yet — the column is nil for every existing and every newly-created
+prescription, and no code path outside the new accessors mentions it.
+
+### Storage
+
+```
+@Model final class SlotPrescription {
+    var alternativesData: Data? = nil   // NEW
+}
+```
+
+Exactly the shape §5.3 called for, and field-for-field the same decision as
+`cardioSegmentsData` (Slice 12C) and `targetDistanceMeters` (Slice 5):
+
+- **Additive optional, nil default** ⇒ SwiftData lightweight migration. No
+  custom migration plan, no `VersionedSchema`, no backfill.
+- **No new `@Model`** ⇒ no `LogApp.swift` `.modelContainer(for:)` change and no
+  `SwiftDataTestHarness` `Schema(...)` change. `SlotPrescription` is already in
+  both lists, so adding a property to it needs neither.
+- **Not in the initializer**, matching `cardioSegmentsData`: the column is set
+  through its accessor, never as a construction argument.
+
+### Accessors
+
+`SlotPrescription+Alternatives.swift`, mirroring
+`SlotPrescription+StructuredCardio.swift` method for method. The names are the
+ones §5.2 proposed.
+
+| API | Behavior |
+|---|---|
+| `var slotAlternatives: [SlotAlternative]` | The only intended read path. nil column, empty data, empty list, corrupt payload and a payload this build cannot parse all read as `[]`; a malformed alternative inside a valid payload is dropped and its siblings survive |
+| `func setSlotAlternatives(_:)` | Normalizes, then encodes. An empty list — and an encode failure — clear the column rather than storing an empty payload |
+| `func clearSlotAlternatives()` | Explicit clear, for call sites where `setSlotAlternatives([])` would read as an accident |
+| `var hasSlotAlternatives: Bool` | Any prepared alternative, **including disabled ones** — they are still prepared work and still shown in the editor (§8.7). "Does this slot have anything to offer *now*" is Phase F's question and filters on `isEnabled` plus whether the exercise still resolves |
+
+**No codec logic lives in the model layer.** Every rule is the Phase B
+`SlotAlternatives.decode` / `encode` / `normalize`, so the routine column, a
+future transfer document and the frozen session plan share one implementation
+rather than three. The practical consequence worth stating: normalization
+happens on **write**, so the stored payload is a fixed point — ordering is
+dense and stable, ids are unique, and re-writing what was just read produces
+byte-identical `Data`.
+
+### `RoutineDuplicator` — deliberately untouched
+
+`copyPrescription` copies fields explicitly, so a duplicated routine currently
+does **not** carry `alternativesData`. That is correct for this phase and costs
+nothing: no UI can author an alternative yet, so there is nothing to lose. The
+one-line copy plus the §12.1 fresh-`id` rule belongs to Phase H, where it can
+land with the transfer work and its own round-trip test.
+
+---
+
+## 20. Phase D — as built
+
+**Shipped:** authoring. A routine slot can now add, edit, reorder, delete,
+enable and disable alternatives, each with a full prescription.
+
+**Still inert.** Nothing reads an alternative outside the routine editor: no
+session freeze, no switch sheet, no adapter case, no Start Workout preview
+change, no duplication, no transfer, no History, no CSV, no schema change. A
+user who authors alternatives today sees them only where they authored them —
+which is why `USER_GUIDE.md` is deliberately not updated yet.
+
+### Files
+
+| File | Role |
+|---|---|
+| `Log/Services/SlotAlternativeSummary.swift` | Pure row wording |
+| `Log/Models/AlternativeDraft.swift` | `AlternativeDraftStore` (the scratch slot) + `SlotAlternativeAuthoring` (list operations) |
+| `Log/Main/Routines/SlotAlternativesEditor.swift` | The row, the list screen, the detail editor |
+| `Log/Main/Routines/PrescriptionFields.swift` | +8 lines: the row, and a `showsAlternatives` flag |
+| `Log/Localizable.xcstrings` | 7 new keys, Korean |
+
+### Placement
+
+One navigation row at the bottom of the slot's tools group — after `Warmup`
+and `Techniques`, above `Slot notes` — reading `Alternative Exercises   2 ›`,
+or `None` when there are none. Shown for **every** tracking mode: an
+alternative replaces a treadmill as readily as a bench press. Always visible,
+because it is the only way to author the first one.
+
+### The editor: full reuse, no fallback
+
+§6.4 approach A worked, and the reduced fallback was not needed. The detail
+screen renders the **existing** `SlotPrescriptionSection` — the same editor the
+routine slot itself uses — bound to a scratch `RoutineExercise` /
+`SlotPrescription` / `WarmupScheme` / `TechniquePlan` graph. So an alternative
+is authored with every rule the app already enforces (cardio gating, tempo
+suppression on duration, technique conflict filtering, distance-unit handling,
+duration ceilings), and every child editor — `WarmupSchemeEditor`,
+`TechniquePlanEditor`, `CardioSegmentPlanEditor` — is reached unchanged.
+
+Editable: sets, reps or duration, rest between sets and after exercise, effort
+(mode + values), tempo, warm-up scheme, techniques, target distance, structured
+cardio plan, slot notes — plus the alternative's own enabled flag and usage
+note. That is the full §17 MVP field list.
+
+### How the scratch slot cannot leak
+
+§6.4 flagged this as the phase's real risk: an inserted-then-deleted scratch
+graph is the orphan-row bug class `BackfillService.purgeOrphanSetTemplates`
+exists to clean up.
+
+The scratch graph is built in its **own in-memory `ModelContainer`**, and the
+detail screen injects that container's context into the prescription section's
+subtree with a single `.environment(\.modelContext, store.context)`. Every
+insert those editors make lands in the throwaway store. The deletion is not
+made reliable — it is made unnecessary: there is no code path by which a
+scratch object reaches the user's database, not a forgotten delete, not an
+early return, not a crash mid-edit. The one invariant that keeps it true is
+that the draft never holds an app-store object: the scratch `Exercise` is a
+copy of the picked exercise's definition fields. Two tests assert the app store
+gains no `SlotPrescription` / `Exercise` / `RoutineExercise` / `WarmupScheme` /
+`WarmupStep` / `TechniquePlan` row while a draft is built and edited.
+
+### Seeding
+
+A new alternative is seeded from **the app's defaults for the picked
+exercise's tracking mode** (§6.3) by running the real
+`makeDefaultPrescription` factory inside a throwaway draft store — so "an
+alternative's defaults" and "a new routine slot's defaults" cannot drift apart.
+It is never seeded from the primary slot's plan; §6.3's `Copy from current
+plan` secondary action is **not** in this phase.
+
+### Commit model
+
+Immediate, like every other routine-editor screen, and therefore **no Cancel**:
+adding one here would make this the only place in the app where backing out
+discards an edit. Metadata (enabled, note) commits on change; the prescription
+commits whenever the draft's payload value changes, which is what a back-swipe
+or a push into a child editor is safe under. Every write goes through
+`SlotAlternativeAuthoring` → `setSlotAlternatives`, so it is normalized, and it
+replaces exactly one alternative addressed by `id` — the slot's own
+prescription and the sibling alternatives are untouched.
+
+### Deviations from the design sketch
+
+- **Presence flags use the app's existing words.** §6.2 sketched
+  `· warm-ups · techniques · Cardio Plan`; the summary says
+  `· Warmup · Techniques · Structured Cardio`, reusing the exact row titles the
+  prescription editor one screen up already uses (and their existing Korean).
+  A second name for the same tool in the same screen would be worse than a
+  slightly longer line.
+- **The zero state reads `None`, not a hidden row.** Matching the Warmup /
+  Techniques / Structured Cardio rows beside it.
+- **Same-exercise alternatives are allowed and warned**, per §8.5: authoring one
+  shows `This is already the slot's exercise.` The switch sheet hides it —
+  Phase F/G.
+
+### Known limitations for later phases
+
+- A technique's `repMin` / `repMax` / `durationSeconds` do not survive the
+  payload round trip, because `TechniquePlanSnapshot` has no such fields. That
+  is the same loss the session freeze already takes when it snapshots a
+  routine's own techniques, so an alternative carries exactly what a slot
+  carries into a workout — but if those fields ever matter, the snapshot type
+  is where to add them.
+- An alternative whose exercise was deleted still opens in the editor, using
+  the stored `exerciseName` and a tracking mode inferred from the payload. The
+  disabled-row treatment (§8.7) belongs to the switch sheet, Phase G.
+- The count row and the summaries read the payload on every render (a JSON
+  decode per row). Fine for an authoring screen with a handful of rows; if the
+  switch sheet ever renders this hot, cache at the call site.
+
+---
+
+## 21. Phase E — as built
+
+**Shipped:** the freeze. Starting a workout copies each slot's prepared
+alternatives into the session, and they survive Save & Exit, a cold resume, and
+an exercise switch.
+
+**Still inert.** Nothing reads them: no switch sheet, no `Choice.useAlternative`,
+no `ResetSource` fields, no Start Workout preview change, no History, no CSV, no
+duplication, no transfer, no schema change, no user-guide change. This phase
+carries data and nothing else.
+
+### The three hops
+
+```
+SlotPrescription.alternativesData        authoring truth (Phase C)
+        │  frozen by StartWorkoutFromRoutineView.makePlan(from:)
+        ▼
+PlanExercise.alternativesSnapshot        [SlotAlternative], default []
+        │  copied by ActiveWorkoutView.initializeSessionPlans()
+        ▼
+SessionPlan.alternatives                 persisted in AppState.sessionPlansJSON
+```
+
+`WorkoutResumeService.planFromRoutine` mirrors `makePlan` and re-reads the
+routine, exactly as it already does for warm-ups and techniques — but that read
+is a **fallback**, not the session's truth: `restoreSessionPlansFromAppState`
+runs after `initializeSessionPlans` and overlays the persisted `SessionPlan`, so
+a routine edited mid-session cannot rewrite what the session holds. The template
+read only matters for a cold resume of a session that never persisted a plan
+(the JSON is written on plan edits and switches, not at start).
+
+### The field, and why it is optional
+
+```
+struct SessionPlan {
+    var alternativesSnapshot: [SlotAlternative]? = nil   // stored
+    var alternatives: [SlotAlternative] { get set }      // nil / [] collapse
+}
+```
+
+The obvious `var alternatives: [SlotAlternative] = []` is wrong here, and
+subtly: **synthesized `Decodable` calls `decode`, not `decodeIfPresent`, for a
+non-optional property even when it has a default value.** Every `SessionPlan`
+persisted by every earlier build lacks this key, so that shape would throw
+`keyNotFound` on resume and take the user's entire in-session plan — every
+edited set count, rest and note — down with it. `Optional` decodes with
+`decodeIfPresent`; the computed `alternatives` restores the non-optional API and
+collapses nil / missing / empty to `[]`, the same "one representation of none"
+rule the routine-side accessor uses. Writing an empty list stores nil, so a slot
+with no alternatives encodes byte-identically to before this phase.
+
+### A switch keeps the slot's alternatives
+
+`applySwitchOutcome` replaces the slot's `SessionPlan` wholesale with the
+adapter's output, which would have discarded the frozen list on the first
+switch. Alternatives belong to the **slot**, not to the exercise currently in
+it — after Bench Press → Machine Chest Press, the prepared DB Bench Press is
+still prepared — so they are carried across the replacement (three lines, no
+visible effect until Phase F). The adapter itself is untouched.
+
+### Testability note
+
+`makePlan(from:)` became `static` (it read no view state). That is what lets the
+freeze be tested against the real start path instead of a copy of it reproduced
+in the test file, which is how `CardioDistanceOnlyTargetTests` had to do it.
+Behavior is unchanged; the three call sites now say `Self.makePlan(from:)`.
+
+---
+
+## 22. Phase F1 — as built
+
+**Shipped:** the feature works. A prepared alternative can be applied mid-workout
+in one tap, and it brings its whole plan — warm-ups, techniques, distance,
+Cardio Plan, note — with it.
+
+**Still outstanding:** duplication (Phase H), transfer/import/export (Phase H),
+History provenance (deferred — §11 keeps it out of MVP), `USER_GUIDE.md` (a
+final docs slice, once duplication and transfer land), and the full manual
+regression pass (Phase J).
+
+### The flow
+
+```
+Switch Exercise
+   │
+   ├─ slot has an offerable alternative ─▶ Prepared Alternatives sheet
+   │        ├─ tap one ──────────────────▶ requestPendingSwap(.useAlternative)
+   │        └─ Choose another exercise… ─▶ ┐
+   │                                        │
+   └─ no offerable alternative ────────────▶ existing picker
+                                             └─▶ existing Keep / Reset dialog
+                                                  └─▶ requestPendingSwap(.keep/.reset)
+                                                            │
+                                                            ▼
+                                          existing logged-set confirmation
+                                                            │
+                                                            ▼
+                                                  performPendingSwap
+```
+
+The sheet is a sheet, not a `confirmationDialog`, for the reason §8.1 gives: an
+alternative needs a name, a summary, a note and a disabled state to be worth
+tapping, and a dialog is a stack of button titles.
+
+§8.1's sketch put `Keep Current Plan` / `Reset to Defaults` in the sheet's
+`Other Options`, which cannot work — both answer "what plan should the exercise
+you just picked use?", and no exercise has been picked yet. `Choose another
+exercise…` leads to today's picker, and *that* path still ends in today's
+two-option dialog, exactly as §8.1's own prose says. The existing dialog and its
+two strings are untouched.
+
+**A slot with nothing to offer sees no new screen.** The picker opens directly
+and the flow is byte-identical to pre-F1 — a UX rule and a test.
+
+### What is offered
+
+`PreparedAlternatives.offers(from:currentExerciseID:availableExerciseIDs:)`, a
+pure function over the slot's **frozen** `SessionPlan` list (never the routine's
+current one):
+
+| Case | Behavior |
+|---|---|
+| `isEnabled == false` | Hidden. Still listed, with `Off`, in the routine editor |
+| `exerciseID == the slot's current exercise` | Hidden. Includes the alternative the user *just applied*, which correctly drops out while its siblings stay switchable. No mid-workout warning — the authoring screen already gave one (§8.5) |
+| Exercise deleted from the library | **Shown, disabled**, reading `Exercise unavailable` (§8.7). A `List` row makes this clean, so the design's preferred treatment was implementable; the frozen `exerciseName` is what makes the row legible |
+| Otherwise | Offered, in authored order, with the same summary the routine editor shows |
+
+### What applying one does
+
+`ExerciseSwitchPlanAdapter.Choice.useAlternative(AlternativePrescriptionPayload)`
+routes to the **existing** `resetPlan` branch with a richer source
+(`ResetSource.alternative(_:)`). There is no second application path:
+
+- **Set count, rep/duration range, rests, tempo, note** — from the alternative,
+  through the reset branch's existing mode gating.
+- **Effort** — from the alternative, *always*, via the new
+  `ResetSource.replacesEffortTarget`: an alternative authored with no effort
+  target must not inherit "RIR 2" from the exercise it replaced. A progression
+  (start/end) rides on `Outcome.appliedAlternative` into `adaptedSnapshot`,
+  because a `SessionPlan` carries only a single value and would drop it.
+- **Warm-ups and techniques** — `Outcome.replacementWarmupSteps` /
+  `replacementTechniques`, the design's §9.1 shape as computed views over
+  `appliedAlternative`. They **replace** rather than survive, including with an
+  empty list, and are still run through `retainedTechniques` so an alternative
+  cannot introduce a combination the routine editor would have rejected.
+- **Distance and Cardio Plan** — from the alternative, and only when the
+  switched-in exercise is cardio *today*. That is the same gate a reset uses, so
+  an alternative whose exercise was later edited into another mode degrades
+  instead of smuggling a stale field through (§8.4).
+- **Everything else** — drafts, checklist ticks, templates, the superset
+  cascade, the rest-timer cancellation — is the existing switch path, unchanged.
+
+The one adapter-adjacent change at the call site: `applySwitchOutcome` now reads
+the three-way warm-up/technique rule (replace / keep / clear) instead of the
+two-way one.
+
+### Destructive confirmation
+
+Inherited, not re-implemented. A prepared alternative calls the same
+`requestPendingSwap` as the two plan choices, so the logged-set gate, its copy,
+its superset partner count and its Cancel semantics are literally the same code.
+Nothing is applied until the confirmation passes — cancelling clears the pending
+state and leaves exercise, plan, logged sets, drafts and rest timer untouched.
+
+### After the switch
+
+The slot keeps its alternatives (Phase E's carry-across in
+`applySwitchOutcome`), so a second switch can offer the rest of the list — minus
+the one now in the slot. `persistSessionPlans` runs on the switch, so Save &
+Exit → Resume restores the applied prescription *and* the list, and the session
+never re-reads the routine.
+
+---
+
+## 23. Phase H1 — as built
+
+**Shipped:** duplicating a routine now duplicates each slot's prepared
+alternatives. This closes the gap §19 recorded when Phase C deliberately left
+`RoutineDuplicator` alone.
+
+**Still deferred:** transfer / import / export (§12.2), History provenance
+(§11 keeps it out of MVP), `USER_GUIDE.md`, and the Phase J regression pass.
+
+### What happens
+
+`RoutineDuplicator.copyPrescription` gains one statement:
+
+```
+p.setSlotAlternatives(SlotAlternatives.duplicated(src.slotAlternatives))
+```
+
+Unlike the `cardioSegmentsData` line above it, this one **cannot** copy the
+column raw: §12.1 requires fresh alternative ids in the duplicate, and that
+means decode → reissue → encode. Going through the Phase C accessors rather
+than the bytes is what makes that safe — a corrupt payload decodes to `[]`, so
+the duplicate simply has no alternatives rather than inheriting a half-readable
+blob, and the write normalizes exactly as every other write does.
+
+`SlotAlternatives.duplicated(_:idGenerator:)` is the whole helper: it reissues
+`id` and touches nothing else. `idGenerator` is injectable so a test can pin the
+new value.
+
+### Identity
+
+| Field | Duplicate | Why |
+|---|---|---|
+| `id` | **New** | It identifies prepared work *within a slot*, and the duplicate's slots already get fresh `slotID`s. Sharing it would make two routines' alternatives indistinguishable to any future per-alternative feature |
+| `exerciseID` | **Shared** | Definition-level. Duplication copies programming, not the library — the same reason the slot's own `Exercise` reference is shared |
+| `CardioSegment.id` inside an alternative's plan | **Shared** | Consistency with the primary slot: the duplicator copies `cardioSegmentsData` as raw bytes, so those segment ids are shared already. One rule for segment identity, not two |
+| `order`, `isEnabled`, `note`, whole payload | **Preserved** | A disabled alternative duplicates as disabled |
+
+Value semantics make the two routines independent for free: editing either
+side's alternatives afterwards leaves the other untouched, both directions
+tested.
+
+---
+
+## 24. Phase H2 — as built
+
+**Shipped:** routine transfer now carries prepared alternatives. Export writes
+them into the document, import restores them onto the new routine's slots, and
+a document written before this slice imports exactly as it did before. This
+closes §12.2.
+
+**Still deferred:** `USER_GUIDE.md`, the final Phase J regression pass,
+`REMAINING_WORK_PLAN.md` Entry #12, and TestFlight build prep. History
+provenance (§11) stays out of MVP, and the CSV formats are untouched (§12.3).
+
+### Wire format
+
+One additive optional key on `RoutineTransferSlotPrescriptionDTO`:
+
+```
+var alternatives: RoutineTransferAlternativesDTO? = nil
+```
+
+**No `schemaVersion` bump.** `validateSupportedSchemaVersion` *rejects* a
+document whose version exceeds the reader's, so bumping would make every older
+build refuse a whole routine rather than import it minus its alternatives —
+nothing about an older document became invalid. That is the reasoning Slices 5,
+9 and 12E each recorded, and the reason an app that predates this slice can
+still read a routine exported by one that doesn't.
+
+`RoutineTransferAlternativesDTO` is a transparent wrapper that encodes the list
+**in place** (`"alternatives": [ … ]`), for the reason
+`RoutineTransferCardioSegmentsDTO` exists one level up: a plain array field
+inside a synthesized `Codable` struct fails the *whole document* on a
+wrong-shaped value or a single malformed element. Here a wrong-shaped value
+reads as no alternatives, and a malformed element is dropped while its siblings
+survive — the tolerance `SlotAlternativesPayload` already gives the stored
+column (§5.3 / §8.7). §12.2 sketched a bare `[RoutineTransferAlternativeDTO]?`;
+the wrapper is what actually delivers the failure behavior that bullet asks for.
+
+`RoutineTransferAlternativeDTO` carries `order`, `isEnabled`, `exerciseName` +
+the three resolution hints, `note`, and the prescription as
+`AlternativePrescriptionPayload` **itself** rather than a mirrored DTO — it is
+already a pure `Codable` value type with a tolerant decoder that nests
+`CardioSegmentPlan` as readable structure, so reusing it means a field added to
+an alternative can never be forgotten in the transfer path. Two fields are
+deliberately absent: `id` and `exerciseID` (below).
+
+### Export
+
+`RoutineTransfer.export(_:exercises:exportedAt:appVersion:)` gained one
+parameter — the exercise library, used *only* to turn an alternative's stored
+`exerciseID` into a name plus hints. A slot's own exercise needs no lookup (it
+is a live relationship); an alternative holds a bare `UUID`, and a `UUID` from
+the sender's store means nothing on the recipient's device. Still read-only and
+`ModelContext`-free; the parameter defaults to empty, and `RoutinesView` passes
+the fetched library at the one export call site.
+
+- Alternatives are read through the **decoding accessor** (`slotAlternatives`),
+  not the raw column: a payload this build cannot parse exports as *no
+  alternatives* rather than shipping corruption to someone else's device. This
+  is the same choice `cardioSegments` makes, and the deliberate difference from
+  `RoutineDuplicator`, which stays inside one store.
+- A slot with no alternatives **omits the key entirely**, so a routine that
+  never used the feature exports byte-identically to before.
+- Order, `isEnabled`, the note and every prescription field travel verbatim —
+  sets, rep range, duration range, rests, effort mode + values, tempo, target
+  distance + unit, warm-up snapshots, technique snapshots, the structured
+  Cardio Plan, and the alternative's slot notes.
+- An alternative whose `exerciseID` no longer resolves falls back to the
+  `exerciseName` frozen on it at authoring time (no hints); if that is blank
+  too the alternative is dropped, mirroring the empty-name sentinel a deleted
+  slot exercise exports.
+
+### Import
+
+Materialization goes through `setSlotAlternatives(_:)`, never the column, so
+Phase B normalization (stable order, dense `order`, unique ids, trimmed
+strings) is the one implementation governing authoring, duplication and import
+alike. An empty, absent or corrupt list all end as a **nil `alternativesData`**
+— one representation of "no alternatives".
+
+- A document without the key imports precisely as before: no alternatives, no
+  error, the rest of the slot unchanged.
+- A malformed element (no `exerciseName`, a blank one, or an unreadable
+  `prescription`) is dropped and its siblings survive; the survivors are
+  re-densified to `0..<count`.
+- A malformed `cardioSegments` *inside* a valid alternative costs the plan, not
+  the alternative.
+- The target distance is **re-normalized rather than trusted**, exactly like the
+  primary prescription's on this path: an imported document is outside data, and
+  an impossible distance must land as "no target" instead of reaching a
+  formatter. An unparseable unit is dropped with the distance it belonged to.
+
+### Identity
+
+| Field | Import | Why |
+|---|---|---|
+| `SlotAlternative.id` | **Fresh** | The wire format carries no id at all (content only, like every other level of the document), so freshness is structural rather than a rule import must remember. An imported routine must not share authored alternative identity with the sender's copy (§12.2) |
+| `exerciseID` | **Remapped** to the recipient's row | The reference travels as a name and resolves through the document's single exercise-resolution rule — link an existing library row (trimmed, case-insensitive), or stub-create a custom one from the exported hints, deduped within the batch. An alternative naming the slot's own exercise links to that one row, not a copy of it |
+| `exerciseName` | The **resolved row's** name | So the frozen display fallback agrees with the library it now points at |
+| `CardioSegment.id` inside an alternative's plan | **Preserved** | Consistency with the primary slot, whose plan already round-trips its segment ids on this path. One rule for segment identity, not two |
+| `order`, `isEnabled`, `note`, whole payload | **Preserved** | A disabled alternative imports as disabled |
+
+Because every reference resolves or stub-creates, an imported alternative always
+resolves — the "exercise unavailable" row (§8.7) belongs to a *later* deletion,
+not to import. Nothing invents an exercise reference, and nothing crashes over a
+missing one.
+
+`RoutineTransfer.preview` counts alternative exercises too, in the same
+slot-then-alternatives order the import visits them, so the preview's "will be
+created" list stays an accurate promise rather than an undercount.
+
+### Not touched
+
+Active-workout switch behavior, `ExerciseSwitchPlanAdapter`, `SessionPlan`, the
+routine editor UI, `RoutineDuplicator`, History, both CSV formats, the user
+guide, the SwiftData schema, and every project/signing setting. The editor and
+the active workout simply see imported alternatives as ordinary authored ones —
+tested end to end: an imported routine duplicates its alternatives with fresh
+ids, and starting a workout from it freezes them into the session plan.
+
+---
+
+## 25. Final status
+
+Alternative Exercises are usable end to end: authored in the routine editor,
+persisted on the slot prescription, frozen into the session at start, offered
+and applied mid-workout under Prepared Alternatives (with the destructive
+confirmation and Save & Exit / Resume behavior intact), copied by routine
+duplication, and carried by routine transfer export/import.
+
+**Remaining:** the final manual regression pass on device, devlog finalization
+(`ENTRY_12_TESTFLIGHT_FEEDBACK.md`), and TestFlight build prep. The user guide
+(`USER_GUIDE.md` + `UserGuideView.swift`, EN + KO) is no longer outstanding —
+§19 and the Phase H1/H2 notes above predate it and are left as written.

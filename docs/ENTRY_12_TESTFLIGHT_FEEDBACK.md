@@ -110,6 +110,8 @@ The checklist testers are asked to walk through (full version in
 - _(optional)_ Log a cardio exercise (duration-based), with the details in notes
 - _(optional)_ Try the Korean UI
 - _(optional)_ Try an uneven superset, if comfortable
+- _(optional)_ Prepare an alternative exercise on a routine exercise, then apply
+  it mid-workout from Switch Exercise → Prepared Alternatives
 
 ---
 
@@ -241,6 +243,7 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 - Raised the duration and rest ceilings and replaced their steppers. Every seconds-valued editor previously capped at 600s (routine prescription duration/rest, in-workout Edit Plan) or 300s (Settings rest defaults, warm-up step rest, superset round rest), stepping 15s at a time. Exercise duration now allows up to 6 hours and rest up to 60 minutes, and both are entered through a shared row offering one-tap presets plus hour/minute/second wheels. Storage is unchanged — still `Int` seconds — and one shared normalizer clamps every write, so no editor can produce a negative or out-of-range value. The active workout's free-text duration field parses through the same normalizer and echoes the compact form ("45m") next to the raw seconds so a long cardio entry is readable before it is logged. Short holds like Plank, Hollow Hold, and Wall Sit are unaffected, and duration slots still hide reps/weight, tempo, and Tempo Override.
 - Added lightweight cardio support without a cardio data model. Cardio already existed as a canonical body part with the Korean translation 유산소; the built-in catalogue now seeds Walking, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine alongside the existing Treadmill Run, all duration-based. The catalogue version was bumped so existing installs pick the new names up, and the per-name dedupe means nothing is duplicated or overwritten. Distance, speed, incline, resistance / machine level, and heart-rate zone go in exercise or setup notes for now.
 - Added regression tests for routine startability, routine deletion, finish confirmation behavior, warm-up step insertion, and exercise-switch compatibility / resume consistency / draft-only prefill.
+- Added **Alternative Exercises**, built after the cardio system and on top of the exercise-switch work above. A routine exercise can now store prepared backup/replacement exercises, each carrying its own plan — sets, reps or duration, rest, effort, tempo, warm-ups, techniques, cardio target distance, Cardio Plan, and notes. The routine editor authors them; a workout started from that routine offers them mid-session under Switch Exercise → **Prepared Alternatives**, and applying one switches the exercise *and* applies the prescription prepared for it rather than adapting the replaced exercise's plan. The existing destructive confirmation still runs first when the switch would remove already-logged sets, and Cancel leaves the session untouched. Alternatives are frozen into the session at start, so editing the routine mid-workout cannot change what the active session offers, and they survive Save & Exit → Resume. Duplicating a routine copies them (with fresh alternative ids and shared exercise references), and routine transfer export/import carries them, resolving each alternative's exercise by name exactly as a slot's own exercise reference is resolved. Routine templates are still never mutated silently, and a routine that uses no alternatives sees no new screen and exports byte-identically to before.
 
 Current validation status:
 
@@ -257,9 +260,13 @@ Current validation status:
 - Switch-time draft prefill: tested so switching prefills reps/weight (or duration) input fields from the switched-in exercise's own latest history, clears the replaced exercise's stale suggestions first, falls back to prescription defaults when the new exercise has no history, and leaves the plan and prescription snapshot byte-identical.
 - Duration/rest limits: tested with bound, clamp, negative, empty, and parse cases at both ceilings, plus 30+ minute cardio durations and the existing short-hold values.
 - Beta cardio: tested so the seeded cardio exercises are all duration-based, the Cardio body part stays canonical, and it localizes to 유산소.
-- User guide sync: tested so the English and Korean guides stay structurally aligned and both carry the cardio-in-notes wording that `USER_GUIDE.md` uses.
+- User guide sync: tested so the English and Korean guides stay structurally aligned and both carry the cardio-in-notes wording that `docs/USER_GUIDE.md` uses.
+- Alternative Exercises: tested at every hop — the payload codec and its tolerance rules, slot persistence, routine-editor authoring, the session freeze (including that editing the routine mid-workout cannot change the active session), the offer rules, the switch adapter applying the prepared prescription, duplication with fresh ids, and transfer export/import round-trips including warm-ups, techniques, a Cardio Plan and older documents that predate the feature.
+- Alternative Exercises Korean coverage: tested so the authoring screen, the Prepared Alternatives sheet, the switch confirmation, and the summary flags all have Korean translations, and the English keys still render unchanged.
 - Manual switch/restart/History re-check on device: completed.
-- Latest full test suite result: 1072 tests, 0 failures.
+- Latest full test suite result: full scheme passes with **2,185 tests, 0
+  failures** — 2,183 unit tests plus 2 UI tests. Debug build succeeds and
+  Release build succeeds.
 
 ---
 
@@ -352,3 +359,8 @@ Themes to continue watching as peer/family testing expands:
 This section will be written once the beta phase has more complete feedback. It should honestly state what the feedback showed, what was fixed, and what was deferred — without claiming a public App Store release. The goal of this phase is external feedback, not distribution.
 
 **As of now:** Friends & Family Beta testing has started. Crash, usability, documentation, active-workout consistency, and exercise-switching issues have already been fixed, and the exercise-switching fix has passed both the automated test suite and manual device validation. Beta testing is still ongoing, so the phase result stays open until more tester feedback comes in.
+
+**Next build scope:** the cardio system and Alternative Exercises are both
+implemented and test-covered in the working tree, and are the headline items for
+the next TestFlight build. That build has **not** been uploaded yet — remaining
+work is the final manual regression pass on device and the build prep itself.

@@ -555,13 +555,25 @@ final class TechniquePlan {
     }
 }
 
-/// Effort target mode for a slot's autoregulation (RIR/RPE). Additive Slice A.
-/// `none` = no effort target; `single` = one value across all sets;
-/// `progression` = directional start → end target interpolated across sets.
+/// Effort target mode for a slot's autoregulation (RIR/RPE).
+///
+/// - `none` — no effort target.
+/// - `single` — one value across every working set ("Same Target" in the UI).
+/// - `progression` — directional start → end target, generated across the sets
+///   by `EffortTargetResolver.progression`.
+/// - `custom` — an explicit per-set list, authored one set at a time and stored
+///   verbatim in `SlotPrescription.customRIRTargetsRaw` /
+///   `customRPETargetsRaw` ("Custom Per Set" in the UI).
+///
+/// Raw values are persisted (`effortModeRaw`), so they are append-only: an
+/// unrecognized raw falls back to the legacy derivation rather than crashing,
+/// which is what lets a routine authored on a newer build open on an older one
+/// as a plain single-target slot.
 enum EffortMode: String, CaseIterable {
     case none
     case single
     case progression
+    case custom
 }
 
 @Model
@@ -589,6 +601,29 @@ final class SlotPrescription {
     var rirEnd: Double?
     var rpeStart: Double?
     var rpeEnd: Double?
+
+    /// Custom per-set effort targets, comma-separated (`"2,1.5,1,0"`), one
+    /// column per metric — the `.custom` effort mode's storage.
+    ///
+    /// A `String?` rather than a `Data?` JSON blob because the value is a flat
+    /// ordered list of numbers with no nested structure and no versioning need;
+    /// `TechniquePlan.appliesToSetIndicesRaw` already stores exactly this shape
+    /// this way, and a CSV stays legible in a transfer document. Read and
+    /// written only through `EffortTargetList`, which is tolerant on both sides
+    /// — an unparseable column reads as "no custom targets" and the resolver
+    /// degrades to the progression / single values still stored beside it.
+    ///
+    /// **Two columns, kept mirrored (`10 - x`)**, exactly like `rir`/`rpe` and
+    /// the start/end pairs above: flipping the app's autoreg metric must
+    /// surface a sensible converted list, and one column plus a "which metric
+    /// was this authored in" flag would be a second, contradictory rule for a
+    /// question this model already answers.
+    ///
+    /// Optional / nil-default, so SwiftData lightweight migration leaves every
+    /// existing row unchanged and reads as "no custom targets" — which is what
+    /// 100% of them are.
+    var customRIRTargetsRaw: String? = nil
+    var customRPETargetsRaw: String? = nil
 
     // Duration targets
     var durationMinSeconds: Int?
@@ -634,6 +669,25 @@ final class SlotPrescription {
     /// what 100% of them are.
     var cardioSegmentsData: Data? = nil
 
+    /// Alternative Exercises Phase C — the slot's prepared alternatives
+    /// (replacement exercise + its own full prescription), JSON-encoded.
+    ///
+    /// Same `Data?`-column reasoning as `cardioSegmentsData` above, and for the
+    /// same reasons (`ALTERNATIVE_EXERCISES_DESIGN.md` §5.1): alternatives are
+    /// never queried independently, so a `@Model` graph would buy nothing and
+    /// cost cascade rules across four levels, ordering discipline, deep-copy in
+    /// `RoutineDuplicator`, and an orphan sweep. The payload is additionally
+    /// *already* the value type the session plan will freeze, so there is no
+    /// model → value mapping layer to write.
+    ///
+    /// Read and written **only** through `slotAlternatives` /
+    /// `setSlotAlternatives` (see `SlotPrescription+Alternatives.swift`), which
+    /// normalize on both sides through the Phase B codec, so a corrupt payload
+    /// degrades to "no alternatives" instead of reaching a view. Optional /
+    /// nil-default: every existing prescription migrates lightweightly and
+    /// reads as having none, which is what 100% of them are.
+    var alternativesData: Data? = nil
+
     /// The tempo this prescription may actually display.
     ///
     /// Tempo describes eccentric/concentric rep phases and is meaningless for a
@@ -675,6 +729,8 @@ final class SlotPrescription {
         rirEnd: Double? = nil,
         rpeStart: Double? = nil,
         rpeEnd: Double? = nil,
+        customRIRTargetsRaw: String? = nil,
+        customRPETargetsRaw: String? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false,
@@ -694,6 +750,8 @@ final class SlotPrescription {
         self.rirEnd = rirEnd
         self.rpeStart = rpeStart
         self.rpeEnd = rpeEnd
+        self.customRIRTargetsRaw = customRIRTargetsRaw
+        self.customRPETargetsRaw = customRPETargetsRaw
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
@@ -716,6 +774,36 @@ extension SlotPrescription {
             return mode
         }
         return (rir != nil || rpe != nil) ? .single : .none
+    }
+
+    /// The slot's custom per-set RIR targets, decoded. `[]` when the slot has
+    /// none or the column is unreadable — see `EffortTargetList`.
+    var customRIRTargets: [Double] {
+        EffortTargetList.decode(customRIRTargetsRaw)
+    }
+
+    /// The slot's custom per-set RPE targets, decoded.
+    var customRPETargets: [Double] {
+        EffortTargetList.decode(customRPETargetsRaw)
+    }
+
+    /// Write a custom per-set list for `metric`, keeping the opposite metric
+    /// mirrored (`10 - x`) — the same pairing rule `rir`/`rpe` and the
+    /// start/end steppers follow, so flipping the app's autoreg preference
+    /// surfaces a converted list rather than an empty one.
+    ///
+    /// An empty list clears **both** columns, so "no custom targets" has one
+    /// representation on disk.
+    func setCustomEffortTargets(_ values: [Double], metric: EffortMetric) {
+        let mirrored = values.map { 10 - $0 }
+        switch metric {
+        case .rir:
+            customRIRTargetsRaw = EffortTargetList.encode(values)
+            customRPETargetsRaw = EffortTargetList.encode(mirrored)
+        case .rpe:
+            customRPETargetsRaw = EffortTargetList.encode(values)
+            customRIRTargetsRaw = EffortTargetList.encode(mirrored)
+        }
     }
 
     /// True when the prescription carries enough info to generate working sets.
@@ -844,6 +932,15 @@ final class PlannedPrescriptionSnapshot {
     var rpeStart: Double?
     var rpeEnd: Double?
 
+    /// Frozen copy of the slot's custom per-set effort targets (see
+    /// `SlotPrescription.customRIRTargetsRaw`). Same two-column mirrored
+    /// storage, frozen for the same reason the start/end pair is: a running or
+    /// completed workout must render the targets it was started with, even
+    /// after the routine is edited. Optional / nil-default, so existing
+    /// snapshot rows migrate lightweightly and read as "no custom targets".
+    var customRIRTargetsRaw: String? = nil
+    var customRPETargetsRaw: String? = nil
+
     // Duration
     var durationMinSeconds: Int?
     var durationMaxSeconds: Int?
@@ -899,6 +996,8 @@ final class PlannedPrescriptionSnapshot {
         rirEnd: Double? = nil,
         rpeStart: Double? = nil,
         rpeEnd: Double? = nil,
+        customRIRTargetsRaw: String? = nil,
+        customRPETargetsRaw: String? = nil,
         durationMinSeconds: Int? = nil,
         durationMaxSeconds: Int? = nil,
         usesDuration: Bool = false,
@@ -921,6 +1020,8 @@ final class PlannedPrescriptionSnapshot {
         self.rirEnd = rirEnd
         self.rpeStart = rpeStart
         self.rpeEnd = rpeEnd
+        self.customRIRTargetsRaw = customRIRTargetsRaw
+        self.customRPETargetsRaw = customRPETargetsRaw
         self.durationMinSeconds = durationMinSeconds
         self.durationMaxSeconds = durationMaxSeconds
         self.usesDuration = usesDuration
@@ -951,6 +1052,8 @@ final class PlannedPrescriptionSnapshot {
             rirEnd: source.rirEnd,
             rpeStart: source.rpeStart,
             rpeEnd: source.rpeEnd,
+            customRIRTargetsRaw: source.customRIRTargetsRaw,
+            customRPETargetsRaw: source.customRPETargetsRaw,
             durationMinSeconds: source.durationMinSeconds,
             durationMaxSeconds: source.durationMaxSeconds,
             usesDuration: source.usesDuration,

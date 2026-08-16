@@ -51,6 +51,41 @@ struct SessionPlan: Codable, Equatable {
     var cardioSegmentsData: Data? = nil
     var slotNotes: String?
 
+    /// Alternative Exercises Phase E — the slot's prepared alternatives, frozen
+    /// at workout start (`ALTERNATIVE_EXERCISES_DESIGN.md` §4.2).
+    ///
+    /// **This is the session's copy, and the session must read no other.** The
+    /// routine's `SlotPrescription.alternativesData` is the authoring truth; a
+    /// routine edited while a workout is in flight must not rewrite what that
+    /// workout has to offer, which is the same freeze rule the prescription
+    /// snapshot already follows and the converse of non-negotiable rule 4.
+    ///
+    /// **Optional on purpose, and read through `alternatives` below.** A
+    /// non-optional `[SlotAlternative] = []` would look equivalent but is not:
+    /// synthesized `Decodable` calls `decode` — not `decodeIfPresent` — for a
+    /// non-optional property *even when it has a default value*, so a
+    /// `SessionPlan` persisted by any earlier build (none of which wrote this
+    /// key) would fail to decode and take the user's whole in-session plan with
+    /// it on resume. `Optional` decodes with `decodeIfPresent`, which is the
+    /// same compatibility the Slice 5 target-distance fields and the Slice 12D
+    /// `cardioSegmentsData` rely on.
+    ///
+    /// Persisted with the rest of the plan through `AppState.sessionPlansJSON`,
+    /// so alternatives survive Save & Exit and a cold resume.
+    var alternativesSnapshot: [SlotAlternative]? = nil
+
+    /// The frozen alternatives, with one representation of "none".
+    ///
+    /// A nil column, a missing key (an older saved session) and an empty list
+    /// all read as `[]` — the same rule `SlotPrescription.slotAlternatives`
+    /// uses on the routine side, so no caller checks three states. Writing an
+    /// empty list stores nil rather than an empty array, so a plan with no
+    /// alternatives encodes exactly as it did before this field existed.
+    var alternatives: [SlotAlternative] {
+        get { alternativesSnapshot ?? [] }
+        set { alternativesSnapshot = newValue.isEmpty ? nil : newValue }
+    }
+
     /// The session's structured cardio plan, decoded, or nil when this slot has
     /// none.
     ///
@@ -149,7 +184,16 @@ struct SessionPlan: Codable, Equatable {
 
     init() { self.usesDuration = false }
 
-    init(from snapshot: PrescriptionSnapshotPayload, notes: String?) {
+    /// - Parameter alternatives: the slot's frozen alternatives, from
+    ///   `PlanExercise.alternativesSnapshot`. Defaulted so every existing call
+    ///   site — the switch adapter's heal in `WorkoutResumeService`, the
+    ///   dirty-check's "original" plan, the test fixtures — keeps producing
+    ///   exactly the plan it produced before, with no alternatives.
+    init(
+        from snapshot: PrescriptionSnapshotPayload,
+        notes: String?,
+        alternatives: [SlotAlternative] = []
+    ) {
         self.sets = snapshot.sets
         self.repMin = snapshot.repMin
         self.repMax = snapshot.repMax
@@ -173,5 +217,8 @@ struct SessionPlan: Codable, Equatable {
         // this field.
         self.cardioSegmentsData = snapshot.cardioSegmentsData
         self.slotNotes = notes
+        // Through the computed setter, so an empty list stores nil and a plan
+        // with no alternatives encodes exactly as it did before Phase E.
+        self.alternatives = alternatives
     }
 }

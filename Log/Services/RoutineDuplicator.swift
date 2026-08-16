@@ -203,6 +203,12 @@ enum RoutineDuplicator {
             rirEnd: src.rirEnd,
             rpeStart: src.rpeStart,
             rpeEnd: src.rpeEnd,
+            // Copied **verbatim** as the stored raw, for the same reason the
+            // cardio segment payload below is: duplication stays inside one
+            // store, so a column this build would normalize (or cannot parse)
+            // survives byte-for-byte rather than being silently rewritten.
+            customRIRTargetsRaw: src.customRIRTargetsRaw,
+            customRPETargetsRaw: src.customRPETargetsRaw,
             durationMinSeconds: src.durationMinSeconds,
             durationMaxSeconds: src.durationMaxSeconds,
             usesDuration: src.usesDuration,
@@ -221,6 +227,18 @@ enum RoutineDuplicator {
         // this build would normalize (or cannot parse at all) survives
         // duplication byte-for-byte instead of being silently rewritten.
         p.cardioSegmentsData = src.cardioSegmentsData
+        // Alternative Exercises Phase H1. Unlike the segment payload above,
+        // this one cannot be copied raw: §12.1 requires fresh alternative ids
+        // in the duplicate, which means decoding, reissuing, and re-encoding.
+        //
+        // Going through the Phase C accessors rather than the column is what
+        // makes that safe — a corrupt payload decodes to `[]` and the duplicate
+        // simply has no alternatives (never a crash, never a half-copied blob),
+        // and the write normalizes exactly as every other write does. Copying
+        // the bytes instead would clone the ids; reimplementing the codec here
+        // would be a second place for the format to drift.
+        p.setSlotAlternatives(
+            SlotAlternatives.duplicated(src.slotAlternatives))
         ctx.insert(p)
         p.techniquePlans = src.techniquePlans.map { copyTechnique($0, in: ctx) }
         // WarmupScheme is mutated in place per-prescription

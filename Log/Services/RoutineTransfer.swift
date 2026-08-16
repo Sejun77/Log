@@ -18,16 +18,28 @@ enum RoutineTransfer {
     /// Export `routine` as a versioned transfer document. `exportedAt` /
     /// `appVersion` are diagnostic-only metadata; the source graph is never
     /// touched.
+    ///
+    /// - Parameter exercises: the exercise library, used **only** to turn a
+    ///   prepared alternative's `exerciseID` into the name + resolution hints
+    ///   the wire format references exercises by (Phase H2). A slot's own
+    ///   exercise needs no lookup — it is a live relationship — but an
+    ///   alternative holds a bare `UUID`, and a `UUID` from the sender's store
+    ///   means nothing on the recipient's device. Defaults to empty, in which
+    ///   case an alternative falls back to the name frozen on it at authoring
+    ///   time and exports no hints. Read-only and still `ModelContext`-free.
     static func export(
         _ routine: Routine,
+        exercises: [Exercise] = [],
         exportedAt: Date? = Date(),
         appVersion: String? = nil
     ) -> RoutineTransferDocument {
-        RoutineTransferDocument(
+        var library: [UUID: Exercise] = [:]
+        for ex in exercises where library[ex.id] == nil { library[ex.id] = ex }
+        return RoutineTransferDocument(
             schemaVersion: RoutineTransferDocument.currentSchemaVersion,
             exportedAt: exportedAt,
             appVersion: appVersion,
-            routine: routineDTO(routine)
+            routine: routineDTO(routine, library)
         )
     }
 
@@ -81,29 +93,33 @@ enum RoutineTransfer {
     // MARK: - Private mapping (each level sorts children by `order`)
 
     private static func routineDTO(
-        _ r: Routine
+        _ r: Routine, _ library: [UUID: Exercise]
     ) -> RoutineTransferRoutineDTO {
         RoutineTransferRoutineDTO(
             name: r.name,
             notes: r.notes,
-            blocks: r.blocks.sorted { $0.order < $1.order }.map(blockDTO)
+            blocks: r.blocks
+                .sorted { $0.order < $1.order }
+                .map { blockDTO($0, library) }
         )
     }
 
     private static func blockDTO(
-        _ b: RoutineBlock
+        _ b: RoutineBlock, _ library: [UUID: Exercise]
     ) -> RoutineTransferBlockDTO {
         RoutineTransferBlockDTO(
             order: b.order,
             isSuperset: b.isSuperset,
             restAfterSeconds: b.restAfterSeconds,
             supersetRoundRestSeconds: b.supersetRoundRestSeconds,
-            slots: b.exercises.sorted { $0.order < $1.order }.map(slotDTO)
+            slots: b.exercises
+                .sorted { $0.order < $1.order }
+                .map { slotDTO($0, library) }
         )
     }
 
     private static func slotDTO(
-        _ re: RoutineExercise
+        _ re: RoutineExercise, _ library: [UUID: Exercise]
     ) -> RoutineTransferSlotDTO {
         // A deleted / unlinked slot (nil `exercise`) exports an **empty**
         // `exerciseName` sentinel and nil hints — truthful (no fabricated name)
@@ -120,7 +136,7 @@ enum RoutineTransfer {
             setTemplates: re.setTemplates
                 .sorted { $0.order < $1.order }
                 .map(setTemplateDTO),
-            prescription: re.prescription.map(prescriptionDTO)
+            prescription: re.prescription.map { prescriptionDTO($0, library) }
         )
     }
 
@@ -138,7 +154,7 @@ enum RoutineTransfer {
     }
 
     private static func prescriptionDTO(
-        _ p: SlotPrescription
+        _ p: SlotPrescription, _ library: [UUID: Exercise]
     ) -> RoutineTransferSlotPrescriptionDTO {
         RoutineTransferSlotPrescriptionDTO(
             sets: p.sets,
@@ -154,6 +170,15 @@ enum RoutineTransfer {
             rirEnd: p.rirEnd,
             rpeStart: p.rpeStart,
             rpeEnd: p.rpeEnd,
+            // Exported through the decoding accessor rather than the raw
+            // column, matching `cardioSegments` / `alternatives` below: a
+            // column this build cannot parse exports as "no custom targets"
+            // instead of shipping corruption to someone else's device. A slot
+            // without them leaves the keys out of the document entirely.
+            customRIRTargets: p.customRIRTargets.isEmpty
+                ? nil : p.customRIRTargets,
+            customRPETargets: p.customRPETargets.isEmpty
+                ? nil : p.customRPETargets,
             durationMinSeconds: p.durationMinSeconds,
             durationMaxSeconds: p.durationMaxSeconds,
             usesDuration: p.usesDuration,
@@ -172,8 +197,59 @@ enum RoutineTransfer {
             techniquePlans: p.techniquePlans
                 .sorted { $0.order < $1.order }
                 .map(techniqueDTO),
-            warmupScheme: p.warmupScheme.map(warmupSchemeDTO)
+            warmupScheme: p.warmupScheme.map(warmupSchemeDTO),
+            // Alternative Exercises Phase H2. Read through the decoding
+            // accessor (`slotAlternatives`), not the raw column — the same
+            // choice `cardioSegments` makes above and for the same reason: a
+            // column this build cannot parse exports as **no alternatives**
+            // rather than shipping corruption to someone else's device. A slot
+            // with none leaves the key out of the document entirely, so a
+            // routine that never used the feature exports byte-identically to
+            // before this slice.
+            alternatives: alternativesDTO(p.slotAlternatives, library)
         )
+    }
+
+    /// Prepared alternatives → wire form, or nil when the slot has none.
+    ///
+    /// The one non-mechanical step is the exercise reference. An alternative
+    /// stores a bare `exerciseID`; the format references exercises by name, so
+    /// the id is resolved against `library` for a **live** name plus the three
+    /// resolution hints — exactly what the slot's own exercise contributes, and
+    /// what lets import stub-create a cardio alternative as time-based rather
+    /// than as a blank strength row.
+    ///
+    /// Two fallbacks, in order:
+    ///
+    ///  * the id no longer resolves (deleted exercise, or no library passed) ⇒
+    ///    fall back to the `exerciseName` frozen on the alternative at
+    ///    authoring time, with no hints. The prepared work is still the user's
+    ///    and a name is still a usable reference,
+    ///  * that name is blank too ⇒ **drop the alternative**. There is nothing
+    ///    left to reference and inventing one is out of scope; this mirrors the
+    ///    empty-name sentinel a deleted slot exercise exports.
+    private static func alternativesDTO(
+        _ alternatives: [SlotAlternative], _ library: [UUID: Exercise]
+    ) -> RoutineTransferAlternativesDTO? {
+        let dtos: [RoutineTransferAlternativeDTO] = alternatives.compactMap {
+            alternative in
+            let resolved = library[alternative.exerciseID]
+            let name = resolved?.name ?? alternative.exerciseName
+            guard
+                !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return nil }
+            return RoutineTransferAlternativeDTO(
+                order: alternative.order,
+                isEnabled: alternative.isEnabled,
+                exerciseName: name,
+                exerciseBodyPart: resolved?.bodyPart,
+                exerciseEquipmentType: resolved?.equipmentType,
+                exerciseIsTimeBased: resolved?.isTimeBased,
+                note: alternative.note,
+                prescription: alternative.prescription)
+        }
+        return dtos.isEmpty ? nil : RoutineTransferAlternativesDTO(
+            alternatives: dtos)
     }
 
     private static func techniqueDTO(

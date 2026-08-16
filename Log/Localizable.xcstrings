@@ -418,6 +418,18 @@
         }
       }
     },
+    "Add Alternative" : {
+      "comment" : "Alternative Exercises Phase D: button that opens the exercise picker to prepare a new alternative",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 추가"
+          }
+        }
+      }
+    },
     "Add an exercise or a superset." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -425,6 +437,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 또는 슈퍼세트를 추가하세요."
+          }
+        }
+      }
+    },
+    "Add at least one set to enter per-set targets." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트별 목표를 입력하려면 세트를 1개 이상 추가하세요."
           }
         }
       }
@@ -546,6 +569,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "모든 메인 세트"
+          }
+        }
+      }
+    },
+    "Alternatives appear when you switch this exercise during a workout." : {
+      "comment" : "Alternative Exercises Phase D: footer explaining where prepared alternatives are offered",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 중 이 운동을 교체할 때 대체 운동이 표시됩니다."
+          }
+        }
+      }
+    },
+    "Alternative Exercises" : {
+      "comment" : "Alternative Exercises Phase D: routine editor row and screen title for a slot's prepared alternative exercises",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동"
           }
         }
       }
@@ -969,6 +1016,18 @@
         }
       }
     },
+    "Choose another exercise…" : {
+      "comment" : "Alternative Exercises Phase F1: switch sheet action opening the full exercise picker",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다른 운동 선택…"
+          }
+        }
+      }
+    },
     "Choose Exercise" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1164,6 +1223,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "사용자 지정 부분 반복 메모"
+          }
+        }
+      }
+    },
+    "Custom Per Set" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트별 지정"
           }
         }
       }
@@ -1648,6 +1718,18 @@
         }
       }
     },
+    "Enabled" : {
+      "comment" : "Alternative Exercises Phase D: toggle controlling whether an alternative is offered when switching",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용"
+          }
+        }
+      }
+    },
     "End" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1795,6 +1877,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 슬롯"
+          }
+        }
+      }
+    },
+    "Exercise unavailable" : {
+      "comment" : "Alternative Exercises Phase F1: shown on a prepared alternative whose exercise was deleted from the library",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동을 찾을 수 없음"
           }
         }
       }
@@ -2061,7 +2155,14 @@
       }
     },
     "Help" : {
-
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "도움말"
+          }
+        }
+      }
     },
     "History" : {
       "extractionState" : "manual",
@@ -2483,7 +2584,14 @@
       }
     },
     "More information" : {
-
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가 정보"
+          }
+        }
+      }
     },
     "Name" : {
       "localizations" : {
@@ -2522,6 +2630,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "다음"
+          }
+        }
+      }
+    },
+    "No alternatives added" : {
+      "comment" : "Alternative Exercises Phase D: empty state for the alternatives list",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가된 대체 운동 없음"
           }
         }
       }
@@ -2863,6 +2983,18 @@
         }
       }
     },
+    "Off" : {
+      "comment" : "Alternative Exercises Phase D: marker on a disabled alternative row",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "꺼짐"
+          }
+        }
+      }
+    },
     "OK" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2912,6 +3044,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "기타"
+          }
+        }
+      }
+    },
+    "Other Options" : {
+      "comment" : "Alternative Exercises Phase F1: switch sheet section header above 'Choose another exercise…'",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기타 옵션"
           }
         }
       }
@@ -3042,6 +3186,17 @@
         }
       }
     },
+    "Per-set effort editing during workout is not available yet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 중에는 아직 세트별 강도를 편집할 수 없습니다."
+          }
+        }
+      }
+    },
     "Personal Record" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3081,6 +3236,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "원판"
+          }
+        }
+      }
+    },
+    "Prepared Alternatives" : {
+      "comment" : "Alternative Exercises Phase F1: switch sheet section header listing the slot's prepared alternatives",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "준비된 대체 운동"
           }
         }
       }
@@ -3785,6 +3952,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "저장하면 기록된 모든 세트가 유지됩니다. 삭제하면 운동이 영구적으로 삭제됩니다."
+          }
+        }
+      }
+    },
+    "Same Target" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "동일 목표"
           }
         }
       }
@@ -4535,6 +4713,18 @@
         }
       }
     },
+    "This is already the slot's exercise." : {
+      "comment" : "Alternative Exercises Phase D: authoring-time note when an alternative names the slot's own exercise",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이미 이 슬롯에 사용 중인 운동입니다."
+          }
+        }
+      }
+    },
     "This removes the option from the picker list. Exercises already using this value will keep it until you change them." : {
       "localizations" : {
         "ko" : {
@@ -4780,7 +4970,14 @@
       }
     },
     "User Guide" : {
-
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용자 가이드"
+          }
+        }
+      }
     },
     "Volume" : {
       "localizations" : {

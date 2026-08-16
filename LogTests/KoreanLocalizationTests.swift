@@ -542,4 +542,184 @@ final class KoreanLocalizationTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Alternative Exercises (Phase D)
+
+    /// Every string the routine editor's Alternative Exercises screens
+    /// introduce. The three tools an alternative can carry (`Warmup`,
+    /// `Techniques`, `Structured Cardio`) are deliberately **not** here: the
+    /// summary reuses those existing keys rather than inventing a second name
+    /// for each, and they are already covered above.
+    private static let alternativeExerciseKeys = [
+        "Alternative Exercises",
+        "Add Alternative",
+        "No alternatives added",
+        "Alternatives appear when you switch this exercise during a workout.",
+        "Off",
+        "Enabled",
+        "This is already the slot's exercise.",
+    ]
+
+    func testAlternativeExerciseStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.alternativeExerciseKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Alternative Exercises string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testAlternativeExerciseStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.alternativeExerciseKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// Every string the active workout's Prepared Alternatives sheet
+    /// introduces. A Korean user meets these mid-set, one tap from switching an
+    /// exercise, so an untranslated string here is expensive.
+    private static let preparedAlternativeKeys = [
+        "Prepared Alternatives",
+        "Other Options",
+        "Choose another exercise…",
+        "Exercise unavailable",
+    ]
+
+    func testPreparedAlternativeStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.preparedAlternativeKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Prepared Alternatives string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testPreparedAlternativeStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.preparedAlternativeKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// The switch flow's other two screens are already localized: the sheet
+    /// hands off to the existing picker and the existing destructive
+    /// confirmation, so a Korean switch is Korean end to end.
+    func testSwitchFlowHandoffStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in ["Pick Exercise", "Cancel", "Switch and Remove Sets"] {
+            XCTAssertNotEqual(
+                localized(key, in: ko), key,
+                "Switch flow string has no Korean translation: \(key)")
+        }
+    }
+
+    /// The summary's presence flags reuse the prescription editor's own row
+    /// titles, so an alternative's subtitle is Korean end to end.
+    func testAlternativeSummaryFlagLabelsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in ["Warmup", "Techniques", "Structured Cardio", "None"] {
+            XCTAssertNotEqual(
+                localized(key, in: ko), key,
+                "Alternative summary flag has no Korean translation: \(key)"
+            )
+        }
+    }
+
+    // MARK: - Effort targets (RIR/RPE modes)
+
+    /// Every string the final effort-target system introduces, plus the four
+    /// it **reuses** rather than inventing new names for (`None`,
+    /// `Progression`, `Start`, `End`, `Set %lld`, `Effort`). A Korean lifter
+    /// meets these while programming a routine, so an untranslated row here
+    /// means an English word in the middle of a Korean form.
+    private static let effortTargetKeys = [
+        "Effort",
+        "None",
+        "Same Target",
+        "Progression",
+        "Custom Per Set",
+        "Start",
+        "End",
+        "Set %lld",
+        "Set targets: %@",
+        "Add at least one set to enter per-set targets.",
+        "Progression editing during workout is not available yet.",
+        "Per-set effort editing during workout is not available yet.",
+    ]
+
+    func testEffortTargetStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.effortTargetKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Effort target string has no Korean translation "
+                + "(still renders English): \(key)"
+            )
+        }
+    }
+
+    func testEffortTargetStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.effortTargetKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)"
+            )
+        }
+    }
+
+    /// The per-set row label carries the set number; a translation that dropped
+    /// the placeholder would render every row as the same untitled stepper.
+    func testKoreanPerSetRowLabelKeepsTheNumberPlaceholder() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        XCTAssertTrue(localized("Set %lld", in: ko).contains("%lld"))
+        XCTAssertTrue(localized("Set targets: %@", in: ko).contains("%@"))
+    }
+
+    /// The Settings → Help → User Guide path itself, plus the info-button
+    /// label that sits beside it in the design system.
+    ///
+    /// These went untranslated while the guide *content* was fully localized,
+    /// which is the worst version of the bug: a Korean tester is told to open
+    /// 설정 → 도움말 → 사용자 가이드 and finds two English rows on the way to a
+    /// Korean document.
+    private static let guideAndHelpKeys = [
+        "Help",
+        "User Guide",
+        "More information",
+    ]
+
+    func testGuideAndHelpStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.guideAndHelpKeys {
+            XCTAssertNotEqual(
+                localized(key, in: ko), key,
+                "Guide/help string has no Korean translation: \(key)"
+            )
+        }
+    }
+
+    func testGuideAndHelpStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.guideAndHelpKeys {
+            XCTAssertEqual(localized(key, in: en), key)
+        }
+    }
 }

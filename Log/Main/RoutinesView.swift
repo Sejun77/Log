@@ -362,7 +362,13 @@ struct RoutinesView: View {
     /// routine or any app data; on encode failure surfaces a friendly alert.
     private func exportRoutine(_ r: Routine) {
         do {
-            let document = RoutineTransfer.export(r)
+            // The library is passed for one reason: a slot's prepared
+            // alternatives reference their exercise by `id`, and the transfer
+            // format references exercises by name (+ hints). Read-only, and an
+            // empty fetch simply falls back to each alternative's frozen name.
+            let library =
+                (try? ctx.fetch(FetchDescriptor<Exercise>())) ?? []
+            let document = RoutineTransfer.export(r, exercises: library)
             let data = try RoutineTransfer.makeJSONEncoder().encode(document)
             guard let text = String(data: data, encoding: .utf8) else {
                 exportErrorMessage = "Couldn\u{2019}t encode the routine for export."
