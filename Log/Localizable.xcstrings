@@ -89,6 +89,26 @@
     "%lld" : {
 
     },
+    "%lld alternative" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 %lld개"
+          }
+        }
+      }
+    },
+    "%lld alternatives" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 %lld개"
+          }
+        }
+      }
+    },
     "%lld exercise" : {
       "localizations" : {
         "ko" : {
@@ -151,6 +171,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "세트 %lld개"
+          }
+        }
+      }
+    },
+    "%lld slots" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "슬롯 %lld개"
           }
         }
       }
@@ -2323,6 +2353,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "잘못된 행 (%lld)"
+          }
+        }
+      }
+    },
+    "It is also used as %lld prepared alternative, which will be removed." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동은 준비된 대체 운동 %lld개로도 사용 중이며, 함께 삭제됩니다."
+          }
+        }
+      }
+    },
+    "It is also used as %lld prepared alternatives, which will be removed." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동은 준비된 대체 운동 %lld개로도 사용 중이며, 함께 삭제됩니다."
           }
         }
       }
@@ -4934,6 +4984,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "풀업, 딥스처럼 체중이 포함되는 운동의 기록 부하 계산에 사용됩니다. 설정하지 않으려면 비워 두세요. 위에 표시된 단위로 저장됩니다."
+          }
+        }
+      }
+    },
+    "Used as %lld alternative" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 %lld개로 사용"
+          }
+        }
+      }
+    },
+    "Used as %lld alternatives" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 %lld개로 사용"
           }
         }
       }
