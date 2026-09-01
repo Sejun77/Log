@@ -184,6 +184,34 @@ What to report:
 - Korean wording issues on the effort target labels (동일 목표 / 프로그레션 /
   세트별 지정) — confusing, clipped, or still in English
 
+### Deleting an Exercise Used as an Alternative (Build 10)
+
+New in Build 10: the Exercises tab now knows when an exercise is used as a
+prepared alternative, and says so before you delete it.
+
+- [ ] In **Exercises**, open an exercise that is used **only** as an Alternative
+      Exercise (not added to any routine directly)
+- [ ] Confirm it does **not** appear unused — it should say it is used as an
+      alternative, not "Used in 0 routines"
+- [ ] Try deleting it
+- [ ] Confirm the delete warning mentions **prepared alternatives**
+- [ ] Confirm the deletion goes through
+- [ ] Reopen the routine that had it as an alternative
+- [ ] Confirm the alternative is gone, with no leftover "Exercise unavailable"
+      row
+- [ ] Confirm any *other* alternatives on that slot are still there and unchanged
+- [ ] Confirm the routine itself still works — open it and start a workout
+
+What to report:
+
+- an exercise still reading as unused when a routine relies on it as an
+  alternative
+- a delete warning that does not mention prepared alternatives
+- other alternatives disappearing when only one should have
+- a leftover "Exercise unavailable" row after the delete
+- anything about the routine that looks broken afterwards
+- clipped or awkward Korean wording in the usage line or the delete warning
+
 ---
 
 ## Feedback Questions

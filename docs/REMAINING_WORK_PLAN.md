@@ -397,8 +397,15 @@ Useful, realistic, user-facing items worth implementing soon.
   `RoutineBlockBuilder.swift`, `ExerciseMultiSelectionTests.swift`,
   `RoutineBlockBuilderTests.swift`.)
 
-### 2.3 "Used in Routines" summary on Exercise detail — ✅ SHIPPED (2026-05-27)
+### 2.3 "Used in Routines" summary on Exercise detail — ✅ SHIPPED (2026-05-27), extended by Build 10 C1
 - **Source:** Phase 9-D pending bullet (deferred to Phase 10).
+- **Build 10 C1 extension (✅ SHIPPED):** this section counted **direct routine
+  slots only**, so an exercise referenced solely as a prepared **Alternative
+  Exercise** reported `"Used in 0 routines"` plus the "add it to a routine"
+  helper text — immediately above the Delete button that would strand that
+  prepared work, and deletion then left dangling alternatives behind. See
+  §2.28 for the fix; the counting rules described below still hold for the
+  direct-slot half.
 - **Status:** **Done.** Exercise detail now has a read-only **"Used in Routines"**
   section. The final shipped version **lists routine names**, not just a count:
   - Unused → `"Used in 0 routines"` plus helper text telling the user that adding
@@ -1453,6 +1460,73 @@ see §2.12** — kept separate from the search-policy commit as planned.
   prefill, parent-logged → percentage switch, edited-then-logged, no-history, warm/cold resume, undo,
   "↩ suggest", superset, rest timer / Live Activity / Finish). Drop-count grow/shrink is covered by
   service/helper tests rather than manual repro (it needs a between-session dropset-config edit).
+
+### 2.28 Exercise usage & deletion vs. prepared Alternative Exercises (Build 10 C1) — ✅ SHIPPED
+- **Source:** Build 10 UX audit, filed as the audit's single **Critical**. Extends §2.3.
+- **Problem:** `ExerciseRoutineUsage` scanned direct `RoutineExercise` slots only.
+  Alternatives live inside `SlotPrescription.alternativesData`, so an exercise used
+  **only** as a prepared alternative reported `"Used in 0 routines"` with the
+  "add this exercise to a routine" empty state — directly above the Delete button.
+  The delete-impact message was equally blind, and the delete path pruned nothing,
+  leaving dangling `exerciseID` references that resurfaced mid-workout as disabled
+  `Exercise unavailable` rows in routines the user had no way to repair. The UI
+  actively misinformed the user before an irreversible action.
+- **Status: Done.**
+  - **Usage counting.** `ExerciseRoutineUsage` now also reads each slot's
+    `prescription.slotAlternatives` and matches on `SlotAlternative.exerciseID`.
+    Direct and alternative usage are counted **separately and never summed**
+    (`slotCount` / `alternativeCount`); a routine referencing the exercise both
+    ways is still one entry. Summary reads `Used as 3 alternatives` when there is
+    no direct usage, `Used in 2 routines · 3 alternatives` when there is both, and
+    is unchanged for the direct-only and unused cases. Row suffixes gained
+    `· N alternatives`; a single alternative is always named (unlike a single
+    slot, which stays suppressed) because it is not visible anywhere else on the
+    screen. Disabled alternatives count — still prepared work.
+  - **Empty state** now gates on `isUsed`, so it no longer appears for an
+    alternative-only exercise.
+  - **Delete confirmation** warns and names the count. The pre-C1 direct-usage
+    sentence is preserved word for word; the alternatives warning is appended as
+    its own sentence.
+  - **Delete cleanup** prunes matching alternatives from every slot of every
+    routine via `setSlotAlternatives`, so survivors keep ids and prescriptions and
+    are densely reordered, and a slot's last alternative clears the column to nil.
+    A nil / empty / corrupt payload matches nothing and is left byte-identical.
+- **Product decision:** prune at delete time rather than strand. This **reverses**
+  `ALTERNATIVE_EXERCISES_DESIGN.md` §15 open question 6, which rejected pruning —
+  that rejection was aimed at a *silent periodic sweep*; this prunes only on an
+  explicit user delete that is now confirmed with a warning naming the loss. The
+  disabled `Exercise unavailable` row is retained for the case it was actually
+  written for: an in-flight session whose frozen `SessionPlan.alternatives` names
+  an exercise deleted mid-workout. Session plans are not pruned.
+- **Implementation:** `Log/Services/ExerciseRoutineUsage.swift` (extended) and new
+  `Log/Services/ExerciseDeletionService.swift`, holding the pure
+  `ExerciseDeletionImpact` (counting + confirmation copy) and the
+  `ExerciseDeletionService` cleanup — both lifted out of `ExercisesView`'s alert
+  closure so they are unit-testable, mirroring the existing
+  `ExerciseSwitchDeletionImpact` / `ExerciseSwitchConfirmationCopy` split.
+- **Pre-existing bug found and fixed en route:** the direct-slot cleanup called
+  `ctx.delete` **without first detaching children from the parent
+  `@Relationship`**, so blocks kept tombstones and the closing `ctx.save()` failed
+  validation silently under `try?`. Harmless while nothing depended on that save;
+  not harmless once alternative pruning writes in the same transaction. The
+  direct-slot half now routes through the already-tested
+  `RoutineBlockBuilder.deleteBlock` / `.removeExercises`, and both cleanups run
+  **before** `ctx.delete(exercise)` — `Exercise.routineUsages` cascades, so
+  afterwards the slots being searched for are nil-`exercise` tombstones. Deletion
+  rules themselves (superset block deleted whole, normal block slots unlinked and
+  renumbered) are unchanged and pinned by tests.
+- **No schema change**, no active-workout switch behavior change, no effort-target
+  logic change, no cardio / History / transfer / duplication change.
+- **Localization:** 7 new keys with Korean, added purely additively to
+  `Localizable.xcstrings`. The confirmation is now built with `String(localized:)`,
+  so unlike the pre-C1 raw interpolation it actually resolves at runtime.
+- **Tests:** `ExerciseAlternativeUsageTests` (12) appended to
+  `LogTests/ExerciseRoutineUsageTests.swift`, new
+  `LogTests/ExerciseAlternativeDeletionTests.swift` (18), and 3 added to
+  `KoreanLocalizationTests`. **Full scheme passes: 2,315 tests, 0 failures** —
+  2,313 unit tests plus 2 UI tests. Debug build succeeds and Release build
+  succeeds. Manual on-device re-check of the dialog copy at Korean string lengths
+  is still pending.
 
 ## 3. Optional / Future Features
 

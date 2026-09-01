@@ -66,13 +66,20 @@ in real use? `[TBD]`
 
 ## TestFlight Setup
 
-- Build prepared for TestFlight: `[TBD]`
-- Build number / version tested: `[TBD]`
+- Build prepared for TestFlight: **Build 9 — uploaded**
+- Build number / version tested: **1.0 (9)**
 - Internal vs. external testing group: `[TBD]`
 - Beta notes sent to testers: `[TBD]`
 - Date invites sent: `[TBD]`
 
-TestFlight setup is planned; details filled in once the build is up.
+Build 9 carries the cardio system, Alternative Exercises end-to-end, Custom Per
+Set RIR/RPE effort targets, the improved automatic RIR/RPE progression, the
+destructive confirmation before removing logged sets, and the updated
+guide/tester docs.
+
+**Build 10 work has started.** It opens with a safety/UX fix to Alternative
+Exercises deletion handling (see the Build 10 entry under *Fixes Made* below);
+Build 9 is unaffected and stays in testers' hands.
 
 ---
 
@@ -115,6 +122,10 @@ The checklist testers are asked to walk through (full version in
 - _(optional)_ Set an effort target on a routine exercise — Same Target,
   Progression, or Custom Per Set — and check the per-set targets during the
   workout
+- _(Build 10)_ Open an exercise that is used **only** as an Alternative
+  Exercise, confirm it does not read as unused, then delete it and confirm the
+  warning mentions prepared alternatives and the alternative is gone from the
+  routine afterwards
 
 ---
 
@@ -250,6 +261,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 - **Redesigned RIR/RPE effort targets**, built after the Build 8 prep and the Alternative Exercises work above, and scoped to the **next build (Build 9)**. Automatic **Progression** no longer lands on awkward half-step targets by default: endpoints are exact, interior sets round to whole numbers in the direction the metric means "easier", and the ramp stays monotonic. RIR 2 → 0 over 4 sets now resolves to **2, 2, 1, 0**, and RPE 8 → 10 over 4 sets resolves to **8, 8, 9, 10**, instead of the half-step values the old nearest-0.5 interpolation produced. Alongside it, a third mode — **Custom Per Set** — lets a user type the exact target for every set, half steps included, such as **2, 1.5, 1, 0**; custom values are stored verbatim and are never rounded. The list is stored as a comma-separated column, fitted to the set count on both write and read (extra sets repeat the last authored target, removed sets truncate, earlier targets are never touched), and rejected whole rather than element-wise if a hand-edited document is malformed, so a bad entry can never shift a later set's target onto the wrong set. Custom targets preserve through routine editing, the active workout, Save & Exit → Resume, Alternative Exercises, routine duplication, and routine transfer export/import. Switching between modes seeds sensible values rather than discarding them, and the None / Same Target / Progression behavior that already shipped is unchanged for slots that do not opt into Custom Per Set.
 - Stopped the host app from requesting **notification authorization during XCTest-hosted runs**. The app already skipped the request under UI tests via the `--ui-testing` launch argument, but `LogTests` does not pass that argument, so the host app could raise a system permission dialog while XCTest was still establishing its connection to the runner — an occasional bootstrap flake that failed the run before any test executed. The launch gate now also checks `XCTestConfigurationFilePath` in the process environment, which XCTest sets only in a test-hosting process. Production launch behavior is unchanged: on device, TestFlight, App Store, or a normal Xcode Run the variable is absent and authorization is still requested exactly once per launch. UI test behavior is unchanged, and the in-workout authorization requests are untouched.
 
+- **Build 10 C1 — made exercise deletion account for prepared Alternative Exercises.** The first Build 10 fix, and a safety/UX one: `ExerciseRoutineUsage` counted only direct routine slots, so an exercise referenced *solely* as a prepared alternative reported the misleading **"Used in 0 routines"** on Exercise Detail — directly above a Delete button that would strand that prepared work. Deleting it removed nothing from the alternatives, leaving dangling references that resurfaced mid-workout as disabled `Exercise unavailable` rows in routines the user had no way to repair. Exercise usage now counts prepared alternatives alongside direct slots, kept as **separate** counts that are never summed (a routine referencing the exercise both ways is still counted once): Exercise Detail now reads `Used as 3 alternatives` when there is no direct usage, `Used in 2 routines · 3 alternatives` when there is both, and no longer offers the "add this exercise to a routine" empty state to an exercise several routines are relying on. The delete confirmation now names the prepared alternatives and their count. Deleting an exercise **prunes** the matching alternatives rather than leaving them dangling — the user chose to delete it from the library and the confirmation now says the prepared work goes with it — while non-matching alternatives keep their ids, their prescriptions, and a dense order, and removing a slot's last alternative clears the column to nil so "had them and lost them" persists identically to "never had any". A nil, empty, or corrupt alternatives payload matches nothing and is left byte-identical rather than rewritten. Disabled alternatives are counted and pruned like any other — they are still prepared work. No schema change, no active-workout switch behavior change, no effort-target logic change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -274,11 +287,26 @@ Current validation status:
   RPE 8 → 10 → 8, 8, 9, 10 cases), mode transitions, slot persistence, the
   active-workout targets, Save & Exit → Resume, alternative exercises carrying
   custom targets, duplication, and transfer export/import round-trips.
+- Alternative-exercise usage and deletion (Build 10 C1): tested at both halves —
+  usage counting for direct-only, alternative-only, and both-ways references,
+  disabled alternatives still counted, the empty-state gate, and a corrupt
+  payload counting zero rather than failing the scan; then the delete
+  confirmation wording for each of the three shapes (unused, direct-only,
+  alternatives present), pruning across every routine and slot, non-matching
+  alternatives surviving with ids and prescriptions intact, dense reordering of
+  survivors, the last alternative clearing the column to nil, no dangling
+  reference left behind, a corrupt column left untouched, and the pre-existing
+  direct-slot deletion rules (superset block deleted whole, normal block slots
+  unlinked and renumbered) still holding. Korean coverage added for the new
+  usage and delete-warning strings, including placeholder retention.
 - Manual switch/restart/History re-check on device: completed.
 - Manual custom-effort regression on device: **pending.**
-- Latest full test suite result: full scheme passes with **2,282 tests, 0
-  failures** — 2,280 unit tests plus 2 UI tests. Debug build succeeds and
-  Release build succeeds.
+- Manual Build 10 C1 re-check on device: **pending** — the automated coverage
+  walks the full delete-an-alternative-only-exercise scenario, but the dialog
+  copy has not been read on a real screen at Korean string lengths.
+- Latest full test suite result: **full scheme passes: 2,315 tests, 0 failures**
+  — 2,313 unit tests plus 2 UI tests. Debug build succeeds and Release build
+  succeeds.
 
 ---
 
@@ -375,6 +403,19 @@ This section will be written once the beta phase has more complete feedback. It 
 **Build 8:** prepared and archived for TestFlight with the cardio system and
 Alternative Exercises as its headline items. No upload is recorded in this
 repository.
+
+**Build 9:** **uploaded to TestFlight** — the cardio system, Alternative
+Exercises end-to-end, Custom Per Set RIR/RPE effort targets, the improved
+automatic RIR/RPE progression, the destructive confirmation before removing
+logged sets, and the updated guide/tester docs.
+
+**Build 10:** started. It opens with **C1**, a safety/UX fix to Alternative
+Exercises deletion handling: exercise usage now includes prepared alternatives,
+so an exercise used only as an alternative no longer reports the misleading
+"Used in 0 routines"; the delete confirmation now warns that prepared
+alternatives will be removed; and deleting an exercise prunes those
+alternatives instead of leaving dangling unavailable rows behind. Nothing here
+blocks Build 9, which stays in testers' hands.
 
 **Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
 landed after Build 8 was prepared: whole-step automatic Progression and the new

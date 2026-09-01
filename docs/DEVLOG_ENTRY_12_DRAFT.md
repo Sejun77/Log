@@ -25,7 +25,8 @@ and only after a smaller version of it had been in testers' hands long enough to
 show what it actually needed.
 
 The phase ends with the test suite repaired and passing, a manual regression
-done, and **build 7 prepared for TestFlight**.
+done, and **build 9 uploaded to TestFlight**. Build 10 work has since started;
+its first fix is recorded at the end of this entry.
 
 ---
 
@@ -191,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_As of the 2026-08-12 verification run. To be re-run and updated before upload._
+_Counts are from the latest verification run, after the Build 10 C1 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -200,14 +201,16 @@ _As of the 2026-08-12 verification run. To be re-run and updated before upload._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 1,968 tests, 0 failures** — 1,966 unit tests plus 2 UI
+- **Full scheme passes: 2,315 tests, 0 failures** — 2,313 unit tests plus 2 UI
   tests.
+- **Debug build succeeds.**
 - **Release build succeeds.**
 - **Manual regression completed** on device: routines, logging, exercise
   switching, cardio Details, the Cardio Plan checklist through Save & Exit and
   Resume, History, the charts, and timer behavior across backgrounding and
   reopening.
-- **Build 7 prepared for TestFlight — not yet uploaded.**
+- **Build 9 uploaded to TestFlight.** Build 10 work has started — see *Build 10*
+  below.
 
 The cardio work landed additively — new fields are optional and start empty — so
 existing workouts, routines, and history weren't rewritten and no data migration
@@ -249,17 +252,55 @@ TODO:
 
 - Add remaining fixes completed before upload
 - Update final test count if it changes
-- Update build status from "prepared for TestFlight" to "uploaded to TestFlight"
-  only after upload succeeds
+
+---
+
+## Build 10 — First Fix
+
+Build 9 is on TestFlight. Build 10 opens not with a feature but with a
+safety/UX fix to how deleting an exercise interacts with **Alternative
+Exercises** — the thing Build 9 shipped and the thing that made this reachable.
+
+Exercise usage was only ever counted from direct routine slots. Alternatives
+live inside a slot's prescription, so an exercise used *only* as a prepared
+alternative reported **"Used in 0 routines"** — on the same screen as the Delete
+button, immediately above it. Delete it and nothing cleaned up the alternatives
+pointing at it; they resurfaced mid-workout as disabled `Exercise unavailable`
+rows, in routines with no way to repair them.
+
+- **Exercise usage now includes prepared alternatives.** Direct slots and
+  alternatives are counted separately and never summed, so a routine that uses
+  an exercise both ways is still one routine. Exercise Detail reads `Used as 3
+  alternatives` when there is no direct usage, and `Used in 2 routines · 3
+  alternatives` when there is both.
+- **The "Used in 0 routines" case is fixed**, along with the "add this exercise
+  to a routine" empty state that used to appear underneath it.
+- **The delete confirmation now warns about prepared alternatives** and names
+  the count.
+- **Deleting an exercise prunes the matching alternatives** instead of leaving
+  dangling unavailable rows. Non-matching alternatives are preserved untouched,
+  and a slot that loses its last one goes back to storing nothing at all.
+
+The pruning is a deliberate reversal of a design-doc decision, and worth being
+straight about: the original design rejected sweeping up alternatives whose
+exercise was deleted, on the grounds that silently destroying prepared work is
+worse than showing a dead row. That reasoning holds for a *silent* sweep. This
+is not one — it happens only at the moment the user deletes the exercise, and
+only after a confirmation that says the prepared alternatives go with it. The
+disabled `Exercise unavailable` row still exists for the case it was really
+written for: a workout already in progress, whose frozen session plan still
+names an exercise deleted mid-session.
+
+No schema change, no active-workout switch behavior change, no effort-target
+logic change.
 
 ---
 
 ## Next Steps
 
-- Finish the remaining pre-upload fixes.
-- Re-run the full test suite and the release build.
-- Upload build 7 to TestFlight and monitor processing.
-- Get it to the small friends-and-family group and let them use it during real
+- Continue Build 10 from the UX audit backlog.
+- Re-run the full test suite and the release build before the next upload.
+- Get Build 9 feedback from the small friends-and-family group during real
   training.
 - Collect feedback, especially on confusing steps and on Korean wording.
 - Fix confusing UI and translation problems **before** adding major new features —
