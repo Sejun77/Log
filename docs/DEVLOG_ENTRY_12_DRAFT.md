@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C5 fix._
+_Counts are from the latest verification run, after the Build 10 C6 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C5 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,344 tests, 0 failures** — 2,342 unit tests plus 2 UI
+- **Full scheme passes: 2,363 tests, 0 failures** — 2,361 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -425,6 +425,39 @@ label.
 The selection is view state and is not saved. The locale default is right on
 essentially every launch, and remembering an override past the session that
 prompted it would be a small, permanent way to be wrong.
+
+---
+
+## Build 10 — Saying What the Effort Targets Do
+
+Five audit findings, one feature. Effort targets are the most conceptually
+loaded thing in the app — RIR, RPE, a progression that rounds in a particular
+direction, a per-set list — and the UI around them explained almost none of it.
+
+- **The mode picker named four modes and defined none.** There is now an info
+  button under it listing all four in a sentence each, and the guide, which had
+  described three ways since before Custom Per Set shipped, now describes four.
+  `None` was the mode a user could select and then find explained nowhere.
+- **Turning autoregulation off looked like deletion.** The effort controls are
+  hidden when autoreg is `None` — reasonably — but a slot with authored targets
+  showed nothing at all, so the targets appeared to be gone. A read-only line
+  now says they are saved and names the setting that brings them back. It
+  appears only when there is actually something saved.
+- **The in-session copy said "not available yet."** A progression is frozen at
+  session start and the rows render it; that is a decision, not a gap. It now
+  says the targets are fixed for this session.
+- **A ten-set custom list printed all ten values** into a one-line row, pushing
+  everything before it off the end. Four values, then an ellipsis.
+- **And one separator was wrong**: the editor's live preview joined per-set
+  values with the same `" · "` that separates whole summary segments, so
+  `Set targets: 2 · 1 · 0` read as three segments instead of one list.
+
+The one that took the most care was the truncation, because a display rule that
+touches a value list is one bad line away from being a data rule. The test that
+matters there is not the one checking the ellipsis renders — it is the one
+asserting that after summarizing, the stored CSV, the resolved values and every
+per-set label are byte-for-byte what they were. A summary is allowed to say
+less; it is never allowed to make the thing it summarizes smaller.
 
 ---
 

@@ -80,9 +80,9 @@ guide/tester docs.
 **Build 10 work has started.** It opens with a safety/UX fix to Alternative
 Exercises deletion handling (C1), followed by a Korean terminology and naming
 pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
-discoverability pass (C4) and a User Guide language default (C5) — see the
-Build 10 entries under *Fixes Made* below. All five are UX polish, not Build 9
-blockers; Build 9 is
+discoverability pass (C4), a User Guide language default (C5) and an
+effort-target clarity pass (C6) — see the Build 10 entries under *Fixes Made*
+below. All six are UX polish, not Build 9 blockers; Build 9 is
 unaffected and stays in testers' hands.
 
 ---
@@ -141,6 +141,9 @@ The checklist testers are asked to walk through (full version in
 - _(Build 10)_ Open the in-app User Guide and confirm it opens in your phone's
   language, with a switch at the top for the other one — you should not have to
   scroll through a guide you cannot read
+- _(Build 10)_ On a routine exercise, tap the info button under the effort mode
+  picker and say whether the four modes are explained clearly enough to choose
+  between them
 
 ---
 
@@ -286,6 +289,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C5 — the in-app User Guide now opens in the device's language.** UX / onboarding polish, presentation only; neither guide's content changed. The guide rendered the full English guide, a divider, and then the full Korean guide — both, always, in that order — so a Korean tester scrolled past a guide they could not read to reach theirs, and an English tester ended every visit on a long Korean appendix. It is the first screen a new tester opens, which made it the worst place in the app for a scroll tax. It now shows **one** guide, chosen by the device language (Korean on a Korean phone, English otherwise), with a small **English / 한국어** segmented switch at the top for anyone who wants the other. The default rule is a pure `UserGuideLanguage.default(for:)` keyed on the **language, not the region** — a Korean speaker with a US region still gets Korean, a bare `ko` resolves, and every other language falls back to English, the only other guide there is; taking a `Locale` argument rather than reading `Locale.current` is what makes it unit-testable. Both guide arrays are intact and still held to matching section and item counts by the existing parity tests, which matters more now that a reader can flip between them on one screen. The selection is view state and is **not persisted**: the locale default is right on essentially every launch, and remembering an override past the session that prompted it would be a small permanent way to be wrong. The two switch titles are deliberately **not** translated — a language switcher names each language in its own language — so the only new key is the one nobody sees: `Guide language` → `가이드 언어`, the picker's VoiceOver label. `docs/USER_GUIDE.md` was not touched; this changes presentation, not content. No schema, persistence, lifecycle, set-logging, rest-timer, switch, alternatives, effort-target, cardio, History, transfer or duplication change.
 
+- **Build 10 C6 — explained the effort targets, and stopped hiding saved ones.** UX / clarity polish covering five audit findings on one feature; wording, helper text and summary formatting only. The **mode picker offered four modes and defined none of them**, so an info button under it now lists all four — None, Same Target, Progression, Custom Per Set — one sentence each, in Korean using the picker's own translations; the in-app guide and `docs/USER_GUIDE.md` had described *three* ways since before Custom Per Set shipped and now describe four, with `None` added as the first. Setting **Autoregulation to None looked like deletion**: the effort controls are hidden, reasonably, but a slot with authored targets showed nothing at all, so a read-only line now says the targets are saved and names the setting that brings them back — shown only when something is actually saved, never editable, and it writes nothing. The **in-session copy said "not available yet"** for a progression that is deliberately frozen at session start; it now says the targets are fixed for this session, and the two superseded strings were deleted from the catalog rather than left stale. A **ten-set custom list printed all ten values** into a one-line row and pushed the segments before it off the end; summaries now show four values then an ellipsis (`RIR 3/3/2/2…`), counted against the list fitted to the set count. And the editor's live preview joined per-set values with `" · "` — the separator that divides whole summary segments — so `Set targets: 2 · 1 · 0` read as three segments rather than one list; the rule is now `/` inside a value list and `" · "` between segments, matching the block subtitle and the alternative summary. All of it is display: `resolve`, the per-set labels and the stored comma-separated list are untouched, pinned by a test asserting they are byte-for-byte unchanged after a summary is taken. No schema, migrations, stored effort fields, `EffortMode` raw values, custom-target persistence, effort resolution, lifecycle, set-logging, rest-timer, switch, alternatives, deletion, cardio, History-schema, transfer or duplication change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -330,6 +335,11 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C6 re-check on device: **pending** — two items: the info
+  button's placement under the mode picker is the one layout judgment call in
+  the slice (a Picker owns its row's tap, so the glyph could not go in its
+  label), and the autoreg-off saved-targets row is unit-tested as a rule but has
+  never been seen in the real editor.
 - Manual Build 10 C5 re-check on device: **pending** — the tests pin the
   language rule but not the wiring of `Locale.current` into the view's state, so
   what needs a real device is launching in each language and seeing the right
@@ -378,8 +388,22 @@ Current validation status:
   `KoreanLocalizationTests` (the picker's accessibility label in both bundles).
   No existing test was weakened — the structural-parity tests read the guide
   arrays directly and still hold both to matching shape.
-- Latest test suite result: **full scheme passes: 2,344 tests, 0 failures** —
-  2,342 unit tests plus 2 UI tests (Build 10 C5 run). Debug build succeeds and
+- Effort-target clarity (Build 10 C6): 15 tests added to
+  `EffortTargetResolverTests` (a custom summary elides after four values and not
+  at four or fewer, elision follows the set count, and — the one that matters —
+  elision changes neither the stored list nor `resolve` nor the per-set labels;
+  separators consistent; saved-target presence in every shape, absent when
+  empty, an unusable custom list not counted, presence independent of the stored
+  mode), 3 to `UserGuideContentTests` (all four modes in both languages, the
+  intro's count matches the list under it, "three ways" never returns) and 5 to
+  `KoreanLocalizationTests` (the new keys localize, English unchanged, the
+  explanation names all four modes using the picker's own Korean, the superseded
+  "not available yet" keys are gone, the saved-targets row names both halves).
+  One existing test was **updated, not weakened**: the effort key list named the
+  two superseded strings and failed on the first run; those entries now name the
+  replacement copy, and a new test pins the old keys' absence.
+- Latest test suite result: **full scheme passes: 2,363 tests, 0 failures** —
+  2,361 unit tests plus 2 UI tests (Build 10 C6 run). Debug build succeeds and
   Release build succeeds.
 
 ---
@@ -505,8 +529,13 @@ the active workout's Switch Exercise row carries the same count, and the switch
 sheet is titled by its action with the replaced exercise moved to a subtitle.
 **C5** makes the in-app User Guide open in the device's language — one guide
 rather than English and Korean stacked back to back — with an English / 한국어
-switch for the other. All five are UX polish. Nothing here blocks Build 9, which
-stays in testers' hands.
+switch for the other. **C6** is an effort-target clarity pass: the routine
+editor now explains all four effort modes, the guide documents `None` as the
+fourth, turning autoregulation off no longer makes saved targets look deleted,
+the in-session copy states the rule instead of reading like an unfinished
+feature, and a long custom per-set summary stops at four values with an
+ellipsis. All six are UX polish. Nothing here blocks Build 9, which stays in
+testers' hands.
 
 **Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
 landed after Build 8 was prepared: whole-step automatic Progression and the new

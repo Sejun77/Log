@@ -328,6 +328,39 @@ What to report:
 
 ---
 
+### Effort Targets, Explained (Build 10)
+
+Changed in Build 10: the routine editor now explains what the four effort
+modes do, saved targets no longer disappear when autoregulation is off, and a
+long per-set target list no longer runs off the end of a row. How targets
+themselves work has not changed.
+
+- [ ] On a routine exercise, tap the info button under the effort mode picker
+      and read the four modes — say whether you could choose between them from
+      that alone
+- [ ] Set **Custom Per Set** with 4 targets and confirm the summary shows all
+      four
+- [ ] Add more sets so there are more than 4 targets, and confirm the summary
+      ends in `…` rather than running long
+- [ ] Confirm each set row still shows its own full target during the workout
+- [ ] In **Settings**, set Autoregulation to **None**, reopen the exercise, and
+      confirm it says the targets are saved rather than showing nothing
+- [ ] Turn RIR or RPE back on and confirm the targets are exactly as you left
+      them
+- [ ] During a workout, open **Edit Plan** on a progression or per-set exercise
+      and confirm it says the targets are fixed for this session
+- [ ] Open the User Guide's effort section and confirm it lists four modes
+
+What to report:
+
+- a mode you still cannot tell apart from the others after reading the info
+- targets that look lost after turning autoregulation off, or different after
+  turning it back on
+- a set row showing a truncated or wrong target (the summary may shorten, the
+  rows must not)
+- any effort text clipped on a routine row, and on which phone
+- awkward Korean in any of the new explanations
+
 ## Feedback Questions
 
 Ask these after testing. Keep it conversational — a message or short call is

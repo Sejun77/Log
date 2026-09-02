@@ -1747,6 +1747,84 @@ see §2.12** — kept separate from the search-policy commit as planned.
   `@State`, and the segmented picker wants a small-device look (both titles are
   short, so this is a check rather than a worry).
 
+### 2.33 Effort-target clarity (Build 10 C6) — ✅ SHIPPED
+- **Source:** Build 10 UX audit — M3, M4, M5, M6 and L1, five findings that all
+  land on the same feature. **UX / clarity polish**, not a Build 9 blocker.
+  Wording, helper text and summary formatting only.
+- **M3 — the picker explained nothing.** It offers four modes and named none of
+  them. A caption row now sits directly under it in the app's existing
+  `Text` + `InfoButton` idiom (Cardio, Bodyweight), opening an alert that lists
+  all four: `None` / `Same Target` / `Progression` / `Custom Per Set`, in Korean
+  using the picker's own translations. **Not** placed inside the `Picker`'s
+  label: a Picker in a Form owns its whole row's tap, so a button in its label
+  would be swallowed by the menu. The keys live on a new pure `EffortTargetHelp`
+  so the view and its tests name one string rather than two hand-copied
+  literals.
+- **M2/M3 — the guide said three.** Both guides, both copies
+  (`UserGuideView.swift` and `docs/USER_GUIDE.md`): `three ways` → `four ways`,
+  `세 가지` → `네 가지`, and a new first item for `None` / `없음`. Item counts go
+  3 → 4 in both languages, so structural parity holds.
+- **M4 — autoreg off looked like deletion.** Autoreg `.none` rendered
+  `EmptyView()`, so a slot's authored targets simply vanished from the editor.
+  It now shows a read-only caption — *Effort targets saved — enable RIR/RPE in
+  Settings to edit.* — **only when targets actually exist**, from a new pure
+  `EffortTargetPresence.hasSavedTargets(in:)` (a single target, either
+  progression endpoint, or a decodable custom list, in either metric).
+  Deliberately independent of `effortModeRaw`: a slot left at `.none` with its
+  values intact is exactly the case that looked like data loss. A corrupt or
+  empty custom column is **not** counted, so the row never promises data the
+  editor could not show. Nothing is written; the row is not editable; Settings
+  behavior is untouched.
+- **M5 — roadmap copy in production.** *"Progression editing during workout is
+  not available yet."* → **"Progression targets are fixed for this session."**,
+  and the per-set equivalent; Korean *…이 세션에서 고정됩니다.* Editing is still
+  not enabled and `SessionPlan` is unchanged — the copy now states the rule
+  instead of implying a half-built feature. Both old keys were **deleted** from
+  the catalog rather than left stale, which is what lets a test assert their
+  absence.
+- **M6 — long custom summaries.** `EffortTargetResolver.summary` now shows up to
+  `maxSummaryTargets` (4) values then `…` — `RIR 3/3/2/2…` — instead of running
+  a 10-set list through a one-line row and pushing the segments before it out.
+  Elision counts against the list **fitted to the set count**, so a 3-set slot
+  holding a longer authored list still reads in full.
+- **L1 — separators.** `/` **inside** a value list, `" · "` **between** summary
+  segments. The resolver already followed this; the outlier was the routine
+  editor's live preview, which joined per-set values with `" · "` — the same
+  separator that divides segments — so `Set targets: 2 · 1 · 0` read as three
+  segments rather than one list. Now `2/1/0`, matching the block subtitle, the
+  alternative summary and the plan card. Progression keeps its `2 → 0` arrow.
+- **Display only.** `resolve`, `perSetStrings`, the stored CSV and every set row
+  are untouched — pinned by its own test. The elision reaches
+  `BlockPrescriptionSummary`, `SlotAlternativeSummary` and the in-session
+  read-only row, since all three call the same summary; that is the consistency
+  the slice wanted, and the rows behind the sheet still show every value.
+- **No schema change**, no migrations, no stored effort fields, no `EffortMode`
+  raw values, no custom-target persistence, no effort **resolution** change
+  (only summary formatting), no workout-lifecycle, set-logging, rest-timer,
+  switch, alternatives, deletion, cardio-calculation, History-schema, transfer
+  payload or duplication change. No project settings, signing, bundle ID, team,
+  marketing version or build number change.
+- **Tests:** 15 added to `EffortTargetResolverTests` (elides after four, does
+  not at four or fewer, elision follows the set count, **elision changes neither
+  the stored list nor `resolve` nor `perSetStrings`**, separators consistent;
+  presence in every shape, absent when empty, an unusable custom list not
+  counted, presence ignores the stored mode), 3 to `UserGuideContentTests` (all
+  four modes in both languages, the intro's count matches the list under it,
+  "three ways" never returns) and 5 to `KoreanLocalizationTests` (new keys
+  localize, English unchanged, the explanation names all four modes using the
+  picker's own Korean, the superseded roadmap keys are gone, the saved-targets
+  row names both halves).
+- **One existing test was updated, not weakened:**
+  `KoreanLocalizationTests.effortTargetKeys` listed the two "not available yet"
+  keys and failed on the first run. Those two entries were replaced with the new
+  copy — the strings were superseded, not dropped, and the list still covers the
+  same two screens — and a new test now pins that the old keys are absent.
+  **Full scheme passes: 2,363 tests, 0 failures** — 2,361 unit tests plus 2 UI
+  tests. Debug and Release builds succeed. Manual on-device verification is
+  still pending; the InfoButton's placement under the picker is the one layout
+  judgment call here, and the autoreg-off round trip is unit-tested as a rule
+  but never seen in the real editor.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.
