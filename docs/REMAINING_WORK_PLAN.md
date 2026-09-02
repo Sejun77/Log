@@ -1618,6 +1618,80 @@ see §2.12** — kept separate from the search-policy commit as planned.
   Sets at the top, plus the bottom bar on a small device, are exactly what a
   build cannot report.
 
+### 2.31 Alternative Exercises discoverability (Build 10 C4) — ✅ SHIPPED
+- **Source:** Build 10 UX audit, filed as a **UX / discoverability polish**
+  item, plus M13 (switch sheet title). Not a Build 9 blocker. Extends §2.28 and
+  the Phase D/F work.
+- **Problem:** prepared alternatives were authored deep inside a routine slot
+  and then invisible everywhere else. Nothing on the routine row, the Start
+  Workout screen or the active workout said a slot had any, so a user could not
+  confirm their prepared work had survived routine editing, duplication or
+  import without starting a workout and tapping Switch Exercise. The switch
+  sheet itself was titled with the exercise being *replaced*, which read as
+  "you are looking at Bench Press" rather than "you are switching away from it"
+  (M13).
+- **Status: Done.** Four surfaces, all display-only:
+  - **Routine editor block row.** `BlockPrescriptionSummary` gained an
+    `alternatives` count on its `.normal` case, appended last:
+    `3 × 8–12 · 90s rest · RIR 2 · 2 alternatives`. Superset rows are
+    unchanged — a block-level count would not say which of the block's
+    exercises owns it, the same reasoning that keeps effort off a superset row.
+  - **Start Workout.** The blocks section showed only "Exercise" plus names; it
+    now renders that same summary, computed once per section via `map(for:)`.
+    One summary source, so what a user confirms before starting is worded by
+    the screen they authored it on. Start-workout logic untouched; the two
+    added `@AppStorage` reads (distance unit, autoreg metric) only word the
+    summary and are never consulted when building or starting a plan.
+  - **Active workout Switch Exercise row.** A trailing secondary count when the
+    slot has offers, from `preparedAlternativeOffers(for:).count` — literally
+    the array the sheet is built from, so the badge cannot promise a row the
+    sheet will not show. Zero offers renders nothing and the picker still opens
+    directly, exactly as pre-F1.
+  - **M13.** The sheet is titled `Switch Exercise`; the replaced exercise moved
+    into a two-line section header (`Prepared Alternatives` over
+    `Replacing Bench Press`), with `.textCase(nil)` so a proper-noun name is
+    not header-capitalized. No restructuring was needed.
+- **Count rule:** **enabled only**, on both new counts — and for the badge that
+  comes free, because `PreparedAlternatives.offers` already filters `isEnabled`
+  and the slot's own exercise. A disabled alternative is prepared work the user
+  asked not to be offered, so counting it on a workout-facing row would
+  advertise something the switch sheet will not honor. An **unavailable**
+  (deleted-exercise) alternative still counts, because the sheet still shows its
+  row, disabled and named. The authoring row inside the slot keeps counting
+  every alternative, disabled included — a different question, unchanged. Both
+  halves are pinned by test names.
+- **Localization:** one new key, `Replacing %@` → `%@ 대체 중`. The counts and
+  both titles reuse keys the app already ships (`%lld alternative(s)` →
+  `대체 운동 %lld개` from C1, `Switch Exercise` → `운동 변경`,
+  `Prepared Alternatives` → `준비된 대체 운동`) — one Korean name for one thing,
+  on every screen it appears. Added purely additively; no catalog churn.
+- **Known trade-off:** `BlockRow`'s subtitle is `lineLimit(1)` in caption, so a
+  maximal cardio row (`3 × 45s · 5.0 km · 120s rest · RPE 8 → 10 ·
+  3 alternatives`) can truncate on a small phone, and truncation eats the tail —
+  which is the new segment. Full-word copy was chosen over a compact `2 alt` on
+  the preferred-copy rule; swapping it is a one-line change if the small-device
+  pass says otherwise. The Start Workout copy of the same string uses
+  `lineLimit(2)` and does not have the problem.
+- **No schema change**, no persistence, no `SlotAlternative` payload-format,
+  authoring, switch, destructive-confirmation, deletion, effort-target,
+  cardio-calculation, History, transfer, duplication, workout-lifecycle,
+  set-logging or rest-timer change. No project settings, signing, bundle ID,
+  team, marketing version or build number change. Every edit is a read or a
+  rendered string; nothing new is written or persisted.
+- **Tests:** 9 added to `BlockPrescriptionSummaryTests` (count present/absent,
+  singular vs plural, disabled excluded, all-disabled reads as none, count is
+  the last segment, corrupt payload counts zero, supersets exempt, value-in
+  initializer, `map` for Start Workout), 3 to `PreparedAlternativeSwitchTests`
+  (badge count equals offer count, an unavailable alternative still counts, no
+  offers means no badge) and 4 to `KoreanLocalizationTests` (new keys localize,
+  English unchanged, placeholders retained with both plural forms agreeing,
+  title differs from subtitle). No existing test was weakened or changed — the
+  `alternatives:` parameter defaults to zero, so every prior expectation stands
+  as written. **Full scheme passes: 2,338 tests, 0 failures** — 2,336 unit tests
+  plus 2 UI tests. Debug and Release builds succeed. Manual on-device
+  verification is still pending, with the small-screen truncation check above as
+  its first item.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.

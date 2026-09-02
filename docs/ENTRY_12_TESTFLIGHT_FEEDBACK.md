@@ -79,9 +79,9 @@ guide/tester docs.
 
 **Build 10 work has started.** It opens with a safety/UX fix to Alternative
 Exercises deletion handling (C1), followed by a Korean terminology and naming
-pass (C2) and an active-workout layout polish (C3) — see the Build 10 entries
-under *Fixes Made* below. All three are UX polish, not Build 9 blockers; Build 9
-is
+pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
+discoverability pass (C4) — see the Build 10 entries under *Fixes Made* below.
+All four are UX polish, not Build 9 blockers; Build 9 is
 unaffected and stays in testers' hands.
 
 ---
@@ -134,6 +134,9 @@ The checklist testers are asked to walk through (full version in
   confirm they ask different questions
 - _(Build 10)_ Start a workout and confirm the set rows are the first thing on
   the screen — say whether logging feels quicker to reach than it did in Build 9
+- _(Build 10)_ On a routine exercise that has prepared alternatives, check that
+  the routine row and the Start Workout screen both say how many there are
+  before you start, and that the Switch Exercise row says so during the workout
 
 ---
 
@@ -275,6 +278,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C3 — put the Sets section first on the active workout screen.** UX polish, layout order only; nothing behaves differently. The set rows were the **ninth** section in the list, under Session Notes, the future-prefill toggle, Exercise Notes, Switch Exercise, the Plan card, Equipment & Setup, warm-ups and the cardio checklist — so logging a normal working set meant scrolling past read-once admin content on every exercise, on every phone. Sets is now first, followed by the plan-shaped sections a user reads *while* logging (Plan, Warmup, the Cardio Plan checklist), then Equipment & Setup, then the read-once half (Switch Exercise, Exercise Notes, the prefill toggle, Session Notes). The header above the list did not move. No section was removed, renamed or collapsed behind a disclosure group, and no label or accessibility identifier changed; the list's own modifiers — inset-grouped style, scroll-to-dismiss-keyboard, the bottom Back / Next-Finish safe-area bar and its keyboard withdrawal, and the keyboard dismiss accessory — are untouched. Verified as a pure permutation by diffing the multiset of non-blank lines against the parent commit: seven comment lines removed, eleven added, every code line byte-identical and merely relocated. That check caught a real defect en route — the first pass swallowed the cardio checklist's call along with the comment above it, which would have compiled clean, passed the whole suite, and silently dropped the checklist from cardio workouts. No schema, persistence, lifecycle, rest timer, switch, alternatives, effort-target, cardio-calculation, History or transfer change.
 
+- **Build 10 C4 — made prepared Alternative Exercises visible before you need them.** UX / discoverability polish, display only; nothing behaves differently. Alternative Exercises shipped complete in Build 9 and then said nothing about itself: a slot's prepared alternatives were authored deep inside the routine slot and invisible on the routine row, the Start Workout screen and the active workout, so a user could not confirm the prepared work had survived routine editing, duplication or import without starting a workout and tapping Switch Exercise. The count now appears on all three. **Routine editor rows** append it to the summary that already states the plan — `3 × 8–12 · 90s rest · RIR 2 · 2 alternatives` — via a new count on `BlockPrescriptionSummary`; superset rows are exempt, since a block-level count would not say which exercise owns it. **Start Workout** listed only exercise names and now renders that same summary type, so a plan is worded identically on the screen you author it and the screen you confirm it; the start logic is untouched. **The Switch Exercise row** shows a count when the slot has offers, taken from the exact array the sheet is built from, so the badge can never promise a row the sheet will not show — and a slot with nothing to offer shows no badge and still opens the picker directly, as before. **M13** is fixed alongside: the sheet is titled `Switch Exercise` rather than the name of the exercise being replaced, which moved into a two-line section header (`Prepared Alternatives` over `Replacing Bench Press`). The **count rule** is "what tapping Switch Exercise will offer you": disabled alternatives are excluded — the user asked for them not to be offered, so counting them would advertise something the sheet will not honor — while a deleted exercise's alternative still counts, because the sheet still shows that row, named and disabled. The authoring row inside the slot still counts every alternative, disabled included. One new localized key (`Replacing %@` → `%@ 대체 중`); the counts and both titles reuse keys the app already ships. No schema, persistence, payload-format, authoring, switch, destructive-confirmation, deletion, effort-target, cardio-calculation, History, transfer, duplication, lifecycle, set-logging or rest-timer change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -319,6 +324,12 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C4 re-check on device: **pending** — and one item comes
+  first: the routine row's subtitle is a single line in caption, so a maximal
+  cardio row (`3 × 45s · 5.0 km · 120s rest · RPE 8 → 10 · 3 alternatives`) may
+  truncate on a small phone, and truncation eats the tail — which is the new
+  count. Needs a small-device pass; swapping the full word for a compact `2 alt`
+  is a one-line change if it reads badly.
 - Manual Build 10 C3 re-check on device: **pending** — the reorder is a pure
   view-tree permutation and builds clean either way, so what needs a real screen
   is first-focus keyboard behavior with Sets at the top and the bottom
@@ -335,8 +346,20 @@ Current validation status:
   test. The reorder was verified by diffing the multiset of non-blank lines
   against the parent commit: comment lines only, every code line relocated
   unchanged.
-- Latest test suite result: **full scheme passes: 2,323 tests, 0 failures** —
-  2,321 unit tests plus 2 UI tests (Build 10 C3 run). Debug build succeeds and
+- Alternative Exercises discoverability (Build 10 C4): 9 tests added to
+  `BlockPrescriptionSummaryTests` (count present and absent, singular vs
+  plural, disabled excluded, all-disabled reads as none, the count is the last
+  segment, a corrupt payload counts zero, supersets exempt, the value-in
+  initializer, and `map` for the Start Workout screen), 3 to
+  `PreparedAlternativeSwitchTests` (the badge count equals the offer count, an
+  unavailable alternative still counts, no offers means no badge) and 4 to
+  `KoreanLocalizationTests` (the new and reused keys localize, English
+  unchanged, placeholders retained with both plural forms agreeing, and the
+  sheet's title differs from its subtitle). No existing test was weakened or
+  changed: the new `alternatives:` parameter defaults to zero, so every prior
+  expectation stands as written.
+- Latest test suite result: **full scheme passes: 2,338 tests, 0 failures** —
+  2,336 unit tests plus 2 UI tests (Build 10 C4 run). Debug build succeeds and
   Release build succeeds.
 
 ---
@@ -455,8 +478,13 @@ the Korean guide now says to tap **완료** — not 종료 — to save a workout
 History. **C3** is an active-workout layout polish: the Sets section now comes
 first on the exercise screen instead of ninth, so logging no longer sits below
 session notes, the prefill toggle, exercise notes, Switch Exercise, the Plan
-card, Equipment & Setup, warm-ups and the cardio checklist. All three are UX
-polish. Nothing here blocks Build 9, which stays in testers' hands.
+card, Equipment & Setup, warm-ups and the cardio checklist. **C4** makes
+prepared Alternative Exercises visible before a workout starts: the routine row
+and the Start Workout screen now say how many enabled alternatives a slot has,
+the active workout's Switch Exercise row carries the same count, and the switch
+sheet is titled by its action with the replaced exercise moved to a subtitle.
+All four are UX polish. Nothing here blocks Build 9, which stays in testers'
+hands.
 
 **Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
 landed after Build 8 was prepared: whole-step automatic Progression and the new

@@ -272,6 +272,38 @@ What to report:
 
 ---
 
+### Seeing Prepared Alternatives Before You Start (Build 10)
+
+New in Build 10: a routine exercise that has prepared alternatives now says so
+before the workout, instead of only when you tap Switch Exercise mid-set.
+Nothing about how alternatives work has changed — this is only about where the
+count is shown.
+
+- [ ] Prepare two alternatives on a routine exercise, and turn a third one off
+- [ ] In the routine, confirm the row says **2 alternatives** — the one you
+      turned off is deliberately not counted
+- [ ] Confirm an exercise with no alternatives says nothing extra
+- [ ] Open **Start Workout** and confirm the count is visible there too, before
+      you start
+- [ ] Start the workout and confirm the **Switch Exercise** row shows the count
+- [ ] Tap Switch Exercise and confirm the sheet is titled **Switch Exercise**,
+      with the exercise you are replacing named under the header
+- [ ] Apply a prepared alternative and confirm it behaves exactly as it did in
+      Build 9
+- [ ] On a small phone, check a long routine row (a cardio exercise with a
+      distance target, rest and an effort range) and say whether the count at
+      the end is cut off
+
+What to report:
+
+- a count that does not match the alternatives you prepared
+- the alternative you turned off being counted
+- the count cut off at the end of a routine row, and on which phone
+- the switch sheet title or subtitle reading oddly, in either language
+- anything different about applying an alternative compared with Build 9
+
+---
+
 ## Feedback Questions
 
 Ask these after testing. Keep it conversational — a message or short call is

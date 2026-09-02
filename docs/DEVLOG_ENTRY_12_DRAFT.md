@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C3 fix._
+_Counts are from the latest verification run, after the Build 10 C4 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C3 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,323 tests, 0 failures** — 2,321 unit tests plus 2 UI
+- **Full scheme passes: 2,338 tests, 0 failures** — 2,336 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -356,6 +356,44 @@ cardio checklist's comment and swallowed the call underneath it. It would have
 compiled clean, passed all 2,323 tests, and silently dropped the checklist from
 every cardio workout, because nothing in the suite asserts that a section is on
 screen. A build succeeding is not the same as the screen being right.
+
+---
+
+## Build 10 — Telling People the Alternatives Are There
+
+The fourth Build 10 slice is the one the tester round arguably needed most.
+Alternative Exercises shipped in Build 9 as a complete feature — authored per
+slot, frozen into the session, offered mid-workout, carried through duplication
+and transfer — and then said nothing about itself anywhere. You prepared a
+backup for the bench press, and the next time the app mentioned it was when you
+tapped Switch Exercise mid-set. Whether your prepared work had survived editing
+a routine, duplicating it, or importing it from a file was, in practice,
+unanswerable without starting a workout.
+
+So the count now appears where the question gets asked:
+
+- **On the routine row**, appended to the summary that already states the
+  plan — `3 × 8–12 · 90s rest · RIR 2 · 2 alternatives`.
+- **On the Start Workout screen**, which previously listed only exercise names.
+  It now renders the *same* summary type as the routine editor, so a plan is
+  worded identically on the screen you author it and the screen you confirm it.
+- **Next to Switch Exercise during a workout**, counted from the exact array
+  the sheet is built from — so the badge cannot promise a row the sheet will
+  not show.
+
+The switch sheet also got its title fixed (M13): it is called **Switch
+Exercise** now, with "Replacing Bench Press" moved into the section header. It
+used to be titled with the name of the exercise you were leaving, which reads
+as a label for what you are looking at, not for what you are doing.
+
+One rule was worth deciding carefully: a **disabled** alternative is not
+counted. It is still prepared work, still listed in the editor, still preserved
+everywhere — but the user explicitly asked for it not to be offered, and a
+count on a workout-facing row that the workout will not honor is just a lie
+told in a smaller font. A **deleted** exercise's alternative does count,
+because the sheet still shows that row — named, disabled, and explaining
+itself. The rule is that these counts mean "what tapping Switch Exercise will
+offer you", and nothing else.
 
 ---
 
