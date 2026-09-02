@@ -64,7 +64,18 @@ struct SettingsView: View {
                 defaultsSection
                 dataSection
                 helpSection
-                showcaseSection
+                // Audit M9 — the Calculus showcase is a development artifact
+                // (an AP Calculus AB demo over in-memory sample data, in
+                // English only), and a TestFlight tester meeting it inside a
+                // gym app reasonably wonders what it is doing there. Gated at
+                // compile time rather than hidden at runtime: a Release build
+                // does not contain the row. `SettingsShowcaseVisibility` states
+                // the rule once so this block and its test cannot disagree.
+                #if DEBUG
+                    if SettingsShowcaseVisibility.isVisibleInThisBuild {
+                        showcaseSection
+                    }
+                #endif
             }
             .navigationTitle("Settings")
             .onAppear {
@@ -246,20 +257,27 @@ struct SettingsView: View {
         }
     }
 
-    private var showcaseSection: some View {
-        Section {
-            NavigationLink {
-                AnalyticsView()
-            } label: {
-                Label("Calculus Analytics", systemImage: "function")
+    /// Debug-only. See the `#if DEBUG` block in `body` and
+    /// `SettingsShowcaseVisibility` for why. `AnalyticsView` and its pure
+    /// calculation layers (`StrengthAnalytics`, `SampleWorkoutData`) are
+    /// untouched and still build in every configuration — this slice removes
+    /// the way *in*, not the showcase itself.
+    #if DEBUG
+        private var showcaseSection: some View {
+            Section {
+                NavigationLink {
+                    AnalyticsView()
+                } label: {
+                    Label("Calculus Analytics", systemImage: "function")
+                }
+            } header: {
+                Text("Showcase")
+            } footer: {
+                Text("AP Calculus AB demo using in-memory sample workout data. Does not touch your history.")
+                    .font(.caption)
             }
-        } header: {
-            Text("Showcase")
-        } footer: {
-            Text("AP Calculus AB demo using in-memory sample workout data. Does not touch your history.")
-                .font(.caption)
         }
-    }
+    #endif
 
     private func formatted(_ v: Double) -> String {
         v.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(v)) : String(format: "%.1f", v)
