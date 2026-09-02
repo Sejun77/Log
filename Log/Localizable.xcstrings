@@ -3331,6 +3331,18 @@
         }
       }
     },
+    "Planned effort" : {
+      "comment" : "History workout detail: label for the effort target this workout was started with. Planned, never achieved — no logged RIR/RPE exists.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "계획 강도"
+          }
+        }
+      }
+    },
     "Plate" : {
       "extractionState" : "stale",
       "localizations" : {

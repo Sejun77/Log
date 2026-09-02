@@ -606,6 +606,17 @@ private struct WorkoutDetailView: View {
         AppSettings.distanceUnit(isMetric: distanceIsMetric)
     }
 
+    /// H5a — the metric a planned effort target reads in. `@AppStorage` for the
+    /// same reason `distanceIsMetric` above is: a plain `UserDefaults` lookup in
+    /// `body` records no dependency, so an open History page would keep showing
+    /// RIR after Settings switched to RPE.
+    @AppStorage(AppSettings.Keys.autoregMode)
+    private var autoregModeRaw: String = AutoregMode.rir.rawValue
+
+    private var autoregMode: AutoregMode {
+        AutoregMode(rawValue: autoregModeRaw) ?? .rir
+    }
+
     private var isActive: Bool { activeGuard.activeWorkoutID == workout.id }
 
     private func exerciseName(for item: WorkoutItem) -> String {
@@ -702,6 +713,7 @@ private struct WorkoutDetailView: View {
                                 name: exerciseName(for: item)
                             )
                             equipmentAndSetupRows(for: item)
+                            plannedEffortRow(for: item)
                             plannedCardioRows(for: item)
                             setLogList(for: item)
                         }
@@ -711,6 +723,7 @@ private struct WorkoutDetailView: View {
                 } else if let item = group.items.first {
                     Section {
                         equipmentAndSetupRows(for: item)
+                        plannedEffortRow(for: item)
                         plannedCardioRows(for: item)
                         setLogList(for: item)
                     } header: {
@@ -776,6 +789,46 @@ private struct WorkoutDetailView: View {
                     .foregroundStyle(.secondary)
                 Text(setup)
                     .font(.dsBody)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// H5a — the **planned effort target** this workout was started with.
+    ///
+    /// Read exclusively from the immutable `plannedPrescriptionSnapshot`, never
+    /// from the live routine or the live `Exercise`, so editing the routine
+    /// afterwards cannot rewrite what an old workout says it planned — the same
+    /// rule Equipment & Setup and the Cardio Plan block already follow.
+    ///
+    /// **Planned, not achieved.** No `SetLog` holds a logged RIR/RPE, so the
+    /// label says *Planned effort* and the value is the programmed target. If
+    /// per-set logged effort ever lands, it belongs on the set rows next to the
+    /// reps it was felt at — not here, and not by quietly re-labelling this row.
+    ///
+    /// Every "nothing to say" case renders zero rows rather than an empty one:
+    /// no snapshot, mode `.none`, missing values, a corrupt custom list, or
+    /// autoregulation switched off. The wording, the metric fallback and the
+    /// four-value elision all come from `HistoryPlannedEffort`, so this view
+    /// decides nothing about formatting.
+    @ViewBuilder
+    private func plannedEffortRow(for item: WorkoutItem) -> some View {
+        let snapshot = item.plannedPrescriptionSnapshot
+        if let summary = HistoryPlannedEffort.summary(
+            fields: snapshot.map { WorkoutEffortTargetResolver.Fields(snapshot: $0) },
+            autoregMode: autoregMode,
+            workingSetCount: snapshot?.sets)
+        {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Planned effort")
+                    .font(.dsCaption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 80, alignment: .leading)
+                // Verbatim: composed from a metric name and numbers, like every
+                // other effort summary in the app.
+                Text(summary)
+                    .font(.dsBody.monospacedDigit())
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
