@@ -3553,6 +3553,18 @@
         }
       }
     },
+    "Replacing %@" : {
+      "comment" : "Alternative Exercises: subtitle on the switch sheet naming the exercise being replaced, under the Prepared Alternatives header",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 대체 중"
+          }
+        }
+      }
+    },
     "Reps" : {
       "extractionState" : "manual",
       "localizations" : {

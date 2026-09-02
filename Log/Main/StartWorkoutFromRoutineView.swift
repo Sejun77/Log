@@ -460,6 +460,23 @@ struct StartWorkoutFromRoutineView: View {
     @Environment(\.modelContext) private var ctx
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
 
+    // Build 10 C4 — display-only, for the block summaries below. Read the same
+    // two settings the routine editor reads so both screens word a plan
+    // identically; neither is consulted when building or starting the plan.
+    @AppStorage(AppSettings.Keys.distanceIsMetric)
+    private var distanceIsMetric: Bool = AppSettings.defaultDistanceIsMetric()
+
+    @AppStorage(AppSettings.Keys.autoregMode)
+    private var autoregModeRaw: String = AutoregMode.rir.rawValue
+
+    private var effortMetric: EffortMetric? {
+        switch AutoregMode(rawValue: autoregModeRaw) ?? .rir {
+        case .rir: return .rir
+        case .rpe: return .rpe
+        case .none: return nil
+        }
+    }
+
     /// Returns the plan to push into `ActiveWorkoutView`.
     ///
     /// **Entry #12 P1 resume-consistency contract:** when a session is already
@@ -703,7 +720,18 @@ struct StartWorkoutFromRoutineView: View {
     }
 
     private var blocksSection: some View {
-        Section {
+        // Build 10 C4 — one summary per block, computed once for the whole
+        // section rather than per row, exactly as `RoutineEditor` does. Same
+        // source as the routine editor's block subtitle, so what a user
+        // confirms here is what they authored there — including the prepared
+        // alternative count, which is the thing they cannot otherwise check
+        // without starting the workout.
+        let summaries = BlockPrescriptionSummary.map(
+            for: routine.blocks,
+            effortMetric: effortMetric,
+            displayUnit: AppSettings.distanceUnit(isMetric: distanceIsMetric)
+        )
+        return Section {
             ForEach(routine.blocks.sorted { $0.order < $1.order }) { b in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(b.isSuperset ? "Superset" : "Exercise")
@@ -717,6 +745,15 @@ struct StartWorkoutFromRoutineView: View {
                             .joined(separator: " + ")
                     )
                     .font(.dsBody)
+
+                    if let subtitle = summaries[b.slotID]?.subtitle,
+                        !subtitle.isEmpty
+                    {
+                        Text(subtitle)
+                            .font(.dsCaption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 }
             }
         } header: {

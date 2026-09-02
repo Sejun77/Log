@@ -455,4 +455,139 @@ final class BlockPrescriptionSummaryTests: SwiftDataTestHarness {
     func testMapEmptyInputReturnsEmpty() {
         XCTAssertTrue(BlockPrescriptionSummary.map(for: []).isEmpty)
     }
+
+    // MARK: - Prepared alternatives (Build 10 C4)
+
+    /// One prepared alternative pointing at a throwaway exercise id.
+    private func alternative(
+        _ name: String, order: Int = 0, enabled: Bool = true
+    ) -> SlotAlternative {
+        SlotAlternative(
+            order: order, isEnabled: enabled, exerciseID: UUID(),
+            exerciseName: name)
+    }
+
+    private func blockWithAlternatives(
+        _ alternatives: [SlotAlternative]
+    ) -> RoutineBlock {
+        let slot = makeSlot(sets: 3, repMin: 8, repMax: 12)
+        slot.prescription?.setSlotAlternatives(alternatives)
+        return makeBlock(isSuperset: false, slots: [slot])
+    }
+
+    /// The count is the point of the slice: a routine row now says that
+    /// switching this exercise mid-workout has something prepared behind it.
+    func testEnabledAlternativesAppearAsATrailingCount() {
+        let block = blockWithAlternatives([
+            alternative("Machine Press", order: 0),
+            alternative("Dumbbell Press", order: 1),
+        ])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block).subtitle,
+            "3 × 8–12 · 2 alternatives")
+    }
+
+    func testASingleAlternativeIsSingular() {
+        let block = blockWithAlternatives([alternative("Machine Press")])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block).subtitle,
+            "3 × 8–12 · 1 alternative")
+    }
+
+    /// A slot with nothing prepared must read exactly as it did before this
+    /// slice — no "0 alternatives", no trailing separator.
+    func testNoAlternativesAddsNothingToTheSubtitle() {
+        let block = blockWithAlternatives([])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block).subtitle, "3 × 8–12")
+    }
+
+    /// **The product rule:** the row counts only alternatives the switch sheet
+    /// would offer, so disabled ones are excluded. A disabled alternative is
+    /// prepared work the user asked not to be offered; promising it on the
+    /// routine row would be a count the workout does not honor. The authoring
+    /// row inside the slot still lists every one of them, disabled included.
+    func testDisabledAlternativesAreExcludedFromTheCount() {
+        let block = blockWithAlternatives([
+            alternative("Machine Press", order: 0),
+            alternative("Treadmill", order: 1, enabled: false),
+        ])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block).subtitle,
+            "3 × 8–12 · 1 alternative")
+    }
+
+    func testASlotWhoseAlternativesAreAllDisabledReadsAsHavingNone() {
+        let block = blockWithAlternatives([
+            alternative("Machine Press", order: 0, enabled: false),
+            alternative("Treadmill", order: 1, enabled: false),
+        ])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block).subtitle, "3 × 8–12")
+    }
+
+    /// The count is the last segment, after rest and effort — the plan reads
+    /// first, and this is the one part a user scans for rather than reads.
+    func testTheCountIsTheLastSegment() {
+        let slot = makeSlot(
+            sets: 3, repMin: 8, repMax: 12, rest: 90, rir: 2,
+            effortModeRaw: EffortMode.single.rawValue)
+        slot.prescription?.setSlotAlternatives([alternative("Machine Press")])
+        let block = makeBlock(isSuperset: false, slots: [slot])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            "3 × 8–12 · 90s rest · RIR 2 · 1 alternative")
+    }
+
+    /// A corrupt payload counts zero rather than breaking the row — the same
+    /// tolerance the storage accessor gives every other reader.
+    func testACorruptAlternativesPayloadCountsZero() {
+        let slot = makeSlot(sets: 3, repMin: 8, repMax: 12)
+        slot.prescription?.alternativesData = Data("not a payload".utf8)
+        let block = makeBlock(isSuperset: false, slots: [slot])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block).subtitle, "3 × 8–12")
+    }
+
+    /// Supersets stay block-level: a per-slot count would not say which of the
+    /// block's exercises it belongs to. Same reasoning that keeps effort off a
+    /// superset row.
+    func testSupersetRowsDoNotShowAnAlternativeCount() {
+        let first = makeSlot(sets: 4, order: 0)
+        first.prescription?.setSlotAlternatives([alternative("Machine Press")])
+        let second = makeSlot(sets: 4, order: 1)
+        let block = makeBlock(isSuperset: true, slots: [first, second])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block).subtitle,
+            "Superset · 2 exercises · 4 sets")
+    }
+
+    /// The value-in initializer is what the wording tests above pin, so it must
+    /// carry the same segment. Defaulting to zero keeps every existing caller
+    /// and test unchanged.
+    func testValueInInitializerCarriesTheCount() {
+        XCTAssertEqual(
+            BlockPrescriptionSummary(sets: 3, repMin: 8, alternatives: 2)
+                .subtitle,
+            "3 × 8 · 2 alternatives")
+        XCTAssertEqual(
+            BlockPrescriptionSummary(sets: 3, repMin: 8).subtitle, "3 × 8")
+    }
+
+    /// The Start Workout screen renders this same type, so a plan a user
+    /// confirms before starting is worded by the routine editor's own source.
+    func testMapCarriesTheCountForTheStartWorkoutScreen() {
+        let block = blockWithAlternatives([alternative("Machine Press")])
+
+        let map = BlockPrescriptionSummary.map(for: [block])
+        XCTAssertEqual(map[block.slotID]?.subtitle, "3 × 8–12 · 1 alternative")
+    }
 }
