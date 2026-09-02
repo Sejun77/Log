@@ -368,6 +368,159 @@ final class EffortTargetResolverTests: XCTestCase {
             "RIR 2")
     }
 
+    // MARK: - Summary truncation (Build 10 C6)
+
+    /// A long custom list used to render its every value into a one-line block
+    /// subtitle — `RIR 3/3/2/2/1/1/0/0` — which pushed the segments before it
+    /// out of the row. The summary now stops at four and says there is more.
+    func testSummaryCustomElidesAfterFourTargets() {
+        XCTAssertEqual(
+            EffortTargetResolver.summary(
+                metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+                custom: [3, 3, 2, 2, 1, 1, 0, 0]),
+            "RIR 3/3/2/2…")
+        XCTAssertEqual(
+            EffortTargetResolver.summary(
+                metric: .rpe, mode: .custom, single: nil, start: nil, end: nil,
+                custom: [8, 8, 9, 9, 10]),
+            "RPE 8/8/9/9…")
+    }
+
+    /// Four or fewer is the common prescription and is spelled out in full —
+    /// no ellipsis on a list that already fits.
+    func testSummaryCustomDoesNotElideFourOrFewer() {
+        for values in [[2.0], [2, 1], [2, 1.5, 1], [2, 1.5, 1, 0]] {
+            let summary = EffortTargetResolver.summary(
+                metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+                custom: values)
+            XCTAssertNotNil(summary)
+            XCTAssertFalse(
+                summary?.contains("…") ?? true,
+                "\(values.count) targets fit and must not be elided")
+        }
+        XCTAssertEqual(
+            EffortTargetResolver.summary(
+                metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+                custom: [2, 1.5, 1, 0]),
+            "RIR 2/1.5/1/0")
+    }
+
+    /// Elision counts against the list **fitted to the set count**, so a 3-set
+    /// slot holding a longer authored list still reads in full.
+    func testSummaryElisionFollowsTheSetCount() {
+        XCTAssertEqual(
+            EffortTargetResolver.summary(
+                metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+                custom: [3, 3, 2, 2, 1, 1], setCount: 3),
+            "RIR 3/3/2")
+        XCTAssertEqual(
+            EffortTargetResolver.summary(
+                metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+                custom: [3, 3, 2, 2, 1, 1], setCount: 6),
+            "RIR 3/3/2/2…")
+    }
+
+    /// **The safety property of the whole change:** eliding is a display rule
+    /// and nothing else. The stored list, the resolved values and the per-set
+    /// strings are all untouched, so every set row still shows its own target
+    /// even when the summary above it stops at four.
+    func testElisionDoesNotChangeTheUnderlyingTargets() {
+        let authored: [Double] = [3, 3, 2, 2, 1, 1, 0, 0]
+        let raw = EffortTargetList.encode(authored)
+
+        _ = EffortTargetResolver.summary(
+            metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+            custom: authored, setCount: authored.count)
+
+        XCTAssertEqual(EffortTargetList.encode(authored), raw)
+        XCTAssertEqual(EffortTargetList.decode(raw), authored)
+        XCTAssertEqual(
+            EffortTargetResolver.resolve(
+                metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+                custom: authored, setCount: 8),
+            authored,
+            "resolve must still return every target")
+        XCTAssertEqual(
+            EffortTargetResolver.perSetStrings(
+                metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+                custom: authored, setCount: 8).last,
+            "RIR 0",
+            "the last set row still shows its own value")
+    }
+
+    /// The separator rule (L1): `/` **inside** a value list, so the segment
+    /// stays one unit inside a `" · "`-joined summary line. Progression keeps
+    /// its directional arrow; neither list ever uses `" · "` internally.
+    func testEffortSummarySeparatorsAreConsistent() {
+        let custom = EffortTargetResolver.summary(
+            metric: .rir, mode: .custom, single: nil, start: nil, end: nil,
+            custom: [2, 1, 0])
+        XCTAssertEqual(custom, "RIR 2/1/0")
+        XCTAssertFalse(custom?.contains(" · ") ?? true)
+
+        XCTAssertEqual(
+            EffortTargetResolver.summary(
+                metric: .rir, mode: .progression, single: nil, start: 2, end: 0),
+            "RIR 2 → 0")
+    }
+
+    // MARK: - Saved-target presence (Build 10 C6)
+
+    private func fields(
+        rir: Double? = nil, rpe: Double? = nil,
+        rirStart: Double? = nil, rirEnd: Double? = nil,
+        rpeStart: Double? = nil, rpeEnd: Double? = nil,
+        customRIR: String? = nil, customRPE: String? = nil
+    ) -> WorkoutEffortTargetResolver.Fields {
+        WorkoutEffortTargetResolver.Fields(
+            rir: rir, rpe: rpe, rirStart: rirStart, rirEnd: rirEnd,
+            rpeStart: rpeStart, rpeEnd: rpeEnd,
+            customRIRTargetsRaw: customRIR, customRPETargetsRaw: customRPE)
+    }
+
+    /// Autoregulation off hides the effort controls. The routine editor now
+    /// says the targets are still there — but only when they actually are.
+    func testSavedTargetsAreDetectedInEveryShape() {
+        XCTAssertTrue(EffortTargetPresence.hasSavedTargets(in: fields(rir: 2)))
+        XCTAssertTrue(EffortTargetPresence.hasSavedTargets(in: fields(rpe: 8)))
+        XCTAssertTrue(
+            EffortTargetPresence.hasSavedTargets(
+                in: fields(rirStart: 2, rirEnd: 0)))
+        XCTAssertTrue(
+            EffortTargetPresence.hasSavedTargets(
+                in: fields(rpeStart: 8, rpeEnd: 10)))
+        XCTAssertTrue(
+            EffortTargetPresence.hasSavedTargets(in: fields(customRIR: "2,1,0")))
+        XCTAssertTrue(
+            EffortTargetPresence.hasSavedTargets(in: fields(customRPE: "8,9,10")))
+    }
+
+    /// A slot that never had targets stays as quiet as it was before the slice.
+    func testNoSavedTargetsShowsNothing() {
+        XCTAssertFalse(EffortTargetPresence.hasSavedTargets(in: fields()))
+    }
+
+    /// A corrupt or empty custom column is not "saved work": promising data the
+    /// editor could never show would be its own kind of lie.
+    func testAnUnusableCustomListIsNotCountedAsSaved() {
+        XCTAssertFalse(
+            EffortTargetPresence.hasSavedTargets(in: fields(customRIR: "")))
+        XCTAssertFalse(
+            EffortTargetPresence.hasSavedTargets(
+                in: fields(customRIR: "not,a,list")))
+        XCTAssertFalse(
+            EffortTargetPresence.hasSavedTargets(in: fields(customRIR: "2,99")),
+            "a whole list is rejected when any value is out of range")
+    }
+
+    /// Deliberately independent of the stored mode: a slot left at `.none`
+    /// while its values remained is exactly the case that looked like deletion.
+    func testPresenceIgnoresTheStoredMode() {
+        var f = fields(rir: 2)
+        f.effortModeRaw = EffortMode.none.rawValue
+        XCTAssertTrue(EffortTargetPresence.hasSavedTargets(in: f))
+    }
+
     // MARK: - Per-set strings
 
     func testPerSetStringsLabelEveryTarget() {

@@ -218,7 +218,13 @@ enum EffortTargetResolver {
     ///  - single → `"RIR 2"`
     ///  - progression → `"RIR 2 → 0"` (directional arrow, never a range)
     ///  - custom → `"RIR 2/1.5/1/0"` (slash-joined, so the segment stays
-    ///    distinguishable inside a `" · "`-joined summary line)
+    ///    distinguishable inside a `" · "`-joined summary line), **elided after
+    ///    `maxSummaryTargets` values**: `"RIR 3/3/2/2…"`. A 10-set custom list
+    ///    otherwise produced a summary longer than the row it sits in, and the
+    ///    tail is the half a one-line row truncates anyway — an ellipsis says
+    ///    "there is more" where a hard cut says nothing. Display only: the
+    ///    stored list, `resolve`, and `perSetStrings` are untouched, so every
+    ///    set row still shows its own exact target.
     ///  - collapses to single form when the two endpoints render equally.
     ///
     /// - Parameter setCount: when known, clips/extends a custom list to the
@@ -261,8 +267,10 @@ enum EffortTargetResolver {
                     mode: (start ?? end) != nil ? .progression : .single,
                     single: single, start: start, end: end)
             }
-            let joined = values.map(format).joined(separator: "/")
-            return "\(label) \(joined)"
+            let shown = values.prefix(maxSummaryTargets).map(format)
+            let joined = shown.joined(separator: "/")
+            let elision = values.count > maxSummaryTargets ? "…" : ""
+            return "\(label) \(joined)\(elision)"
         }
     }
 
@@ -304,10 +312,77 @@ enum EffortTargetResolver {
             metric: metric, start: lo, end: hi, setCount: setCount)
     }
 
+    /// How many custom per-set targets a **summary** spells out before eliding.
+    /// Four covers the overwhelmingly common 3–4 set prescription exactly, and
+    /// is where a one-line block subtitle starts losing the segments after it.
+    static let maxSummaryTargets = 4
+
     private static func label(for metric: EffortMetric) -> String {
         switch metric {
         case .rir: return "RIR"
         case .rpe: return "RPE"
         }
+    }
+}
+
+// ======================================================
+// MARK: - Effort target help copy & presence (Build 10 C6)
+// ======================================================
+
+/// Localization keys for the effort-target explanations, held as constants so
+/// the view and its tests name the same string rather than two hand-copied
+/// literals that can drift apart.
+///
+/// Copy only — nothing here reads, writes or resolves a target.
+enum EffortTargetHelp {
+
+    /// Title of the info alert next to the mode picker.
+    static let modesTitle = "Effort target modes"
+
+    /// The alert body: all four modes the picker offers, one line each. The
+    /// picker has always had four; the guide and the app between them used to
+    /// describe three, leaving `None` as the one mode a user could select and
+    /// find no explanation of anywhere.
+    static let modesMessage = """
+        None: No effort target is shown.
+        Same Target: Use one target for every set.
+        Progression: Spread start and end targets across the sets.
+        Custom Per Set: Choose a target for each set.
+        """
+
+    /// Shown in place of the effort controls when autoregulation is off and the
+    /// slot still holds authored targets. Autoreg `.none` hides the controls; it
+    /// has never deleted anything, and this row is the only thing that says so.
+    static let savedWhileAutoregOff =
+        "Effort targets saved — enable RIR/RPE in Settings to edit."
+}
+
+/// Whether a slot still holds effort-target data worth telling the user about.
+///
+/// Pure and field-based, so "autoreg is off but this slot has targets" is a unit
+/// test rather than a screenshot. Reads the same `Fields` shape every other
+/// effort reader uses; decodes nothing else and mutates nothing.
+enum EffortTargetPresence {
+
+    /// True when any authored effort value survives on the slot — a single
+    /// target, either progression endpoint, or a custom list — in **either**
+    /// metric.
+    ///
+    /// Deliberately independent of `effortModeRaw`: the question is "is there
+    /// saved work here", and a slot whose mode was left at `.none` while its
+    /// values remained is exactly the case that looked like deletion. A custom
+    /// list counts only when it decodes to something, so a corrupt or empty
+    /// column does not promise data that cannot be shown.
+    static func hasSavedTargets(
+        in fields: WorkoutEffortTargetResolver.Fields
+    ) -> Bool {
+        let singles = [
+            fields.rir, fields.rpe,
+            fields.rirStart, fields.rirEnd,
+            fields.rpeStart, fields.rpeEnd,
+        ]
+        if singles.contains(where: { $0 != nil }) { return true }
+        return !EffortTargetList.decode(fields.customRIRTargetsRaw).isEmpty
+            || !EffortTargetList.decode(fields.customRPETargetsRaw).isEmpty
     }
 }

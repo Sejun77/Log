@@ -384,7 +384,21 @@ private struct PrescriptionFields: View {
                 label: "RPE", paths: Self.rpePaths,
                 range: 5...10, defaultValue: AppSettings.defaultRPE)
         case .none:
-            EmptyView()
+            // M4 — autoreg off hides the controls, and always has; it has never
+            // deleted anything. Without this row a slot's authored targets
+            // simply vanished from the editor, which reads as data loss. Shown
+            // only when there is actually something saved, so a slot that never
+            // had targets stays as quiet as before. Read-only by construction:
+            // there is no metric selected to edit them in.
+            if EffortTargetPresence.hasSavedTargets(
+                in: WorkoutEffortTargetResolver.Fields(
+                    prescription: prescription))
+            {
+                Text(LocalizedStringKey(EffortTargetHelp.savedWhileAutoregOff))
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -434,6 +448,21 @@ private struct PrescriptionFields: View {
         .onChange(of: prescription.sets ?? 0) { _, newCount in
             prescription.resizeCustomEffortTargets(
                 to: newCount, metric: paths.metric)
+        }
+
+        // M3 — the picker offers four modes and named none of them. Its own
+        // row cannot carry the glyph: a `Picker` in a Form owns the whole
+        // row's tap, so a button inside its label would be swallowed by the
+        // menu. This sits directly under it instead, in the caption + info
+        // idiom the app already uses for Cardio and Bodyweight.
+        HStack(spacing: DSSpacing.xs) {
+            Text(LocalizedStringKey(EffortTargetHelp.modesTitle))
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+            InfoButton(
+                LocalizedStringKey(EffortTargetHelp.modesTitle),
+                message: LocalizedStringKey(EffortTargetHelp.modesMessage))
+            Spacer()
         }
 
         switch prescription.effortMode {
@@ -546,7 +575,7 @@ private struct PrescriptionFields: View {
             workingSetCount: max(0, prescription.sets ?? 0))
         if !values.isEmpty {
             Text(
-                "Set targets: \(values.map(EffortTargetResolver.format).joined(separator: " · "))"
+                "Set targets: \(values.map(EffortTargetResolver.format).joined(separator: "/"))"
             )
             .font(.caption)
             .foregroundStyle(.secondary)

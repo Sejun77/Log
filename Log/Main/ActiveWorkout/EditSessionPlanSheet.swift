@@ -162,7 +162,11 @@ struct EditSessionPlanSheet: View {
                 }
             case .progression:
                 effortReadOnlyRow(snapshotSummary ?? "—")
-                Text("Progression editing during workout is not available yet.")
+                // M5 — states the rule, not a roadmap. Nothing about the
+                // behavior changed: a progression is frozen at session start
+                // and the rows render it; "not available yet" implied a
+                // half-built feature rather than a deliberate one.
+                Text("Progression targets are fixed for this session.")
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
             // Read-only for the same reason `.progression` is: the sheet edits
@@ -172,9 +176,7 @@ struct EditSessionPlanSheet: View {
             // is shown instead and the rows keep displaying it.
             case .custom:
                 effortReadOnlyRow(snapshotSummary ?? "—")
-                Text(
-                    "Per-set effort editing during workout is not available yet."
-                )
+                Text("Per-set targets are fixed for this session.")
                 .font(.dsCaption)
                 .foregroundStyle(.secondary)
             }
