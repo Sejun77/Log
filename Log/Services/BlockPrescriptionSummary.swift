@@ -24,6 +24,12 @@ import Foundation
 ///      The value is resolved through `EffortTargetResolver.summary`, so legacy
 ///      single-value prescriptions (`rir`/`rpe` with nil `effortModeRaw`) render
 ///      as single effort exactly as before they had a mode.
+///    - trailing prepared-alternative count when the slot has any **enabled**
+///      alternative (Build 10 C4) → `"… · 2 alternatives"`. Disabled
+///      alternatives are excluded: this line is workout-facing
+///      discoverability, and a disabled alternative is never offered mid-
+///      workout. The authoring row one screen down still counts every
+///      prepared alternative, disabled included — a different question.
 ///    - no prescription / no usable sets → `"Not set"`
 ///  - **Superset block** — block-level:
 ///    - `"Superset · N exercises · M sets"` where `N = block.exercises.count`
@@ -31,7 +37,9 @@ import Foundation
 ///      child `prescription.sets` (matching `SupersetDetailNoRest.currentSetsValue`).
 ///    - `M` omitted when no child carries a positive `sets` → `"Superset · N exercises"`.
 ///    - effort is **not** shown for supersets (per-slot targets would be
-///      ambiguous block-level); reserved for a future slice.
+///      ambiguous block-level); reserved for a future slice. Prepared
+///      alternatives are omitted for the same reason: they are per-slot, and a
+///      block-level count would not say which exercise they belong to.
 ///  - Weight and tempo remain intentionally **out of scope for v1**.
 struct BlockPrescriptionSummary: Equatable {
     private enum Content: Equatable {
@@ -43,7 +51,8 @@ struct BlockPrescriptionSummary: Equatable {
             usesDuration: Bool,
             targetDistance: String?,
             restSeconds: Int?,
-            effort: String?
+            effort: String?,
+            alternatives: Int
         )
         case superset(exerciseCount: Int, sets: Int?)
     }
@@ -60,7 +69,8 @@ struct BlockPrescriptionSummary: Equatable {
         usesDuration: Bool = false,
         targetDistance: String? = nil,
         restSeconds: Int? = nil,
-        effort: String? = nil
+        effort: String? = nil,
+        alternatives: Int = 0
     ) {
         content = .normal(
             sets: sets,
@@ -70,7 +80,8 @@ struct BlockPrescriptionSummary: Equatable {
             usesDuration: usesDuration,
             targetDistance: targetDistance,
             restSeconds: restSeconds,
-            effort: effort
+            effort: effort,
+            alternatives: alternatives
         )
     }
 
@@ -123,7 +134,12 @@ struct BlockPrescriptionSummary: Equatable {
                 targetDistance: p?.targetDistance(displayUnit: displayUnit)?
                     .displayText,
                 restSeconds: p?.restSecondsBetweenSets,
-                effort: Self.effortSummary(for: p, metric: effortMetric)
+                effort: Self.effortSummary(for: p, metric: effortMetric),
+                // Enabled only — see the summary rules above. Reading this is
+                // a decode of the additive `alternativesData` column through
+                // the tolerant Phase C accessor, so a corrupt payload counts
+                // zero and never breaks the row.
+                alternatives: p?.slotAlternatives.filter(\.isEnabled).count ?? 0
             )
         }
     }
@@ -190,7 +206,7 @@ struct BlockPrescriptionSummary: Equatable {
 
         case let .normal(
             sets, repMin, repMax, duration, usesDuration, targetDistance, rest,
-            effort):
+            effort, alternatives):
             guard let s = sets, s > 0 else { return String(localized: "Not set") }
             let core: String
             if usesDuration {
@@ -211,6 +227,15 @@ struct BlockPrescriptionSummary: Equatable {
             if let targetDistance { parts.append(targetDistance) }
             if let r = rest, r > 0 { parts.append(String(localized: "\(r)s rest")) }
             if let effort { parts.append(effort) }
+            // Last: the plan itself reads first, and this is the one segment a
+            // user scans for rather than reads. Reuses the count strings the
+            // Exercise Detail usage line already ships (`대체 운동 N개`) rather
+            // than inventing a second name for the same thing.
+            if alternatives == 1 {
+                parts.append(String(localized: "\(alternatives) alternative"))
+            } else if alternatives > 1 {
+                parts.append(String(localized: "\(alternatives) alternatives"))
+            }
             return parts.joined(separator: " · ")
         }
     }

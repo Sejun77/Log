@@ -122,6 +122,59 @@ final class PreparedAlternativeSwitchTests: XCTestCase {
             "no offers keeps the pre-F1 flow: picker first, no new sheet")
     }
 
+    /// Build 10 C4 — the active workout's Switch Exercise row now shows how
+    /// many alternatives tapping it would offer. The badge reads
+    /// `preparedAlternativeOffers(...).count`, i.e. exactly this list, so the
+    /// count can never promise a row the sheet does not render: disabled
+    /// alternatives and the slot's own exercise are already filtered out here,
+    /// while an unavailable one is still counted because the sheet still shows
+    /// it (disabled, named, with its reason).
+    func testTheBadgeCountIsTheOfferCount() {
+        let offers = PreparedAlternatives.offers(
+            from: [
+                alternative("Machine", exerciseID: machineID, order: 0),
+                alternative("Bench", exerciseID: benchID, order: 1),
+                alternative(
+                    "Treadmill", exerciseID: treadmillID, order: 2,
+                    enabled: false),
+            ],
+            currentExerciseID: benchID,
+            availableExerciseIDs: [benchID, machineID, treadmillID])
+
+        XCTAssertEqual(
+            offers.count, 1,
+            "the badge counts only what the sheet would list: the disabled "
+                + "alternative and the slot's own exercise are not offered")
+        XCTAssertEqual(offers.map(\.exerciseName), ["Machine"])
+    }
+
+    /// A deleted exercise still counts, because the sheet still shows its row.
+    func testAnUnavailableAlternativeStillCounts() {
+        let offers = PreparedAlternatives.offers(
+            from: [alternative("Machine", exerciseID: machineID, order: 0)],
+            currentExerciseID: benchID,
+            availableExerciseIDs: [benchID])
+
+        XCTAssertEqual(offers.count, 1)
+        XCTAssertFalse(
+            offers[0].isAvailable,
+            "counted, and rendered as a disabled row rather than hidden")
+    }
+
+    /// No offers means no badge — and, unchanged from Phase F1, no sheet.
+    func testNoOffersMeansNoBadge() {
+        let offers = PreparedAlternatives.offers(
+            from: [
+                alternative(
+                    "Treadmill", exerciseID: treadmillID, order: 0,
+                    enabled: false)
+            ],
+            currentExerciseID: benchID,
+            availableExerciseIDs: [benchID, treadmillID])
+
+        XCTAssertTrue(offers.isEmpty)
+    }
+
     func testDisabledAlternativesAreHidden() {
         let offers = PreparedAlternatives.offers(
             from: [
