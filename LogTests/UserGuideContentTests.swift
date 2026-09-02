@@ -269,6 +269,40 @@ final class UserGuideContentTests: XCTestCase {
         XCTAssertEqual(DurationLimits.maxRestSeconds, 60 * 60)
     }
 
+    // MARK: - 3. Finishing a workout (Build 10)
+
+    /// Finishing and exiting are two different actions, and the Korean guide
+    /// used to point at the wrong one: it told users to tap 종료, the exit
+    /// button, to save a workout to History. The finish action is 완료.
+    func testKoreanGuideSaysToTapFinishToSaveToHistory() throws {
+        let en = try XCTUnwrap(section(heading: "Completing a Workout", in: english))
+        XCTAssertTrue(
+            en.items.contains(
+                "Tap Finish and confirm to save the workout to History."),
+            "English finish step drifted from USER_GUIDE.md")
+
+        let ko = try XCTUnwrap(section(heading: "운동 완료하기", in: korean))
+        XCTAssertTrue(
+            ko.items.contains(
+                "완료를 누른 뒤 확인하면 운동이 기록에 저장됩니다."),
+            "The Korean guide no longer tells users to tap 완료 to save to History")
+    }
+
+    /// 종료 survives in exactly one place — "저장 후 종료", the save-for-later
+    /// exit — and nowhere as the finish action. Checked across the whole Korean
+    /// guide, because the wrong verb has appeared in three separate sections.
+    func testKoreanGuideNeverCallsFinishingAnExit() {
+        let text = allText(of: korean)
+        for phrase in ["종료를 누", "운동을 종료합니다", "운동을 종료하거나"] {
+            XCTAssertFalse(
+                text.contains(phrase),
+                "Korean guide calls finishing a workout 종료 — \"\(phrase)\"")
+        }
+        XCTAssertTrue(
+            text.contains("저장 후 종료"),
+            "The save-for-later exit is the one place 종료 belongs")
+    }
+
     /// Duration slots hide reps, weight, tempo, and Tempo Override — the guide
     /// states it, so a regression in either place should surface here.
     func testGuideStatesTheDurationFieldRules() throws {

@@ -22,7 +22,7 @@ struct RoutineBlockDetailView: View {
                         ForEach(templates.indices, id: \.self) { i in
                             let t = templates[i]
                             HStack {
-                                Text("\(i + 1). \(t.kindRaw.capitalized)")
+                                Text("\(i + 1). \(t.kind.historyRowLabel)")
                                 Spacer()
 
                                 if ex.isTimeBased {
@@ -375,7 +375,7 @@ struct SupersetDetailNoRest: View {
                             ForEach(templates.indices, id: \.self) { i in
                                 let t = templates[i]
                                 HStack {
-                                    Text("\(i + 1). \(t.kindRaw.capitalized)")
+                                    Text("\(i + 1). \(t.kind.historyRowLabel)")
                                     Spacer()
 
                                     if ex.isTimeBased {
