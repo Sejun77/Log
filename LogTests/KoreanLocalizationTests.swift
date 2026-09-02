@@ -658,8 +658,12 @@ final class KoreanLocalizationTests: XCTestCase {
         "Set %lld",
         "Set targets: %@",
         "Add at least one set to enter per-set targets.",
-        "Progression editing during workout is not available yet.",
-        "Per-set effort editing during workout is not available yet.",
+        // Build 10 C6 — the two in-session read-only messages, reworded from
+        // "not available yet" (a roadmap claim about settled behavior) to the
+        // rule they actually state. Same two screens, same two strings' jobs;
+        // `testTheNotAvailableYetCopyIsGone` pins that the old keys are gone.
+        "Progression targets are fixed for this session.",
+        "Per-set targets are fixed for this session.",
     ]
 
     func testEffortTargetStringsLocalizeToKorean() throws {
@@ -789,6 +793,93 @@ final class KoreanLocalizationTests: XCTestCase {
                 )
             }
         }
+    }
+
+    // MARK: - Effort target clarity (Build 10 C6)
+
+    /// Every string this slice adds. Named through `EffortTargetHelp` rather
+    /// than re-typed, so the view and the test cannot drift onto two different
+    /// keys.
+    private static var effortClarityKeys: [String] {
+        [
+            EffortTargetHelp.modesTitle,
+            EffortTargetHelp.modesMessage,
+            EffortTargetHelp.savedWhileAutoregOff,
+            "Progression targets are fixed for this session.",
+            "Per-set targets are fixed for this session.",
+        ]
+    }
+
+    func testEffortClarityStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.effortClarityKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Effort clarity string has no Korean translation "
+                    + "(still renders English): \(key)")
+        }
+    }
+
+    func testEffortClarityStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.effortClarityKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)")
+        }
+    }
+
+    /// The info alert must name all four modes the picker offers, in both
+    /// languages, using the picker's own translations for each.
+    func testEffortModeExplanationCoversAllFourModes() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let english = EffortTargetHelp.modesMessage
+        let korean = localized(EffortTargetHelp.modesMessage, in: ko)
+
+        for mode in ["None", "Same Target", "Progression", "Custom Per Set"] {
+            XCTAssertTrue(
+                english.contains(mode),
+                "the explanation must name the \(mode) mode")
+            let translated = localized(mode, in: ko)
+            XCTAssertTrue(
+                korean.contains(translated),
+                "the Korean explanation must use the picker's own name for "
+                    + "\(mode) (\(translated))")
+        }
+    }
+
+    /// M5 — the in-session copy stated a roadmap ("not available yet") for
+    /// behavior that is deliberate and settled. The old keys are gone, not just
+    /// unused: a missing key resolves to itself, so this asserts absence.
+    func testTheNotAvailableYetCopyIsGone() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in [
+            "Progression editing during workout is not available yet.",
+            "Per-set effort editing during workout is not available yet.",
+        ] {
+            XCTAssertEqual(
+                localized(key, in: ko), key,
+                "the superseded roadmap copy is still in the catalog: \(key)")
+        }
+
+        for key in Self.effortClarityKeys {
+            XCTAssertFalse(
+                localized(key, in: ko).contains("아직"),
+                "the replacement copy still reads as unfinished: \(key)")
+        }
+    }
+
+    /// The saved-targets row has to say both halves — that the work is kept,
+    /// and what to do to edit it again.
+    func testSavedTargetsRowNamesTheSettingToTurnBackOn() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let value = localized(EffortTargetHelp.savedWhileAutoregOff, in: ko)
+
+        XCTAssertTrue(value.contains("저장"), "must say the targets are saved")
+        XCTAssertTrue(value.contains("RIR/RPE"), "must name the setting")
+        XCTAssertTrue(value.contains("설정"), "must point at Settings")
     }
 
     // MARK: - User Guide language picker (Build 10 C5)

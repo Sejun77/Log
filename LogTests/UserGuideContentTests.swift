@@ -303,6 +303,48 @@ final class UserGuideContentTests: XCTestCase {
             "The save-for-later exit is the one place 종료 belongs")
     }
 
+    // MARK: - 3b. Effort targets (Build 10 C6)
+
+    /// The picker has always offered four modes; the guide described three, so
+    /// `None` was the one mode a user could select and find explained nowhere.
+    func testEffortSectionDocumentsAllFourModes() throws {
+        let en = try XCTUnwrap(section(heading: "Effort Targets", in: english))
+        for mode in ["None", "Same Target", "Progression", "Custom Per Set"] {
+            XCTAssertTrue(
+                en.items.contains { $0.hasPrefix("\(mode):") },
+                "The English guide no longer documents the \(mode) mode")
+        }
+
+        let ko = try XCTUnwrap(section(heading: "운동 강도 목표", in: korean))
+        for mode in ["없음", "동일 목표", "프로그레션", "세트별 지정"] {
+            XCTAssertTrue(
+                ko.items.contains { $0.hasPrefix("\(mode):") },
+                "The Korean guide no longer documents the \(mode) mode")
+        }
+    }
+
+    /// The count in the intro must match the number of modes listed under it —
+    /// the specific thing that went stale when Custom Per Set shipped.
+    func testEffortSectionCountsItsOwnModes() throws {
+        let en = try XCTUnwrap(section(heading: "Effort Targets", in: english))
+        XCTAssertEqual(en.items.count, 4)
+        XCTAssertTrue(
+            try XCTUnwrap(en.intro).contains("four ways"),
+            "the English intro must state the number of modes it lists")
+
+        let ko = try XCTUnwrap(section(heading: "운동 강도 목표", in: korean))
+        XCTAssertEqual(ko.items.count, 4)
+        XCTAssertTrue(
+            try XCTUnwrap(ko.intro).contains("네 가지"),
+            "the Korean intro must state the number of modes it lists")
+    }
+
+    /// The guide must not go back to naming three ways in either language.
+    func testEffortSectionNoLongerSaysThreeWays() {
+        XCTAssertFalse(allText(of: english).contains("targets three ways"))
+        XCTAssertFalse(allText(of: korean).contains("세 가지 방식"))
+    }
+
     // MARK: - 4. Language selection (Build 10 C5)
 
     /// A Korean phone opens the Korean guide. Keyed on the language, so a

@@ -1729,6 +1729,42 @@
         }
       }
     },
+    "Effort target modes" : {
+      "comment" : "Caption beside the routine editor's effort-mode info button, and the title of the alert it opens.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 강도 목표 방식"
+          }
+        }
+      }
+    },
+    "Effort targets saved — enable RIR/RPE in Settings to edit." : {
+      "comment" : "Shown in the routine editor when autoregulation is off and the slot still holds authored effort targets. They are hidden, never deleted.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 강도 목표가 저장되어 있습니다 — 설정에서 RIR/RPE를 켜면 편집할 수 있습니다."
+          }
+        }
+      }
+    },
+    "None: No effort target is shown.\nSame Target: Use one target for every set.\nProgression: Spread start and end targets across the sets.\nCustom Per Set: Choose a target for each set." : {
+      "comment" : "Body of the effort-mode info alert: all four modes the picker offers, one per line. Mode names must match the picker's own translations.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "없음: 강도 목표를 표시하지 않습니다.\n동일 목표: 모든 세트에 같은 목표를 사용합니다.\n프로그레션: 시작 목표와 마지막 목표를 세트에 나누어 적용합니다.\n세트별 지정: 세트마다 목표를 직접 정합니다."
+          }
+        }
+      }
+    },
     "Empty routine" : {
       "localizations" : {
         "ko" : {
@@ -3251,13 +3287,14 @@
         }
       }
     },
-    "Per-set effort editing during workout is not available yet." : {
+    "Per-set targets are fixed for this session." : {
+      "comment" : "In-workout Edit Plan sheet: why a custom per-set effort list is read-only. States the rule; the previous copy read as an unfinished feature.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "운동 중에는 아직 세트별 강도를 편집할 수 없습니다."
+            "value" : "세트별 목표는 이 세션에서 고정됩니다."
           }
         }
       }
@@ -3339,13 +3376,14 @@
         }
       }
     },
-    "Progression editing during workout is not available yet." : {
+    "Progression targets are fixed for this session." : {
+      "comment" : "In-workout Edit Plan sheet: why a progression is read-only. States the rule; the previous copy read as an unfinished feature.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "운동 중에는 아직 프로그레션을 편집할 수 없습니다."
+            "value" : "프로그레션 목표는 이 세션에서 고정됩니다."
           }
         }
       }
