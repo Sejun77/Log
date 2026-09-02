@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C4 fix._
+_Counts are from the latest verification run, after the Build 10 C5 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C4 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,338 tests, 0 failures** — 2,336 unit tests plus 2 UI
+- **Full scheme passes: 2,344 tests, 0 failures** — 2,342 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -394,6 +394,37 @@ told in a smaller font. A **deleted** exercise's alternative does count,
 because the sheet still shows that row — named, disabled, and explaining
 itself. The rule is that these counts mean "what tapping Switch Exercise will
 offer you", and nothing else.
+
+---
+
+## Build 10 — A Guide That Opens in Your Language
+
+The in-app User Guide rendered the English guide, a divider, and then the Korean
+guide. Both, always, in that order. A Korean tester scrolled past the whole
+English guide to reach the one they could read; an English tester finished every
+visit staring at a long Korean appendix.
+
+It now opens in the device's language — Korean on a Korean phone, English
+otherwise — with a small **English / 한국어** switch at the top for anyone who
+wants the other one. Both guide arrays are untouched: not a character of content
+changed, and the two are still held to matching section and item counts by the
+same tests as before. That parity matters more now than it did when the guides
+were stacked, because a reader can flip between them in one screen and see
+immediately if one is missing a step.
+
+Two small decisions worth writing down. The default rule keys on the *language*,
+not the region, so a Korean speaker with a US region still gets Korean — and it
+takes a `Locale` argument instead of reading `Locale.current`, which turns "a
+Korean phone opens the Korean guide" into a unit test rather than something only
+a re-launched simulator can answer. And the two switch labels are deliberately
+**not** translated: a language switcher has to name each language in its own
+language, or the Korean reader cannot find 한국어 on an English screen. The only
+string that did need translating is the one nobody sees — the picker's VoiceOver
+label.
+
+The selection is view state and is not saved. The locale default is right on
+essentially every launch, and remembering an override past the session that
+prompted it would be a small, permanent way to be wrong.
 
 ---
 

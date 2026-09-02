@@ -304,6 +304,30 @@ What to report:
 
 ---
 
+### Opening the User Guide (Build 10)
+
+Changed in Build 10: the in-app guide opens in your phone's language instead of
+showing the English guide with the Korean one underneath it. Nothing either
+guide says has changed — only which one you land on.
+
+- [ ] Open **Settings → Help → User Guide** and confirm it opens in your
+      phone's language
+- [ ] Confirm you do **not** have to scroll through a second full guide in the
+      other language
+- [ ] Tap the other language at the top and confirm the guide switches
+- [ ] Leave the guide, reopen it, and confirm it opens in your phone's language
+      again (the switch is per visit, on purpose)
+- [ ] On a small phone, confirm the **English / 한국어** switch is not cramped
+
+What to report:
+
+- the guide opening in the wrong language for your phone
+- the switch not changing the guide, or landing you mid-page
+- a section that exists in one language but not the other
+- the switch looking cramped or clipped, and on which phone
+
+---
+
 ## Feedback Questions
 
 Ask these after testing. Keep it conversational — a message or short call is

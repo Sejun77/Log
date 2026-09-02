@@ -1692,6 +1692,61 @@ see §2.12** — kept separate from the search-policy commit as planned.
   verification is still pending, with the small-screen truncation check above as
   its first item.
 
+### 2.32 User Guide opens in the device language (Build 10 C5) — ✅ SHIPPED
+- **Source:** Build 10 UX audit, filed as a **UX / onboarding polish** item. Not
+  a Build 9 blocker.
+- **Problem:** `UserGuideView` rendered `englishGuide`, a `Divider`, then
+  `koreanGuide` — both guides, always, in that order. A Korean tester scrolled
+  the entire English guide to reach theirs, and an English tester ended every
+  read on a long Korean appendix. The guide is the first thing a new tester
+  opens, so this was the worst possible place for a scroll tax.
+- **Status: Done.** A segmented picker at the top, then exactly one guide,
+  opened on the device's language and switchable by tap.
+  - **Default rule** lives in a new pure `UserGuideLanguage.default(for:)`:
+    `locale.language.languageCode == .korean` → Korean, everything else →
+    English. Keyed on the **language, not the region**, so a Korean speaker with
+    a US region still gets Korean and a bare `ko` resolves; every other language
+    falls back to English, the only other guide there is. Taking a `Locale`
+    rather than reading `Locale.current` is what makes the rule a unit test
+    instead of something only a re-launched simulator can answer.
+  - **`UserGuideView.sections(for:)`** returns one of the two arrays — never
+    both concatenated — and is what the view renders from, so a test can assert
+    the "both guides back to back" behavior is gone.
+- **Guide content untouched.** Not a character changed, and neither array was
+  removed, merged or reordered. `GuideSectionView` / `GuideListRow` are as they
+  were; the only new rendering is the picker.
+- **State: view-local `@State`, deliberately not persisted.** The locale default
+  is right on essentially every launch, and a stored override would outlive the
+  reading session it was meant for. No `UserDefaults`, no `@AppStorage`, no
+  Settings row — the app has no per-screen language pattern to follow, so none
+  was invented.
+- **Segment titles are deliberately unlocalized.** `English` and `한국어` render
+  through `Text(verbatim:)`: a language switcher names each language in its own
+  language, or a Korean reader cannot find their guide on an English screen.
+  **Localization:** one new key, `Guide language` → `가이드 언어`, the picker's
+  VoiceOver label — invisible in segmented style, which is exactly why it needs
+  a translated accessibility label. Added additively; no catalog churn.
+- **`docs/USER_GUIDE.md` unchanged**: this slice changes only how the in-app
+  guide is presented, not what either guide says.
+- **No schema change**, no persistence, workout-lifecycle, set-logging,
+  rest-timer, switch, alternatives, effort-target, cardio, History, transfer or
+  duplication change. No project settings, signing, bundle ID, team, marketing
+  version or build number change.
+- **Tests:** 6 added to `UserGuideContentTests` (Korean locales — `ko_KR`, `ko`,
+  `ko_US`, `ko-Hang_KR` — default to Korean; `en_US`, `en_GB`, `ja_JP`,
+  `zh_Hans_CN`, `de_DE` default to English; each language renders exactly one
+  guide, asserted on headings plus an explicit check that the count is *not* the
+  sum of both; the selector offers exactly two languages; both labels are
+  stable) and 1 to `KoreanLocalizationTests` (the accessibility label in both
+  bundles). No existing test was weakened: the structural-parity tests read the
+  arrays directly and still hold both guides to matching shape — which now
+  matters **more**, since a user can flip between them on one screen.
+  **Full scheme passes: 2,344 tests, 0 failures** — 2,342 unit tests plus 2 UI
+  tests. Debug and Release builds succeed. Manual on-device verification is
+  still pending: the tests pin the rule, not the wiring of `Locale.current` into
+  `@State`, and the segmented picker wants a small-device look (both titles are
+  short, so this is a check rather than a worry).
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.

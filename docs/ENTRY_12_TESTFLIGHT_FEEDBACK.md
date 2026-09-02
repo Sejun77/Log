@@ -80,8 +80,9 @@ guide/tester docs.
 **Build 10 work has started.** It opens with a safety/UX fix to Alternative
 Exercises deletion handling (C1), followed by a Korean terminology and naming
 pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
-discoverability pass (C4) — see the Build 10 entries under *Fixes Made* below.
-All four are UX polish, not Build 9 blockers; Build 9 is
+discoverability pass (C4) and a User Guide language default (C5) — see the
+Build 10 entries under *Fixes Made* below. All five are UX polish, not Build 9
+blockers; Build 9 is
 unaffected and stays in testers' hands.
 
 ---
@@ -137,6 +138,9 @@ The checklist testers are asked to walk through (full version in
 - _(Build 10)_ On a routine exercise that has prepared alternatives, check that
   the routine row and the Start Workout screen both say how many there are
   before you start, and that the Switch Exercise row says so during the workout
+- _(Build 10)_ Open the in-app User Guide and confirm it opens in your phone's
+  language, with a switch at the top for the other one — you should not have to
+  scroll through a guide you cannot read
 
 ---
 
@@ -280,6 +284,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C4 — made prepared Alternative Exercises visible before you need them.** UX / discoverability polish, display only; nothing behaves differently. Alternative Exercises shipped complete in Build 9 and then said nothing about itself: a slot's prepared alternatives were authored deep inside the routine slot and invisible on the routine row, the Start Workout screen and the active workout, so a user could not confirm the prepared work had survived routine editing, duplication or import without starting a workout and tapping Switch Exercise. The count now appears on all three. **Routine editor rows** append it to the summary that already states the plan — `3 × 8–12 · 90s rest · RIR 2 · 2 alternatives` — via a new count on `BlockPrescriptionSummary`; superset rows are exempt, since a block-level count would not say which exercise owns it. **Start Workout** listed only exercise names and now renders that same summary type, so a plan is worded identically on the screen you author it and the screen you confirm it; the start logic is untouched. **The Switch Exercise row** shows a count when the slot has offers, taken from the exact array the sheet is built from, so the badge can never promise a row the sheet will not show — and a slot with nothing to offer shows no badge and still opens the picker directly, as before. **M13** is fixed alongside: the sheet is titled `Switch Exercise` rather than the name of the exercise being replaced, which moved into a two-line section header (`Prepared Alternatives` over `Replacing Bench Press`). The **count rule** is "what tapping Switch Exercise will offer you": disabled alternatives are excluded — the user asked for them not to be offered, so counting them would advertise something the sheet will not honor — while a deleted exercise's alternative still counts, because the sheet still shows that row, named and disabled. The authoring row inside the slot still counts every alternative, disabled included. One new localized key (`Replacing %@` → `%@ 대체 중`); the counts and both titles reuse keys the app already ships. No schema, persistence, payload-format, authoring, switch, destructive-confirmation, deletion, effort-target, cardio-calculation, History, transfer, duplication, lifecycle, set-logging or rest-timer change.
 
+- **Build 10 C5 — the in-app User Guide now opens in the device's language.** UX / onboarding polish, presentation only; neither guide's content changed. The guide rendered the full English guide, a divider, and then the full Korean guide — both, always, in that order — so a Korean tester scrolled past a guide they could not read to reach theirs, and an English tester ended every visit on a long Korean appendix. It is the first screen a new tester opens, which made it the worst place in the app for a scroll tax. It now shows **one** guide, chosen by the device language (Korean on a Korean phone, English otherwise), with a small **English / 한국어** segmented switch at the top for anyone who wants the other. The default rule is a pure `UserGuideLanguage.default(for:)` keyed on the **language, not the region** — a Korean speaker with a US region still gets Korean, a bare `ko` resolves, and every other language falls back to English, the only other guide there is; taking a `Locale` argument rather than reading `Locale.current` is what makes it unit-testable. Both guide arrays are intact and still held to matching section and item counts by the existing parity tests, which matters more now that a reader can flip between them on one screen. The selection is view state and is **not persisted**: the locale default is right on essentially every launch, and remembering an override past the session that prompted it would be a small permanent way to be wrong. The two switch titles are deliberately **not** translated — a language switcher names each language in its own language — so the only new key is the one nobody sees: `Guide language` → `가이드 언어`, the picker's VoiceOver label. `docs/USER_GUIDE.md` was not touched; this changes presentation, not content. No schema, persistence, lifecycle, set-logging, rest-timer, switch, alternatives, effort-target, cardio, History, transfer or duplication change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -324,6 +330,11 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C5 re-check on device: **pending** — the tests pin the
+  language rule but not the wiring of `Locale.current` into the view's state, so
+  what needs a real device is launching in each language and seeing the right
+  guide open, plus the segmented picker's look on a small screen (both titles
+  are short, so this is a check rather than a worry).
 - Manual Build 10 C4 re-check on device: **pending** — and one item comes
   first: the routine row's subtitle is a single line in caption, so a maximal
   cardio row (`3 × 45s · 5.0 km · 120s rest · RPE 8 → 10 · 3 alternatives`) may
@@ -358,8 +369,17 @@ Current validation status:
   sheet's title differs from its subtitle). No existing test was weakened or
   changed: the new `alternatives:` parameter defaults to zero, so every prior
   expectation stands as written.
-- Latest test suite result: **full scheme passes: 2,338 tests, 0 failures** —
-  2,336 unit tests plus 2 UI tests (Build 10 C4 run). Debug build succeeds and
+- User Guide language default (Build 10 C5): 6 tests added to
+  `UserGuideContentTests` (Korean locales default to the Korean guide, including
+  a bare `ko` and a Korean language with a non-Korean region; non-Korean locales
+  default to English; each language renders exactly one guide, with an explicit
+  check that the section count is *not* the sum of both; the selector offers
+  exactly two languages; both labels are stable) and 1 to
+  `KoreanLocalizationTests` (the picker's accessibility label in both bundles).
+  No existing test was weakened — the structural-parity tests read the guide
+  arrays directly and still hold both to matching shape.
+- Latest test suite result: **full scheme passes: 2,344 tests, 0 failures** —
+  2,342 unit tests plus 2 UI tests (Build 10 C5 run). Debug build succeeds and
   Release build succeeds.
 
 ---
@@ -483,8 +503,10 @@ prepared Alternative Exercises visible before a workout starts: the routine row
 and the Start Workout screen now say how many enabled alternatives a slot has,
 the active workout's Switch Exercise row carries the same count, and the switch
 sheet is titled by its action with the replaced exercise moved to a subtitle.
-All four are UX polish. Nothing here blocks Build 9, which stays in testers'
-hands.
+**C5** makes the in-app User Guide open in the device's language — one guide
+rather than English and Korean stacked back to back — with an English / 한국어
+switch for the other. All five are UX polish. Nothing here blocks Build 9, which
+stays in testers' hands.
 
 **Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
 landed after Build 8 was prepared: whole-step automatic Progression and the new
