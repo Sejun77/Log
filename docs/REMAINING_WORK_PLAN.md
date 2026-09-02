@@ -1892,6 +1892,67 @@ see §2.12** — kept separate from the search-policy commit as planned.
   is unit-tested against real rows, so the pass worth prioritizing is that
   exercises with no target and cardio items stay visually clean.
 
+### 2.35 Calculus showcase hidden from Release / TestFlight (Build 10 C8) — ✅ SHIPPED
+- **Source:** Build 10 UX audit, **M9** — a Settings / TestFlight polish item.
+  Not a Build 9 blocker.
+- **Problem:** Settings offered a **Showcase → Calculus Analytics** row
+  unconditionally. It is a development artifact — an AP Calculus AB demo over
+  in-memory sample data that touches nothing a user owns — and inside a gym app
+  on a tester's phone it reads as a stray academic feature. Its strings are
+  English-only, so a Korean tester met an untranslated section describing
+  coursework.
+- **Status: Done.** Two `#if DEBUG` blocks in `SettingsView`: one around the
+  call site, one around the `showcaseSection` **definition**. Gating the
+  definition as well as the call is what makes the gate load-bearing rather than
+  cosmetic — if anyone later re-adds an ungated call, **Release fails to
+  compile** instead of quietly shipping the row.
+- **The rule is stated once**, in a new pure
+  `SettingsShowcaseVisibility.isVisible(isDebug:)`, so the `#if DEBUG` block and
+  the test that pins the intent cannot drift into disagreeing. Taking the
+  configuration as an **argument** is what makes it testable: a test bundle is
+  built in the same configuration as its host app, so a Debug run can never
+  observe Release behavior directly — but it can assert both answers of a pure
+  function, plus that the compiled constant matches the configuration it is
+  running in.
+- **Not a runtime flag.** No `UserDefaults`, nothing togglable, no hidden
+  gesture — explicitly ruled out by the slice, and nothing a shipped build could
+  be talked into showing.
+- **Debug is unchanged:** the row is still there and still works. This removes
+  the way *in*, not the showcase — `AnalyticsView`, `StrengthAnalytics` and
+  `SampleWorkoutData` are untouched and still build in every configuration, with
+  their existing test suites passing.
+- **Localization: no catalog change, deliberately.** The three showcase keys
+  (`Calculus Analytics`, `Showcase`, the AP Calculus footer) carry **no Korean
+  at all** — that was the untranslated-English half of M9 — and no test requires
+  them to localize (`KoreanLocalizationTests` covers only the two Settings
+  *footer description* keys, which are unrelated and still pass). Translating a
+  Debug-only demo would be work with no user, and deleting the keys would touch
+  the catalog for no test-proven reason. **Optional follow-up, not taken:** a
+  `"comment"` marking those three keys Debug-only would stop a future translator
+  spending time on them.
+- **No schema change**, no migrations, no showcase-implementation change, no
+  workout, routine, active-workout, History, cardio, Alternative Exercises or
+  effort-target change. No localization catalog, docs, project settings,
+  signing, bundle ID, team, marketing version or build number change.
+- **Tests:** new `LogTests/SettingsShowcaseVisibilityTests.swift` (4) — visible
+  in Debug, hidden in Release, visibility depends on nothing but its argument,
+  and the compiled constant agrees with the configuration the suite runs in (so
+  an inverted `#if` fails in CI rather than surfacing as a showcase row on
+  TestFlight). No existing test was modified. **Full scheme passes: 2,389 tests,
+  0 failures** — 2,387 unit tests plus 2 UI tests. Debug and **Release** builds
+  succeed — the Release build is the meaningful one here, since it compiles with
+  `showcaseSection` absent.
+- **A verification that was attempted and did not stand up:** grepping the built
+  Debug and Release `.app` bundles for the footer literal, to demonstrate the
+  absence directly. The string appears in *neither* bundle, so the probe cannot
+  distinguish the two configurations and is no evidence either way — Swift does
+  not store those literals in a form plain `strings` finds here. The evidence
+  for this slice is the successful Release compile with the section removed (a
+  compile-time guarantee) plus the unit tests; the on-device pass below is what
+  would confirm it end to end.
+- Manual verification is still pending: that the showcase is gone from a Release
+  build, and that **no other Settings row** went with it.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.

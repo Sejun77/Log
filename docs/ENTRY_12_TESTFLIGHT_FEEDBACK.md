@@ -81,9 +81,10 @@ guide/tester docs.
 Exercises deletion handling (C1), followed by a Korean terminology and naming
 pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
 discoverability pass (C4), a User Guide language default (C5) and an
-effort-target clarity pass (C6) and planned effort targets in History (C7) —
-see the Build 10 entries under *Fixes Made* below. All seven are UX polish or
-visibility improvements, not Build 9 blockers; Build 9 is
+effort-target clarity pass (C6), planned effort targets in History (C7) and the
+Calculus showcase hidden from Release (C8) — see the Build 10 entries under
+*Fixes Made* below. All eight are UX polish or visibility improvements, not
+Build 9 blockers; Build 9 is
 unaffected and stays in testers' hands.
 
 ---
@@ -148,6 +149,8 @@ The checklist testers are asked to walk through (full version in
 - _(Build 10)_ Finish a workout on an exercise that has an effort target, then
   open it in History and confirm the planned effort is shown — and that it still
   shows the old value after you change the routine's target
+- _(Build 10)_ Open Settings and confirm there is no "Showcase" or "Calculus
+  Analytics" row — and that everything else you used before is still there
 
 ---
 
@@ -297,6 +300,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C7 — History now shows the planned effort target a workout was started with.** A History / effort-target visibility improvement, display only. Build 9 shipped Custom Per Set targets and they vanished the moment a workout ended: `PlannedPrescriptionSnapshot` had carried the frozen effort fields since the slice that added them, with **no reader**, so a user could author a per-set ramp, train it, and find no trace of it afterwards — the feature was effectively write-only. Each History item now carries a one-line **Planned effort** row, between Equipment & Setup and the Cardio Plan block and above the logged sets, laid out exactly like the Equipment row and added to both the single-exercise and superset section shapes. The value is read **only** from `item.plannedPrescriptionSnapshot`, through a new pure helper — never the live routine, the live exercise, or the routine list — so editing your programming tomorrow cannot rewrite what last week's workout says it planned; that is pinned by tests against real model rows, for a single target and for a custom list. All formatting is delegated to the same resolver the routine editor and active workout use, so `RIR 2`, `RIR 2 → 0` and `RIR 2/1.5/1/0` render identically to everywhere else and the C6 four-value elision (`RIR 3/3/2/2…`) arrived for free; both metrics work, including the paired fallback that lets a target authored in RIR read for a user now on RPE, and legacy snapshots with no explicit mode still derive a single target. Every "nothing to say" case renders **no row at all** rather than an empty one: no snapshot, mode None, missing values, a corrupt custom list, or autoregulation switched off. Cardio is not special-cased — a cardio slot's snapshot carries no effort values, so it renders nothing through the ordinary path. The label is **Planned effort / 계획 강도** and says nothing about achievement: no `SetLog` holds a logged RIR/RPE, and a test asserts the Korean never implies one. **H5(b) was deliberately not implemented** — no logged-effort field, no planned-vs-actual comparison, no `SetLog` change. No schema, migrations, `SetLog` / `WorkoutItem` / snapshot fields, stored effort values, `EffortMode` raw values, active-workout logging or effort controls, lifecycle, rest timer, switch, alternatives, deletion, cardio calculations, transfer payload or duplication change.
 
+- **Build 10 C8 — hid the Calculus showcase from Release and TestFlight builds.** Settings / TestFlight polish, visibility only. Settings offered a **Showcase → Calculus Analytics** row unconditionally: an AP Calculus AB demo that analyses in-memory sample data and touches nothing a user owns. It was written as a development exercise, and it has been sitting in the Settings screen of a build sent to people who came to log workouts — in English only, so a Korean tester met an untranslated section about coursework. It is now behind `#if DEBUG`, still available locally and absent from anything a tester installs. The gate wraps **both** the call site and the `showcaseSection` definition, which is what makes it load-bearing rather than cosmetic: gating only the call would work today and quietly stop working the first time someone re-added a reference, whereas with the definition gated too an ungated call **fails the Release build** instead of shipping. The rule itself lives in one small pure helper taking the build configuration as an argument — the only way to test it at all, since a test bundle is built in the same configuration as its host app and a Debug run can never observe Release behavior directly. Not a runtime flag: no `UserDefaults`, nothing togglable, no hidden gesture. `Localizable.xcstrings` was **not** touched — the three showcase keys have no Korean and no test requires them to, so translating a Debug-only demo would be work with no user. `AnalyticsView`, `StrengthAnalytics` and `SampleWorkoutData` are unchanged and still build and test in every configuration: this removes the way *in*, not the showcase. No schema, migrations, workout, routine, active-workout, History, cardio, Alternative Exercises, effort-target, localization, docs, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -341,6 +346,10 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C8 re-check on device: **pending** — the gate is a
+  compile-time one, so what a device pass adds is the two things a build cannot
+  report: that the showcase is genuinely absent from a Release install, and that
+  **no other Settings row** disappeared with it.
 - Manual Build 10 C7 re-check on device: **pending** — the freeze behavior is
   unit-tested against real model rows, so what wants a real screen is the
   quieter half: that an exercise with no effort target and a cardio item both
@@ -423,9 +432,18 @@ Current validation status:
   stored list byte-for-byte intact. 2 added to `KoreanLocalizationTests` (the
   label localizes, and never implies a logged result). No existing test was
   modified.
-- Latest test suite result: **full scheme passes: 2,385 tests, 0 failures** —
-  2,383 unit tests plus 2 UI tests (Build 10 C7 run). Debug build succeeds and
-  Release build succeeds.
+- Calculus showcase gate (Build 10 C8): new `SettingsShowcaseVisibilityTests`
+  (4) — visible in Debug, hidden in Release, visibility depending on nothing but
+  its argument, and the compiled constant agreeing with the configuration the
+  suite runs in, so an inverted `#if` fails in CI rather than surfacing as a
+  showcase row on TestFlight. The showcase's own suites
+  (`StrengthAnalyticsTests`, `SampleWorkoutDataTests`) are untouched and still
+  pass: the slice removes the way *in*, not the showcase. No existing test was
+  modified.
+- Latest test suite result: **full scheme passes: 2,389 tests, 0 failures** —
+  2,387 unit tests plus 2 UI tests (Build 10 C8 run). Debug build succeeds and
+  Release build succeeds — the Release build being the meaningful one for C8,
+  since it compiles with the showcase section absent.
 
 ---
 
@@ -558,8 +576,10 @@ feature, and a long custom per-set summary stops at four values with an
 ellipsis. **C7** makes the effort targets visible again after a workout ends:
 History now shows the planned effort each exercise was started with, read from
 the frozen session snapshot so editing the routine later cannot rewrite it.
-Six are UX polish and C7 is a visibility improvement. Nothing here blocks
-Build 9, which stays in testers' hands.
+**C8** takes the AP Calculus AB showcase out of Settings for Release and
+TestFlight builds, keeping it for local development. Six are UX polish, C7 is a
+visibility improvement and C8 is a TestFlight-facing cleanup. Nothing here
+blocks Build 9, which stays in testers' hands.
 
 **Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
 landed after Build 8 was prepared: whole-step automatic Progression and the new

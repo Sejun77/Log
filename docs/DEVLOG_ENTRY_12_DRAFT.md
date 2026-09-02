@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C7 fix._
+_Counts are from the latest verification run, after the Build 10 C8 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C7 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,385 tests, 0 failures** — 2,383 unit tests plus 2 UI
+- **Full scheme passes: 2,389 tests, 0 failures** — 2,387 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -488,6 +488,35 @@ snapshot and is pinned by a test against real rows. And it does not claim you
 says "Planned effort" and stops. Naming a row "RIR" and letting the reader
 assume it was measured would be the cheapest possible lie, and it would be
 indistinguishable from the honest version until someone relied on it.
+
+---
+
+## Build 10 — Taking the Calculus Out of the Gym App
+
+Settings had a **Showcase** section offering *Calculus Analytics*: an AP
+Calculus AB demo that runs a strength/volume analysis over in-memory sample
+data. It was written as a development exercise, it touches nothing a user owns,
+and it has been sitting in the Settings screen of a build sent to people who
+came to log workouts. In English only, so a Korean tester met an untranslated
+section about coursework.
+
+It is now `#if DEBUG`. Still there on my machine, gone from anything a tester
+installs.
+
+The detail worth keeping is that the gate wraps **both** the call site and the
+`showcaseSection` definition. Gating only the call would have worked today and
+quietly stopped working the first time someone re-added a reference — the
+section would still exist, so Release would still compile. With the definition
+gated too, an ungated call in a future edit fails the Release build instead of
+shipping. A compile error is a much better failure than a screenshot from a
+tester asking why the gym app wants to teach them derivatives.
+
+The rule lives in one small pure function taking the configuration as an
+argument, which is the only way to test it at all: a test bundle is built in the
+same configuration as the app it hosts, so a Debug run can never see what a
+Release build renders. It can, however, assert both answers of a function — and
+assert that the compiled constant agrees with the configuration it is running
+in, so an inverted `#if` fails in CI rather than on someone's phone.
 
 ---
 

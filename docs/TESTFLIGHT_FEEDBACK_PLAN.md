@@ -393,6 +393,26 @@ What to report:
   effort
 - the line cut off or crowding the rows below it, and on which phone
 
+---
+
+### Settings, After the Showcase Was Removed (Build 10)
+
+Removed in Build 10: the **Showcase / Calculus Analytics** row in Settings. It
+was a development demo that had no business in a build you installed, and it is
+gone from tester builds. Nothing else in Settings changed.
+
+- [ ] Open **Settings** and confirm there is no "Showcase" or "Calculus
+      Analytics" row
+- [ ] Confirm Units, Bodyweight, Autoregulation, Defaults, Data and Help are all
+      still present and still work
+- [ ] In Korean, confirm Settings has no leftover English-only section
+
+What to report:
+
+- a "Showcase" or "Calculus Analytics" row still appearing
+- any Settings row that used to be there and now is not
+- any remaining English text on the Korean Settings screen
+
 ## Feedback Questions
 
 Ask these after testing. Keep it conversational — a message or short call is
