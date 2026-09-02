@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C1 fix._
+_Counts are from the latest verification run, after the Build 10 C2 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,8 +201,9 @@ _Counts are from the latest verification run, after the Build 10 C1 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,315 tests, 0 failures** — 2,313 unit tests plus 2 UI
-  tests.
+- **`LogTests` passes: 2,321 tests, 0 failures.** The last full-scheme run —
+  2,315 tests, 2,313 unit plus 2 UI — was at Build 10 C1; the UI tests were not
+  re-run for the display-text slice that followed it.
 - **Debug build succeeds.**
 - **Release build succeeds.**
 - **Manual regression completed** on device: routines, logging, exercise
@@ -293,6 +294,40 @@ names an exercise deleted mid-session.
 
 No schema change, no active-workout switch behavior change, no effort-target
 logic change.
+
+---
+
+## Build 10 — Saying the Right Thing in Korean
+
+The second Build 10 slice is smaller and entirely about words. Nothing in the
+app behaves differently afterwards; four things it *said* were wrong.
+
+- **End and Finish asked the same question.** Both dialogs were titled
+  `운동을 종료할까요?` in Korean — the one that exits a workout and the one that
+  completes it and saves it to History. They now read `운동을 중단할까요?` and
+  `운동을 완료할까요?`, and the finish dialog agrees with the `완료` button
+  inside it.
+- **Routine block detail leaked the database into the UI.** It rendered
+  `kindRaw.capitalized` — the persisted English raw value — so a Korean routine
+  listed its sets as `Working`, `Warmup`, `Dropset`. It now uses the localized
+  label the rest of the app already had.
+- **The cardio plan had two names.** The routine editor said *Structured
+  Cardio*; the active workout, History and the guide said *Cardio Plan*. The
+  editor row and the screen it pushes now say Cardio Plan too.
+- **The Techniques row argued with itself**, reading `운동 기법        3 테크닉`.
+  The count now reuses the row's own name.
+
+And a guide error worth its own line: the Korean guide told users to tap **종료**
+to save a workout to History. 종료 is the *exit* button. Someone following the
+guide literally would have been told to leave the workout at the exact moment
+they meant to finish it. The finish steps now say **완료**, and the only 종료
+left in the guide is `저장 후 종료` — the save-for-later exit, which is what the
+word should have been reserved for from the start.
+
+That last one is the useful reminder in this slice. The translation was not
+missing and not clipped; it was fluent, confident, and pointed at the wrong
+button. Nothing but reading the Korean UI as a Korean user would catch it, which
+is exactly what the tester round is for.
 
 ---
 

@@ -214,6 +214,36 @@ What to report:
 
 ---
 
+### Korean Wording After the Build 10 Terminology Fix (Build 10)
+
+Korean UI only. Set the phone to Korean first. Nothing here changes what the app
+does — it is a read-the-screen pass on wording that was wrong in Build 9.
+
+- [ ] Open a routine block and check the set rows — they should read
+      `메인 세트` / `워밍업 세트` / `드롭 세트`, never `Working`, `Warmup` or
+      `Dropset`
+- [ ] Start a workout, tap the **End** path and read the dialog title
+      (`운동을 중단할까요?`)
+- [ ] Cancel, then tap **Finish** and read that dialog title
+      (`운동을 완료할까요?`) — the two must ask different questions
+- [ ] Open a cardio routine slot and confirm the plan row says `유산소 계획`,
+      and that the screen it opens has the same name
+- [ ] Open a slot with techniques and confirm the row does not mix 운동 기법 and
+      테크닉
+- [ ] Open the in-app Korean guide and confirm the finish step says to tap
+      **완료** to save the workout to History
+
+What to report:
+
+- any English word left in a Korean screen, especially in a set row
+- the End and Finish dialogs reading the same, or either one naming the wrong
+  action
+- 유산소 계획 and 유산소 구성 both appearing for the same thing
+- guide steps that name a button that is not on the screen
+- any of this wording clipped or wrapped badly at Korean string lengths
+
+---
+
 ## Feedback Questions
 
 Ask these after testing. Keep it conversational — a message or short call is

@@ -1528,6 +1528,53 @@ see §2.12** — kept separate from the search-policy commit as planned.
   succeeds. Manual on-device re-check of the dialog copy at Korean string lengths
   is still pending.
 
+### 2.29 Korean terminology & set-kind enum leak (Build 10 C2) — ✅ SHIPPED
+- **Source:** Build 10 UX audit — H2, H3, M1, M10, plus a guide-wording error
+  found alongside them. Display text only; no behavior in scope.
+- **Problem:** four separate places where the Korean UI said the wrong thing.
+  The **End workout?** and **Finish this workout?** dialogs shared one Korean
+  title (`운동을 종료할까요?`), so the exit path and the save-to-History path
+  asked the same question. Routine block detail rendered
+  `SetTemplate.kindRaw.capitalized` — the *persisted English raw value* — so a
+  Korean routine listed its sets as `Working` / `Warmup` / `Dropset`. The
+  routine editor called the cardio segment plan **Structured Cardio** while the
+  active workout, History and the guide all called it **Cardio Plan**. The
+  Techniques row read `운동 기법        3 테크닉`, two Korean words for one
+  thing. And the Korean guide told users to tap **종료** to save a workout to
+  History — the exit button, not the finish one.
+- **Status: Done.**
+  - **End vs. Finish.** `End workout?` → `운동을 중단할까요?` (the Save & Exit /
+    Discard exit), `Finish this workout?` → `운동을 완료할까요?`, matching the
+    `완료` button it confirms and `운동 완료`. English unchanged.
+  - **Set kinds.** Both block-detail call sites (`RoutineBlockDetailView`,
+    `SupersetDetailNoRest`) now render `t.kind.historyRowLabel` instead of
+    `t.kindRaw.capitalized`. `SetKind` raw values and persistence untouched.
+  - **Cardio Plan.** The routine editor row and the pushed
+    `CardioSegmentPlanEditor` title both say `Cardio Plan` / `유산소 계획`,
+    reusing the existing key. The `Structured Cardio` key survives for the
+    Alternative Exercises summary chip, which is **deliberately left alone** —
+    renaming it would rewrite `SlotAlternativeSummary` expectations for no user
+    gain. Recorded here as the one remaining occurrence of the old name.
+  - **Techniques count.** `%lld technique%@` → `운동 기법 %1$lld개`, reusing the
+    row's own name; placeholder retained.
+  - **Guide.** Three Korean lines now say 완료 for finishing; the single
+    surviving 종료 is `저장 후 종료` (Save & Exit), which is what it should have
+    named all along. `docs/USER_GUIDE.md` updated to match, since the in-app
+    guide mirrors it by hand.
+- **No schema change**, no persistence change, no workout-lifecycle,
+  switch-behavior, effort-target, cardio, alternatives, transfer, duplication or
+  History change. No project settings, signing, bundle ID, team, marketing
+  version or build number change.
+- **Tests:** 6 added to `KoreanLocalizationTests` (End/Finish distinct and
+  exact, English keys unchanged, set-kind labels localize and are never a
+  capitalized raw value, a `SetKind.allCases` guard so a new case forces the key
+  list update, `Cardio Plan` ko/en, technique count uses 운동 기법 and keeps its
+  placeholder) and 2 to `UserGuideContentTests` (the Korean finish step says
+  완료; no Korean section calls finishing 종료). **`LogTests` passes: 2,321
+  tests, 0 failures.** Debug and Release builds succeed. The 2 UI tests were not
+  re-run in this slice. Manual on-device verification in Korean is still
+  pending.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.

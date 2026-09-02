@@ -78,8 +78,9 @@ destructive confirmation before removing logged sets, and the updated
 guide/tester docs.
 
 **Build 10 work has started.** It opens with a safety/UX fix to Alternative
-Exercises deletion handling (see the Build 10 entry under *Fixes Made* below);
-Build 9 is unaffected and stays in testers' hands.
+Exercises deletion handling (C1), followed by a Korean terminology and naming
+pass (C2) — see the Build 10 entries under *Fixes Made* below. Build 9 is
+unaffected and stays in testers' hands.
 
 ---
 
@@ -126,6 +127,9 @@ The checklist testers are asked to walk through (full version in
   Exercise, confirm it does not read as unused, then delete it and confirm the
   warning mentions prepared alternatives and the alternative is gone from the
   routine afterwards
+- _(Build 10, Korean UI)_ Open a routine block and confirm the set rows are in
+  Korean, then compare the **End** and **Finish** dialogs during a workout and
+  confirm they ask different questions
 
 ---
 
@@ -263,6 +267,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C1 — made exercise deletion account for prepared Alternative Exercises.** The first Build 10 fix, and a safety/UX one: `ExerciseRoutineUsage` counted only direct routine slots, so an exercise referenced *solely* as a prepared alternative reported the misleading **"Used in 0 routines"** on Exercise Detail — directly above a Delete button that would strand that prepared work. Deleting it removed nothing from the alternatives, leaving dangling references that resurfaced mid-workout as disabled `Exercise unavailable` rows in routines the user had no way to repair. Exercise usage now counts prepared alternatives alongside direct slots, kept as **separate** counts that are never summed (a routine referencing the exercise both ways is still counted once): Exercise Detail now reads `Used as 3 alternatives` when there is no direct usage, `Used in 2 routines · 3 alternatives` when there is both, and no longer offers the "add this exercise to a routine" empty state to an exercise several routines are relying on. The delete confirmation now names the prepared alternatives and their count. Deleting an exercise **prunes** the matching alternatives rather than leaving them dangling — the user chose to delete it from the library and the confirmation now says the prepared work goes with it — while non-matching alternatives keep their ids, their prescriptions, and a dense order, and removing a slot's last alternative clears the column to nil so "had them and lost them" persists identically to "never had any". A nil, empty, or corrupt alternatives payload matches nothing and is left byte-identical rather than rewritten. Disabled alternatives are counted and pruned like any other — they are still prepared work. No schema change, no active-workout switch behavior change, no effort-target logic change.
 
+- **Build 10 C2 — fixed Korean terminology and a raw-enum leak in the routine editor.** Display text only; nothing behaves differently. Four things the app said wrong, plus a guide error. The **End workout?** and **Finish this workout?** dialogs shared one Korean title — `운동을 종료할까요?` — so the exit path and the save-to-History path asked the identical question; they now read `운동을 중단할까요?` and `운동을 완료할까요?`, the latter matching the `완료` button inside it. Routine block detail rendered `SetTemplate.kindRaw.capitalized`, the *persisted English raw value*, so a Korean routine listed its sets as `Working` / `Warmup` / `Dropset`; both call sites now use the localized `SetKind` label the rest of the app already had, with raw values and persistence untouched. The routine editor row and the cardio plan editor's title said **Structured Cardio** while the active workout, History and the guide said **Cardio Plan** — both now say Cardio Plan / 유산소 계획 (the Alternative Exercises summary chip keeps the old key deliberately, as renaming it buys the user nothing). The Techniques row read `운동 기법        3 테크닉`, two Korean words for one thing; the count now reuses the row's own name as `운동 기법 %1$lld개`. And the Korean guide told users to tap **종료** — the *exit* button — to save a workout to History; the finish steps now say **완료**, and the only 종료 left is `저장 후 종료`, the save-for-later exit. `docs/USER_GUIDE.md` was updated on main to match, since the in-app guide mirrors it by hand. No schema, persistence, lifecycle, cardio, alternatives, transfer or History change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -304,9 +310,20 @@ Current validation status:
 - Manual Build 10 C1 re-check on device: **pending** — the automated coverage
   walks the full delete-an-alternative-only-exercise scenario, but the dialog
   copy has not been read on a real screen at Korean string lengths.
-- Latest full test suite result: **full scheme passes: 2,315 tests, 0 failures**
-  — 2,313 unit tests plus 2 UI tests. Debug build succeeds and Release build
-  succeeds.
+- Manual Build 10 C2 re-check on device: **pending** — the tests assert the
+  compiled Korean strings, but the block-detail rows, the two workout dialogs,
+  the cardio row and the Techniques row have not been seen on a Korean screen.
+- Korean terminology and set-kind labels (Build 10 C2): 6 tests added to
+  `KoreanLocalizationTests` — the End and Finish dialog titles distinct and each
+  exact, English keys unchanged, set-kind row labels localized and never a
+  capitalized raw enum value, a `SetKind.allCases` guard so a new case forces
+  the key list to be updated, the Cardio Plan row name in both languages, and
+  the technique count reusing 운동 기법 with its placeholder intact — plus 2 in
+  `UserGuideContentTests` pinning the Korean finish step to 완료.
+- Latest test suite result: **`LogTests` passes: 2,321 tests, 0 failures**
+  (Build 10 C2 run). Debug build succeeds and Release build succeeds. The 2 UI
+  tests were not re-run in this display-text slice; the last full-scheme run was
+  2,315 tests at C1.
 
 ---
 
@@ -414,8 +431,14 @@ Exercises deletion handling: exercise usage now includes prepared alternatives,
 so an exercise used only as an alternative no longer reports the misleading
 "Used in 0 routines"; the delete confirmation now warns that prepared
 alternatives will be removed; and deleting an exercise prunes those
-alternatives instead of leaving dangling unavailable rows behind. Nothing here
-blocks Build 9, which stays in testers' hands.
+alternatives instead of leaving dangling unavailable rows behind. **C2** follows
+it with a Korean terminology pass, display text only: the End and Finish
+workout dialogs no longer share one Korean title, routine block detail stops
+showing raw English set kinds (`Working` / `Warmup` / `Dropset`) in Korean, the
+routine editor and its plan editor now call the cardio plan **Cardio Plan** like
+the rest of the app, the Techniques count stops mixing 운동 기법 and 테크닉, and
+the Korean guide now says to tap **완료** — not 종료 — to save a workout to
+History. Nothing here blocks Build 9, which stays in testers' hands.
 
 **Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
 landed after Build 8 was prepared: whole-step automatic Progression and the new
