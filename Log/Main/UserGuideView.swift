@@ -12,18 +12,58 @@ import SwiftUI
 /// The guide is intentionally a flat `ScrollView` of typed blocks. To update the
 /// text, edit the `englishGuide` / `koreanGuide` arrays below to match
 /// `USER_GUIDE.md`; there is no parsing or shared state to keep in sync.
+/// Which of the two guides is on screen.
+///
+/// A pure value type with a pure default rule, so "a Korean phone opens the
+/// Korean guide" is a unit test rather than something only a re-launched
+/// simulator can answer.
+enum UserGuideLanguage: String, CaseIterable, Identifiable {
+    case english
+    case korean
+
+    var id: String { rawValue }
+
+    /// The segmented control's label. **Never localized**: a language switcher
+    /// names each language in its own language, so a Korean reader can find
+    /// 한국어 on an English screen and vice versa. Rendered with
+    /// `Text(verbatim:)` for the same reason.
+    var pickerLabel: String {
+        switch self {
+        case .english: return "English"
+        case .korean: return "한국어"
+        }
+    }
+
+    /// Which guide to open for a given locale: Korean for a Korean-language
+    /// locale, English for everything else.
+    ///
+    /// Keyed on the **language**, not the region — a Korean speaker with a US
+    /// region still reads Korean, and `ko` with no region still resolves. Every
+    /// other language falls back to English, which is the only other guide
+    /// there is.
+    static func `default`(for locale: Locale) -> UserGuideLanguage {
+        locale.language.languageCode == .korean ? .korean : .english
+    }
+}
+
 struct UserGuideView: View {
+    /// View-local only, deliberately not persisted: the locale default is right
+    /// on essentially every launch, and a stored override would outlive the one
+    /// reading session it was meant for. Nothing else in the app stores a
+    /// per-screen language either.
+    @State private var language: UserGuideLanguage = .default(for: .current)
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DSSpacing.xl) {
-                ForEach(Self.englishGuide) { section in
-                    GuideSectionView(section: section)
+                Picker("Guide language", selection: $language) {
+                    ForEach(UserGuideLanguage.allCases) { language in
+                        Text(verbatim: language.pickerLabel).tag(language)
+                    }
                 }
+                .pickerStyle(.segmented)
 
-                Divider()
-                    .padding(.vertical, DSSpacing.sm)
-
-                ForEach(Self.koreanGuide) { section in
+                ForEach(Self.sections(for: language)) { section in
                     GuideSectionView(section: section)
                 }
             }
@@ -32,6 +72,16 @@ struct UserGuideView: View {
         }
         .navigationTitle("User Guide")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The guide for one language — **one** of the two arrays, never both
+    /// concatenated. Both arrays are kept exactly as they were; this only
+    /// chooses between them.
+    static func sections(for language: UserGuideLanguage) -> [GuideSection] {
+        switch language {
+        case .english: return englishGuide
+        case .korean: return koreanGuide
+        }
     }
 }
 

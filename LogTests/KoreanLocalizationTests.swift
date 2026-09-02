@@ -791,6 +791,19 @@ final class KoreanLocalizationTests: XCTestCase {
         }
     }
 
+    // MARK: - User Guide language picker (Build 10 C5)
+
+    /// The picker's accessibility label is the only new string the guide
+    /// language selector introduces — the two segment titles are deliberately
+    /// unlocalized, each naming its own language.
+    func testGuideLanguagePickerLabelLocalizesToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+
+        XCTAssertEqual(localized("Guide language", in: ko), "가이드 언어")
+        XCTAssertEqual(localized("Guide language", in: en), "Guide language")
+    }
+
     // MARK: - Alternative Exercises discoverability (Build 10 C4)
 
     /// Every string the discoverability slice puts on a new surface — the

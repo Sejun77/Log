@@ -303,6 +303,58 @@ final class UserGuideContentTests: XCTestCase {
             "The save-for-later exit is the one place 종료 belongs")
     }
 
+    // MARK: - 4. Language selection (Build 10 C5)
+
+    /// A Korean phone opens the Korean guide. Keyed on the language, so a
+    /// Korean speaker in any region gets it.
+    func testKoreanLocalesDefaultToTheKoreanGuide() {
+        for identifier in ["ko_KR", "ko", "ko_US", "ko-Hang_KR"] {
+            XCTAssertEqual(
+                UserGuideLanguage.default(for: Locale(identifier: identifier)),
+                .korean,
+                "\(identifier) should open the Korean guide")
+        }
+    }
+
+    /// Everything else falls back to English — the only other guide there is.
+    func testNonKoreanLocalesDefaultToTheEnglishGuide() {
+        for identifier in ["en_US", "en_GB", "ja_JP", "zh_Hans_CN", "de_DE"] {
+            XCTAssertEqual(
+                UserGuideLanguage.default(for: Locale(identifier: identifier)),
+                .english,
+                "\(identifier) should open the English guide")
+        }
+    }
+
+    /// The guide shown is **one** of the two arrays, never both concatenated —
+    /// the whole point of the slice. Asserted on headings, since `GuideSection`
+    /// carries a fresh `UUID` and is not `Equatable`.
+    func testEachLanguageRendersExactlyOneGuide() {
+        XCTAssertEqual(
+            UserGuideView.sections(for: .english).map(\.heading),
+            english.map(\.heading))
+        XCTAssertEqual(
+            UserGuideView.sections(for: .korean).map(\.heading),
+            korean.map(\.heading))
+
+        XCTAssertNotEqual(
+            UserGuideView.sections(for: .english).count,
+            english.count + korean.count,
+            "the view must not render both guides back to back any more")
+    }
+
+    /// The two selectable languages, and nothing else.
+    func testTheSelectorOffersExactlyTwoLanguages() {
+        XCTAssertEqual(UserGuideLanguage.allCases, [.english, .korean])
+    }
+
+    /// Each segment names its own language, and neither is translated — a
+    /// Korean reader must be able to find 한국어 on an English screen.
+    func testSelectorLabelsAreStableAndUntranslated() {
+        XCTAssertEqual(UserGuideLanguage.english.pickerLabel, "English")
+        XCTAssertEqual(UserGuideLanguage.korean.pickerLabel, "한국어")
+    }
+
     /// Duration slots hide reps, weight, tempo, and Tempo Override — the guide
     /// states it, so a regression in either place should surface here.
     func testGuideStatesTheDurationFieldRules() throws {
