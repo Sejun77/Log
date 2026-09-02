@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C2 fix._
+_Counts are from the latest verification run, after the Build 10 C3 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,9 +201,8 @@ _Counts are from the latest verification run, after the Build 10 C2 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **`LogTests` passes: 2,321 tests, 0 failures.** The last full-scheme run —
-  2,315 tests, 2,313 unit plus 2 UI — was at Build 10 C1; the UI tests were not
-  re-run for the display-text slice that followed it.
+- **Full scheme passes: 2,323 tests, 0 failures** — 2,321 unit tests plus 2 UI
+  tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
 - **Manual regression completed** on device: routines, logging, exercise
@@ -328,6 +327,35 @@ That last one is the useful reminder in this slice. The translation was not
 missing and not clipped; it was fluent, confident, and pointed at the wrong
 button. Nothing but reading the Korean UI as a Korean user would catch it, which
 is exactly what the tester round is for.
+
+---
+
+## Build 10 — Putting the Sets Where the Hands Are
+
+The third Build 10 slice moves one section and changes nothing else.
+
+The active workout screen listed nine sections, and the set rows were **ninth**.
+Above them: session notes, the future-prefill toggle, exercise notes, Switch
+Exercise, the Plan card, Equipment & Setup, warm-ups, the cardio checklist. All
+of it either read once at the start or never — and all of it between the user
+and the reps field they come back to every couple of minutes, on every exercise,
+on every phone.
+
+Sets is now first. Then the plan-shaped things a user reads *while* logging —
+Plan, Warmup, the Cardio Plan checklist — then Equipment & Setup, and then the
+read-once half: Switch Exercise, Exercise Notes, the prefill toggle, Session
+Notes. No section was removed, renamed, collapsed behind a disclosure, or given
+a new label; the header above the list did not move.
+
+It is worth being precise about how little this changed, because a 4,800-line
+view is exactly where a "simple reorder" quietly loses something. Comparing the
+multiset of non-blank lines against the previous commit: seven comment lines
+removed, eleven added, and every single line of code byte-identical and merely
+relocated. That check earned its keep immediately — the first pass rewrote the
+cardio checklist's comment and swallowed the call underneath it. It would have
+compiled clean, passed all 2,323 tests, and silently dropped the checklist from
+every cardio workout, because nothing in the suite asserts that a section is on
+screen. A build succeeding is not the same as the screen being right.
 
 ---
 

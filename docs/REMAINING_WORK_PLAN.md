@@ -1575,6 +1575,49 @@ see §2.12** — kept separate from the search-policy commit as planned.
   re-run in this slice. Manual on-device verification in Korean is still
   pending.
 
+### 2.30 Active workout section order — Sets first (Build 10 C3) — ✅ SHIPPED
+- **Source:** Build 10 UX audit, filed as a **UX polish** item. Not a Build 9
+  blocker; Build 9 stays in testers' hands.
+- **Problem:** the set rows — the only thing a user touches every few minutes —
+  were the **ninth** section in `ActiveWorkoutView`'s `List`, under Session
+  Notes, the future-prefill toggle, Exercise Notes, Switch Exercise, the Plan
+  card, Equipment & Setup, warm-ups and the cardio checklist. Logging a normal
+  working set meant scrolling past admin content on every exercise.
+- **Status: Done.** Sets is now first. The order runs **Sets → Plan → Warmup →
+  Cardio Plan checklist → Equipment & Setup → Actions (Switch Exercise) →
+  Exercise Notes → future-prefill toggle → Session Notes**: plan-shaped content
+  a user reads *while* logging stays next to the rows, and the read-once/admin
+  half sits below. The header `VStack` (routine name, block counter, block
+  title) lives outside the `List` and did not move.
+- **Pure reordering.** No `DisclosureGroup`, no extracted view, no renamed
+  section, no changed label or accessibility identifier. Verified mechanically
+  rather than by eye: comparing the multiset of non-blank lines against the
+  parent commit, the only differences are 7 comment lines removed and 11 added —
+  every line of code is byte-identical and merely relocated. The two rewritten
+  comments are the ones whose stated rationale described the old order.
+- **List modifiers untouched**, all of them outside the reordered range:
+  `.listStyle(.insetGrouped)`, `.scrollDismissesKeyboard(.immediately)`, the
+  `.safeAreaInset(edge: .bottom)` Back / Next-Finish bar with its
+  `keyboardVisible` withdrawal, the `.keyboard` dismiss accessory, and both
+  keyboard notification observers.
+- **Caught en route:** the first pass rewrote the cardio-checklist comment and
+  swallowed the `cardioSegmentChecklistSection(for: exercise)` call with it —
+  which would have compiled cleanly and silently dropped the checklist for
+  cardio slots. The line-multiset check is what surfaced it; restored before the
+  build.
+- **No schema change**, no persistence, workout-lifecycle, set-logging, rest
+  timer, Save & Exit / Resume, switch, destructive-confirmation, alternatives,
+  effort-target, cardio-calculation, History, transfer or duplication change. No
+  localization change (no section header text moved), no docs, project settings,
+  signing, bundle ID, team, marketing version or build number change.
+- **Tests:** none added or changed — no test asserts section order, and the UI
+  target is a launch/navigation smoke test. **Full scheme passes: 2,323 tests,
+  0 failures** — 2,321 unit tests plus 2 UI tests. Debug and Release builds
+  succeed. Manual on-device verification is still pending: a view-tree
+  permutation builds clean either way, and first-focus keyboard behavior with
+  Sets at the top, plus the bottom bar on a small device, are exactly what a
+  build cannot report.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.

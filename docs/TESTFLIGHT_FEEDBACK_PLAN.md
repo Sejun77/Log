@@ -244,6 +244,34 @@ What to report:
 
 ---
 
+### Reaching the Set Rows (Build 10)
+
+Changed in Build 10: on the active workout screen the **Sets** rows now come
+first, instead of below session notes, the prefill toggle, exercise notes,
+Switch Exercise, the plan card, setup, warm-ups and the cardio checklist.
+Nothing else about logging changed — this is only about how far you scroll.
+
+- [ ] Start a normal workout and confirm the set rows are visible without
+      scrolling
+- [ ] Log a working set and confirm the rest timer behaves as it always has
+- [ ] Confirm everything you used before is still there, further down: the plan,
+      warm-ups, setup, Switch Exercise, exercise notes, the prefill toggle and
+      session notes
+- [ ] Start a cardio workout with a Cardio Plan and confirm the checklist is
+      still easy to find
+- [ ] Tap into a notes or setup field and confirm the keyboard and the bottom
+      Back / Next buttons behave normally
+
+What to report:
+
+- still having to scroll to reach the set rows, and on which phone
+- anything that used to be on this screen that you can no longer find
+- the keyboard covering a field, or the bottom Back / Next bar overlapping
+  anything
+- whether logging actually feels quicker than it did in Build 9
+
+---
+
 ## Feedback Questions
 
 Ask these after testing. Keep it conversational — a message or short call is

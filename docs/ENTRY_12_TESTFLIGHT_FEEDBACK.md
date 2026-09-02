@@ -79,7 +79,9 @@ guide/tester docs.
 
 **Build 10 work has started.** It opens with a safety/UX fix to Alternative
 Exercises deletion handling (C1), followed by a Korean terminology and naming
-pass (C2) — see the Build 10 entries under *Fixes Made* below. Build 9 is
+pass (C2) and an active-workout layout polish (C3) — see the Build 10 entries
+under *Fixes Made* below. All three are UX polish, not Build 9 blockers; Build 9
+is
 unaffected and stays in testers' hands.
 
 ---
@@ -130,6 +132,8 @@ The checklist testers are asked to walk through (full version in
 - _(Build 10, Korean UI)_ Open a routine block and confirm the set rows are in
   Korean, then compare the **End** and **Finish** dialogs during a workout and
   confirm they ask different questions
+- _(Build 10)_ Start a workout and confirm the set rows are the first thing on
+  the screen — say whether logging feels quicker to reach than it did in Build 9
 
 ---
 
@@ -269,6 +273,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C2 — fixed Korean terminology and a raw-enum leak in the routine editor.** Display text only; nothing behaves differently. Four things the app said wrong, plus a guide error. The **End workout?** and **Finish this workout?** dialogs shared one Korean title — `운동을 종료할까요?` — so the exit path and the save-to-History path asked the identical question; they now read `운동을 중단할까요?` and `운동을 완료할까요?`, the latter matching the `완료` button inside it. Routine block detail rendered `SetTemplate.kindRaw.capitalized`, the *persisted English raw value*, so a Korean routine listed its sets as `Working` / `Warmup` / `Dropset`; both call sites now use the localized `SetKind` label the rest of the app already had, with raw values and persistence untouched. The routine editor row and the cardio plan editor's title said **Structured Cardio** while the active workout, History and the guide said **Cardio Plan** — both now say Cardio Plan / 유산소 계획 (the Alternative Exercises summary chip keeps the old key deliberately, as renaming it buys the user nothing). The Techniques row read `운동 기법        3 테크닉`, two Korean words for one thing; the count now reuses the row's own name as `운동 기법 %1$lld개`. And the Korean guide told users to tap **종료** — the *exit* button — to save a workout to History; the finish steps now say **완료**, and the only 종료 left is `저장 후 종료`, the save-for-later exit. `docs/USER_GUIDE.md` was updated on main to match, since the in-app guide mirrors it by hand. No schema, persistence, lifecycle, cardio, alternatives, transfer or History change.
 
+- **Build 10 C3 — put the Sets section first on the active workout screen.** UX polish, layout order only; nothing behaves differently. The set rows were the **ninth** section in the list, under Session Notes, the future-prefill toggle, Exercise Notes, Switch Exercise, the Plan card, Equipment & Setup, warm-ups and the cardio checklist — so logging a normal working set meant scrolling past read-once admin content on every exercise, on every phone. Sets is now first, followed by the plan-shaped sections a user reads *while* logging (Plan, Warmup, the Cardio Plan checklist), then Equipment & Setup, then the read-once half (Switch Exercise, Exercise Notes, the prefill toggle, Session Notes). The header above the list did not move. No section was removed, renamed or collapsed behind a disclosure group, and no label or accessibility identifier changed; the list's own modifiers — inset-grouped style, scroll-to-dismiss-keyboard, the bottom Back / Next-Finish safe-area bar and its keyboard withdrawal, and the keyboard dismiss accessory — are untouched. Verified as a pure permutation by diffing the multiset of non-blank lines against the parent commit: seven comment lines removed, eleven added, every code line byte-identical and merely relocated. That check caught a real defect en route — the first pass swallowed the cardio checklist's call along with the comment above it, which would have compiled clean, passed the whole suite, and silently dropped the checklist from cardio workouts. No schema, persistence, lifecycle, rest timer, switch, alternatives, effort-target, cardio-calculation, History or transfer change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -313,6 +319,10 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C3 re-check on device: **pending** — the reorder is a pure
+  view-tree permutation and builds clean either way, so what needs a real screen
+  is first-focus keyboard behavior with Sets at the top and the bottom
+  Back / Next-Finish bar on a small device.
 - Korean terminology and set-kind labels (Build 10 C2): 6 tests added to
   `KoreanLocalizationTests` — the End and Finish dialog titles distinct and each
   exact, English keys unchanged, set-kind row labels localized and never a
@@ -320,10 +330,14 @@ Current validation status:
   the key list to be updated, the Cardio Plan row name in both languages, and
   the technique count reusing 운동 기법 with its placeholder intact — plus 2 in
   `UserGuideContentTests` pinning the Korean finish step to 완료.
-- Latest test suite result: **`LogTests` passes: 2,321 tests, 0 failures**
-  (Build 10 C2 run). Debug build succeeds and Release build succeeds. The 2 UI
-  tests were not re-run in this display-text slice; the last full-scheme run was
-  2,315 tests at C1.
+- Active workout section order (Build 10 C3): no tests added or changed — no
+  test asserts section order, and the UI target is a launch/navigation smoke
+  test. The reorder was verified by diffing the multiset of non-blank lines
+  against the parent commit: comment lines only, every code line relocated
+  unchanged.
+- Latest test suite result: **full scheme passes: 2,323 tests, 0 failures** —
+  2,321 unit tests plus 2 UI tests (Build 10 C3 run). Debug build succeeds and
+  Release build succeeds.
 
 ---
 
@@ -438,7 +452,11 @@ showing raw English set kinds (`Working` / `Warmup` / `Dropset`) in Korean, the
 routine editor and its plan editor now call the cardio plan **Cardio Plan** like
 the rest of the app, the Techniques count stops mixing 운동 기법 and 테크닉, and
 the Korean guide now says to tap **완료** — not 종료 — to save a workout to
-History. Nothing here blocks Build 9, which stays in testers' hands.
+History. **C3** is an active-workout layout polish: the Sets section now comes
+first on the exercise screen instead of ninth, so logging no longer sits below
+session notes, the prefill toggle, exercise notes, Switch Exercise, the Plan
+card, Equipment & Setup, warm-ups and the cardio checklist. All three are UX
+polish. Nothing here blocks Build 9, which stays in testers' hands.
 
 **Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
 landed after Build 8 was prepared: whole-step automatic Progression and the new
