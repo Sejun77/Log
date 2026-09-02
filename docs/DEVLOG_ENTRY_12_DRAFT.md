@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C6 fix._
+_Counts are from the latest verification run, after the Build 10 C7 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C6 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,363 tests, 0 failures** — 2,361 unit tests plus 2 UI
+- **Full scheme passes: 2,385 tests, 0 failures** — 2,383 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -458,6 +458,36 @@ matters there is not the one checking the ellipsis renders — it is the one
 asserting that after summarizing, the stored CSV, the resolved values and every
 per-set label are byte-for-byte what they were. A summary is allowed to say
 less; it is never allowed to make the thing it summarizes smaller.
+
+---
+
+## Build 10 — The Targets Come Back Out Again
+
+Build 9 shipped Custom Per Set effort targets. You could author a per-set ramp,
+train it, finish the workout — and then it was gone. History showed the sets,
+the reps, the weight, and nothing about what you had been *aiming* for.
+
+The frozen data was there the whole time. `PlannedPrescriptionSnapshot` has
+carried the effort fields since the slice that introduced them, precisely so a
+finished workout could state what it was started with. It simply had no reader.
+That is the quiet failure mode of snapshot-everything discipline: the data is
+correct, durable and invisible.
+
+So History now has a **Planned effort** line per exercise — `RIR 2`,
+`RIR 2 → 0`, `RIR 2/1.5/1/0` — sitting with Equipment and the Cardio Plan,
+above the logged sets. Every bit of the formatting comes from the same resolver
+the routine editor and the active workout use, which meant the C6 elision rule
+arrived for free: a ten-set custom list reads `RIR 3/3/2/2…` here too, without
+this slice knowing anything about it.
+
+Two things it deliberately does **not** do. It does not read the live routine —
+edit your programming tomorrow and last week's workout still says what last
+week's workout was started with, which is the entire point of freezing a
+snapshot and is pinned by a test against real rows. And it does not claim you
+*achieved* anything. There is no logged RIR/RPE field in the app, so the label
+says "Planned effort" and stops. Naming a row "RIR" and letting the reader
+assume it was measured would be the cheapest possible lie, and it would be
+indistinguishable from the honest version until someone relied on it.
 
 ---
 

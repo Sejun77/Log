@@ -361,6 +361,38 @@ What to report:
 - any effort text clipped on a routine row, and on which phone
 - awkward Korean in any of the new explanations
 
+---
+
+### Seeing Your Planned Effort in History (Build 10)
+
+New in Build 10: after a workout is finished, History shows the effort target
+that exercise was planned with. It is what you **aimed for**, not what the app
+measured — nothing records your actual RIR or RPE per set.
+
+- [ ] Set an effort target on a routine exercise, finish a workout with it, and
+      open that workout in **History**
+- [ ] Confirm a **Planned effort** line appears for that exercise
+- [ ] Now change the routine's effort target, reopen the **same old** workout,
+      and confirm History still shows the original value
+- [ ] Try it with a progression (RIR 2 → 0) and with per-set targets
+      (2, 1.5, 1, 0) and confirm both read correctly
+- [ ] With more than 4 per-set targets, confirm the line ends in `…` rather
+      than running long
+- [ ] Confirm an exercise with **no** effort target shows no planned-effort line
+      at all
+- [ ] Confirm a cardio exercise's History still reads cleanly
+- [ ] In Korean, confirm 계획 강도 reads as something you planned, not something
+      you achieved
+
+What to report:
+
+- History showing a different target than the workout was started with,
+  especially after you edit the routine
+- a planned-effort line on an exercise you never set a target for
+- wording in either language that sounds like the app recorded your actual
+  effort
+- the line cut off or crowding the rows below it, and on which phone
+
 ## Feedback Questions
 
 Ask these after testing. Keep it conversational — a message or short call is

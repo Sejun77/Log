@@ -1825,6 +1825,73 @@ see §2.12** — kept separate from the search-policy commit as planned.
   judgment call here, and the autoreg-off round trip is unit-tested as a rule
   but never seen in the real editor.
 
+### 2.34 History shows the frozen planned effort target (Build 10 C7, H5a) — ✅ SHIPPED
+- **Source:** Build 10 UX audit, **H5(a)** — a History / effort-target
+  visibility improvement, not a Build 9 blocker. **H5(b) is deliberately not
+  implemented**: no logged-effort field, no planned-vs-actual tracking, no
+  `SetLog` change.
+- **Problem:** Build 9 shipped Custom Per Set effort targets, and the moment a
+  workout ended they disappeared. `PlannedPrescriptionSnapshot` had carried the
+  frozen effort fields since Slice E1 — with **no reader**. A user could author
+  a per-set ramp, train it, and find no trace of it in History, which made the
+  whole feature feel write-only.
+- **Status: Done.** A one-line **Planned effort** row per History item, between
+  Equipment & Setup and the Cardio Plan block, above the logged sets. Laid out
+  exactly like the Equipment row (80pt caption label, monospaced value) and
+  added to both section shapes, so a superset member gets one too.
+- **Frozen, never live.** `item.plannedPrescriptionSnapshot` → a new additive
+  `WorkoutEffortTargetResolver.Fields(snapshot:)` → the new pure
+  `HistoryPlannedEffort.summary`. The view never reads the live
+  `SlotPrescription`, the live `Exercise`, or `routines` — the rule Equipment &
+  Setup and the Cardio Plan block already follow. A custom list is fitted to the
+  snapshot's **planned** `sets`, not to however many sets were logged.
+- **Wording is delegated, not reinvented.** Everything comes from
+  `WorkoutEffortTargetResolver`, so History is formatted by the same code as the
+  routine row, the plan card and the in-session sheet: `RIR 2`,
+  `RIR 2 → 0`, `RIR 2/1.5/1/0`, and the C6 four-value elision (`RIR 3/3/2/2…`)
+  for free. Both metrics, the paired `10 - x` fallback (a target authored in RIR
+  still reads for a user now on RPE), and legacy snapshots with no explicit mode
+  deriving `.single`.
+- **No row, rather than an empty one**, for: no snapshot, mode `.none`, a mode
+  whose values are missing, a corrupt or out-of-range custom list, and
+  autoregulation switched off (no metric selected means no unit to state a
+  target in — the app-wide rule).
+- **Planned, not achieved.** The label is `Planned effort` / `계획 강도`. No
+  `SetLog` holds a logged RIR/RPE, so no copy here may imply a measured result;
+  a test asserts the Korean says 계획 and contains none of 실제 / 달성 / 기록한.
+- **Cardio is not special-cased.** A cardio slot's snapshot carries no effort
+  values (the routine editor does not offer effort for one), so it renders
+  nothing through the ordinary path. **Known edge:** a slot switched
+  strength → cardio mid-workout keeps its frozen effort, so that item shows the
+  target it was *started* with — truthful, and the alternative (reading
+  `item.exercise?.isCardio`) would introduce exactly the live-state dependency
+  this slice forbids.
+- **One incidental fix:** the autoreg preference is now read via `@AppStorage`
+  rather than a bare `UserDefaults` lookup, matching the fix already commented
+  on `distanceIsMetric` in the same view — a plain lookup in `body` records no
+  SwiftUI dependency, so an open History page would have kept showing RIR after
+  Settings switched to RPE.
+- **No schema change**, no migrations, no `SetLog` / `WorkoutItem` /
+  `PlannedPrescriptionSnapshot` field change (`Log/Models/` is untouched by the
+  diff), no stored effort values, no `EffortMode` raw values, no effort
+  persistence or resolution change, no active-workout logging or effort-control
+  change, no lifecycle, rest-timer, switch, alternatives, deletion,
+  cardio-calculation, transfer-payload or duplication change. No project
+  settings, signing, bundle ID, team, marketing version or build number change.
+- **Tests:** new `LogTests/HistoryPlannedEffortTests.swift` (20), split into
+  wording over pure `Fields` values (every mode, both metrics, mirroring,
+  legacy), no-row cases (five corrupt-list shapes, autoreg off, empty modes,
+  zero set count), and **freshness over real model rows** — editing the routine
+  after the workout does not change History, for both a single target and a
+  custom list, plus a test that rendering an elided summary leaves
+  `customRIRTargetsRaw` byte-for-byte intact. 2 added to
+  `KoreanLocalizationTests` (the label localizes; it never implies a logged
+  result). No existing test was modified. **Full scheme passes: 2,385 tests,
+  0 failures** — 2,383 unit tests plus 2 UI tests. Debug and Release builds
+  succeed. Manual on-device verification is still pending; the freeze behavior
+  is unit-tested against real rows, so the pass worth prioritizing is that
+  exercises with no target and cardio items stay visually clean.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.

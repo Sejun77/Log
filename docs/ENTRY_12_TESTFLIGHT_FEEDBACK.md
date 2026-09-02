@@ -81,8 +81,9 @@ guide/tester docs.
 Exercises deletion handling (C1), followed by a Korean terminology and naming
 pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
 discoverability pass (C4), a User Guide language default (C5) and an
-effort-target clarity pass (C6) — see the Build 10 entries under *Fixes Made*
-below. All six are UX polish, not Build 9 blockers; Build 9 is
+effort-target clarity pass (C6) and planned effort targets in History (C7) —
+see the Build 10 entries under *Fixes Made* below. All seven are UX polish or
+visibility improvements, not Build 9 blockers; Build 9 is
 unaffected and stays in testers' hands.
 
 ---
@@ -144,6 +145,9 @@ The checklist testers are asked to walk through (full version in
 - _(Build 10)_ On a routine exercise, tap the info button under the effort mode
   picker and say whether the four modes are explained clearly enough to choose
   between them
+- _(Build 10)_ Finish a workout on an exercise that has an effort target, then
+  open it in History and confirm the planned effort is shown — and that it still
+  shows the old value after you change the routine's target
 
 ---
 
@@ -291,6 +295,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C6 — explained the effort targets, and stopped hiding saved ones.** UX / clarity polish covering five audit findings on one feature; wording, helper text and summary formatting only. The **mode picker offered four modes and defined none of them**, so an info button under it now lists all four — None, Same Target, Progression, Custom Per Set — one sentence each, in Korean using the picker's own translations; the in-app guide and `docs/USER_GUIDE.md` had described *three* ways since before Custom Per Set shipped and now describe four, with `None` added as the first. Setting **Autoregulation to None looked like deletion**: the effort controls are hidden, reasonably, but a slot with authored targets showed nothing at all, so a read-only line now says the targets are saved and names the setting that brings them back — shown only when something is actually saved, never editable, and it writes nothing. The **in-session copy said "not available yet"** for a progression that is deliberately frozen at session start; it now says the targets are fixed for this session, and the two superseded strings were deleted from the catalog rather than left stale. A **ten-set custom list printed all ten values** into a one-line row and pushed the segments before it off the end; summaries now show four values then an ellipsis (`RIR 3/3/2/2…`), counted against the list fitted to the set count. And the editor's live preview joined per-set values with `" · "` — the separator that divides whole summary segments — so `Set targets: 2 · 1 · 0` read as three segments rather than one list; the rule is now `/` inside a value list and `" · "` between segments, matching the block subtitle and the alternative summary. All of it is display: `resolve`, the per-set labels and the stored comma-separated list are untouched, pinned by a test asserting they are byte-for-byte unchanged after a summary is taken. No schema, migrations, stored effort fields, `EffortMode` raw values, custom-target persistence, effort resolution, lifecycle, set-logging, rest-timer, switch, alternatives, deletion, cardio, History-schema, transfer or duplication change.
 
+- **Build 10 C7 — History now shows the planned effort target a workout was started with.** A History / effort-target visibility improvement, display only. Build 9 shipped Custom Per Set targets and they vanished the moment a workout ended: `PlannedPrescriptionSnapshot` had carried the frozen effort fields since the slice that added them, with **no reader**, so a user could author a per-set ramp, train it, and find no trace of it afterwards — the feature was effectively write-only. Each History item now carries a one-line **Planned effort** row, between Equipment & Setup and the Cardio Plan block and above the logged sets, laid out exactly like the Equipment row and added to both the single-exercise and superset section shapes. The value is read **only** from `item.plannedPrescriptionSnapshot`, through a new pure helper — never the live routine, the live exercise, or the routine list — so editing your programming tomorrow cannot rewrite what last week's workout says it planned; that is pinned by tests against real model rows, for a single target and for a custom list. All formatting is delegated to the same resolver the routine editor and active workout use, so `RIR 2`, `RIR 2 → 0` and `RIR 2/1.5/1/0` render identically to everywhere else and the C6 four-value elision (`RIR 3/3/2/2…`) arrived for free; both metrics work, including the paired fallback that lets a target authored in RIR read for a user now on RPE, and legacy snapshots with no explicit mode still derive a single target. Every "nothing to say" case renders **no row at all** rather than an empty one: no snapshot, mode None, missing values, a corrupt custom list, or autoregulation switched off. Cardio is not special-cased — a cardio slot's snapshot carries no effort values, so it renders nothing through the ordinary path. The label is **Planned effort / 계획 강도** and says nothing about achievement: no `SetLog` holds a logged RIR/RPE, and a test asserts the Korean never implies one. **H5(b) was deliberately not implemented** — no logged-effort field, no planned-vs-actual comparison, no `SetLog` change. No schema, migrations, `SetLog` / `WorkoutItem` / snapshot fields, stored effort values, `EffortMode` raw values, active-workout logging or effort controls, lifecycle, rest timer, switch, alternatives, deletion, cardio calculations, transfer payload or duplication change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -335,6 +341,11 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C7 re-check on device: **pending** — the freeze behavior is
+  unit-tested against real model rows, so what wants a real screen is the
+  quieter half: that an exercise with no effort target and a cardio item both
+  stay visually clean, and that the Korean label reads as *planned* rather than
+  achieved.
 - Manual Build 10 C6 re-check on device: **pending** — two items: the info
   button's placement under the mode picker is the one layout judgment call in
   the slice (a Picker owns its row's tap, so the glyph could not go in its
@@ -402,8 +413,18 @@ Current validation status:
   One existing test was **updated, not weakened**: the effort key list named the
   two superseded strings and failed on the first run; those entries now name the
   replacement copy, and a new test pins the old keys' absence.
-- Latest test suite result: **full scheme passes: 2,363 tests, 0 failures** —
-  2,361 unit tests plus 2 UI tests (Build 10 C6 run). Debug build succeeds and
+- History planned effort (Build 10 C7): new `HistoryPlannedEffortTests` (20),
+  in three parts — wording over pure snapshot field values (every mode, both
+  metrics, the paired-metric fallback, legacy snapshots); the no-row cases (five
+  corrupt-list shapes, autoregulation off, modes with no values, a zero set
+  count); and **freshness over real model rows**, where editing the routine
+  after the workout must not change what History says, for both a single target
+  and a custom list, plus a check that rendering an elided summary leaves the
+  stored list byte-for-byte intact. 2 added to `KoreanLocalizationTests` (the
+  label localizes, and never implies a logged result). No existing test was
+  modified.
+- Latest test suite result: **full scheme passes: 2,385 tests, 0 failures** —
+  2,383 unit tests plus 2 UI tests (Build 10 C7 run). Debug build succeeds and
   Release build succeeds.
 
 ---
@@ -534,8 +555,11 @@ editor now explains all four effort modes, the guide documents `None` as the
 fourth, turning autoregulation off no longer makes saved targets look deleted,
 the in-session copy states the rule instead of reading like an unfinished
 feature, and a long custom per-set summary stops at four values with an
-ellipsis. All six are UX polish. Nothing here blocks Build 9, which stays in
-testers' hands.
+ellipsis. **C7** makes the effort targets visible again after a workout ends:
+History now shows the planned effort each exercise was started with, read from
+the frozen session snapshot so editing the routine later cannot rewrite it.
+Six are UX polish and C7 is a visibility improvement. Nothing here blocks
+Build 9, which stays in testers' hands.
 
 **Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
 landed after Build 8 was prepared: whole-step automatic Progression and the new
