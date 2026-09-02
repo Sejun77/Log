@@ -49,7 +49,17 @@ struct PreparedAlternativesSheet: View {
                         .disabled(!offer.isAvailable)
                     }
                 } header: {
-                    Text("Prepared Alternatives")
+                    // M13 — the sheet is titled by the *action* now, so the
+                    // exercise being replaced moves here, where it reads as
+                    // context for the rows underneath rather than as the
+                    // screen's name. `textCase(nil)` keeps a proper-noun
+                    // exercise name out of header capitalization.
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Prepared Alternatives")
+                        Text("Replacing \(currentExerciseName)")
+                            .textCase(nil)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section {
@@ -65,7 +75,10 @@ struct PreparedAlternativesSheet: View {
                     Text("Other Options")
                 }
             }
-            .navigationTitle(currentExerciseName)
+            // M13 — named for what this screen does. It used to be titled
+            // with the current exercise's name, which read as "you are looking
+            // at Bench Press" rather than "you are switching away from it".
+            .navigationTitle("Switch Exercise")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

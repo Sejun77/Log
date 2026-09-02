@@ -791,6 +791,78 @@ final class KoreanLocalizationTests: XCTestCase {
         }
     }
 
+    // MARK: - Alternative Exercises discoverability (Build 10 C4)
+
+    /// Every string the discoverability slice puts on a new surface — the
+    /// routine editor's block subtitle, the Start Workout summary, the active
+    /// workout's Switch Exercise badge, and the switch sheet's title and
+    /// subtitle. Only `Replacing %@` is new: the counts and the two titles
+    /// reuse keys the app already ships, which is the point — one Korean name
+    /// for one thing, on every screen it appears.
+    private static let alternativeDiscoverabilityKeys = [
+        "%lld alternative",
+        "%lld alternatives",
+        "Switch Exercise",
+        "Prepared Alternatives",
+        "Replacing %@",
+    ]
+
+    func testAlternativeDiscoverabilityStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.alternativeDiscoverabilityKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(
+                value, key,
+                "Alternatives discoverability string has no Korean "
+                    + "translation (still renders English): \(key)")
+        }
+    }
+
+    func testAlternativeDiscoverabilityStringsEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in Self.alternativeDiscoverabilityKeys {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)")
+        }
+    }
+
+    /// The count strings carry their placeholder, and both grammatical numbers
+    /// resolve to the same Korean — Korean has no plural inflection, so a
+    /// second wording here would be a bug, not a nicety.
+    func testAlternativeCountsKeepTheirPlaceholderAndAgree() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let singular = localized("%lld alternative", in: ko)
+        let plural = localized("%lld alternatives", in: ko)
+
+        XCTAssertTrue(
+            singular.contains("%lld"),
+            "Korean translation dropped the count placeholder: \(singular)")
+        XCTAssertTrue(
+            plural.contains("%lld"),
+            "Korean translation dropped the count placeholder: \(plural)")
+        XCTAssertEqual(
+            singular, plural,
+            "Korean has no plural inflection — one wording for both")
+        XCTAssertTrue(
+            plural.contains("대체 운동"),
+            "the count must reuse the app's name for the feature: \(plural)")
+    }
+
+    /// The switch sheet's subtitle keeps the exercise name it is given.
+    func testReplacingSubtitleKeepsTheExerciseName() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let value = localized("Replacing %@", in: ko)
+
+        XCTAssertTrue(
+            value.contains("%@"),
+            "Korean translation dropped the exercise name: \(value)")
+        XCTAssertNotEqual(
+            localized("Switch Exercise", in: ko), value,
+            "the sheet's title and its subtitle must not read the same")
+    }
+
     // MARK: - End vs Finish (Build 10)
 
     /// The two ways out of an active workout are different actions: **End**

@@ -2253,10 +2253,35 @@ struct ActiveWorkoutView: View {
                                     index: currentExerciseIndex)
                             }
                         } label: {
-                            Label(
-                                "Switch Exercise",
-                                systemImage: "arrow.triangle.2.circlepath"
-                            )
+                            // Build 10 C4 — the count of what tapping this
+                            // would actually offer. Derived from the same
+                            // `preparedAlternativeOffers` the sheet is built
+                            // from, so the badge can never promise a row the
+                            // sheet does not show: disabled alternatives, the
+                            // slot's own exercise, and (post-switch) whatever
+                            // is now current are already filtered out by
+                            // `PreparedAlternatives.offers`. Display only —
+                            // the button's action is unchanged, and a slot
+                            // with nothing to offer shows no badge and still
+                            // opens the picker directly.
+                            let offerCount =
+                                preparedAlternativeOffers(for: exercise).count
+                            HStack {
+                                Label(
+                                    "Switch Exercise",
+                                    systemImage: "arrow.triangle.2.circlepath"
+                                )
+                                if offerCount > 0 {
+                                    Spacer()
+                                    Text(
+                                        offerCount == 1
+                                            ? "\(offerCount) alternative"
+                                            : "\(offerCount) alternatives"
+                                    )
+                                    .font(.dsCaption)
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
                         }
                     }
 
