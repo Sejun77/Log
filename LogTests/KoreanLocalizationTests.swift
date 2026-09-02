@@ -795,6 +795,35 @@ final class KoreanLocalizationTests: XCTestCase {
         }
     }
 
+    // MARK: - History planned effort (Build 10 H5a)
+
+    /// The one new label History gains. It must read as **planned**, not
+    /// achieved: no logged RIR/RPE exists anywhere in the app, so wording that
+    /// implied a measured result would be claiming something the app never
+    /// observed.
+    func testPlannedEffortLabelLocalizesToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+
+        XCTAssertEqual(localized("Planned effort", in: ko), "계획 강도")
+        XCTAssertEqual(localized("Planned effort", in: en), "Planned effort")
+    }
+
+    /// Neither language may call it an achieved or logged result.
+    func testPlannedEffortLabelDoesNotImplyALoggedResult() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let korean = localized("Planned effort", in: ko)
+
+        XCTAssertTrue(
+            korean.contains("계획"),
+            "the Korean label must say this is planned: \(korean)")
+        for claimed in ["실제", "달성", "기록한"] {
+            XCTAssertFalse(
+                korean.contains(claimed),
+                "the label must not imply a logged result: \(korean)")
+        }
+    }
+
     // MARK: - Effort target clarity (Build 10 C6)
 
     /// Every string this slice adds. Named through `EffortTargetHelp` rather
