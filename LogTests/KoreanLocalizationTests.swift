@@ -790,4 +790,113 @@ final class KoreanLocalizationTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - End vs Finish (Build 10)
+
+    /// The two ways out of an active workout are different actions: **End**
+    /// leaves it (Save & Exit / Discard), **Finish** completes it and saves it
+    /// to History. Through Build 9 both dialogs asked the same Korean question
+    /// — "운동을 종료할까요?" — so a Korean lifter could not tell from the title
+    /// which one they had opened. The titles must stay distinct, and each must
+    /// use its own verb: 중단 for the exit, 완료 for the finish (matching the
+    /// Finish button and "운동 완료").
+    func testEndAndFinishDialogTitlesAreDistinctInKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let end = localized("End workout?", in: ko)
+        let finish = localized("Finish this workout?", in: ko)
+
+        XCTAssertNotEqual(
+            end, finish,
+            "The End and Finish dialogs must not share a Korean title")
+        XCTAssertEqual(end, "운동을 중단할까요?")
+        XCTAssertEqual(finish, "운동을 완료할까요?")
+        XCTAssertTrue(
+            finish.contains("완료"),
+            "The finish dialog must say 완료, like the Finish button it confirms")
+        XCTAssertFalse(
+            end.contains("완료"),
+            "The exit dialog must not claim the workout is being completed")
+    }
+
+    func testEndAndFinishDialogTitlesEnglishUnchanged() throws {
+        let en = try XCTUnwrap(localizationBundle("en"))
+        for key in ["End workout?", "Finish this workout?"] {
+            XCTAssertEqual(
+                localized(key, in: en), key,
+                "English should render the literal key text for \(key)")
+        }
+    }
+
+    // MARK: - Set kind labels in the routine block detail (Build 10)
+
+    /// The routine block detail used to render `SetTemplate.kindRaw.capitalized`
+    /// — the persisted English raw value — so a Korean routine listed its sets
+    /// as "Working", "Warmup", "Dropset". It now renders `kind.historyRowLabel`,
+    /// whose keys are these. Each must have a Korean translation, and none may
+    /// be a capitalized raw value.
+    private static let setKindLabelKeys = [
+        "Working Set", "Warm-up Set", "Drop Set",
+    ]
+
+    func testSetKindRowLabelsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let leakedRawValues = Set(SetKind.allCases.map { $0.rawValue.capitalized })
+
+        for key in Self.setKindLabelKeys {
+            let value = localized(key, in: ko)
+            XCTAssertNotEqual(
+                value, key,
+                "Set kind label has no Korean translation: \(key)")
+            XCTAssertFalse(
+                leakedRawValues.contains(value),
+                "Korean set kind label is a raw enum value: \(value)")
+        }
+    }
+
+    /// A new `SetKind` case must arrive with a label key above, or the block
+    /// detail silently gains an untested row label. Asserted on the raw values
+    /// rather than on `historyRowLabel`, which resolves against the host app's
+    /// own language and so is not a fixed string inside a test.
+    func testEverySetKindHasACoveredRowLabel() {
+        XCTAssertEqual(
+            Set(SetKind.allCases.map(\.rawValue)),
+            ["warmup", "working", "dropset"],
+            "A SetKind case was added or renamed — add its row label key to "
+                + "setKindLabelKeys so its Korean translation is checked")
+        XCTAssertEqual(Self.setKindLabelKeys.count, SetKind.allCases.count)
+    }
+
+    // MARK: - Cardio Plan naming (Build 10)
+
+    /// The routine editor row and the plan editor title used to say
+    /// "Structured Cardio" while the active workout, History and the guide all
+    /// said "Cardio Plan". One name now, in both languages.
+    func testCardioPlanRowLocalizesToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+
+        XCTAssertEqual(localized("Cardio Plan", in: ko), "유산소 계획")
+        XCTAssertEqual(localized("Cardio Plan", in: en), "Cardio Plan")
+    }
+
+    // MARK: - Techniques row wording (Build 10)
+
+    /// The routine editor's Techniques row rendered "운동 기법        3 테크닉":
+    /// the title and its own count used two different Korean words for the same
+    /// thing. The count now reuses the row's name.
+    func testTechniqueCountReusesTheRowsKoreanName() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let count = localized("%lld technique%@", in: ko)
+
+        XCTAssertEqual(localized("Techniques", in: ko), "운동 기법")
+        XCTAssertTrue(
+            count.contains("운동 기법"),
+            "The technique count must use the row's own name: \(count)")
+        XCTAssertFalse(
+            count.contains("테크닉"),
+            "The Techniques row still mixes 운동 기법 and 테크닉: \(count)")
+        XCTAssertTrue(
+            count.contains("%1$lld"),
+            "Korean translation dropped the count placeholder: \(count)")
+    }
 }

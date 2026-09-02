@@ -315,7 +315,7 @@ private struct PrescriptionFields: View {
                 CardioSegmentPlanEditor(prescription: prescription)
             } label: {
                 HStack {
-                    Text("Structured Cardio")
+                    Text("Cardio Plan")
                     Spacer()
                     // Verbatim: the summary is composed from counts and units,
                     // like every other plan summary in the app. Reading it here

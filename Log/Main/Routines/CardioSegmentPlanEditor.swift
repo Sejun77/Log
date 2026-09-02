@@ -92,7 +92,7 @@ struct CardioSegmentPlanEditor: View {
                 }
             }
         }
-        .navigationTitle("Structured Cardio")
+        .navigationTitle("Cardio Plan")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !segments.isEmpty {
