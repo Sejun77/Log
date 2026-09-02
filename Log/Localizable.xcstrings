@@ -89,6 +89,26 @@
     "%lld" : {
 
     },
+    "%lld alternative" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 %lld개"
+          }
+        }
+      }
+    },
+    "%lld alternatives" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 %lld개"
+          }
+        }
+      }
+    },
     "%lld exercise" : {
       "localizations" : {
         "ko" : {
@@ -155,6 +175,16 @@
         }
       }
     },
+    "%lld slots" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "슬롯 %lld개"
+          }
+        }
+      }
+    },
     "%lld step%@" : {
       "localizations" : {
         "en" : {
@@ -192,6 +222,7 @@
       }
     },
     "%lld technique%@" : {
+      "comment" : "Routine editor: number of techniques configured on a slot. Korean reuses the row title 운동 기법 so the row does not mix two names for the same thing.",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -202,7 +233,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$lld 테크닉"
+            "value" : "운동 기법 %1$lld개"
           }
         }
       }
@@ -982,7 +1013,7 @@
       }
     },
     "Cardio Plan" : {
-      "comment" : "Structured Cardio Slice 12D: active-workout section header for the planned cardio segment checklist",
+      "comment" : "The slot's cardio segment plan: active-workout checklist header, History section, routine editor row, and the plan editor's title. One name app-wide (the routine editor formerly said \"Structured Cardio\").",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
@@ -1753,11 +1784,12 @@
       }
     },
     "End workout?" : {
+      "comment" : "Title of the exit dialog for an active workout (Save & Exit / Discard). Distinct from the Finish dialog, which completes the workout and saves it to History.",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "운동을 종료할까요?"
+            "value" : "운동을 중단할까요?"
           }
         }
       }
@@ -2057,12 +2089,13 @@
       }
     },
     "Finish this workout?" : {
+      "comment" : "Title of the finish dialog, which completes the workout and saves it to History. Korean says 완료, matching the Finish button; the End dialog owns 중단.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "운동을 종료할까요?"
+            "value" : "운동을 완료할까요?"
           }
         }
       }
@@ -2323,6 +2356,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "잘못된 행 (%lld)"
+          }
+        }
+      }
+    },
+    "It is also used as %lld prepared alternative, which will be removed." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동은 준비된 대체 운동 %lld개로도 사용 중이며, 함께 삭제됩니다."
+          }
+        }
+      }
+    },
+    "It is also used as %lld prepared alternatives, which will be removed." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동은 준비된 대체 운동 %lld개로도 사용 중이며, 함께 삭제됩니다."
           }
         }
       }
@@ -4450,7 +4503,7 @@
       }
     },
     "Structured Cardio" : {
-      "comment" : "Structured Cardio Slice 12C: routine editor row and screen title for the cardio segment plan",
+      "comment" : "Presence flag in an alternative exercise's summary line, meaning the alternative carries a cardio segment plan. The routine editor row and the plan editor title now say \"Cardio Plan\".",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
@@ -4934,6 +4987,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "풀업, 딥스처럼 체중이 포함되는 운동의 기록 부하 계산에 사용됩니다. 설정하지 않으려면 비워 두세요. 위에 표시된 단위로 저장됩니다."
+          }
+        }
+      }
+    },
+    "Used as %lld alternative" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 %lld개로 사용"
+          }
+        }
+      }
+    },
+    "Used as %lld alternatives" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대체 운동 %lld개로 사용"
           }
         }
       }

@@ -38,38 +38,18 @@ struct ExercisesView: View {
     @State private var pendingDeleteExercise: Exercise? = nil
     @State private var deleteImpactMessage = "This will delete the exercise."
 
+    /// Delete-confirmation body copy.
+    ///
+    /// The counting and the wording both live on `ExerciseDeletionImpact` so
+    /// they can be tested without a view — including the Build 10 C1 clause
+    /// that warns when prepared alternatives will be removed, which the
+    /// pre-C1 inline version could not see at all.
     private func buildImpactMessage(for ex: Exercise) -> String {
         guard let routines = try? ctx.fetch(FetchDescriptor<Routine>()) else {
             return "This will delete “\(ex.name)”. This cannot be undone."
         }
-        var supersetBlocks = 0
-        var normalRefs = 0
-        var affectedRoutines = Set<UUID>()
-
-        for r in routines {
-            for b in r.blocks {
-                let hasRef = b.exercises.contains { re in
-                    re.safeExercise(in: ctx)?.id == ex.id
-                }
-                if hasRef {
-                    affectedRoutines.insert(r.id)
-                    if b.isSuperset {
-                        supersetBlocks += 1
-                    } else {
-                        normalRefs += 1
-                    }
-                }
-            }
-        }
-
-        if supersetBlocks == 0 && normalRefs == 0 {
-            return "Delete “\(ex.name)”? This cannot be undone."
-        } else {
-            let rs = affectedRoutines.count
-            return """
-                Delete “\(ex.name)”? This will remove it from \(rs) routine\(rs == 1 ? "" : "s"), delete \(supersetBlocks) superset block\(supersetBlocks == 1 ? "" : "s"), and unlink \(normalRefs) exercise reference\(normalRefs == 1 ? "" : "s"). This cannot be undone.
-                """
-        }
+        return ExerciseDeletionImpact(routines: routines, exerciseID: ex.id)
+            .message(exerciseName: ex.name)
     }
 
     /// Display list = sort mode applied to the `@Query` result, then
@@ -184,41 +164,11 @@ struct ExercisesView: View {
             Button("Delete", role: .destructive) {
                 guard let ex = pendingDeleteExercise else { return }
                 withAnimation {
-                    let deletedID = ex.id
-                    ctx.delete(ex)
-
-                    if let routines = try? ctx.fetch(FetchDescriptor<Routine>())
-                    {
-                        for r in routines {
-                            for b in Array(r.blocks) {
-                                let refsThisExercise = b.exercises.contains {
-                                    re in
-                                    re.exercise?.id == deletedID
-                                }
-                                guard refsThisExercise else { continue }
-
-                                if b.isSuperset {
-                                    ctx.delete(b)
-                                } else {
-                                    for re in Array(b.exercises) {
-                                        if re.exercise?.id == deletedID {
-                                            ctx.delete(re)
-                                        }
-                                    }
-                                    let remaining = b.exercises.sorted {
-                                        $0.order < $1.order
-                                    }
-                                    for (i, re) in remaining.enumerated() {
-                                        re.order = i
-                                    }
-                                }
-                            }
-                            let renum = r.blocks.sorted { $0.order < $1.order }
-                            for (i, blk) in renum.enumerated() { blk.order = i }
-                        }
-                    }
-
-                    try? ctx.save()
+                    // Build 10 C1: the exercise, its direct routine slots, and
+                    // its prepared alternatives all go together — see
+                    // `ExerciseDeletionService`, which also fixes the failing
+                    // save the open-coded version here left behind.
+                    ExerciseDeletionService.delete(ex, in: ctx)
                 }
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 pendingDeleteExercise = nil
@@ -881,13 +831,18 @@ struct ExerciseDetailView: View {
     /// routines; a routine that uses the exercise in more than one slot gets
     /// a "· N slots" suffix. Caps the visible rows at `maxRoutineRows` with a
     /// trailing "+N more" row.
+    ///
+    /// Build 10 C1: a routine that references this exercise only as a prepared
+    /// alternative is listed here too, with a "· N alternatives" suffix, and
+    /// suppresses the "add it to a routine" empty state — which used to be the
+    /// screen's answer for an exercise that several routines were relying on.
     @ViewBuilder
     private var usedInRoutinesSection: some View {
         Section {
             Text(usage.summary)
                 .font(.dsBody)
 
-            if usage.routineCount > 0 {
+            if usage.isUsed {
                 ForEach(
                     Array(usage.entries.prefix(Self.maxRoutineRows)),
                     id: \.routineID
@@ -916,7 +871,7 @@ struct ExerciseDetailView: View {
         } header: {
             Text("Used in Routines")
         } footer: {
-            if usage.routineCount == 0 {
+            if !usage.isUsed {
                 Text("Add this exercise to a routine to see it here.")
             }
         }
