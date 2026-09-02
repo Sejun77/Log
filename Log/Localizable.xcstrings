@@ -2165,6 +2165,18 @@
         }
       }
     },
+    "Guide language" : {
+      "comment" : "Accessibility label for the User Guide's English / 한국어 segmented picker. The segment titles themselves are deliberately unlocalized — each names its own language.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "가이드 언어"
+          }
+        }
+      }
+    },
     "Hamstrings" : {
       "extractionState" : "stale",
       "localizations" : {
