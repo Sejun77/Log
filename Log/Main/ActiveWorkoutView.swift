@@ -2122,143 +2122,13 @@ struct ActiveWorkoutView: View {
                 .padding(.horizontal)
 
                 List {
-                    // --- Session-level workout notes (written to Workout.notes) ---
-                    Section("Session Notes") {
-                        // Multiline: Return inserts a newline (no .submitLabel
-                        // (.done)), so the keyboard shows a normal return key —
-                        // not a second done/check key competing with the shared
-                        // keyboard checkmark accessory, which is the sole
-                        // dismissal control.
-                        TextField(
-                            "Notes for this session…",
-                            text: $sessionNotesDraft,
-                            axis: .vertical
-                        )
-                        .lineLimit(1...6)
-                        .textInputAutocapitalization(.sentences)
-                        .focused($sessionNotesFocused)
-                        .onChange(of: sessionNotesFocused) { _, focused in
-                            if !focused { commitSessionNotes() }
-                        }
-                    }
-
-                    // --- Future-prefill exclusion (workout-level) ---
-                    // Positive wording: ON (default) means this workout may seed
-                    // last-performance prefill. Turn OFF for recovery/deload days
-                    // whose reduced loads shouldn't become the next baseline.
-                    // Maps to Workout.excludedFromPrefill (inverted). The workout
-                    // still stays in History either way.
-                    if let w = workout {
-                        Section {
-                            Toggle(
-                                isOn: Binding(
-                                    get: { !w.excludedFromPrefill },
-                                    set: { w.excludedFromPrefill = !$0 }
-                                )
-                            ) {
-                                // Explanation moved off the footer into an
-                                // on-demand info button next to the toggle label
-                                // to reduce clutter.
-                                HStack(spacing: DSSpacing.xs) {
-                                    Text("Use for future prefill")
-                                    InfoButton(
-                                        "Use for future prefill",
-                                        message: "Turn off for recovery or deload workouts so they don't become the source for your next workout's prefill. The workout still appears in History."
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // --- Exercise-level notes (read-only display of Exercise.notes) ---
-                    // Source: live Exercise.notes for the currently-focused exercise.
-                    // Inline editing is intentionally disabled to preserve the
-                    // no-silent-mutation invariant (Phase 2). Explicit editing is
-                    // available via the "Edit Exercise Notes" button below, which
-                    // opens a focused sheet that writes through to Exercise.notes.
-                    if fetchExercise(by: exercise.currentExerciseID) != nil {
-                        Section {
-                            if let live = fetchExercise(by: exercise.currentExerciseID),
-                                let raw = live.notes,
-                                !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            {
-                                Text(raw)
-                                    .font(.dsBody)
-                                    .foregroundStyle(.primary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            } else {
-                                Text("No notes yet.")
-                                    .font(.dsBodySecondary)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button {
-                                showExerciseNotesSheet = true
-                            } label: {
-                                Label("Edit Exercise Notes", systemImage: "square.and.pencil")
-                            }
-                            // The "affects every routine/workout" caption was
-                            // removed here — the edit sheet opened by the button
-                            // above already carries that explanation in its footer.
-                        } header: {
-                            Text("Exercise Notes")
-                        }
-                    }
-
-                    Section("Actions") {
-                        Button {
-                            exerciseToSwapIndex = currentExerciseIndex
-                            // Phase F1 — prepared alternatives come first when
-                            // the slot has any; otherwise the picker opens
-                            // directly, exactly as it did before.
-                            if hasPreparedAlternatives(for: exercise) {
-                                preparedAlternativesItem = SwapPickerItem(
-                                    index: currentExerciseIndex)
-                            } else {
-                                swapPickerItem = SwapPickerItem(
-                                    index: currentExerciseIndex)
-                            }
-                        } label: {
-                            Label(
-                                "Switch Exercise",
-                                systemImage: "arrow.triangle.2.circlepath"
-                            )
-                        }
-                    }
-
-                    // --- Plan summary (compact) + edit via sheet ---
-                    planSummarySection(for: exercise)
-
-                    // --- Equipment & Setup ---
-                    // Equipment: prescriptionSnapshot.equipment captured at
-                    // session start (Phase 10) for non-swapped slots. Setup:
-                    // live Exercise.setupDefaults (editable in-workout via
-                    // SetupNotesEditSheet, mirroring Exercise Notes); the
-                    // snapshot value is only a deleted-exercise fallback.
-                    equipmentAndSetupSection(for: exercise)
-
-                    // --- Warmup section ---
-                    if !exercise.warmupStepsSnapshot.isEmpty {
-                        Section {
-                            ForEach(exercise.warmupStepsSnapshot, id: \.order) { step in
-                                buildWarmupRow(block: block, exercise: exercise, step: step)
-                            }
-                        } header: {
-                            Text("Warmup")
-                                .font(.dsBody)
-                        }
-                    }
-
-                    // --- Structured cardio checklist (Slice 12D) ---
-                    // Deliberately the LAST thing before the set rows: it is
-                    // the plan you read while the bout is running, so it
-                    // belongs against the rows you tick it beside — not up by
-                    // the Plan card, where Equipment & Setup pushed it a
-                    // scroll away from them. Cardio slots with a segment plan
-                    // only; everything else renders nothing here, so no other
-                    // section moved.
-                    cardioSegmentChecklistSection(for: exercise)
-
                     // --- Sets section ---
+                    // Build 10 C3 — first in the list. Logging sets is the only thing a
+                    // user does on this screen every few minutes; everything below is read
+                    // once, or not at all. It used to sit ninth, under session notes, the
+                    // prefill toggle, exercise notes, Switch Exercise, the Plan card,
+                    // Equipment & Setup, warm-ups and the cardio checklist — a scroll away
+                    // from the reps field on every exercise, on every phone.
                     Section {
                         let setCount = effectiveSetCount(
                             for: exercise,
@@ -2336,6 +2206,140 @@ struct ActiveWorkoutView: View {
                         // instead rides on the stable "0.0" field placeholder in
                         // SetEntryRow / DropLogRow, which never moves with the
                         // keyboard.
+                    }
+
+                    // --- Plan summary (compact) + edit via sheet ---
+                    planSummarySection(for: exercise)
+
+                    // --- Warmup section ---
+                    if !exercise.warmupStepsSnapshot.isEmpty {
+                        Section {
+                            ForEach(exercise.warmupStepsSnapshot, id: \.order) { step in
+                                buildWarmupRow(block: block, exercise: exercise, step: step)
+                            }
+                        } header: {
+                            Text("Warmup")
+                                .font(.dsBody)
+                        }
+                    }
+
+                    // --- Structured cardio checklist (Slice 12D) ---
+                    // Kept directly under the plan-shaped sections and within a screen of
+                    // the set rows: it is the plan you read while the bout is running, so
+                    // it belongs near the rows you tick it beside rather than down in the
+                    // admin half. Cardio slots with a segment plan only; everything else
+                    // renders nothing here, so no other section is affected.
+                    cardioSegmentChecklistSection(for: exercise)
+
+                    // --- Equipment & Setup ---
+                    // Equipment: prescriptionSnapshot.equipment captured at
+                    // session start (Phase 10) for non-swapped slots. Setup:
+                    // live Exercise.setupDefaults (editable in-workout via
+                    // SetupNotesEditSheet, mirroring Exercise Notes); the
+                    // snapshot value is only a deleted-exercise fallback.
+                    equipmentAndSetupSection(for: exercise)
+
+                    Section("Actions") {
+                        Button {
+                            exerciseToSwapIndex = currentExerciseIndex
+                            // Phase F1 — prepared alternatives come first when
+                            // the slot has any; otherwise the picker opens
+                            // directly, exactly as it did before.
+                            if hasPreparedAlternatives(for: exercise) {
+                                preparedAlternativesItem = SwapPickerItem(
+                                    index: currentExerciseIndex)
+                            } else {
+                                swapPickerItem = SwapPickerItem(
+                                    index: currentExerciseIndex)
+                            }
+                        } label: {
+                            Label(
+                                "Switch Exercise",
+                                systemImage: "arrow.triangle.2.circlepath"
+                            )
+                        }
+                    }
+
+                    // --- Exercise-level notes (read-only display of Exercise.notes) ---
+                    // Source: live Exercise.notes for the currently-focused exercise.
+                    // Inline editing is intentionally disabled to preserve the
+                    // no-silent-mutation invariant (Phase 2). Explicit editing is
+                    // available via the "Edit Exercise Notes" button below, which
+                    // opens a focused sheet that writes through to Exercise.notes.
+                    if fetchExercise(by: exercise.currentExerciseID) != nil {
+                        Section {
+                            if let live = fetchExercise(by: exercise.currentExerciseID),
+                                let raw = live.notes,
+                                !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            {
+                                Text(raw)
+                                    .font(.dsBody)
+                                    .foregroundStyle(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text("No notes yet.")
+                                    .font(.dsBodySecondary)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Button {
+                                showExerciseNotesSheet = true
+                            } label: {
+                                Label("Edit Exercise Notes", systemImage: "square.and.pencil")
+                            }
+                            // The "affects every routine/workout" caption was
+                            // removed here — the edit sheet opened by the button
+                            // above already carries that explanation in its footer.
+                        } header: {
+                            Text("Exercise Notes")
+                        }
+                    }
+
+                    // --- Future-prefill exclusion (workout-level) ---
+                    // Positive wording: ON (default) means this workout may seed
+                    // last-performance prefill. Turn OFF for recovery/deload days
+                    // whose reduced loads shouldn't become the next baseline.
+                    // Maps to Workout.excludedFromPrefill (inverted). The workout
+                    // still stays in History either way.
+                    if let w = workout {
+                        Section {
+                            Toggle(
+                                isOn: Binding(
+                                    get: { !w.excludedFromPrefill },
+                                    set: { w.excludedFromPrefill = !$0 }
+                                )
+                            ) {
+                                // Explanation moved off the footer into an
+                                // on-demand info button next to the toggle label
+                                // to reduce clutter.
+                                HStack(spacing: DSSpacing.xs) {
+                                    Text("Use for future prefill")
+                                    InfoButton(
+                                        "Use for future prefill",
+                                        message: "Turn off for recovery or deload workouts so they don't become the source for your next workout's prefill. The workout still appears in History."
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Session-level workout notes (written to Workout.notes) ---
+                    Section("Session Notes") {
+                        // Multiline: Return inserts a newline (no .submitLabel
+                        // (.done)), so the keyboard shows a normal return key —
+                        // not a second done/check key competing with the shared
+                        // keyboard checkmark accessory, which is the sole
+                        // dismissal control.
+                        TextField(
+                            "Notes for this session…",
+                            text: $sessionNotesDraft,
+                            axis: .vertical
+                        )
+                        .lineLimit(1...6)
+                        .textInputAutocapitalization(.sentences)
+                        .focused($sessionNotesFocused)
+                        .onChange(of: sessionNotesFocused) { _, focused in
+                            if !focused { commitSessionNotes() }
+                        }
                     }
                 }
                 .listStyle(.insetGrouped)
