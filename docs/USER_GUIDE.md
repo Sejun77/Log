@@ -52,8 +52,9 @@ In the Exercises tab, you can organize the exercise list in different ways:
 ## Effort Targets
 
 An effort target says how hard a working set should feel, written as RIR or RPE
-(choose which in Settings). A routine exercise can set targets three ways:
+(choose which in Settings). A routine exercise can set targets four ways:
 
+- None: no effort target is shown for this exercise.
 - Same Target: one value for every working set.
 - Progression: a start value and an end value, spread across the sets. Targets
   move in whole steps by default, so you get clean numbers instead of awkward
@@ -265,8 +266,9 @@ You can:
 ## 운동 강도 목표
 
 운동 강도 목표는 각 작업 세트를 얼마나 힘들게 수행할지 RIR 또는 RPE로 나타냅니다
-(설정에서 방식을 선택합니다). 루틴의 운동마다 세 가지 방식으로 설정할 수 있습니다.
+(설정에서 방식을 선택합니다). 루틴의 운동마다 네 가지 방식으로 설정할 수 있습니다.
 
+- 없음: 이 운동에는 강도 목표를 표시하지 않습니다.
 - 동일 목표: 모든 작업 세트에 같은 값을 사용합니다.
 - 프로그레션: 시작 값과 끝 값을 정하면 세트에 걸쳐 나누어 적용됩니다. 기본적으로
   정수 단위로 변하므로 애매한 0.5 단위 값 대신 깔끔한 값이 표시됩니다. 4세트에서
