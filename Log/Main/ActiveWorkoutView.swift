@@ -136,6 +136,12 @@ struct ActiveWorkoutView: View {
     @State private var preEditDurStrs: [UUID: [Int: String]] = [:]
     // Phase 5.2 — keyed by routineSlotID (per-slot identity).
     @State private var loggedByExercise: [UUID: Set<Int>] = [:]
+    /// Which logged set started the rest that is currently running, so undoing
+    /// that set can stop it and undoing any *other* set cannot. Nil whenever no
+    /// rest is running, and also after a cold restart — the rehydrated rest
+    /// knows only its slot — which `restClearDecision` handles as its
+    /// conservative branch.
+    @State private var restOrigin: RestOriginSet? = nil
     /// Maps exerciseID → parentSetIndex → Set of logged drop subIndices (1-based).
     // Phase 5.2 — keyed by routineSlotID (per-slot identity).
     @State private var dropsLoggedByExercise: [UUID: [Int: Set<Int>]] = [:]
@@ -1269,7 +1275,10 @@ struct ActiveWorkoutView: View {
                             block: block,
                             exercise: exercise
                         ) {
-                            startRestWithPersistence(seconds: seconds, slotID: exercise.routineSlotID)
+                            startRestWithPersistence(
+                                seconds: seconds,
+                                slotID: exercise.routineSlotID,
+                                setIndex: idx)
                             showRestOverlay = true
                         } else {
                             rest.stop()
@@ -1286,7 +1295,14 @@ struct ActiveWorkoutView: View {
                         s.remove(idx)
                         syncToGuardCaches()
                         loggedByExercise[slotID] = s
-                        // Do not affect rest timer here; behavior mirrors reps/weight undo
+                        // The rest this set started must not outlive it. This
+                        // path used to leave the countdown running entirely —
+                        // the reported bug, most visible on cardio and timed
+                        // holds, where the rest kept ticking (and its
+                        // notification stayed scheduled) for a set that was no
+                        // longer logged.
+                        clearRestIfStartedBy(
+                            slotID: slotID, setIndex: idx, remainingLogged: s)
                         UINotificationFeedbackGenerator().notificationOccurred(
                             .warning
                         )
@@ -1337,7 +1353,10 @@ struct ActiveWorkoutView: View {
                             block: block,
                             exercise: exercise
                         ) {
-                            startRestWithPersistence(seconds: seconds, slotID: exercise.routineSlotID)
+                            startRestWithPersistence(
+                                seconds: seconds,
+                                slotID: exercise.routineSlotID,
+                                setIndex: idx)
                             showRestOverlay = true
                         } else {
                             rest.stop()
@@ -1350,12 +1369,16 @@ struct ActiveWorkoutView: View {
                     },
                     onUndo: {
                         undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: idx)
-                        rest.stop()
-                        clearPersistedRestState()
                         var s = loggedByExercise[slotID, default: []]
                         s.remove(idx)
                         loggedByExercise[slotID] = s
                         syncToGuardCaches()
+                        // Was an unconditional `rest.stop()`, which also killed
+                        // the countdown when the user went back to correct an
+                        // *older* set mid-rest. Now scoped to the set that
+                        // actually started it.
+                        clearRestIfStartedBy(
+                            slotID: slotID, setIndex: idx, remainingLogged: s)
                         UINotificationFeedbackGenerator().notificationOccurred(
                             .warning
                         )
@@ -1413,6 +1436,10 @@ struct ActiveWorkoutView: View {
                     s.remove(logIndex)
                     loggedByExercise[slotID] = s
                     syncToGuardCaches()
+                    // A warm-up step with a rest starts the same timer, so
+                    // un-ticking it must be able to stop it too.
+                    clearRestIfStartedBy(
+                        slotID: slotID, setIndex: logIndex, remainingLogged: s)
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 } else {
                     appendSetLog(
@@ -1432,7 +1459,8 @@ struct ActiveWorkoutView: View {
                     if let seconds = restSec, seconds > 0 {
                         startRestWithPersistence(
                             seconds: seconds,
-                            slotID: exercise.routineSlotID
+                            slotID: exercise.routineSlotID,
+                            setIndex: logIndex
                         )
                         showRestOverlay = true
                     }
@@ -1469,6 +1497,30 @@ struct ActiveWorkoutView: View {
         case .noteOnly:
             return step.note ?? "—"
         }
+    }
+
+    /// Stop the running rest when the set just unlogged is the one that started
+    /// it. Applied by all three undo paths (working reps/weight, duration /
+    /// cardio, warm-up), which previously disagreed: the first stopped the rest
+    /// unconditionally, the other two never stopped it at all.
+    ///
+    /// The decision itself is the pure `restClearDecision`; this only supplies
+    /// the current state and performs the clear through the existing
+    /// timer-clearing API — `rest.stop()` cancels the pending notification,
+    /// clears the timer's own persistence and returns the Live Activity to
+    /// neutral, and `clearPersistedRestState()` drops the `AppState` row so a
+    /// cold resume cannot rehydrate a rest for a set that no longer exists.
+    private func clearRestIfStartedBy(
+        slotID: UUID, setIndex: Int, remainingLogged: Set<Int>
+    ) {
+        let decision = restClearDecision(
+            isRestRunning: rest.isRunning,
+            origin: restOrigin,
+            unlogged: RestOriginSet(slotID: slotID, setIndex: setIndex),
+            remainingLoggedSetsInSlot: remainingLogged)
+        guard decision == .clear else { return }
+        rest.stop()
+        clearPersistedRestState()
     }
 
     private func unlockAndDismiss() {
@@ -1518,8 +1570,10 @@ struct ActiveWorkoutView: View {
         try? ctx.save()
     }
 
-    /// Clears persisted rest state in AppState.
+    /// Clears persisted rest state in AppState, and the in-memory origin with
+    /// it — every caller is either stopping the rest or replacing it.
     private func clearPersistedRestState() {
+        restOrigin = nil
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
         appState.activeRestEndsAt = nil
         appState.activeRestSlotID = nil
@@ -1596,7 +1650,13 @@ struct ActiveWorkoutView: View {
     }
 
     /// Starts a rest timer with stable notification ID and persisted state.
-    private func startRestWithPersistence(seconds: Int, slotID: UUID) {
+    ///
+    /// `setIndex` records **which** set began the countdown (see
+    /// `RestOriginSet`), so unlogging that set can stop it while correcting a
+    /// different one leaves it running.
+    private func startRestWithPersistence(
+        seconds: Int, slotID: UUID, setIndex: Int
+    ) {
         let stableID = activeRestNotificationID(workoutID: workout?.id, slotID: slotID)
 
         // Cancel the OLD slot's notification before overwriting the stable ID.
@@ -1612,6 +1672,7 @@ struct ActiveWorkoutView: View {
 
         rest.stableNotificationID = stableID
         rest.start(seconds: seconds, mode: .rest)
+        restOrigin = RestOriginSet(slotID: slotID, setIndex: setIndex)
         persistRestState(endsAt: endsAt, slotID: slotID)
     }
 
@@ -2122,13 +2183,55 @@ struct ActiveWorkoutView: View {
                 .padding(.horizontal)
 
                 List {
+                    // --- Plan summary (compact) + edit via sheet ---
+                    planSummarySection(for: exercise)
+
+                    // --- Equipment & Setup ---
+                    // Equipment: prescriptionSnapshot.equipment captured at
+                    // session start (Phase 10) for non-swapped slots. Setup:
+                    // live Exercise.setupDefaults (editable in-workout via
+                    // SetupNotesEditSheet, mirroring Exercise Notes); the
+                    // snapshot value is only a deleted-exercise fallback.
+                    equipmentAndSetupSection(for: exercise)
+
+                    // --- Warmup section ---
+                    // Directly above Sets, because that is the order the work happens in.
+                    // Renders nothing when the slot has no warm-up snapshot, so a slot
+                    // without one puts Sets straight under Equipment & Setup.
+                    if !exercise.warmupStepsSnapshot.isEmpty {
+                        Section {
+                            ForEach(exercise.warmupStepsSnapshot, id: \.order) { step in
+                                buildWarmupRow(block: block, exercise: exercise, step: step)
+                            }
+                        } header: {
+                            Text("Warmup")
+                                .font(.dsBody)
+                        }
+                    }
+
+                    // --- Structured cardio checklist (Slice 12D) ---
+                    // Kept with the plan-shaped sections and immediately above the set
+                    // rows: it is the plan you read while the bout is running, so it
+                    // belongs beside the rows you tick it against rather than down in the
+                    // admin half. Cardio slots with a segment plan only; everything else
+                    // renders nothing here, so no other section is affected.
+                    cardioSegmentChecklistSection(for: exercise)
+
                     // --- Sets section ---
-                    // Build 10 C3 — first in the list. Logging sets is the only thing a
-                    // user does on this screen every few minutes; everything below is read
-                    // once, or not at all. It used to sit ninth, under session notes, the
-                    // prefill toggle, exercise notes, Switch Exercise, the Plan card,
-                    // Equipment & Setup, warm-ups and the cardio checklist — a scroll away
-                    // from the reps field on every exercise, on every phone.
+                    // Build 10 C3 lifted this out of ninth place — under session notes,
+                    // the prefill toggle, exercise notes, Switch Exercise, the Plan card,
+                    // Equipment & Setup, warm-ups and the cardio checklist — because
+                    // logging sets is the only thing a user does on this screen every few
+                    // minutes and everything below it is read once, or not at all.
+                    //
+                    // Manual-test polish moves it one step back down, to fifth: a warm-up
+                    // is performed *before* the first working set, so listing it after the
+                    // rows it precedes asked the user to scroll up to do the thing they do
+                    // first. Everything now above it is plan-shaped and short — the
+                    // compact Plan card, Equipment & Setup, the warm-up rows, and the
+                    // cardio checklist for cardio slots — and the whole admin half
+                    // (Switch Exercise, Exercise Notes, the prefill toggle, Session Notes)
+                    // still sits below.
                     Section {
                         let setCount = effectiveSetCount(
                             for: exercise,
@@ -2207,37 +2310,6 @@ struct ActiveWorkoutView: View {
                         // SetEntryRow / DropLogRow, which never moves with the
                         // keyboard.
                     }
-
-                    // --- Plan summary (compact) + edit via sheet ---
-                    planSummarySection(for: exercise)
-
-                    // --- Warmup section ---
-                    if !exercise.warmupStepsSnapshot.isEmpty {
-                        Section {
-                            ForEach(exercise.warmupStepsSnapshot, id: \.order) { step in
-                                buildWarmupRow(block: block, exercise: exercise, step: step)
-                            }
-                        } header: {
-                            Text("Warmup")
-                                .font(.dsBody)
-                        }
-                    }
-
-                    // --- Structured cardio checklist (Slice 12D) ---
-                    // Kept directly under the plan-shaped sections and within a screen of
-                    // the set rows: it is the plan you read while the bout is running, so
-                    // it belongs near the rows you tick it beside rather than down in the
-                    // admin half. Cardio slots with a segment plan only; everything else
-                    // renders nothing here, so no other section is affected.
-                    cardioSegmentChecklistSection(for: exercise)
-
-                    // --- Equipment & Setup ---
-                    // Equipment: prescriptionSnapshot.equipment captured at
-                    // session start (Phase 10) for non-swapped slots. Setup:
-                    // live Exercise.setupDefaults (editable in-workout via
-                    // SetupNotesEditSheet, mirroring Exercise Notes); the
-                    // snapshot value is only a deleted-exercise fallback.
-                    equipmentAndSetupSection(for: exercise)
 
                     Section("Actions") {
                         Button {
@@ -2394,7 +2466,12 @@ struct ActiveWorkoutView: View {
                             Button {
                                 prev()
                             } label: {
-                                Label("Back", systemImage: "chevron.left")
+                                // Not a bare "Back" literal: that key is the
+                                // body part, and rendered 등 here. See
+                                // `ActiveWorkoutNavCopy`.
+                                Label(
+                                    ActiveWorkoutNavCopy.backTitle,
+                                    systemImage: "chevron.left")
                             }
                             .disabled(
                                 currentBlockIndex == 0 && currentExerciseIndex == 0
@@ -2531,13 +2608,16 @@ struct ActiveWorkoutView: View {
                 // choice — the finish itself runs after the dialog's
                 // dismissal transaction commits (see .onChange below), so
                 // one confirm tap reliably finishes.
-                ForEach(
-                    finishDialogOptions(
-                        hasSwapsPending: hasSwapsPending,
-                        hasSessionPlanPending: hasSessionPlanPending),
-                    id: \.self
-                ) { option in
-                    Button(finishOptionLabel(option)) {
+                let options = finishDialogOptions(
+                    hasSwapsPending: hasSwapsPending,
+                    hasSessionPlanPending: hasSessionPlanPending)
+                ForEach(options, id: \.self) { option in
+                    // Label wording depends on the company the option keeps —
+                    // see `finishOptionLabelKey`. Routing does not.
+                    Button(
+                        finishOptionLabel(
+                            option, isSoleOption: options.count == 1)
+                    ) {
                         pendingFinishOption = option
                     }
                 }
@@ -2934,18 +3014,19 @@ struct ActiveWorkoutView: View {
             : "Finish this workout?"
     }
 
-    /// User-facing label for one finish-dialog option. Kept here (not on the
-    /// enum) so `ActiveWorkoutHelpers` stays SwiftUI-free; the literals are
-    /// the pre-existing localized keys (Korean included).
+    /// User-facing label for one finish-dialog option.
+    ///
+    /// The key selection is the pure `finishOptionLabelKey`, so the
+    /// "plain finish alone reads simply *Finish*" rule is testable without a
+    /// view; this wrapper only lifts the key into a `LocalizedStringKey` so
+    /// `ActiveWorkoutHelpers` stays SwiftUI-free. Every key is pre-existing and
+    /// already translated.
     private func finishOptionLabel(
-        _ option: FinishDialogOption
+        _ option: FinishDialogOption,
+        isSoleOption: Bool
     ) -> LocalizedStringKey {
-        switch option {
-        case .finishOnly: "Finish (this workout only)"
-        case .applySwaps: "Finish + Update routine template"
-        case .applySlotPrescription: "Finish + Update slot prescription"
-        case .applyAll: "Finish + Apply all"
-        }
+        LocalizedStringKey(
+            finishOptionLabelKey(option, isSoleOption: isSoleOption))
     }
 
     private var hasSwapsPending: Bool {
@@ -4402,7 +4483,12 @@ struct ActiveWorkoutView: View {
                                     r > 0
                                 {
                                     startRestWithPersistence(
-                                        seconds: r, slotID: exercise.routineSlotID)
+                                        seconds: r,
+                                        slotID: exercise.routineSlotID,
+                                        // A drop belongs to its parent working
+                                        // set: undoing that parent is what must
+                                        // clear this rest.
+                                        setIndex: parentSetIndex)
                                     showRestOverlay = true
                                 } else {
                                     // Round incomplete, last set of workout, or
@@ -4444,7 +4530,12 @@ struct ActiveWorkoutView: View {
                                     ), r > 0
                                 {
                                     startRestWithPersistence(
-                                        seconds: r, slotID: exercise.routineSlotID)
+                                        seconds: r,
+                                        slotID: exercise.routineSlotID,
+                                        // A drop belongs to its parent working
+                                        // set: undoing that parent is what must
+                                        // clear this rest.
+                                        setIndex: parentSetIndex)
                                     showRestOverlay = true
                                 }
                             }
@@ -4455,7 +4546,9 @@ struct ActiveWorkoutView: View {
                             let restDur = snap.restSeconds.flatMap { $0 > 0 ? $0 : nil }
                             if let r = restDur, r > 0 {
                                 startRestWithPersistence(
-                                    seconds: r, slotID: exercise.routineSlotID)
+                                    seconds: r,
+                                    slotID: exercise.routineSlotID,
+                                    setIndex: parentSetIndex)
                                 showRestOverlay = true
                             }
                         }

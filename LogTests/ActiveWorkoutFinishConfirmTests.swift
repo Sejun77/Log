@@ -174,6 +174,69 @@ final class ActiveWorkoutFinishConfirmTests: XCTestCase {
         XCTAssertNil(consumePendingFinish(&slot))
     }
 
+    // MARK: - Label selection (manual-test polish)
+
+    /// With nothing pending the dialog offers one action plus Cancel, and
+    /// "(this workout only)" answers a question the user was never asked —
+    /// there is no other workout and nothing else the button could apply.
+    func test_soleFinishOption_readsSimplyFinish() {
+        let options = finishDialogOptions(
+            hasSwapsPending: false, hasSessionPlanPending: false)
+        XCTAssertEqual(options, [.finishOnly])
+        XCTAssertEqual(
+            finishOptionLabelKey(.finishOnly, isSoleOption: options.count == 1),
+            "Finish")
+    }
+
+    /// As soon as an apply option shares the dialog, the qualifier earns its
+    /// place back: a bare "Finish" beside "Finish + Update routine template"
+    /// would leave the plain option's meaning implicit.
+    func test_finishKeepsQualifierWhenApplyOptionsExist() {
+        for (swaps, plan) in [(true, false), (false, true), (true, true)] {
+            let options = finishDialogOptions(
+                hasSwapsPending: swaps, hasSessionPlanPending: plan)
+            XCTAssertGreaterThan(options.count, 1)
+            XCTAssertEqual(
+                finishOptionLabelKey(
+                    .finishOnly, isSoleOption: options.count == 1),
+                "Finish (this workout only)",
+                "swaps: \(swaps), plan: \(plan)")
+        }
+    }
+
+    /// The apply options are worded the same either way — only `.finishOnly`
+    /// depends on its company.
+    func test_applyOptionLabelsAreUnconditional() {
+        for sole in [true, false] {
+            XCTAssertEqual(
+                finishOptionLabelKey(.applySwaps, isSoleOption: sole),
+                "Finish + Update routine template")
+            XCTAssertEqual(
+                finishOptionLabelKey(.applySlotPrescription, isSoleOption: sole),
+                "Finish + Update slot prescription")
+            XCTAssertEqual(
+                finishOptionLabelKey(.applyAll, isSoleOption: sole),
+                "Finish + Apply all")
+        }
+    }
+
+    /// Wording is the *only* thing that changes: the options offered, their
+    /// order, and the apply-back flags each one routes to are untouched.
+    func test_labelSelectionDoesNotChangeRoutingOrOptionSet() {
+        let sole = finishDialogOptions(
+            hasSwapsPending: false, hasSessionPlanPending: false)
+        XCTAssertEqual(sole, [.finishOnly])
+        XCTAssertFalse(sole[0].applySwaps)
+        XCTAssertFalse(sole[0].applySlotPrescription)
+
+        let both = finishDialogOptions(
+            hasSwapsPending: true, hasSessionPlanPending: true)
+        XCTAssertEqual(
+            both, [.finishOnly, .applySwaps, .applySlotPrescription, .applyAll])
+        XCTAssertFalse(both[0].applySwaps)
+        XCTAssertFalse(both[0].applySlotPrescription)
+    }
+
     func test_reconfirmAfterSurvivingView_isReArmable() {
         // If the view ever survives a finish attempt, a NEW confirmation can
         // record and consume again — the single-fire guard is per-request,

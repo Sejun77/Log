@@ -749,6 +749,18 @@ private struct WorkoutDetailView: View {
             .foregroundStyle(DSColor.textPrimary)
     }
 
+    /// Width of the leading label column shared by the Equipment and Planned
+    /// effort rows, so the two stay aligned.
+    ///
+    /// Was 80pt, which fits "Equipment" and *not* "Planned effort" — at
+    /// `dsCaption` (12pt) that label needs roughly 88pt, so it wrapped onto two
+    /// lines and turned a one-line fact into a two-line block. Widened once,
+    /// here, rather than per-row: two adjacent rows with different label
+    /// columns would read as a layout bug of its own. The label keeps its full
+    /// wording — "Planned effort" says both that a target existed and that the
+    /// app never measured whether it was hit, and neither half is droppable.
+    private static let labelColumnWidth: CGFloat = 100
+
     /// Trim and treat empty/whitespace-only as nil so a blank snapshot
     /// value never renders an empty row. Mirrors the `ActiveWorkoutView`
     /// helper used at workout time.
@@ -775,7 +787,7 @@ private struct WorkoutDetailView: View {
                 Text("Equipment")
                     .font(.dsCaption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 80, alignment: .leading)
+                    .frame(width: Self.labelColumnWidth, alignment: .leading)
                 Text(LocalizedStringKey(equipment))
                     .font(.dsBody)
                     .foregroundStyle(.primary)
@@ -824,13 +836,23 @@ private struct WorkoutDetailView: View {
                 Text("Planned effort")
                     .font(.dsCaption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 80, alignment: .leading)
+                    // One line, always. The width above fits the label at every
+                    // default type size; the scale factor is the accessibility
+                    // backstop, so a very large type setting shrinks the label
+                    // rather than reflowing the row into two.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(width: Self.labelColumnWidth, alignment: .leading)
                 // Verbatim: composed from a metric name and numbers, like every
-                // other effort summary in the app.
+                // other effort summary in the app. Bounded by the Build 10 C6
+                // four-value elision (`RIR 3/3/2/2…`), so one line is enough;
+                // `lineLimit(1)` replaces the previous vertical `fixedSize` to
+                // guarantee it rather than merely expect it.
                 Text(summary)
                     .font(.dsBody.monospacedDigit())
                     .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
     }
