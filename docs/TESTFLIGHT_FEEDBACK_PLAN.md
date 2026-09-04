@@ -304,6 +304,38 @@ What to report:
 
 ---
 
+### Warm-ups and Techniques Inside an Alternative (Build 10)
+
+Fixed in Build 10: on Build 9, adding a warm-up step to a prepared alternative
+crashed the app. Adding a technique did not crash but quietly left a stray row
+behind. Both are fixed, and nothing about how alternatives work has changed —
+this check is only to confirm the editing itself is now solid.
+
+- [ ] Open a routine exercise's **Alternative Exercises** and open a prepared one
+- [ ] Add a **warm-up** step, and confirm the app does not crash
+- [ ] Confirm the step appears straight away, without leaving the screen
+- [ ] Add a **technique**, then edit it, then delete it
+- [ ] Leave the alternative editor, reopen it, and confirm what you kept is
+      still there
+- [ ] Start a workout from that routine and apply the prepared alternative
+- [ ] Confirm the warm-up and technique you authored are the ones the workout
+      shows
+- [ ] Log a set and confirm the rest timer still behaves normally
+- [ ] Check that a **normal** routine exercise's warm-ups and techniques still
+      work exactly as before
+
+What to report:
+
+- any crash, and what you had just tapped
+- a warm-up step or technique that does not appear until you leave and come back
+- anything you saved in an alternative that is missing when you reopen it
+- a warm-up or technique that does not carry into the workout after applying the
+  alternative
+- anything different about editing warm-ups or techniques on a normal routine
+  exercise
+
+---
+
 ### Opening the User Guide (Build 10)
 
 Changed in Build 10: the in-app guide opens in your phone's language instead of

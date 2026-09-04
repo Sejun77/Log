@@ -81,11 +81,14 @@ guide/tester docs.
 Exercises deletion handling (C1), followed by a Korean terminology and naming
 pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
 discoverability pass (C4), a User Guide language default (C5) and an
-effort-target clarity pass (C6), planned effort targets in History (C7) and the
-Calculus showcase hidden from Release (C8) — see the Build 10 entries under
-*Fixes Made* below. All eight are UX polish or visibility improvements, not
-Build 9 blockers; Build 9 is
-unaffected and stays in testers' hands.
+effort-target clarity pass (C6), planned effort targets in History (C7), the
+Calculus showcase hidden from Release (C8) and a stability / data-integrity fix
+to prepared Alternative Exercises (C9) — see the Build 10 entries under *Fixes
+Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
+blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
+orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
+the crash needs a prepared alternative's *first* warm-up step to trigger, so it
+is reachable but not on a common path.
 
 ---
 
@@ -302,6 +305,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C8 — hid the Calculus showcase from Release and TestFlight builds.** Settings / TestFlight polish, visibility only. Settings offered a **Showcase → Calculus Analytics** row unconditionally: an AP Calculus AB demo that analyses in-memory sample data and touches nothing a user owns. It was written as a development exercise, and it has been sitting in the Settings screen of a build sent to people who came to log workouts — in English only, so a Korean tester met an untranslated section about coursework. It is now behind `#if DEBUG`, still available locally and absent from anything a tester installs. The gate wraps **both** the call site and the `showcaseSection` definition, which is what makes it load-bearing rather than cosmetic: gating only the call would work today and quietly stop working the first time someone re-added a reference, whereas with the definition gated too an ungated call **fails the Release build** instead of shipping. The rule itself lives in one small pure helper taking the build configuration as an argument — the only way to test it at all, since a test bundle is built in the same configuration as its host app and a Debug run can never observe Release behavior directly. Not a runtime flag: no `UserDefaults`, nothing togglable, no hidden gesture. `Localizable.xcstrings` was **not** touched — the three showcase keys have no Korean and no test requires them to, so translating a Debug-only demo would be work with no user. `AnalyticsView`, `StrengthAnalytics` and `SampleWorkoutData` are unchanged and still build and test in every configuration: this removes the way *in*, not the showcase. No schema, migrations, workout, routine, active-workout, History, cardio, Alternative Exercises, effort-target, localization, docs, project-settings, signing, bundle ID, team, marketing-version or build-number change.
 
+- **Build 10 C9 — made prepared Alternative Exercises write into their own store.** A stability and data-integrity fix, and the first Build 10 item that is not polish: manual testing reproduced a **crash**. The alternative detail editor reuses the real routine prescription editors — `PrescriptionFields`, `WarmupSchemeEditor`, `TechniquePlanEditor` — by binding them to a **scratch** slot that lives in `AlternativeDraftStore`'s own throwaway in-memory container, and injects that container's context into the section's environment. That injection does not reach the editors the section **pushes**, so both wrote into the app's context instead, against a prescription that belongs somewhere else. One mistake, two different failures. `SlotPrescription.warmupScheme` is **to-one**, and relating a to-one across containers is a SwiftData `fatalError` — adding the first warm-up step to a prepared alternative killed the app on the main thread (`EXC_BREAKPOINT` in the `warmupScheme` setter), which is exactly the reported crash. `techniquePlans` is **to-many**, and the same cross-container relate is accepted *silently* — so techniques never crashed on add; they were saved into the **user's store** as orphan rows owned by no cascade and reachable from no screen, and `ModelContext.delete` on a draft-owned plan was a no-op until the draft had saved, after which it raised `NSInvalidArgumentException`. Both editors now resolve the write context from **the model being edited** (`prescription.modelContext ?? environment`), through two small helpers — `WarmupSchemeAuthoring` and `TechniquePlanAuthoring` — which also carry the create / insert / relate sequences so those paths are testable without a UI harness. For every routine slot the resolved context *is* the environment's, so ordinary warm-up and technique editing is unchanged; for a scratch slot it is the draft container, so nothing an alternative editor creates can reach the user's database. **No orphan sweep was added:** any `TechniquePlan` rows a Build 9 install already leaked are inert — unreachable from any screen, with no effect on payloads, workouts or History — and cleaning them up can be decided separately. No schema, migrations, `SlotAlternative` payload format, public Alternative Exercises behavior, routine-editor behavior outside the context fix, active-workout, switch, effort-target, cardio, History, transfer/import/export payload, duplication, localization, docs, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -309,6 +314,7 @@ Current validation status:
 - Finish confirmation: tested with pure navigation helper tests and manual checklist.
 - Finish confirmation reliability fix: tested with dialog option-routing and single-fire consumption tests; manual one-tap re-check on device completed.
 - Warm-up rendering fix: tested with warm-up insertion tests.
+- Prepared-alternative scratch-context fix (Build 10 C9): tested with new warm-up and technique scratch-context suites; manual device re-check still pending.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
 - Exercise-switch compatibility: tested with 22 value-level adapter tests covering Keep/Reset across duration → normal, normal → duration, and same-type switches.
@@ -346,6 +352,11 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C9 re-check on device: **pending** — the automated coverage
+  proves the crash path and the leak are gone at the model layer, but the two
+  things only a device can confirm are that the added warm-up step and technique
+  appear in the alternative editor immediately, and that they are still there
+  after leaving, reopening, and applying the alternative mid-workout.
 - Manual Build 10 C8 re-check on device: **pending** — the gate is a
   compile-time one, so what a device pass adds is the two things a build cannot
   report: that the showcase is genuinely absent from a Release install, and that
@@ -440,10 +451,21 @@ Current validation status:
   (`StrengthAnalyticsTests`, `SampleWorkoutDataTests`) are untouched and still
   pass: the slice removes the way *in*, not the showcase. No existing test was
   modified.
-- Latest test suite result: **full scheme passes: 2,389 tests, 0 failures** —
-  2,387 unit tests plus 2 UI tests (Build 10 C8 run). Debug build succeeds and
-  Release build succeeds — the Release build being the meaningful one for C8,
-  since it compiles with the showcase section absent.
+- Prepared-alternative scratch context (Build 10 C9): new
+  `AlternativeWarmupScratchTests` (14) and `AlternativeTechniqueScratchTests`
+  (17), both passing the **app's** context as the fallback — the wrong-store
+  context the environment used to hand the pushed editors — so each one fails
+  loudly if the resolution regresses. Between them they cover adding, editing,
+  deleting, reordering, committing, reopening and applying warm-ups and
+  techniques inside a prepared alternative, that nothing reaches the app store,
+  that the parent routine slot is never mutated, and that normal routine warm-up
+  and technique editing still writes to the app context exactly as before. Both
+  were checked against the pre-fix code: the warm-up suite crashes the runner
+  with the shipped fatal error, and 9 of the technique suite's tests fail. No
+  existing test was modified.
+- Latest test suite result: **full scheme passes: 2,420 tests, 0 failures** —
+  2,418 unit tests plus 2 UI tests (Build 10 C9 run). Debug build succeeds and
+  Release build succeeds.
 
 ---
 

@@ -1953,6 +1953,67 @@ see §2.12** — kept separate from the search-policy commit as planned.
 - Manual verification is still pending: that the showcase is gone from a Release
   build, and that **no other Settings row** went with it.
 
+### 2.36 Prepared Alternative Exercises write into their own store (Build 10 C9) — ✅ SHIPPED
+- **Source:** manual testing of Build 9 — a **reproduced crash**, not an audit
+  item. The first Build 10 slice that is not polish.
+- **Problem:** `SlotAlternativeDetailEditor` reuses the real prescription
+  editors by binding them to a **scratch** slot in `AlternativeDraftStore`'s own
+  in-memory container, and injects that container's context via
+  `.environment(\.modelContext, store.context)` on `SlotPrescriptionSection`.
+  That injection does **not** reach the editors the section *pushes*, so
+  `WarmupSchemeEditor` and `TechniquePlanEditor` read the app's context and
+  wrote there against a prescription registered in another container.
+- **Two symptoms, one cause.** `SlotPrescription.warmupScheme` is **to-one** and
+  SwiftData traps on a cross-container relate — `PersistentModel.swift:432`,
+  surfacing as `EXC_BREAKPOINT` on the `warmupScheme` setter, main thread: the
+  reported crash on adding an alternative's **first** warm-up step.
+  `techniquePlans` is **to-many** and the identical relate is accepted
+  *silently*, so techniques never crashed on add — they were inserted **and
+  saved into the user's store** as orphan rows owned by no cascade and reachable
+  from no screen (the bug class `BackfillService.purgeOrphanSetTemplates` exists
+  to clean up), and `ModelContext.delete` on a draft-owned plan was a silent
+  no-op until the draft context had saved, after which it raised
+  `NSInvalidArgumentException`.
+- **Status: Done.** Both editors resolve the write context from **the model**,
+  not the environment — `prescription.modelContext ?? fallback` — through two
+  new helpers, `WarmupSchemeAuthoring` and `TechniquePlanAuthoring`, which also
+  own the create / insert / relate sequences so the crash paths are reachable
+  from tests without a UI harness. `TechniqueParamEditView` resolves the same
+  way from `plan.modelContext`. Technique append switched to whole-array
+  reassignment, matching the warm-up path: an in-place append on a SwiftData
+  to-many does not reliably fire the Observation notification the alternative
+  editor's commit depends on. Order and persistence are unchanged.
+- **Normal routine editing is unchanged by construction:** a real slot's
+  prescription is registered in the app's main context, which *is* the
+  environment's context, so the resolved context is the same object it always
+  was. Pinned by tests asserting exactly that identity.
+- **No orphan sweep, deliberately.** Any `TechniquePlan` rows a Build 9 install
+  already leaked are inert — unreachable from any screen, with no effect on
+  payloads, workouts, transfer or History. A `BackfillService` sweep stays an
+  open, separate decision.
+- **No schema change**, no migrations, no `SlotAlternative` payload-format
+  change, no public Alternative Exercises behavior change, no routine-editor
+  change outside the context fix, and no active-workout, switch, effort-target,
+  cardio, History, transfer/import/export, duplication, localization, project
+  settings, signing, bundle ID, team, marketing version or build number change.
+- **Tests:** new `LogTests/AlternativeWarmupScratchTests.swift` (14) and
+  `LogTests/AlternativeTechniqueScratchTests.swift` (17). Both pass the **app's**
+  context as the fallback — the wrong-store context the environment used to hand
+  the pushed editors — so either suite fails loudly if the resolution regresses.
+  Coverage: adding, editing, deleting, reordering, committing back to the
+  `SlotAlternative` payload, reopening a fresh draft from it, and applying it
+  through `ExerciseSwitchPlanAdapter`; plus that nothing reaches the app store,
+  that the parent routine slot's prescription is never mutated, and that normal
+  routine warm-up and technique editing still writes to the app context. Both
+  were validated against the pre-fix code — the warm-up suite crashes the test
+  runner with the shipped fatal error, and 9 of the technique suite's tests fail,
+  including the `NSInvalidArgumentException` on delete. No existing test was
+  modified. **Full scheme passes: 2,420 tests, 0 failures** — 2,418 unit tests
+  plus 2 UI tests. Debug and Release builds succeed.
+- Manual verification on device is still **pending**: that the added warm-up step
+  and technique appear immediately, survive leaving and reopening the alternative
+  editor, and carry into a workout when the alternative is applied.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.

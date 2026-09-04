@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C8 fix._
+_Counts are from the latest verification run, after the Build 10 C9 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C8 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,389 tests, 0 failures** — 2,387 unit tests plus 2 UI
+- **Full scheme passes: 2,420 tests, 0 failures** — 2,418 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -517,6 +517,44 @@ same configuration as the app it hosts, so a Debug run can never see what a
 Release build renders. It can, however, assert both answers of a function — and
 assert that the compiled constant agrees with the configuration it is running
 in, so an inverted `#if` fails in CI rather than on someone's phone.
+
+---
+
+## Build 10 — Writing Into the Right Store
+
+The one Build 10 slice that came from a real defect rather than an audit.
+
+The Alternative Exercises editor doesn't reimplement the prescription editors —
+it binds the real ones to a **scratch** slot living in its own throwaway
+in-memory database, so nothing you type while editing an alternative can reach
+your actual data. The scratch container's context is injected into the section's
+environment. It turns out that injection does not follow the editors the section
+*pushes*, so **Warmup** and **Techniques** were writing into the app's database
+against a prescription that lives somewhere else.
+
+The same mistake produced two completely different symptoms, which is the part
+worth remembering. A prescription's warm-up scheme is a **to-one**
+relationship, and SwiftData traps outright when you relate a to-one across two
+containers — so adding the first warm-up step to a prepared alternative crashed
+the app, reproducibly, on Build 9. Techniques are a **to-many** relationship,
+and the identical mistake there is accepted *silently*: no crash, and instead a
+`TechniquePlan` row quietly saved into the user's database, owned by nothing and
+reachable from no screen. Deleting one then did nothing at all, until the draft
+had saved once, at which point it threw.
+
+The crash is the one that got reported. The silent one is the one that would
+have kept accumulating rows.
+
+Both editors now ask **the model they are editing** which store to write into,
+rather than asking the environment. For a real routine slot that is the same
+context it always was, so ordinary warm-up and technique editing is untouched;
+for a scratch slot it is the draft container, which is what the design promised
+in the first place. The create-and-relate sequences moved into two small
+helpers so the crash path is reachable from a test — both suites were run
+against the old code first, to confirm they actually catch it.
+
+Existing Build 9 orphan rows are left alone for now. They are inert, and
+sweeping them is a separate decision.
 
 ---
 
