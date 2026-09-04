@@ -336,6 +336,45 @@ What to report:
 
 ---
 
+### The Active Workout Screen, After the Polish Pass (Build 10)
+
+Changed in Build 10, from a round of manual testing: **Warmup** now sits above
+the set rows, the rest timer stops when you unlog the set that started it, the
+finish button reads plainly **Finish / 완료** when there is nothing else to
+apply, and the Korean bottom bar says **이전** instead of **등**.
+
+- [ ] Start a workout from a routine whose first exercise has warm-up steps
+- [ ] Confirm **Warmup** appears **above** Sets, and that the set rows are still
+      quick to reach without a long scroll
+- [ ] Confirm **Session Notes** is still near the bottom
+- [ ] Log a set and confirm the rest timer starts as it always did
+- [ ] Unlog that same set, and confirm the rest timer stops
+- [ ] Log another set and confirm rest starts normally again
+- [ ] *(optional)* While resting after set 3, go back and correct set 1 —
+      the rest should **keep running**
+- [ ] Finish a workout where you changed nothing, and confirm the button says
+      just **Finish** / **완료**
+- [ ] Finish a workout where you switched an exercise or edited the plan, and
+      confirm the longer "Finish + …" options still appear
+- [ ] Open **History** for a workout that had an effort target, and confirm
+      **Planned effort** fits on one line
+- [ ] In Korean, confirm the bottom bar reads **이전** and **다음**
+- [ ] In Korean, open an exercise whose body part is Back and confirm it still
+      reads **등**
+
+What to report:
+
+- a rest timer that keeps running after you unlog a set, or one that stops when
+  you did not expect it to
+- a rest notification that still arrives after you unlogged the set
+- Warmup or Sets in an order that feels wrong while training
+- the planned-effort row still wrapping onto two lines, and on which phone
+- **이전** or **다음** reading oddly, or **등** appearing anywhere it means
+  navigation
+- the finish button saying more or less than the situation calls for
+
+---
+
 ### Opening the User Guide (Build 10)
 
 Changed in Build 10: the in-app guide opens in your phone's language instead of

@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C9 fix._
+_Counts are from the latest verification run, after the Build 10 C10 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C9 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,420 tests, 0 failures** — 2,418 unit tests plus 2 UI
+- **Full scheme passes: 2,438 tests, 0 failures** — 2,436 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -340,6 +340,8 @@ Exercise, the Plan card, Equipment & Setup, warm-ups, the cardio checklist. All
 of it either read once at the start or never — and all of it between the user
 and the reps field they come back to every couple of minutes, on every exercise,
 on every phone.
+
+*(A later slice moved it once more — see “What You Do First, First” below.)*
 
 Sets is now first. Then the plan-shaped things a user reads *while* logging —
 Plan, Warmup, the Cardio Plan checklist — then Equipment & Setup, and then the
@@ -555,6 +557,46 @@ against the old code first, to confirm they actually catch it.
 
 Existing Build 9 orphan rows are left alone for now. They are inert, and
 sweeping them is a separate decision.
+
+---
+
+## Build 10 — What You Do First, First
+
+One pass through the app on a real phone, five things wrong, one of them a bug.
+
+The bug: **the rest timer outlived the set that started it.** Log a set, watch
+the rest start, unlog the set — and the countdown kept going, along with its
+scheduled notification and its Live Activity, for a set that no longer existed.
+
+The cause is the kind I find slightly embarrassing in hindsight. There are three
+places a set can be unlogged, and all three had drifted apart. The reps/weight
+row stopped the rest unconditionally — which is its own small bug, since going
+back to fix an older set killed the countdown you were taking after a newer one.
+The duration/cardio row and the warm-up row didn't stop it at all, under a
+comment that confidently claimed they mirrored the first.
+
+Nobody was in a position to do better, because the timer never knew which set
+started it. It is scoped to a *slot*, and the only thing persisted across a cold
+restart is the slot id. So rest starts now record the set that triggered them —
+all five of them, including both dropset paths, where a drop's rest belongs to
+its parent working set — and one rule decides the rest: clear when the unlogged
+set is the origin, and after a cold resume, where the origin is genuinely
+unknown, clear only when the slot has nothing logged left to justify it.
+
+The other four are wording and layout. **Warmup moved above Sets** — C3 put the
+set rows first, correctly, and then left the warm-up below the rows it comes
+before, so you scrolled up to do the thing you do first. **History's planned
+effort wrapped onto two lines**, because "Planned effort" doesn't fit an 80pt
+column at 12pt; the column is now 100pt and the wording is untouched, which was
+the point. **The finish dialog said "Finish (this workout only)" when it was the
+only option**, answering a question nobody asked. And **the Korean Back button
+said `등`** — the body part — because it shared a key with the muscle group,
+sitting next to a perfectly correct `다음`. It says `이전` now, and the body part
+still says `등`.
+
+That last one is the whole tester round in miniature. It was never going to show
+up in a test, and I would never have found it myself, because I don't read the
+app in Korean.
 
 ---
 

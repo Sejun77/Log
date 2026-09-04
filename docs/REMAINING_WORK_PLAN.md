@@ -1576,6 +1576,8 @@ see §2.12** — kept separate from the search-policy commit as planned.
   pending.
 
 ### 2.30 Active workout section order — Sets first (Build 10 C3) — ✅ SHIPPED
+- **Superseded in part by §2.37 (Build 10 C10)**, which moved Warmup above
+  Sets. The admin half stays exactly where this slice put it.
 - **Source:** Build 10 UX audit, filed as a **UX polish** item. Not a Build 9
   blocker; Build 9 stays in testers' hands.
 - **Problem:** the set rows — the only thing a user touches every few minutes —
@@ -2013,6 +2015,84 @@ see §2.12** — kept separate from the search-policy commit as planned.
 - Manual verification on device is still **pending**: that the added warm-up step
   and technique appear immediately, survive leaving and reopening the alternative
   editor, and carry into a workout when the alternative is applied.
+
+### 2.37 Manual-test polish bundle (Build 10 C10) — ✅ SHIPPED
+- **Source:** one manual pass through the app on device. Five findings, fixed as
+  one slice: four wording/layout, one a real active-workout bug.
+- **(1) Rest timer outlived the set that started it.** The three undo paths had
+  drifted apart: the reps/weight row called `rest.stop()` **unconditionally**
+  (so correcting an older set killed the rest running after a newer one), while
+  the duration/cardio row and the warm-up row never stopped it **at all** —
+  under a comment claiming they mirrored the first. Unlogging the set that began
+  the rest left the countdown, its scheduled notification and its Live Activity
+  running for a set that no longer existed. **Root cause:** the timer is
+  slot-scoped — `stableNotificationID` is `(workoutID, slotID)` and `AppState`
+  persists only `activeRestSlotID` — so nothing downstream knew *which set* had
+  triggered it.
+- **Status: Done.** A new `RestOriginSet(slotID:setIndex:)` is recorded by
+  `startRestWithPersistence`, wired at all **five** start sites: working
+  reps/weight, duration/cardio, warm-up (negative `-(order+1)` index, so it
+  cannot collide with a working set), and the two dropset paths, where a drop's
+  rest is owned by its **parent** working set. One pure rule,
+  `restClearDecision`: not running → keep; origin known → clear iff the unlogged
+  set *is* the origin; origin unknown (cold resume rehydrates from `AppState`,
+  which stores only the slot) → the conservative branch, clear only when the
+  slot has no logged sets left. Clearing runs through the existing path
+  (`rest.stop()` cancels the pending notification, clears timer persistence and
+  neutralises the Live Activity; `clearPersistedRestState()` drops the
+  `AppState` row so a cold resume cannot rehydrate it). Rest **start** behavior
+  and every duration calculation are unchanged.
+- **(2) Warmup above Sets.** §2.30 moved the set rows from ninth to first; a
+  warm-up is performed *before* the first working set, so it was listed after
+  the rows it precedes. Order is now Plan → Equipment & Setup → Warmup → Cardio
+  Plan checklist → Sets, with the admin half (Switch Exercise, Exercise Notes,
+  prefill toggle, Session Notes) unchanged below and Session Notes last.
+  Verified as a **pure permutation**: zero code lines added or removed against
+  the parent commit, comments only. No DisclosureGroups; header, list modifiers,
+  safe-area bar and keyboard handling untouched.
+- **(3) History planned-effort row wrapped.** The value was never the cause —
+  the §2.33 four-value elision bounds it — the **label** was: "Planned effort"
+  needs ~88pt at `dsCaption` (12pt) and sat in an 80pt column. Widened to 100pt
+  via a shared constant used by the Equipment row too, so the pair stays
+  aligned, plus `lineLimit(1)` + `minimumScaleFactor` as the large-type
+  backstop. Copy unchanged in both languages; `HistoryPlannedEffort` untouched.
+- **(4) Finish label over-qualified.** With nothing pending the dialog offers one
+  action plus Cancel, and "Finish (this workout only)" / "완료 (이번 운동만)"
+  answered a question the user was never asked. A pure
+  `finishOptionLabelKey(_:isSoleOption:)` now returns the plain `Finish` / `완료`
+  key when `.finishOnly` is alone, and the qualified key whenever an apply option
+  shares the dialog. **Label selection only** — `finishDialogOptions`, the option
+  order, the apply-back flags and `finishWorkout` are all unchanged, and no new
+  key was needed.
+- **(5) Korean Back said `등`.** The bottom bar's Back label used the bare `Back`
+  key, which is also the canonical **body part** (`ExerciseCatalog` seeds
+  Pull-Up, Barbell Row, Lat Pulldown, Seated Cable Row and Conventional Deadlift
+  with it), so the navigation control rendered the anatomical back beside a
+  correct `다음`. The button now takes its own key, `activeWorkout.back`, with an
+  explicit `en` value ("Back") since the key is not itself English text, and
+  Korean **`이전`** — chosen over `뒤로` because it pairs with `다음` as an
+  ordinal step through the workout. The body part's `Back` → `등` entry is
+  **untouched**: one key added, none repointed.
+- **No schema change**, no migrations, no model-field change, no Alternative
+  Exercises payload-format or scratch-editor-architecture change, and no
+  exercise-deletion, exercise-switch, effort-target-resolution, cardio-
+  calculation, History-data-model, transfer/import/export, routine-duplication,
+  project-settings, signing, bundle ID, team, marketing-version or build-number
+  change. The only localization change is one added key.
+- **Tests:** new `LogTests/ActiveWorkoutRestOriginTests.swift` (9) pinning the
+  rest rule so a fourth undo path cannot invent a fourth answer. 4 added to
+  `ActiveWorkoutFinishConfirmTests`, 3 to `KoreanLocalizationTests` (including
+  that the body part still translates to `등`), 2 to
+  `HistoryPlannedEffortTests`. No existing test modified or weakened. **Full
+  scheme passes: 2,438 tests, 0 failures** — 2,436 unit tests plus 2 UI tests.
+  Debug and Release builds succeed.
+- **The section reorder has no unit test, deliberately.** The sections are
+  heterogeneous `ViewBuilder` calls; driving them from an ordered list would
+  restructure a view whose keyboard and safe-area behavior is documented as
+  fragile, which is a poor trade for this slice. The evidence is the
+  pure-permutation diff plus the device pass.
+- Manual verification on device is still **pending**, and is the widest of the
+  Build 10 items: four of the five findings are things only a screen settles.
 
 ## 3. Optional / Future Features
 

@@ -82,13 +82,15 @@ Exercises deletion handling (C1), followed by a Korean terminology and naming
 pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
 discoverability pass (C4), a User Guide language default (C5) and an
 effort-target clarity pass (C6), planned effort targets in History (C7), the
-Calculus showcase hidden from Release (C8) and a stability / data-integrity fix
-to prepared Alternative Exercises (C9) — see the Build 10 entries under *Fixes
-Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
-blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
-orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
-the crash needs a prepared alternative's *first* warm-up step to trigger, so it
-is reachable but not on a common path.
+Calculus showcase hidden from Release (C8), a stability / data-integrity fix to
+prepared Alternative Exercises (C9) and a manual-test polish bundle (C10) — see
+the Build 10 entries under *Fixes Made* below. C1–C8 are UX polish or visibility
+improvements, not Build 9 blockers. **C9 is not polish**: it fixes a reproduced
+crash and a silent orphan-row leak in Alternative Exercises authoring, and Build
+9 carries both — the crash needs a prepared alternative's *first* warm-up step
+to trigger, so it is reachable but not on a common path. **C10 is mixed**: five
+findings from one manual pass, four of them wording and layout, one a real
+active-workout bug (a rest timer that outlived the set that started it).
 
 ---
 
@@ -307,6 +309,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C9 — made prepared Alternative Exercises write into their own store.** A stability and data-integrity fix, and the first Build 10 item that is not polish: manual testing reproduced a **crash**. The alternative detail editor reuses the real routine prescription editors — `PrescriptionFields`, `WarmupSchemeEditor`, `TechniquePlanEditor` — by binding them to a **scratch** slot that lives in `AlternativeDraftStore`'s own throwaway in-memory container, and injects that container's context into the section's environment. That injection does not reach the editors the section **pushes**, so both wrote into the app's context instead, against a prescription that belongs somewhere else. One mistake, two different failures. `SlotPrescription.warmupScheme` is **to-one**, and relating a to-one across containers is a SwiftData `fatalError` — adding the first warm-up step to a prepared alternative killed the app on the main thread (`EXC_BREAKPOINT` in the `warmupScheme` setter), which is exactly the reported crash. `techniquePlans` is **to-many**, and the same cross-container relate is accepted *silently* — so techniques never crashed on add; they were saved into the **user's store** as orphan rows owned by no cascade and reachable from no screen, and `ModelContext.delete` on a draft-owned plan was a no-op until the draft had saved, after which it raised `NSInvalidArgumentException`. Both editors now resolve the write context from **the model being edited** (`prescription.modelContext ?? environment`), through two small helpers — `WarmupSchemeAuthoring` and `TechniquePlanAuthoring` — which also carry the create / insert / relate sequences so those paths are testable without a UI harness. For every routine slot the resolved context *is* the environment's, so ordinary warm-up and technique editing is unchanged; for a scratch slot it is the draft container, so nothing an alternative editor creates can reach the user's database. **No orphan sweep was added:** any `TechniquePlan` rows a Build 9 install already leaked are inert — unreachable from any screen, with no effect on payloads, workouts or History — and cleaning them up can be decided separately. No schema, migrations, `SlotAlternative` payload format, public Alternative Exercises behavior, routine-editor behavior outside the context fix, active-workout, switch, effort-target, cardio, History, transfer/import/export payload, duplication, localization, docs, project-settings, signing, bundle ID, team, marketing-version or build-number change.
 
+- **Build 10 C10 — the manual-test polish bundle.** Five findings from one pass through the app on device, fixed together: four are wording or layout, one is a real bug. **The rest timer outlived the set that started it.** Three undo paths had drifted apart — the reps/weight row stopped the rest *unconditionally* (so going back to correct an older set killed the countdown running after a newer one), while the duration / cardio row and the warm-up row never stopped it *at all*, under a comment claiming the first behavior. Unlog the set that began the rest and the countdown, its scheduled notification and its Live Activity all kept running for a set that no longer existed. The timer had no way to know better: it is slot-scoped, and `AppState` persists only `activeRestSlotID`, never which set triggered it. Rest starts now record their origin set, and all five start sites — working reps/weight, duration/cardio, warm-up, and the two dropset paths, where a drop's rest belongs to its **parent** working set — carry it. One pure rule decides the rest: clear only when the unlogged set *is* the origin; after a cold resume, where the rehydrated rest knows only its slot, clear only when that slot has no logged sets left at all. Clearing goes through the existing path, so the notification and Live Activity state go with it. Rest *start* behavior and every duration calculation are untouched. **Warm-up now sits above Sets.** C3 moved the set rows from ninth to first; a warm-up is performed *before* the first working set, so listing it after the rows it precedes asked the user to scroll up to do the thing they do first. The order is now Plan, Equipment & Setup, Warmup, Cardio Plan checklist, Sets — everything above the set rows plan-shaped and short — with the whole admin half (Switch Exercise, Exercise Notes, the prefill toggle, Session Notes) still below, Session Notes last. Verified as a pure permutation: zero code lines added or removed against the parent commit, comments only. **History's planned-effort row wrapped onto two lines.** The value was never the cause — the C6 four-value elision bounds it — the label was: "Planned effort" needs about 88pt at the row's 12pt caption size and sat in an 80pt column. The column is now 100pt, shared with the Equipment row so the two stay aligned, with a one-line limit and a scale-factor backstop for large type. The copy is unchanged in both languages: `계획 강도` stays, and nothing about the row implies a measured result. **"Finish (this workout only)" appeared even when it was the only option.** With no pending swaps and no dirty session plan the dialog offers one action plus Cancel, and the qualifier answered a question the user was never asked — there is no other workout, and nothing else the button could apply. Alone it now reads **Finish / 완료**; as soon as an apply option shares the dialog the qualifier earns its place back and every multi-option dialog keeps the wording it shipped with. Label selection only: the options offered, their order, the apply-back flags and what finishing does are all unchanged, and no new key was needed. **The Korean Back button said `등`.** The active workout's bottom bar rendered its Back label through the bare `Back` key — which is also the canonical **body part**, seeded on Pull-Up, Barbell Row, Lat Pulldown, Seated Cable Row and Conventional Deadlift — so the navigation control read the anatomical back, next to a correctly labelled `다음`. The button now has its own key, translating to **`이전`**, chosen over `뒤로` because it pairs with `다음` as an ordinal step through the workout. English is unchanged, and the body part's own `Back` → `등` entry is untouched — one added key, nothing repointed. No schema, migrations, model fields, Alternative Exercises payload format, scratch-editor architecture, exercise-deletion behavior, exercise-switch behavior, effort-target resolution, cardio calculations, History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -315,6 +319,7 @@ Current validation status:
 - Finish confirmation reliability fix: tested with dialog option-routing and single-fire consumption tests; manual one-tap re-check on device completed.
 - Warm-up rendering fix: tested with warm-up insertion tests.
 - Prepared-alternative scratch-context fix (Build 10 C9): tested with new warm-up and technique scratch-context suites; manual device re-check still pending.
+- Manual-test polish bundle (Build 10 C10): rest-origin, finish-label and Korean navigation copy are covered by pure tests; the section reorder and the History row layout are display-only and want the device pass.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
 - Exercise-switch compatibility: tested with 22 value-level adapter tests covering Keep/Reset across duration → normal, normal → duration, and same-type switches.
@@ -352,6 +357,15 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C10 re-check on device: **pending** — and the widest of the
+  Build 10 items, because four of its five findings are things only a screen can
+  settle: that Warmup reads naturally above Sets and the set rows are still
+  quick to reach, that the planned-effort row holds one line at normal width,
+  that the finish dialog says plainly **Finish / 완료** with nothing pending and
+  keeps the qualifier when an apply option appears, and that the Korean bottom
+  bar reads **이전 / 다음** while a body part elsewhere still reads **등**. The
+  rest-timer fix wants the full loop: log a set, watch rest start, unlog it,
+  confirm the countdown *and* its notification stop, then log again.
 - Manual Build 10 C9 re-check on device: **pending** — the automated coverage
   proves the crash path and the leak are gone at the model layer, but the two
   things only a device can confirm are that the added warm-up step and technique
@@ -463,8 +477,25 @@ Current validation status:
   were checked against the pre-fix code: the warm-up suite crashes the runner
   with the shipped fatal error, and 9 of the technique suite's tests fail. No
   existing test was modified.
-- Latest test suite result: **full scheme passes: 2,420 tests, 0 failures** —
-  2,418 unit tests plus 2 UI tests (Build 10 C9 run). Debug build succeeds and
+- Manual-test polish bundle (Build 10 C10): new `ActiveWorkoutRestOriginTests`
+  (9) pinning the one rest-clearing rule so a fourth undo path cannot invent a
+  fourth answer — origin unlogged clears; an older set, another slot, and the
+  warm-up/working-set index split all keep; a drop is owned by its parent set;
+  and the cold-resume branch clears only on a slot with nothing logged left. 4
+  added to `ActiveWorkoutFinishConfirmTests` (sole option reads `Finish`, the
+  qualifier returns across all three multi-option shapes, apply labels are
+  unconditional, and the option set and routing are unchanged), 3 to
+  `KoreanLocalizationTests` (the navigation key is `이전` and not `등`, English
+  is still "Back", `다음` unchanged, and the body part still translates to `등`),
+  and 2 to `HistoryPlannedEffortTests` (every summary shape is one short line
+  with no embedded break; the label keeps both "planned" and "effort"). No
+  existing test was modified or weakened. The section reorder has **no** unit
+  test: the sections are heterogeneous `ViewBuilder` calls and driving them from
+  a list would restructure a view whose keyboard and safe-area behavior is
+  documented as fragile, so the evidence is the pure-permutation diff plus the
+  device pass.
+- Latest test suite result: **full scheme passes: 2,438 tests, 0 failures** —
+  2,436 unit tests plus 2 UI tests (Build 10 C10 run). Debug build succeeds and
   Release build succeeds.
 
 ---
