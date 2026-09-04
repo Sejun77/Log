@@ -637,3 +637,133 @@ func findSlotIndex(
     }
     return nil
 }
+
+// MARK: - Rest origin (manual-test polish)
+
+/// Which logged set started the rest timer that is currently running.
+///
+/// The rest timer itself is slot-scoped — its stable notification ID is
+/// `(workoutID, slotID)` and `AppState` persists only `activeRestSlotID` — so
+/// nothing downstream knew *which set* of that slot had triggered the
+/// countdown. That was fine while rest only ever started, and became a bug the
+/// moment a set could be unlogged underneath a running rest.
+///
+/// Session-scoped and deliberately not persisted: after a cold restart the rest
+/// is rehydrated from `AppState` with no memory of its origin, which
+/// `restClearDecision` handles explicitly rather than guessing.
+struct RestOriginSet: Equatable {
+    let slotID: UUID
+    /// `PlanExercise`-relative set index. Warm-up rows use the negative
+    /// `-(order + 1)` encoding, exactly as `loggedByExercise` does, so a
+    /// warm-up rest and a working-set rest can never collide.
+    let setIndex: Int
+}
+
+/// What to do with a running rest timer when a set is unlogged.
+enum RestClearDecision: Equatable {
+    /// Leave the countdown alone — it belongs to a set that is still logged.
+    case keep
+    /// Stop the timer and clear its persisted state / pending notification.
+    case clear
+}
+
+/// Whether unlogging one set should stop the rest that is currently running.
+///
+/// Before this rule, the three undo paths disagreed. The reps/weight row
+/// stopped the rest **unconditionally** — including when the user corrected an
+/// older set while resting after a newer one. The duration/cardio row and the
+/// warm-up row did not stop it **at all**, which is the reported bug: unlog the
+/// set that started the rest and the countdown, its notification and its Live
+/// Activity all kept running for a set that no longer exists.
+///
+/// The rule, in order:
+///
+///  1. Nothing is running → `.keep`. There is nothing to clear.
+///  2. The origin is **known** → `.clear` only when the unlogged set *is* the
+///     origin. Correcting any other set, in this slot or another, leaves the
+///     countdown alone.
+///  3. The origin is **unknown** — the session was cold-restarted and the rest
+///     was rehydrated from `AppState`, which stores only the slot — → the
+///     conservative fallback: `.clear` only when that slot has no logged sets
+///     left at all, so nothing remains that could justify the rest. A slot that
+///     still holds other logged sets keeps its countdown.
+///
+/// Pure.
+///
+/// - Parameter remainingLoggedSetsInSlot: the slot's logged set indices
+///   **after** the removal.
+func restClearDecision(
+    isRestRunning: Bool,
+    origin: RestOriginSet?,
+    unlogged: RestOriginSet,
+    remainingLoggedSetsInSlot: Set<Int>
+) -> RestClearDecision {
+    guard isRestRunning else { return .keep }
+    if let origin { return origin == unlogged ? .clear : .keep }
+    return remainingLoggedSetsInSlot.isEmpty ? .clear : .keep
+}
+
+// MARK: - Finish-dialog label selection (manual-test polish)
+
+/// Localization key for one finish-dialog option's label.
+///
+/// `.finishOnly` is the only option whose wording depends on its company. When
+/// it is alone — no pending swaps, no dirty session plan — the dialog offers
+/// exactly one action plus Cancel, and disambiguating it as "Finish (this
+/// workout only)" / "완료 (이번 운동만)" answers a question nobody asked: there
+/// is no *other* workout, and nothing else the button could apply. It reads as
+/// a warning about a choice the user was never given. Alone it is simply
+/// "Finish" / "완료".
+///
+/// As soon as an apply option is on screen the qualifier earns its place again
+/// — "Finish" next to "Finish + Update routine template" would leave the plain
+/// option's meaning implicit — so every multi-option dialog keeps the wording
+/// it shipped with.
+///
+/// Only the label changes. `FinishDialogOption` still carries the same
+/// apply-back flags, `finishDialogOptions` still returns the same options in
+/// the same order, and finishing does exactly what it did. Pure.
+func finishOptionLabelKey(
+    _ option: FinishDialogOption,
+    isSoleOption: Bool
+) -> String {
+    switch option {
+    case .finishOnly:
+        return isSoleOption ? "Finish" : "Finish (this workout only)"
+    case .applySwaps:
+        return "Finish + Update routine template"
+    case .applySlotPrescription:
+        return "Finish + Update slot prescription"
+    case .applyAll:
+        return "Finish + Apply all"
+    }
+}
+
+// MARK: - Active-workout navigation copy (manual-test polish)
+
+/// Copy for the active workout's bottom Back / Next bar.
+///
+/// `Back` cannot be a bare `"Back"` literal here. That string is also the
+/// canonical **body part** — `ExerciseCatalog` seeds Pull-Up, Barbell Row, Lat
+/// Pulldown, Seated Cable Row and Conventional Deadlift with `bodyPart:
+/// "Back"`, and the catalog translates it to `등`, the anatomical back. Sharing
+/// one key meant the navigation button read `등` in Korean: a muscle group
+/// where a direction belonged, next to a correctly-labelled `다음`.
+///
+/// So the button takes its own key. `이전` ("previous") is chosen over `뒤로`
+/// ("backwards") because it pairs with `다음` ("next") as an ordinal step
+/// through the workout, which is what the button does — it moves to the
+/// previous exercise, not backwards through navigation history. English is
+/// unchanged, and the body part's own `"Back"` → `등` entry is untouched.
+enum ActiveWorkoutNavCopy {
+    /// Catalog key. Not English text, so the catalog carries an explicit `en`
+    /// entry alongside the Korean one.
+    static let backKey = "activeWorkout.back"
+
+    static var backTitle: String {
+        NSLocalizedString(
+            backKey,
+            comment: "Active workout bottom bar: go to the previous exercise. "
+                + "NOT the body part 'Back' (등) — Korean is 이전.")
+    }
+}
