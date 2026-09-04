@@ -428,6 +428,24 @@
         }
       }
     },
+    "activeWorkout.back" : {
+      "comment" : "Active workout bottom bar: navigate to the previous exercise. Deliberately NOT the shared Back key, which is the body part and translates to 등. Korean is 이전 (previous), pairing with 다음 (Next).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이전"
+          }
+        }
+      }
+    },
     "Add" : {
       "extractionState" : "manual",
       "localizations" : {

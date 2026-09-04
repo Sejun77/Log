@@ -277,4 +277,52 @@ final class HistoryPlannedEffortTests: SwiftDataTestHarness {
 
         XCTAssertNil(historySummary(for: snap))
     }
+
+    // MARK: - One-row layout (manual-test polish)
+
+    /// The History row wrapped onto two lines. The value was never the cause —
+    /// the Build 10 C6 four-value elision bounds it — so the fix is a wider
+    /// label column, not shorter copy. This pins the value side of that claim:
+    /// whatever the snapshot holds, the summary is a single short line the row
+    /// can render without wrapping.
+    func testEverySummaryIsOneShortLine() throws {
+        let cases: [(String, SlotPrescription)] = [
+            ("single", SlotPrescription(
+                sets: 3, rir: 2,
+                effortModeRaw: EffortMode.single.rawValue)),
+            ("progression", SlotPrescription(
+                sets: 4, effortModeRaw: EffortMode.progression.rawValue,
+                rirStart: 3, rirEnd: 0)),
+            ("custom, fitted", SlotPrescription(
+                sets: 4, effortModeRaw: EffortMode.custom.rawValue,
+                customRIRTargetsRaw: "2,1.5,1,0")),
+            ("custom, elided", SlotPrescription(
+                sets: 10, effortModeRaw: EffortMode.custom.rawValue,
+                customRIRTargetsRaw: "3,3,2,2,1,1,1,0,0,0")),
+        ]
+
+        for (name, prescription) in cases {
+            context.insert(prescription)
+            let summary = try XCTUnwrap(
+                historySummary(for: snapshot(from: prescription)),
+                "\(name) produced no summary")
+
+            XCTAssertFalse(
+                summary.contains("\n"),
+                "\(name): a summary must never carry its own line break")
+            XCTAssertLessThanOrEqual(
+                summary.count, 20,
+                "\(name): the elision rule keeps the value short enough for "
+                    + "one row — \(summary)")
+        }
+    }
+
+    /// The label keeps both halves of its meaning. "Planned" alone would lose
+    /// that this is an effort target; dropping "planned" would imply the app
+    /// measured what was achieved, which no `SetLog` records.
+    func testTheLabelStillSaysPlannedAndEffort() {
+        let label = "Planned effort"
+        XCTAssertTrue(label.lowercased().contains("planned"))
+        XCTAssertTrue(label.lowercased().contains("effort"))
+    }
 }

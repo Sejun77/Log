@@ -1104,4 +1104,52 @@ final class KoreanLocalizationTests: XCTestCase {
             count.contains("%1$lld"),
             "Korean translation dropped the count placeholder: \(count)")
     }
+
+    // MARK: - Active workout navigation copy (manual-test polish)
+
+    /// The active workout's bottom bar rendered its Back button through the
+    /// bare `"Back"` key — which is also the canonical **body part**, so the
+    /// navigation control read `등` (the anatomical back) next to a correctly
+    /// labelled `다음`. The button now has its own key.
+    func testActiveWorkoutBackButtonIsNavigationNotBodyPart() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+        let korean = localized(ActiveWorkoutNavCopy.backKey, in: ko)
+
+        XCTAssertNotEqual(
+            korean, "등",
+            "The navigation button must not use the body part's translation")
+        XCTAssertTrue(
+            ["이전", "뒤로"].contains(korean),
+            "Expected a navigation word (이전 / 뒤로), got: \(korean)")
+        XCTAssertEqual(
+            korean, "이전",
+            "이전 is the chosen wording — it pairs with 다음 as an ordinal step")
+        XCTAssertEqual(
+            localized(ActiveWorkoutNavCopy.backKey, in: en), "Back",
+            "English is unchanged; the key carries an explicit en value "
+                + "because it is not itself English text")
+        XCTAssertEqual(
+            ActiveWorkoutNavCopy.backTitle, "Back",
+            "The test bundle runs in English, so the helper resolves to Back")
+    }
+
+    /// The two buttons of the bottom bar read as a pair.
+    func testActiveWorkoutNextIsUnchanged() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        XCTAssertEqual(localized("Next", in: ko), "다음")
+    }
+
+    /// The body part keeps its own translation — the fix adds a key, it does
+    /// not repoint the existing one.
+    func testBodyPartBackStillTranslatesToTheAnatomicalBack() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+
+        XCTAssertEqual(localized("Back", in: ko), "등")
+        XCTAssertEqual(localized("Back", in: en), "Back")
+        XCTAssertNotEqual(
+            ActiveWorkoutNavCopy.backKey, "Back",
+            "The navigation button must not share the body part's key")
+    }
 }
