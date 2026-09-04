@@ -121,47 +121,41 @@ struct TechniquePlanEditor: View {
         }
     }
 
+    /// The store this editor writes into: **the one the edited prescription
+    /// already lives in**, not whatever `@Environment(\.modelContext)` resolves
+    /// to.
+    ///
+    /// For every routine slot the two are the same object, so ordinary
+    /// technique editing is unchanged. They differ for the scratch slot the
+    /// Alternative Exercises detail editor binds this editor to, which lives in
+    /// `AlternativeDraftStore`'s own in-memory container: writing there through
+    /// the environment saved the plan into the *user's* store and related it
+    /// across containers, and deleting through it was a silent no-op. See
+    /// `TechniquePlanAuthoring` for the full note.
+    private var writeContext: ModelContext {
+        TechniquePlanAuthoring.writeContext(for: prescription, fallback: ctx)
+    }
+
     private func addPlan(type: TechniqueType) {
-        let nextOrder = (prescription.techniquePlans.map(\.order).max() ?? -1) + 1
-        let plan: TechniquePlan
-        switch type {
-        case .dropset:
-            plan = TechniquePlan(order: nextOrder, type: type,
-                                 dropPercent: 20, dropCount: 1,
-                                 dropsetEffortRaw: "amrap")
-        case .partialReps:
-            // Default to "Not set" (nil partialRangeRaw) — no preseeded note.
-            plan = TechniquePlan(order: nextOrder, type: type, reps: 8)
-        case .restPause:
-            plan = TechniquePlan(order: nextOrder, type: type,
-                                 restSeconds: 15, rounds: 2)
-        case .cluster:
-            plan = TechniquePlan(order: nextOrder, type: type,
-                                 reps: 3, restSeconds: 10, rounds: 3)
-        default:
-            plan = TechniquePlan(order: nextOrder, type: type)
-        }
-        ctx.insert(plan)
-        prescription.techniquePlans.append(plan)
-        try? ctx.save()
+        TechniquePlanAuthoring.addPlan(
+            type: type, to: prescription, fallbackContext: ctx)
     }
 
     private func deletePlans(at offsets: IndexSet) {
         let s = sorted
-        for i in offsets {
-            let plan = s[i]
-            prescription.techniquePlans.removeAll { $0.id == plan.id }
-            ctx.delete(plan)
-        }
+        TechniquePlanAuthoring.delete(
+            offsets.map { s[$0] },
+            from: prescription,
+            fallbackContext: ctx)
         for (i, p) in sorted.enumerated() { p.order = i }
-        try? ctx.save()
+        try? writeContext.save()
     }
 
     private func movePlans(from source: IndexSet, to destination: Int) {
         var s = sorted
         s.move(fromOffsets: source, toOffset: destination)
         for (i, p) in s.enumerated() { p.order = i }
-        try? ctx.save()
+        try? writeContext.save()
     }
 }
 
@@ -440,6 +434,13 @@ private struct TechniqueParamEditView: View {
     /// Working set count from the prescription (used for per-set-index UI and conflict checks).
     var setCount: Int = 3
 
+    /// Same rule as `TechniquePlanEditor.writeContext`, resolved from the plan
+    /// itself: this screen is pushed one level deeper still, so in a prepared
+    /// alternative the environment's context belongs to the app while the plan
+    /// belongs to the draft container — and saving the wrong store silently
+    /// flushed nothing. Identical to `ctx` for every routine slot.
+    private var writeContext: ModelContext { plan.modelContext ?? ctx }
+
     /// Transient error shown when a set-index toggle is blocked by a conflict.
     @State private var appliesToErrorMsg: String? = nil
     /// Transient error shown when a Dropset effort change is immediately reverted.
@@ -511,19 +512,19 @@ private struct TechniqueParamEditView: View {
         }
         .navigationTitle(typeName)
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: plan.dropPercent)              { try? ctx.save() }
-        .onChange(of: plan.dropCount)                { try? ctx.save() }
-        .onChange(of: plan.rounds)                   { try? ctx.save() }
-        .onChange(of: plan.restSeconds)              { try? ctx.save() }
-        .onChange(of: plan.reps)                     { try? ctx.save() }
-        .onChange(of: plan.partialRangeNote)         { try? ctx.save() }
-        .onChange(of: plan.partialRangeRaw)          { try? ctx.save() }
-        .onChange(of: plan.note)                     { try? ctx.save() }
-        .onChange(of: plan.appliesToRaw)             { try? ctx.save() }
-        .onChange(of: plan.appliesToSetNumber)       { try? ctx.save() }
-        .onChange(of: plan.appliesToSetIndicesRaw)   { try? ctx.save() }
-        .onChange(of: plan.dropsetEffortRaw)         { try? ctx.save() }
-        .onChange(of: plan.dropsetEffortReps)        { try? ctx.save() }
+        .onChange(of: plan.dropPercent)              { try? writeContext.save() }
+        .onChange(of: plan.dropCount)                { try? writeContext.save() }
+        .onChange(of: plan.rounds)                   { try? writeContext.save() }
+        .onChange(of: plan.restSeconds)              { try? writeContext.save() }
+        .onChange(of: plan.reps)                     { try? writeContext.save() }
+        .onChange(of: plan.partialRangeNote)         { try? writeContext.save() }
+        .onChange(of: plan.partialRangeRaw)          { try? writeContext.save() }
+        .onChange(of: plan.note)                     { try? writeContext.save() }
+        .onChange(of: plan.appliesToRaw)             { try? writeContext.save() }
+        .onChange(of: plan.appliesToSetNumber)       { try? writeContext.save() }
+        .onChange(of: plan.appliesToSetIndicesRaw)   { try? writeContext.save() }
+        .onChange(of: plan.dropsetEffortRaw)         { try? writeContext.save() }
+        .onChange(of: plan.dropsetEffortReps)        { try? writeContext.save() }
     }
 
     // MARK: - Applies-To multi-select section
