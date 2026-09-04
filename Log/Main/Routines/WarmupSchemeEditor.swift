@@ -126,29 +126,31 @@ struct WarmupSchemeEditor: View {
         }
     }
 
+    /// The store this editor writes into: **the one the edited prescription
+    /// already lives in**, not whatever `@Environment(\.modelContext)` resolves
+    /// to.
+    ///
+    /// For every routine slot the two are the same object, so ordinary warm-up
+    /// editing is unchanged. They differ for the scratch slot the Alternative
+    /// Exercises detail editor binds this editor to, which lives in
+    /// `AlternativeDraftStore`'s own in-memory container: writing there through
+    /// the environment created the scheme in the *app's* store and then related
+    /// it to a model from another container, which SwiftData traps on. See
+    /// `WarmupSchemeAuthoring` for the full crash note.
+    private var writeContext: ModelContext {
+        WarmupSchemeAuthoring.writeContext(for: prescription, fallback: ctx)
+    }
+
     private func addStep(kind: WarmupStepKind, reps: Int?, pct: Double?, rest: Int?, note: String?, weight: Double?) {
-        let scheme: WarmupScheme
-        if let existing = prescription.warmupScheme {
-            scheme = existing
-        } else {
-            let s = WarmupScheme(name: "Warmup")
-            ctx.insert(s)
-            prescription.warmupScheme = s
-            scheme = s
-        }
-        let nextOrder = (scheme.steps.map(\.order).max() ?? -1) + 1
-        let step = WarmupStep(order: nextOrder, kind: kind, reps: reps,
-                              percentOfWorking: pct, restSecondsAfter: rest, note: note, weight: weight)
-        ctx.insert(step)
-        // Reassign the whole relationship array instead of `scheme.steps.append`.
-        // An in-place append on a SwiftData to-many relationship does not
-        // reliably fire the Observation change notification, so the editor's
-        // `@Bindable prescription` body did not re-read `warmupScheme.steps` —
-        // the new row only appeared after popping and re-pushing the editor.
-        // A full setter assignment guarantees SwiftUI observes the change and
-        // renders the new step immediately. Order/persistence are unchanged.
-        scheme.steps = scheme.steps + [step]
-        try? ctx.save()
+        WarmupSchemeAuthoring.addStep(
+            to: prescription,
+            kind: kind,
+            reps: reps,
+            percentOfWorking: pct,
+            restSecondsAfter: rest,
+            note: note,
+            weight: weight,
+            fallbackContext: ctx)
     }
 
     /// Writes edited values back to an existing step (edit mode). Only the
@@ -162,11 +164,12 @@ struct WarmupSchemeEditor: View {
         step.restSecondsAfter = rest
         step.note = note
         step.weight = weight
-        try? ctx.save()
+        try? writeContext.save()
     }
 
     private func deleteSteps(at offsets: IndexSet) {
         guard let scheme = prescription.warmupScheme else { return }
+        let ctx = writeContext
         let sorted = sortedSteps
         for i in offsets {
             let step = sorted[i]
@@ -186,7 +189,7 @@ struct WarmupSchemeEditor: View {
         var sorted = sortedSteps
         sorted.move(fromOffsets: source, toOffset: destination)
         renumber(sorted)
-        try? ctx.save()
+        try? writeContext.save()
     }
 
     private func renumber(_ steps: [WarmupStep]) {
