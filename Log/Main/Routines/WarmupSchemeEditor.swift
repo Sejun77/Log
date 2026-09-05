@@ -16,6 +16,16 @@ struct WarmupSchemeEditor: View {
     /// base them on. Defaults false, so strength and timed-hold slots are
     /// unaffected.
     var isCardio: Bool = false
+    /// Called after **every** mutation this editor makes to the prescription's
+    /// warm-up graph — add, edit, delete, reorder.
+    ///
+    /// Nil for a routine slot, whose prescription is already the user's own
+    /// stored model: there is nothing to write back. Non-nil only for the
+    /// prepared-alternative editor, which owns a scratch prescription whose
+    /// edits reach the `SlotAlternative` payload solely through a commit — and
+    /// which is off-screen while this editor is pushed, so it cannot notice the
+    /// change for itself. See `AlternativeDraftCommit`.
+    var onGraphChange: (() -> Void)? = nil
     @State private var showAddStep = false
     /// Non-nil drives the edit sheet (`.sheet(item:)`). Set by a row tap; the
     /// same `WarmupStepEditSheet` is reused in edit mode and writes changes
@@ -102,13 +112,34 @@ struct WarmupSchemeEditor: View {
                 Button {
                     editingStep = step
                 } label: {
+                    // The tap target is the whole row, not the text.
+                    //
+                    // `.buttonStyle(.plain)` opts out of the promotion a `List`
+                    // gives a default-styled button (whole cell tappable, accent
+                    // tint), which is what keeps the row looking like a row — so
+                    // the button's hit area is exactly its label. The label is
+                    // short and hugs its content, leaving the row's leading and
+                    // trailing insets and the padding up to the list's 44pt
+                    // minimum height dead: the user had to hit the text itself.
+                    //
+                    // Both modifiers therefore belong **inside** the button, on
+                    // the label. `contentShape` outside it (where it used to be)
+                    // shapes the cell for the list's own hit-testing and never
+                    // reaches the gesture, which is installed on the label.
+                    // `minHeight: 44` matches the height the list row already
+                    // has, so the label fills the cell it sits in without
+                    // changing how anything looks.
                     WarmupStepRow(
                         step: step,
                         isBodyweight: isBodyweight,
                         isCardio: isCardio)
+                        .frame(
+                            maxWidth: .infinity, minHeight: 44,
+                            alignment: .leading)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .contentShape(Rectangle())
+                .accessibilityIdentifier("warmupStepRow_\(step.order)")
                 .swipeActions(allowsFullSwipe: false) {
                     Button {
                         if let idx = sortedSteps.firstIndex(where: {
@@ -151,6 +182,7 @@ struct WarmupSchemeEditor: View {
             note: note,
             weight: weight,
             fallbackContext: ctx)
+        onGraphChange?()
     }
 
     /// Writes edited values back to an existing step (edit mode). Only the
@@ -165,6 +197,7 @@ struct WarmupSchemeEditor: View {
         step.note = note
         step.weight = weight
         try? writeContext.save()
+        onGraphChange?()
     }
 
     private func deleteSteps(at offsets: IndexSet) {
@@ -182,6 +215,7 @@ struct WarmupSchemeEditor: View {
         // `order` first preserves their relative order before reindexing.
         renumber(sortedSteps)
         try? ctx.save()
+        onGraphChange?()
     }
 
     private func moveSteps(from source: IndexSet, to destination: Int) {
@@ -190,6 +224,7 @@ struct WarmupSchemeEditor: View {
         sorted.move(fromOffsets: source, toOffset: destination)
         renumber(sorted)
         try? writeContext.save()
+        onGraphChange?()
     }
 
     private func renumber(_ steps: [WarmupStep]) {
