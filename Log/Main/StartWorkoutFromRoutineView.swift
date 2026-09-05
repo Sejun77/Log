@@ -690,7 +690,13 @@ struct StartWorkoutFromRoutineView: View {
                         ActiveWorkoutView(plan: Self.makePlan(from: routine))
                     }
                 } label: {
-                    Label("Start", systemImage: "play.fill")
+                    // "Start Workout", matching the screen's own title and
+                    // the step the User Guide tells the user to tap. The bare
+                    // "Start" was the only place the two disagreed — and it
+                    // shared the generic `Start` key with the effort
+                    // progression rows, which now have their own (see
+                    // `EffortTargetLabels`).
+                    Label("Start Workout", systemImage: "play.fill")
                         .font(.dsBody.weight(.semibold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)

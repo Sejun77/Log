@@ -122,9 +122,46 @@ enum ExerciseSwitchConfirmationCopy {
 
     /// Body text for the given impact. Returns nil when nothing would be
     /// removed — that case must not present a confirmation at all.
-    static func message(for impact: ExerciseSwitchDeletionImpact) -> String? {
+    ///
+    /// - Parameter incomingExerciseName: the exercise being switched **to**.
+    ///   Naming it is the audit's L4: the warning stated a cost without stating
+    ///   what the cost buys, so a user mid-set had to remember which row they
+    ///   had just tapped in order to judge the trade. Nil — an unresolvable or
+    ///   deleted exercise — falls back to the original unnamed wording rather
+    ///   than rendering an empty name into the sentence.
+    static func message(
+        for impact: ExerciseSwitchDeletionImpact,
+        incomingExerciseName: String? = nil
+    ) -> String? {
         guard impact.requiresConfirmation else { return nil }
         let count = impact.totalLoggedSets
+
+        let name = incomingExerciseName?.trimmingCharacters(
+            in: .whitespacesAndNewlines)
+        if let name, !name.isEmpty {
+            if impact.includesPartnerSets {
+                if count == 1 {
+                    return String(
+                        localized:
+                            "Switching to \(name) will remove 1 logged set from this block."
+                    )
+                }
+                return String(
+                    localized:
+                        "Switching to \(name) will remove \(count) logged sets from this block."
+                )
+            }
+            if count == 1 {
+                return String(
+                    localized:
+                        "Switching to \(name) will remove 1 logged set for this exercise."
+                )
+            }
+            return String(
+                localized:
+                    "Switching to \(name) will remove \(count) logged sets for this exercise."
+            )
+        }
 
         if impact.includesPartnerSets {
             if count == 1 {

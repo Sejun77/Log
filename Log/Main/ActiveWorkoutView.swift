@@ -2886,7 +2886,11 @@ struct ActiveWorkoutView: View {
                 }
             } message: {
                 if let message = ExerciseSwitchConfirmationCopy.message(
-                    for: pendingSwapImpact ?? ExerciseSwitchDeletionImpact()
+                    for: pendingSwapImpact ?? ExerciseSwitchDeletionImpact(),
+                    // The exercise the switch would apply — already resolved
+                    // and held for the swap itself, so naming it costs nothing
+                    // and cannot disagree with what is about to happen.
+                    incomingExerciseName: pendingSwapNewExercise?.name
                 ) {
                     Text(message)
                 }

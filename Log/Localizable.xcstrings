@@ -4,6 +4,174 @@
     "" : {
 
     },
+    "%lld effort target" : {
+      "comment" : "Routine editor: superset block subtitle marker — how many members carry an effort target. Korean has no plural form, so both count keys share one translation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "강도 목표 %lld개"
+          }
+        }
+      }
+    },
+    "%lld effort targets" : {
+      "comment" : "Routine editor: superset block subtitle marker — how many members carry an effort target. Korean has no plural form, so both count keys share one translation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "강도 목표 %lld개"
+          }
+        }
+      }
+    },
+    "Checklist only — not saved as results." : {
+      "comment" : "Active workout Cardio Plan checklist footer. The ticks are session-scoped and never reach a SetLog or History; the bout is still logged once from the duration and Details fields.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "체크리스트 전용 — 결과로 저장되지 않음"
+          }
+        }
+      }
+    },
+    "Does not match the target distance." : {
+      "comment" : "Cardio Plan editor: shown under the segment total when it differs from the slot's target distance. A cue, not an error — nothing is blocked or adjusted.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "목표 거리와 일치하지 않습니다."
+          }
+        }
+      }
+    },
+    "End RIR" : {
+      "comment" : "Routine editor: the RIR a progression finishes on. Its own key rather than the generic End (종료 = terminate), which read as \"quit RIR\" in Korean.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "마지막 RIR"
+          }
+        }
+      }
+    },
+    "End RPE" : {
+      "comment" : "Routine editor: the RPE a progression finishes on. See End RIR.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "마지막 RPE"
+          }
+        }
+      }
+    },
+    "Segment total: %@" : {
+      "comment" : "Cardio Plan editor: the distance all segments add up to, in the user's display unit.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구간 합계: %@"
+          }
+        }
+      }
+    },
+    "Start RIR" : {
+      "comment" : "Routine editor: the RIR a progression starts from. Paired with End RIR.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시작 RIR"
+          }
+        }
+      }
+    },
+    "Start RPE" : {
+      "comment" : "Routine editor: the RPE a progression starts from. Paired with End RPE.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시작 RPE"
+          }
+        }
+      }
+    },
+    "Switching to %@ will remove %lld logged sets for this exercise." : {
+      "comment" : "Destructive switch confirmation, naming the incoming exercise. Two placeholders, so both languages are positional.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switching to %1$@ will remove %2$lld logged sets for this exercise."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@(으)로 변경하면 이 운동에 기록된 세트 %2$lld개가 삭제됩니다."
+          }
+        }
+      }
+    },
+    "Switching to %@ will remove %lld logged sets from this block." : {
+      "comment" : "Destructive switch confirmation for a superset, naming the incoming exercise. Two placeholders, so both languages are positional.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switching to %1$@ will remove %2$lld logged sets from this block."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@(으)로 변경하면 이 블록에 기록된 세트 %2$lld개가 삭제됩니다."
+          }
+        }
+      }
+    },
+    "Switching to %@ will remove 1 logged set for this exercise." : {
+      "comment" : "Destructive switch confirmation, naming the incoming exercise. Korean uses the (으)로 particle so a name ending in either a consonant or a vowel reads correctly.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@(으)로 변경하면 이 운동에 기록된 세트 1개가 삭제됩니다."
+          }
+        }
+      }
+    },
+    "Switching to %@ will remove 1 logged set from this block." : {
+      "comment" : "Destructive switch confirmation for a superset, naming the incoming exercise.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@(으)로 변경하면 이 블록에 기록된 세트 1개가 삭제됩니다."
+          }
+        }
+      }
+    },
     "—" : {
 
     },
