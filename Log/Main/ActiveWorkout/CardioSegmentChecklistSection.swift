@@ -62,13 +62,22 @@ struct CardioSegmentChecklistSection: View {
             }
         } header: {
             Text("Cardio Plan")
+        } footer: {
+            // The audit's M2, and a reversal of the note that stood here: a
+            // footer was refused because "ticks are not saved to your history"
+            // is a sentence about the app's internals, on the one screen a user
+            // is not reading. That objection was about the *sentence*, and it
+            // still holds — this is four words, scanned rather than read, and
+            // it answers the question a tick actually raises: did that count as
+            // logging something? It did not. The bout is still logged once,
+            // from the duration and Details fields below.
+            //
+            // Behaviour is untouched: the ticks remain session-scoped state in
+            // `CardioSegmentCheckStore`, which is still the only writer and
+            // still cannot reach a `SetLog` or History.
+            Text("Checklist only — not saved as results.")
+                .font(.dsCaption)
         }
-        // No explanatory footer. "Ticks are not saved to your history" is a
-        // statement about the app's internals, and the active screen is the
-        // one place a user is not reading. The behaviour it described is
-        // unchanged and enforced in code (`CardioSegmentCheckStore` is the only
-        // writer, and it cannot reach a `SetLog`); the User Guide is where it
-        // is explained.
     }
 
     // MARK: - Rows

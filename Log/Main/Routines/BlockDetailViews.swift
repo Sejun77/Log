@@ -69,7 +69,17 @@ struct RoutineBlockDetailView: View {
         // Scrolling dismisses the multiline slot-notes keyboard;
         // `.interactively` matches the note-heavy routine-editor lists.
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Block")
+        // Audit M11 — the exercise, not the kind. This screen used to be
+        // titled "Block", so one tap after a row that said "Bench Press" the
+        // name was gone. Names are resolved the same way the routine editor's
+        // own row title resolves them, so the two cannot disagree; an
+        // all-deleted block falls back to the kind word.
+        .navigationTitle(
+            BlockDetailTitle.title(
+                exerciseNames: block.exercises
+                    .sorted { $0.order < $1.order }
+                    .compactMap { $0.safeExercise(in: ctx)?.name },
+                isSuperset: false))
     }
 }
 
@@ -421,7 +431,15 @@ struct SupersetDetailNoRest: View {
         // `.interactively` matches the note-heavy routine-editor lists.
         .scrollDismissesKeyboard(.interactively)
         .onAppear(perform: seedBulkDraftIfNeeded)
-        .navigationTitle("Superset")
+        // Same rule, joined with `+` for the members — matching the routine
+        // editor's `blockTitle`. Long joins are truncated in the middle by
+        // `.inline` display mode, which reads better than a guess at a width.
+        .navigationTitle(
+            BlockDetailTitle.title(
+                exerciseNames: block.exercises
+                    .sorted { $0.order < $1.order }
+                    .compactMap { $0.safeExercise(in: ctx)?.name },
+                isSuperset: true))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 EditButton()
