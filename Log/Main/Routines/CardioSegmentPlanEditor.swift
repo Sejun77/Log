@@ -35,6 +35,31 @@ struct CardioSegmentPlanEditor: View {
         AppSettings.distanceUnit(isMetric: distanceIsMetric)
     }
 
+    /// Segment total, plus a mismatch cue when it differs from the slot's
+    /// target distance. Renders nothing when the plan carries no distances —
+    /// a duration-only plan has no total to state.
+    @ViewBuilder
+    private var targetComparison: some View {
+        switch CardioPlanTargetCheck.evaluate(
+            targetMeters: prescription.targetDistanceMeters,
+            segmentTotalMeters: plan?.totalDistanceMeters,
+            displayUnit: distanceUnit)
+        {
+        case .nothingToShow:
+            EmptyView()
+        case .total(let total):
+            Text(CardioPlanTargetCheck.totalCaption(total))
+                .foregroundStyle(.secondary)
+        case .mismatch(let total, _):
+            VStack(alignment: .leading, spacing: 2) {
+                Text(CardioPlanTargetCheck.totalCaption(total))
+                    .foregroundStyle(.secondary)
+                Text(CardioPlanTargetCheck.mismatchCaption)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
     // MARK: Body
 
     var body: some View {
@@ -63,12 +88,22 @@ struct CardioSegmentPlanEditor: View {
                     DSSectionHeader(
                         title: "Segments", systemImage: "list.number")
                 } footer: {
-                    // Verbatim, like every other composed plan summary in the
-                    // app (`SessionPlan.primarySummary`, block summaries): the
-                    // string is assembled from numbers and units, so there is
-                    // no whole phrase to translate.
-                    Text(plan?.summary(distanceUnit: distanceUnit) ?? "")
-                        .font(.dsCaption)
+                    VStack(alignment: .leading, spacing: DSSpacing.xs) {
+                        // Verbatim, like every other composed plan summary in
+                        // the app (`SessionPlan.primarySummary`, block
+                        // summaries): the string is assembled from numbers and
+                        // units, so there is no whole phrase to translate.
+                        Text(plan?.summary(distanceUnit: distanceUnit) ?? "")
+                        // Audit L5 — the segment distances and the slot's
+                        // target distance are independent fields that could
+                        // silently describe different sessions. This states the
+                        // total and, when it disagrees with the target beside
+                        // it, says so. It never adjusts either value and never
+                        // blocks saving: a plan that deliberately covers part
+                        // of a longer target is a real thing to author.
+                        targetComparison
+                    }
+                    .font(.dsCaption)
                 }
             }
 

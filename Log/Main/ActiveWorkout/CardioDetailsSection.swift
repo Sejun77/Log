@@ -33,7 +33,16 @@ struct CardioDetailsSection: View {
     /// fixed-width unit suffix, so the fields line up in one column instead of
     /// stepping left and right as the suffix ("bpm" / "kcal" / "%" / none)
     /// changes width.
+    /// Audit L2 — a **range**, not a fixed width. 96pt is what the controls
+    /// take whenever the row can spare it, so at default type in English
+    /// nothing moves; the floor lets them give width back to a long label
+    /// (Korean, or a large Dynamic Type setting) instead of the label
+    /// truncating against a control that refused to yield.
+    private static let controlMinWidth: CGFloat = 72
     private static let controlWidth: CGFloat = 96
+    /// Likewise a floor rather than a cap: short suffixes still reserve the
+    /// column that keeps the seven controls aligned, and a long one ("kcal" at
+    /// an accessibility size) may exceed it rather than clip.
     fileprivate static let suffixWidth: CGFloat = 34
 
     /// Derived once per render rather than three times inside `body`.
@@ -112,7 +121,7 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.decimalPad)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: Self.controlWidth)
+                .frame(minWidth: Self.controlMinWidth, maxWidth: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .distance)
 
@@ -130,7 +139,7 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: Self.controlWidth)
+                .frame(minWidth: Self.controlMinWidth, maxWidth: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .heartRate)
             UnitSuffix("bpm")
@@ -151,7 +160,9 @@ struct CardioDetailsSection: View {
             .labelsHidden()
             .pickerStyle(.menu)
             .disabled(isLogged)
-            .frame(width: Self.controlWidth, alignment: .trailing)
+            .frame(
+                minWidth: Self.controlMinWidth,
+                maxWidth: Self.controlWidth, alignment: .trailing)
             UnitSuffix()
         }
     }
@@ -162,7 +173,7 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: Self.controlWidth)
+                .frame(minWidth: Self.controlMinWidth, maxWidth: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .calories)
             UnitSuffix("kcal")
@@ -178,7 +189,7 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.numbersAndPunctuation)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: Self.controlWidth)
+                .frame(minWidth: Self.controlMinWidth, maxWidth: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .incline)
             UnitSuffix("%")
@@ -191,7 +202,7 @@ struct CardioDetailsSection: View {
                 .font(.dsBody.monospacedDigit())
                 .keyboardType(.decimalPad)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: Self.controlWidth)
+                .frame(minWidth: Self.controlMinWidth, maxWidth: Self.controlWidth)
                 .disabled(isLogged)
                 .focused($focused, equals: .resistance)
             UnitSuffix()
@@ -293,7 +304,10 @@ private struct UnitSuffix: View {
         label
             .font(.dsBodySecondary)
             .foregroundStyle(.secondary)
-            .frame(width: CardioDetailsSection.suffixWidth, alignment: .leading)
+            .lineLimit(1)
+            .frame(
+                minWidth: CardioDetailsSection.suffixWidth,
+                alignment: .leading)
     }
 }
 
@@ -324,6 +338,13 @@ private struct LabeledField<Content: View>: View {
             label
                 .font(.dsBodySecondary)
                 .foregroundStyle(.secondary)
+                // The label is what a fixed control column used to squeeze.
+                // Two lines and a modest scale floor let a long Korean or
+                // large-type label stay readable; at default sizes every one
+                // of these fits on one line, so nothing looks different.
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DSSpacing.sm)
             content
         }

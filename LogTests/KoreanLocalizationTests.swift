@@ -1140,6 +1140,145 @@ final class KoreanLocalizationTests: XCTestCase {
         XCTAssertEqual(localized("Next", in: ko), "다음")
     }
 
+    // MARK: - Build 10 low-risk polish keys
+
+    /// Audit M7 — the progression ends had been composed from the generic
+    /// `Start` / `End` keys, and `End` is the workout-ending word: a Korean
+    /// user editing a ramp read `종료 RIR`, "quit RIR".
+    func testEffortProgressionLabelsAreNaturalKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+
+        XCTAssertEqual(localized("Start RIR", in: ko), "시작 RIR")
+        XCTAssertEqual(localized("End RIR", in: ko), "마지막 RIR")
+        XCTAssertEqual(localized("Start RPE", in: ko), "시작 RPE")
+        XCTAssertEqual(localized("End RPE", in: ko), "마지막 RPE")
+
+        for key in ["End RIR", "End RPE"] {
+            XCTAssertFalse(
+                localized(key, in: ko).contains("종료"),
+                "\(key) must not reuse the workout-ending word")
+        }
+        XCTAssertEqual(localized("Start RIR", in: en), "Start RIR")
+        XCTAssertEqual(localized("End RIR", in: en), "End RIR")
+    }
+
+    /// The generic keys keep their own meanings — the fix adds keys rather
+    /// than repointing the ones the workout controls own.
+    func testGenericStartAndEndAreUnchanged() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        XCTAssertEqual(localized("Start", in: ko), "시작")
+        XCTAssertEqual(localized("End", in: ko), "종료")
+    }
+
+    /// Audit M7's other half — the button and the guide step now say the same
+    /// thing, and it is the screen's own title.
+    func testStartWorkoutButtonMatchesTheScreenTitle() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+        XCTAssertEqual(localized("Start Workout", in: ko), "운동 시작")
+        XCTAssertEqual(localized("Start Workout", in: en), "Start Workout")
+    }
+
+    /// Audit M2 — the Cardio Plan checklist says what a tick is worth.
+    func testCardioChecklistSessionOnlyCaptionLocalizes() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let korean = localized(
+            "Checklist only — not saved as results.", in: ko)
+
+        XCTAssertEqual(korean, "체크리스트 전용 — 결과로 저장되지 않음")
+        XCTAssertNotEqual(
+            korean, "Checklist only — not saved as results.",
+            "the caption must be translated, not fall through to English")
+    }
+
+    /// Audit L5 — the segment total and its mismatch cue.
+    func testCardioSegmentTotalCopyLocalizes() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let total = localized("Segment total: %@", in: ko)
+
+        XCTAssertEqual(total, "구간 합계: %@")
+        XCTAssertTrue(
+            total.contains("%@"),
+            "Korean dropped the distance placeholder: \(total)")
+        XCTAssertEqual(
+            localized("Does not match the target distance.", in: ko),
+            "목표 거리와 일치하지 않습니다.")
+    }
+
+    /// Audit L7 — the superset effort marker. Korean has no plural form, so
+    /// both count keys share one translation.
+    func testSupersetEffortMarkerLocalizes() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in ["%lld effort target", "%lld effort targets"] {
+            let value = localized(key, in: ko)
+            XCTAssertEqual(value, "강도 목표 %lld개")
+            XCTAssertTrue(
+                value.contains("%lld"),
+                "\(key) dropped its count placeholder: \(value)")
+        }
+    }
+
+    /// Audit L4 — the destructive switch warning now names what it buys.
+    /// The two-placeholder variants must stay positional in both languages,
+    /// because Korean puts the count after the noun.
+    func testNamedSwitchWarningsLocalizeAndKeepPlaceholders() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+
+        let singularKeys = [
+            "Switching to %@ will remove 1 logged set for this exercise.",
+            "Switching to %@ will remove 1 logged set from this block.",
+        ]
+        for key in singularKeys {
+            let value = localized(key, in: ko)
+            XCTAssertNotEqual(value, key, "\(key) is untranslated")
+            XCTAssertTrue(
+                value.contains("%@"),
+                "\(key) dropped the exercise-name placeholder: \(value)")
+            XCTAssertTrue(
+                value.contains("(으)로"),
+                "the particle keeps a consonant- or vowel-final name correct")
+        }
+
+        let pluralKeys = [
+            "Switching to %@ will remove %lld logged sets for this exercise.",
+            "Switching to %@ will remove %lld logged sets from this block.",
+        ]
+        for key in pluralKeys {
+            for (bundle, language) in [(ko, "ko"), (en, "en")] {
+                let value = localized(key, in: bundle)
+                XCTAssertTrue(
+                    value.contains("%1$@") && value.contains("%2$lld"),
+                    "\(language) must be positional for two placeholders: "
+                        + value)
+            }
+        }
+    }
+
+    /// The unnamed originals stay — they are the fallback for an exercise that
+    /// cannot be resolved.
+    func testUnnamedSwitchWarningsAreStillTranslated() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in [
+            "Switching exercises will remove 1 logged set for this exercise.",
+            "Switching exercises will remove %lld logged sets for this exercise.",
+            "Switching exercises will remove 1 logged set from this block.",
+            "Switching exercises will remove %lld logged sets from this block.",
+        ] {
+            XCTAssertNotEqual(
+                localized(key, in: ko), key, "\(key) is untranslated")
+        }
+    }
+
+    /// Audit M11 — the block detail titles fall back to these two words only
+    /// when every exercise is gone.
+    func testBlockDetailFallbackTitlesLocalize() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        XCTAssertEqual(localized("Block", in: ko), "블록")
+        XCTAssertEqual(localized("Superset", in: ko), "슈퍼세트")
+    }
+
     /// The body part keeps its own translation — the fix adds a key, it does
     /// not repoint the existing one.
     func testBodyPartBackStillTranslatesToTheAnatomicalBack() throws {

@@ -484,13 +484,17 @@ private struct PrescriptionFields: View {
                 paired: doubleBinding(paths.pairedSingle),
                 range: range, step: 0.5) { 10 - $0 }
         case .progression:
+            // Whole phrases, not `Start` + metric: the generic `End` key is
+            // the one the workout-ending controls use, and its Korean (종료 —
+            // "terminate") made this row read "quit RIR". See
+            // `EffortTargetLabels`.
             doubleStepperRow(
-                "\(String(localized: "Start")) \(label)",
+                EffortTargetLabels.start(paths.metric),
                 active: doubleBinding(paths.start),
                 paired: doubleBinding(paths.pairedStart),
                 range: range, step: 0.5) { 10 - $0 }
             doubleStepperRow(
-                "\(String(localized: "End")) \(label)",
+                EffortTargetLabels.end(paths.metric),
                 active: doubleBinding(paths.end),
                 paired: doubleBinding(paths.pairedEnd),
                 range: range, step: 0.5) { 10 - $0 }
