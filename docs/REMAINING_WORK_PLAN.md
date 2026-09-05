@@ -1956,6 +1956,8 @@ see §2.12** — kept separate from the search-policy commit as planned.
   build, and that **no other Settings row** went with it.
 
 ### 2.36 Prepared Alternative Exercises write into their own store (Build 10 C9) — ✅ SHIPPED
+- **Completed by §2.38 (Build 10 C11)**: this slice made the edit possible;
+  that one made it durable. The context rule below is unchanged.
 - **Source:** manual testing of Build 9 — a **reproduced crash**, not an audit
   item. The first Build 10 slice that is not polish.
 - **Problem:** `SlotAlternativeDetailEditor` reuses the real prescription
@@ -2093,6 +2095,80 @@ see §2.12** — kept separate from the search-policy commit as planned.
   pure-permutation diff plus the device pass.
 - Manual verification on device is still **pending**, and is the widest of the
   Build 10 items: four of the five findings are things only a screen settles.
+
+### 2.38 Prepared-alternative nested edits persist; warm-up row tap target (Build 10 C11) — ✅ SHIPPED
+- **Source:** manual testing, immediately after §2.36. Two findings, one of them
+  **data loss** — not polish.
+- **Problem (A): the draft commit was inferred, not called.**
+  `SlotAlternativeDetailEditor` edits a **scratch** slot in
+  `AlternativeDraftStore`'s own in-memory container and writes the result back
+  into the `SlotAlternative` payload. That write-back happened only because the
+  editor read `store.payload()` inside its `body` and `.onChange` noticed the
+  value had moved. But `WarmupSchemeEditor` and `TechniquePlanEditor` are
+  **pushed on top of** that view, so an edit made in either mutates the scratch
+  graph while the view owning the commit is off-screen; its body re-evaluates
+  only if the user returns through it. Pop one level → committed. Switch tabs or
+  pop straight to the routine list → the body never runs again, the commit never
+  fires, and the draft container is deallocated with the edit inside. That is
+  the "saved sometimes" in the report, and `TechniqueParamEditView` — a further
+  level down — was the most exposed.
+- **Status: Done.** The commit is now a call. New
+  `Log/Services/AlternativeDraftCommit.swift` holds the write-back rule
+  (resolves the draft's current payload when the caller has none; a `nil` draft
+  commits metadata only; an unknown id writes nothing and returns `false`, so a
+  stale editor cannot resurrect an alternative deleted on another screen). Both
+  nested editors take `onGraphChange`, fired after **every** mutation — add,
+  edit, delete, reorder, and each of `TechniqueParamEditView`'s 13 field saves.
+  `SlotPrescriptionSection` forwards it as `onNestedGraphChange`, defaulting to
+  nil. The existing value observer stays (it still covers everything edited on
+  the detail screen itself) with an idempotent `onDisappear` commit as a
+  backstop; all three paths write identical bytes, so they cannot fight.
+- **The scratch-editor architecture is kept.** Only its lifecycle became
+  explicit. **Routine editing is unchanged by construction:** a routine slot's
+  prescription *is* the stored model, so its editors pass no hook and nothing is
+  committed anywhere.
+- **Problem (B): the warm-up row's tap target was its text.** The row's
+  `.buttonStyle(.plain)` opts out of the promotion a `List` gives a
+  default-styled button — which is exactly what keeps the row looking like a row
+  rather than an accent-tinted link — so the button's hit area is precisely its
+  label, and the label hugs its content, leaving the row's leading/trailing
+  insets and the padding up to the list's 44pt minimum height inert. A
+  `.contentShape(Rectangle())` was already present but applied **outside** the
+  `Button`, where it shapes the cell for the list's own hit-testing and never
+  reaches the gesture installed on the label. Both modifiers now sit inside, on
+  the label, which also takes `maxWidth: .infinity, minHeight: 44` — the height
+  the row already had, so nothing looks different. Swipe-to-delete and `.onMove`
+  reordering are untouched, and the row carries a stable accessibility
+  identifier. Techniques were never affected: their rows are `NavigationLink`s,
+  which a list makes fully tappable.
+- **No schema change**, no migrations, no `SlotAlternative` payload-format
+  change, no public Alternative Exercises semantics change, and no
+  scratch-editor-architecture, active-workout-switch, exercise-deletion,
+  effort-target, cardio-calculation, History-data-model, transfer/import/export,
+  routine-duplication, localization, project-settings, signing, bundle ID, team,
+  marketing-version or build-number change.
+- **Tests:** new `LogTests/AlternativeNestedEditorCommitTests.swift` (14), whose
+  first test is a **negative control** — a nested edit that is never committed is
+  lost when the draft store is released, the reported data loss asserted
+  directly, so the suite fails loudly if the hook is removed. The rest pin the
+  fix: warm-up and technique committed through the hook; both surviving
+  leave-and-reopen, checked in the stored payload *and* in the scratch graph a
+  reopened nested editor reads; edit-and-delete across two visits; both carried
+  into the session plan by `ExerciseSwitchPlanAdapter`; the parent routine slot
+  never mutated; siblings untouched including a disabled one and a noted one;
+  the commit targeting the alternative actually being edited; a deleted
+  alternative never resurrected; a no-draft commit writing metadata only; the
+  commit being idempotent; and normal routine editing needing no commit. No
+  existing test modified or weakened. **Full scheme passes: 2,452 tests, 0
+  failures** — 2,450 unit tests plus 2 UI tests. Debug and Release builds
+  succeed.
+- **The tap target has no unit test, deliberately.** Hit-testing is not
+  reachable without a UI harness; the accessibility identifier is there for when
+  one exists, and the evidence is the device pass.
+- Manual verification on device is still **pending**, and one half of it is a
+  route no test can take: add a warm-up and a technique inside a prepared
+  alternative, return to the routine, **switch tabs**, come back, and confirm
+  both are still there.
 
 ## 3. Optional / Future Features
 

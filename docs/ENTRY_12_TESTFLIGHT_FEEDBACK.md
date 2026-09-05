@@ -83,14 +83,18 @@ pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
 discoverability pass (C4), a User Guide language default (C5) and an
 effort-target clarity pass (C6), planned effort targets in History (C7), the
 Calculus showcase hidden from Release (C8), a stability / data-integrity fix to
-prepared Alternative Exercises (C9) and a manual-test polish bundle (C10) — see
-the Build 10 entries under *Fixes Made* below. C1–C8 are UX polish or visibility
-improvements, not Build 9 blockers. **C9 is not polish**: it fixes a reproduced
-crash and a silent orphan-row leak in Alternative Exercises authoring, and Build
-9 carries both — the crash needs a prepared alternative's *first* warm-up step
-to trigger, so it is reachable but not on a common path. **C10 is mixed**: five
-findings from one manual pass, four of them wording and layout, one a real
-active-workout bug (a rest timer that outlived the set that started it).
+prepared Alternative Exercises (C9), a manual-test polish bundle (C10) and a
+nested-editor persistence fix (C11) — see the Build 10 entries under *Fixes
+Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
+blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
+orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
+the crash needs a prepared alternative's *first* warm-up step to trigger, so it
+is reachable but not on a common path. **C10 is mixed**: five findings from one
+manual pass, four of them wording and layout, one a real active-workout bug (a
+rest timer that outlived the set that started it). **C11 is data loss**: work
+authored inside a prepared alternative could vanish on the way out of the
+screen. Build 9 carries it, and so did C9 — the crash fix made the edit
+possible, not durable.
 
 ---
 
@@ -311,6 +315,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C10 — the manual-test polish bundle.** Five findings from one pass through the app on device, fixed together: four are wording or layout, one is a real bug. **The rest timer outlived the set that started it.** Three undo paths had drifted apart — the reps/weight row stopped the rest *unconditionally* (so going back to correct an older set killed the countdown running after a newer one), while the duration / cardio row and the warm-up row never stopped it *at all*, under a comment claiming the first behavior. Unlog the set that began the rest and the countdown, its scheduled notification and its Live Activity all kept running for a set that no longer existed. The timer had no way to know better: it is slot-scoped, and `AppState` persists only `activeRestSlotID`, never which set triggered it. Rest starts now record their origin set, and all five start sites — working reps/weight, duration/cardio, warm-up, and the two dropset paths, where a drop's rest belongs to its **parent** working set — carry it. One pure rule decides the rest: clear only when the unlogged set *is* the origin; after a cold resume, where the rehydrated rest knows only its slot, clear only when that slot has no logged sets left at all. Clearing goes through the existing path, so the notification and Live Activity state go with it. Rest *start* behavior and every duration calculation are untouched. **Warm-up now sits above Sets.** C3 moved the set rows from ninth to first; a warm-up is performed *before* the first working set, so listing it after the rows it precedes asked the user to scroll up to do the thing they do first. The order is now Plan, Equipment & Setup, Warmup, Cardio Plan checklist, Sets — everything above the set rows plan-shaped and short — with the whole admin half (Switch Exercise, Exercise Notes, the prefill toggle, Session Notes) still below, Session Notes last. Verified as a pure permutation: zero code lines added or removed against the parent commit, comments only. **History's planned-effort row wrapped onto two lines.** The value was never the cause — the C6 four-value elision bounds it — the label was: "Planned effort" needs about 88pt at the row's 12pt caption size and sat in an 80pt column. The column is now 100pt, shared with the Equipment row so the two stay aligned, with a one-line limit and a scale-factor backstop for large type. The copy is unchanged in both languages: `계획 강도` stays, and nothing about the row implies a measured result. **"Finish (this workout only)" appeared even when it was the only option.** With no pending swaps and no dirty session plan the dialog offers one action plus Cancel, and the qualifier answered a question the user was never asked — there is no other workout, and nothing else the button could apply. Alone it now reads **Finish / 완료**; as soon as an apply option shares the dialog the qualifier earns its place back and every multi-option dialog keeps the wording it shipped with. Label selection only: the options offered, their order, the apply-back flags and what finishing does are all unchanged, and no new key was needed. **The Korean Back button said `등`.** The active workout's bottom bar rendered its Back label through the bare `Back` key — which is also the canonical **body part**, seeded on Pull-Up, Barbell Row, Lat Pulldown, Seated Cable Row and Conventional Deadlift — so the navigation control read the anatomical back, next to a correctly labelled `다음`. The button now has its own key, translating to **`이전`**, chosen over `뒤로` because it pairs with `다음` as an ordinal step through the workout. English is unchanged, and the body part's own `Back` → `등` entry is untouched — one added key, nothing repointed. No schema, migrations, model fields, Alternative Exercises payload format, scratch-editor architecture, exercise-deletion behavior, exercise-switch behavior, effort-target resolution, cardio calculations, History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change.
 
+- **Build 10 C11 — prepared-alternative edits now survive leaving the screen, and a warm-up row is tappable across its whole card.** A stability / persistence fix, found by manual testing straight after C9 — and a genuine data-loss bug rather than polish. **The commit was inferred rather than called.** `SlotAlternativeDetailEditor` edits a **scratch** slot in `AlternativeDraftStore`'s own in-memory container and writes the result back into the `SlotAlternative` payload; that write-back happened because the editor read `store.payload()` inside its `body` and let `.onChange` notice the value had moved. But the warm-up and technique editors are **pushed on top of that view**, so a step added in one mutates the scratch graph while the view owning the commit is off-screen. Its body re-evaluates only if the user comes back through it — pop one level and the edit is saved, switch tabs or pop straight to the routine list and the body never runs again, the commit never fires, and the draft container is deallocated with the edit still inside. That is precisely the "sometimes saved, sometimes not" in the report, and `TechniqueParamEditView` — a further level down — was the most exposed of all. The commit is now a **call**: a new `AlternativeDraftCommit` holds the write-back rule, both nested editors take an `onGraphChange` hook fired after *every* mutation (add, edit, delete, reorder, and each of the parameter screen's field saves), `SlotPrescriptionSection` forwards it, and the detail editor commits the moment the graph changes. The existing value observer stays — it still covers everything edited on that screen — with an idempotent `onDisappear` commit as a backstop. The scratch-editor architecture is **kept**; only its lifecycle became explicit. Routine editing is unchanged by construction: a routine slot's prescription *is* the stored model, so its editors pass no hook and nothing is committed anywhere. **The second half is a tap target.** Editing an existing warm-up step required hitting the *text*: the row's `.buttonStyle(.plain)` opts out of the promotion a `List` gives a default-styled button — which is what keeps the row looking like a row — so the button's hit area was exactly its label, and the label hugs its content, leaving the row's insets and the padding up to the list's 44pt minimum height dead. `.contentShape(Rectangle())` was applied **outside** the button, where it shapes the cell for the list's own hit-testing and never reaches the gesture. Both modifiers now sit inside, on the label, which also spans the full row width and minimum height — no visual change, and swipe-to-delete and drag reordering are untouched. Techniques were never affected: their rows are `NavigationLink`s, which a list makes fully tappable. No schema, migrations, `SlotAlternative` payload format, public Alternative Exercises semantics, scratch-editor architecture, active-workout switch behavior, exercise-deletion behavior, effort-target logic, cardio calculations, History data model, transfer/import/export payload, routine duplication, localization, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -320,6 +326,7 @@ Current validation status:
 - Warm-up rendering fix: tested with warm-up insertion tests.
 - Prepared-alternative scratch-context fix (Build 10 C9): tested with new warm-up and technique scratch-context suites; manual device re-check still pending.
 - Manual-test polish bundle (Build 10 C10): rest-origin, finish-label and Korean navigation copy are covered by pure tests; the section reorder and the History row layout are display-only and want the device pass.
+- Nested-editor persistence fix (Build 10 C11): the commit and refresh rules are covered by a new suite whose first test asserts the data loss itself; the warm-up tap target is a hit-testing change and wants the device pass.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
 - Exercise-switch compatibility: tested with 22 value-level adapter tests covering Keep/Reset across duration → normal, normal → duration, and same-type switches.
@@ -357,6 +364,14 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C11 re-check on device: **pending** — and the one whose whole
+  point is a route a test cannot take. The sequence to walk is the reported one:
+  add a warm-up step inside a prepared alternative, go **back to the routine and
+  switch tabs** rather than popping one level, return to the same alternative,
+  and confirm the step is there; then the same for a technique. The tap target
+  is the other half: tap the empty background of a warm-up row, in a normal
+  routine exercise and in a prepared alternative, and confirm the edit sheet
+  opens — then check swipe-to-delete and drag reordering still behave.
 - Manual Build 10 C10 re-check on device: **pending** — and the widest of the
   Build 10 items, because four of its five findings are things only a screen can
   settle: that Warmup reads naturally above Sets and the set rows are still
@@ -494,8 +509,25 @@ Current validation status:
   a list would restructure a view whose keyboard and safe-area behavior is
   documented as fragile, so the evidence is the pure-permutation diff plus the
   device pass.
-- Latest test suite result: **full scheme passes: 2,438 tests, 0 failures** —
-  2,436 unit tests plus 2 UI tests (Build 10 C10 run). Debug build succeeds and
+- Nested-editor persistence (Build 10 C11): new
+  `AlternativeNestedEditorCommitTests` (14). The first test is a **negative
+  control** — a nested edit that is never committed is lost when the draft store
+  is released, which is the reported data loss asserted directly, so the suite
+  fails loudly if the hook is ever removed. The rest cover the fix: warm-up and
+  technique committed through the hook, both surviving leave-and-reopen (checked
+  in the stored payload *and* in the scratch graph a reopened nested editor
+  reads), edit-and-delete across two visits, both carried into the session plan
+  by the switch adapter, the parent routine slot never mutated, siblings
+  untouched including a disabled one and a noted one, the commit targeting the
+  alternative actually being edited, a deleted alternative never resurrected by
+  a stale editor, a no-draft commit writing metadata only, the commit being
+  idempotent, and normal routine editing needing no commit at all. No existing
+  test was modified or weakened. The warm-up tap target has **no** unit test:
+  hit-testing is not reachable without a UI harness, so the row carries a stable
+  accessibility identifier for when one exists, and the evidence is the device
+  pass.
+- Latest test suite result: **full scheme passes: 2,452 tests, 0 failures** —
+  2,450 unit tests plus 2 UI tests (Build 10 C11 run). Debug build succeeds and
   Release build succeeds.
 
 ---

@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C10 fix._
+_Counts are from the latest verification run, after the Build 10 C11 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C10 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,438 tests, 0 failures** — 2,436 unit tests plus 2 UI
+- **Full scheme passes: 2,452 tests, 0 failures** — 2,450 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -597,6 +597,45 @@ still says `등`.
 That last one is the whole tester round in miniature. It was never going to show
 up in a test, and I would never have found it myself, because I don't read the
 app in Korean.
+
+---
+
+## Build 10 — Saved, Unless You Left the Wrong Way
+
+The crash fix a few slices back made it possible to add a warm-up step to a
+prepared alternative. It did not make it *stick*.
+
+Manual testing found the rest: add a warm-up or a technique inside a prepared
+alternative, go back to the routine and switch tabs, then return — and the edit
+was sometimes gone. Sometimes. Which is the word that tells you the mechanism
+before you've looked at anything.
+
+An alternative is edited through a scratch slot in its own throwaway database,
+and the result is written back into the stored payload. I had made that
+write-back a *consequence* rather than an action: the editor read the draft's
+payload inside its `body`, and an `onChange` noticed when the value moved. That
+is fine for the fields on that screen. It is not fine for the warm-up and
+technique editors, which are pushed **on top of** it — the edit happens while
+the view holding the commit is off-screen, and its body only runs again if you
+come back through it. Pop one level and the commit fires on the way past.
+Switch tabs and the scratch database is deallocated with your work inside it.
+
+So the commit stopped being an inference. There is a small `AlternativeDraftCommit`
+that holds the rule, the two nested editors call a hook after every mutation
+they make, and the detail editor writes back the moment the graph changes. The
+old observer stays for the fields it already covered, plus an `onDisappear`
+commit as a backstop — all three are idempotent, so they can't fight.
+
+The other half of the slice is smaller and more embarrassing: to edit an
+existing warm-up step you had to tap the *text*. The row is a plain-styled
+button, which is what keeps it looking like a row instead of a blue link, and
+the cost of that style is that the button's hit area is exactly its label —
+short, hugging its content, with the rest of the 44pt row inert. There was even
+a `contentShape(Rectangle())` on it already, applied one level too high, where
+it shaped the cell for the list and never reached the gesture.
+
+Both fixes are two lines each. Finding them took a person with the app in their
+hands.
 
 ---
 

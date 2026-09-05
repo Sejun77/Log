@@ -307,9 +307,11 @@ What to report:
 ### Warm-ups and Techniques Inside an Alternative (Build 10)
 
 Fixed in Build 10: on Build 9, adding a warm-up step to a prepared alternative
-crashed the app. Adding a technique did not crash but quietly left a stray row
-behind. Both are fixed, and nothing about how alternatives work has changed —
-this check is only to confirm the editing itself is now solid.
+crashed the app, and adding a technique quietly left a stray row behind. A later
+round of manual testing found more: the edit could **disappear** if you left the
+screen the wrong way, and you had to tap a warm-up row's *text* rather than the
+card to edit it. All of it is fixed, and nothing about how alternatives work has
+changed — these checks only confirm the editing itself is now solid.
 
 - [ ] Open a routine exercise's **Alternative Exercises** and open a prepared one
 - [ ] Add a **warm-up** step, and confirm the app does not crash
@@ -317,6 +319,24 @@ this check is only to confirm the editing itself is now solid.
 - [ ] Add a **technique**, then edit it, then delete it
 - [ ] Leave the alternative editor, reopen it, and confirm what you kept is
       still there
+
+Then the route that used to lose the work — please follow it exactly:
+
+- [ ] Add a warm-up step and a technique to a prepared alternative
+- [ ] Go **back to the main routine view**, then **switch to another tab**
+- [ ] Come back to the same routine, the same exercise, the same alternative
+- [ ] Confirm the warm-up step and the technique are both still there
+- [ ] Open the alternative's warm-up editor again and confirm the step is listed
+
+And the tap target:
+
+- [ ] In a prepared alternative's warm-up editor, tap the **empty background**
+      of an existing warm-up row — not the text — and confirm the edit sheet
+      opens
+- [ ] Do the same in a **normal** routine exercise's warm-up editor
+- [ ] Confirm swiping a warm-up row still offers Delete, and that Edit-mode
+      dragging still reorders
+
 - [ ] Start a workout from that routine and apply the prepared alternative
 - [ ] Confirm the warm-up and technique you authored are the ones the workout
       shows
@@ -328,7 +348,10 @@ What to report:
 
 - any crash, and what you had just tapped
 - a warm-up step or technique that does not appear until you leave and come back
-- anything you saved in an alternative that is missing when you reopen it
+- **anything you added to an alternative that is missing after switching tabs
+  and returning** — and how you left the screen, which is the part that matters
+- a warm-up row where tapping the card does nothing but tapping the text works
+- swipe-to-delete or reordering behaving differently on a warm-up row
 - a warm-up or technique that does not carry into the workout after applying the
   alternative
 - anything different about editing warm-ups or techniques on a normal routine
