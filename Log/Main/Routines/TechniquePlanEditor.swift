@@ -14,6 +14,12 @@ struct TechniquePlanEditor: View {
     /// technique is blocked in the picker. Defaults false so non-bodyweight
     /// behavior is unchanged.
     var isBodyweight: Bool = false
+    /// Called after **every** mutation this editor (or the parameter screen it
+    /// pushes) makes to the prescription's technique graph — add, edit, delete,
+    /// reorder. Nil for a routine slot; non-nil only for the prepared-alternative
+    /// editor, which cannot see the change for itself while it is off-screen.
+    /// See `AlternativeDraftCommit`.
+    var onGraphChange: (() -> Void)? = nil
     @State private var showAdd = false
     @State private var addType: TechniqueType = .dropset
     /// Non-nil drives the "Delete Technique?" confirmation alert. Set by
@@ -55,7 +61,8 @@ struct TechniquePlanEditor: View {
                         TechniqueParamEditView(
                             plan: plan,
                             siblingTechniques: sorted,
-                            setCount: prescription.sets ?? 3
+                            setCount: prescription.sets ?? 3,
+                            onGraphChange: onGraphChange
                         )
                     } label: {
                         TechniquePlanRow(plan: plan)
@@ -139,6 +146,7 @@ struct TechniquePlanEditor: View {
     private func addPlan(type: TechniqueType) {
         TechniquePlanAuthoring.addPlan(
             type: type, to: prescription, fallbackContext: ctx)
+        onGraphChange?()
     }
 
     private func deletePlans(at offsets: IndexSet) {
@@ -149,6 +157,7 @@ struct TechniquePlanEditor: View {
             fallbackContext: ctx)
         for (i, p) in sorted.enumerated() { p.order = i }
         try? writeContext.save()
+        onGraphChange?()
     }
 
     private func movePlans(from source: IndexSet, to destination: Int) {
@@ -156,6 +165,7 @@ struct TechniquePlanEditor: View {
         s.move(fromOffsets: source, toOffset: destination)
         for (i, p) in s.enumerated() { p.order = i }
         try? writeContext.save()
+        onGraphChange?()
     }
 }
 
@@ -433,6 +443,11 @@ private struct TechniqueParamEditView: View {
     var siblingTechniques: [TechniquePlan] = []
     /// Working set count from the prescription (used for per-set-index UI and conflict checks).
     var setCount: Int = 3
+    /// Forwarded from `TechniquePlanEditor`. This screen is pushed a further
+    /// level deep, so for a prepared alternative it is the furthest point from
+    /// the view that owns the commit — and the one most likely to be left by a
+    /// route that never re-renders it.
+    var onGraphChange: (() -> Void)? = nil
 
     /// Same rule as `TechniquePlanEditor.writeContext`, resolved from the plan
     /// itself: this screen is pushed one level deeper still, so in a prepared
@@ -512,19 +527,19 @@ private struct TechniqueParamEditView: View {
         }
         .navigationTitle(typeName)
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: plan.dropPercent)              { try? writeContext.save() }
-        .onChange(of: plan.dropCount)                { try? writeContext.save() }
-        .onChange(of: plan.rounds)                   { try? writeContext.save() }
-        .onChange(of: plan.restSeconds)              { try? writeContext.save() }
-        .onChange(of: plan.reps)                     { try? writeContext.save() }
-        .onChange(of: plan.partialRangeNote)         { try? writeContext.save() }
-        .onChange(of: plan.partialRangeRaw)          { try? writeContext.save() }
-        .onChange(of: plan.note)                     { try? writeContext.save() }
-        .onChange(of: plan.appliesToRaw)             { try? writeContext.save() }
-        .onChange(of: plan.appliesToSetNumber)       { try? writeContext.save() }
-        .onChange(of: plan.appliesToSetIndicesRaw)   { try? writeContext.save() }
-        .onChange(of: plan.dropsetEffortRaw)         { try? writeContext.save() }
-        .onChange(of: plan.dropsetEffortReps)        { try? writeContext.save() }
+        .onChange(of: plan.dropPercent)              { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.dropCount)                { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.rounds)                   { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.restSeconds)              { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.reps)                     { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.partialRangeNote)         { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.partialRangeRaw)          { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.note)                     { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.appliesToRaw)             { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.appliesToSetNumber)       { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.appliesToSetIndicesRaw)   { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.dropsetEffortRaw)         { try? writeContext.save(); onGraphChange?() }
+        .onChange(of: plan.dropsetEffortReps)        { try? writeContext.save(); onGraphChange?() }
     }
 
     // MARK: - Applies-To multi-select section

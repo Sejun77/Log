@@ -56,6 +56,14 @@ struct SlotPrescriptionSection: View {
     /// this same section for a scratch slot: an alternative does not get
     /// alternatives of its own.
     var showsAlternatives: Bool = true
+    /// Forwarded to the warm-up and technique editors this section pushes, so
+    /// they can report a change to whoever owns the prescription they are
+    /// editing. Nil for a routine slot — its prescription *is* the stored model
+    /// and there is nothing to write back. Set only by
+    /// `SlotAlternativeDetailEditor`, whose scratch prescription reaches the
+    /// stored `SlotAlternative` payload only through a commit, and which is
+    /// off-screen while either editor is pushed. See `AlternativeDraftCommit`.
+    var onNestedGraphChange: (() -> Void)? = nil
     /// Phase 5.2 — when true (routine is in use by an active workout),
     /// the Section's content is non-interactive but still visible /
     /// scrollable. Applied to the Section itself so the parent List's
@@ -107,7 +115,8 @@ struct SlotPrescriptionSection: View {
                     NavigationLink {
                         WarmupSchemeEditor(
                             prescription: prescription,
-                            isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType)
+                            isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType),
+                            onGraphChange: onNestedGraphChange
                         )
                     } label: {
                         HStack {
@@ -132,7 +141,8 @@ struct SlotPrescriptionSection: View {
                     NavigationLink {
                         TechniquePlanEditor(
                             prescription: prescription,
-                            isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType)
+                            isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType),
+                            onGraphChange: onNestedGraphChange
                         )
                     } label: {
                         HStack {
