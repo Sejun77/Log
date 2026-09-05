@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C11 fix._
+_Counts are from the latest verification run, after the Build 10 C12 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C11 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,452 tests, 0 failures** — 2,450 unit tests plus 2 UI
+- **Full scheme passes: 2,485 tests, 0 failures** — 2,483 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -636,6 +636,58 @@ it shaped the cell for the list and never reached the gesture.
 
 Both fixes are two lines each. Finding them took a person with the app in their
 hands.
+
+---
+
+## Build 10 — Clearing the Audit's Tail
+
+Seven items, none of them behavioural, done in one pass because each is a
+sentence, a title, or a constraint.
+
+Two of them are the same mistake in different places: a word that was correct in
+English and wrong in Korean because it was reused. The effort progression rows
+were labelled by composing the generic `Start` and `End` keys with a metric —
+and `End` is the word the app uses for *ending a workout*, `종료`. So a Korean
+user editing a ramp read `종료 RIR`: "quit RIR". They now have their own keys,
+`시작 RIR` and `마지막 RIR`, and the workout controls keep `종료` to themselves.
+This is the second time this build that a shared key produced a wrong Korean
+word in the right English place, which is starting to look less like bad luck
+and more like a category.
+
+The rest:
+
+The **Cardio Plan checklist** now says `Checklist only — not saved as results.`
+I had refused that footer once, and the note explaining why is still in the
+file: "ticks are not saved to your history" is a sentence about the app's
+internals, on the one screen a user is not reading. That was right about the
+sentence. It was not an argument against four words answering the question a
+tick actually raises — did that just count as logging something?
+
+**Start Workout** now says Start Workout. The button said `Start`; the screen
+title and the guide both said `Start Workout`. The guide was telling people to
+tap a control that did not exist under that name.
+
+**Details screens name the exercise.** Tapping into Bench Press landed on a
+screen titled "Block", which is the one thing the user already knew.
+
+**The switch warning names what it buys.** It told you how many logged sets a
+switch would destroy, and never what you were switching *to* — a trade you were
+asked to judge mid-set, from memory.
+
+**The Cardio Plan editor states its segment total**, and says when it disagrees
+with the target distance beside it. The two are independent fields, so a 5 km
+target and a plan totalling 3 km were both stored, both valid, and neither
+mentioned the other. It warns; it never adjusts. And it decides agreement on the
+*rendered* numbers rather than the raw meters, so it can't warn about a
+difference the user can't see.
+
+**Superset rows hint that effort exists** — a count, not the values. A member
+with a full custom per-set ramp used to look exactly like one with no target.
+
+**And the cardio fields stopped being rigid.** Fixed widths became ranges, so a
+long Korean label takes room from the control instead of truncating against it.
+That one I can't verify from here at all: it needs a small phone, a large type
+setting, and Korean, which is precisely the combination that broke it.
 
 ---
 

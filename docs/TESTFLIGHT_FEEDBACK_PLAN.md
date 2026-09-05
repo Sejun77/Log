@@ -398,6 +398,53 @@ What to report:
 
 ---
 
+### Wording, Titles and Tight Screens (Build 10)
+
+Changed in Build 10, from the last pass of the UX audit: several labels and
+titles now say more, and the cardio detail fields flex instead of clipping.
+Nothing behaves differently — this is a read-through, and the last two checks
+are the ones that need a small phone.
+
+- [ ] Start a cardio workout with a **Cardio Plan** and confirm the checklist
+      says it is not saved as results
+- [ ] Finish it and confirm History shows no ticks — only the logged bout
+- [ ] On the Start Workout screen, confirm the button says **Start Workout**,
+      matching the guide
+- [ ] In a routine exercise, set an effort **Progression** and confirm the two
+      rows read naturally — in Korean, **시작 RIR** and **마지막 RIR**, never
+      **종료 RIR**
+- [ ] Open **Details** for a single exercise and confirm the title is the
+      exercise name, not "Block"
+- [ ] Open Details for a **superset** and confirm the title names its exercises
+- [ ] Mid-workout, log a set then switch that exercise, and confirm the warning
+      **names the exercise you are switching to**
+- [ ] Give a cardio slot a target distance of 5 km and a Cardio Plan whose
+      segments total 3 km; confirm the editor shows the segment total and says
+      it does not match
+- [ ] Change the plan so the totals match, and confirm the mismatch line goes
+      away
+- [ ] Put an effort target on one exercise in a superset, and confirm the
+      routine row hints that effort exists without printing RIR/RPE values
+
+And the two that need the right device:
+
+- [ ] On the **smallest phone you have**, open a cardio workout's **Details**
+      fields and check nothing is cut off
+- [ ] Turn Dynamic Type up (Settings → Display & Brightness → Text Size), in
+      **Korean**, and check the same fields again
+
+What to report:
+
+- any label or number cut off, and which phone and text size
+- **시작 / 마지막 / 종료** used where they do not fit the meaning
+- a Details title that is empty, wrong, or unhelpfully long
+- a switch warning naming the wrong exercise
+- a segment-total mismatch warning that appears when the two numbers shown are
+  the same, or is missing when they differ
+- a superset row that prints an RIR or RPE value rather than a count
+
+---
+
 ### Opening the User Guide (Build 10)
 
 Changed in Build 10: the in-app guide opens in your phone's language instead of

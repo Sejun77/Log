@@ -83,9 +83,9 @@ pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
 discoverability pass (C4), a User Guide language default (C5) and an
 effort-target clarity pass (C6), planned effort targets in History (C7), the
 Calculus showcase hidden from Release (C8), a stability / data-integrity fix to
-prepared Alternative Exercises (C9), a manual-test polish bundle (C10) and a
-nested-editor persistence fix (C11) — see the Build 10 entries under *Fixes
-Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
+prepared Alternative Exercises (C9), a manual-test polish bundle (C10), a
+nested-editor persistence fix (C11) and the remaining low-risk UI polish bundle
+(C12) — see the Build 10 entries under *Fixes Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
 blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
 orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
 the crash needs a prepared alternative's *first* warm-up step to trigger, so it
@@ -94,7 +94,9 @@ manual pass, four of them wording and layout, one a real active-workout bug (a
 rest timer that outlived the set that started it). **C11 is data loss**: work
 authored inside a prepared alternative could vanish on the way out of the
 screen. Build 9 carries it, and so did C9 — the crash fix made the edit
-possible, not durable.
+possible, not durable. **C12 closes the audit's low-risk tail**: seven wording,
+title and layout items, none of them behavioral, and the point at which the
+Build 10 UX audit has nothing left in it that is both cheap and worth doing.
 
 ---
 
@@ -317,6 +319,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C11 — prepared-alternative edits now survive leaving the screen, and a warm-up row is tappable across its whole card.** A stability / persistence fix, found by manual testing straight after C9 — and a genuine data-loss bug rather than polish. **The commit was inferred rather than called.** `SlotAlternativeDetailEditor` edits a **scratch** slot in `AlternativeDraftStore`'s own in-memory container and writes the result back into the `SlotAlternative` payload; that write-back happened because the editor read `store.payload()` inside its `body` and let `.onChange` notice the value had moved. But the warm-up and technique editors are **pushed on top of that view**, so a step added in one mutates the scratch graph while the view owning the commit is off-screen. Its body re-evaluates only if the user comes back through it — pop one level and the edit is saved, switch tabs or pop straight to the routine list and the body never runs again, the commit never fires, and the draft container is deallocated with the edit still inside. That is precisely the "sometimes saved, sometimes not" in the report, and `TechniqueParamEditView` — a further level down — was the most exposed of all. The commit is now a **call**: a new `AlternativeDraftCommit` holds the write-back rule, both nested editors take an `onGraphChange` hook fired after *every* mutation (add, edit, delete, reorder, and each of the parameter screen's field saves), `SlotPrescriptionSection` forwards it, and the detail editor commits the moment the graph changes. The existing value observer stays — it still covers everything edited on that screen — with an idempotent `onDisappear` commit as a backstop. The scratch-editor architecture is **kept**; only its lifecycle became explicit. Routine editing is unchanged by construction: a routine slot's prescription *is* the stored model, so its editors pass no hook and nothing is committed anywhere. **The second half is a tap target.** Editing an existing warm-up step required hitting the *text*: the row's `.buttonStyle(.plain)` opts out of the promotion a `List` gives a default-styled button — which is what keeps the row looking like a row — so the button's hit area was exactly its label, and the label hugs its content, leaving the row's insets and the padding up to the list's 44pt minimum height dead. `.contentShape(Rectangle())` was applied **outside** the button, where it shapes the cell for the list's own hit-testing and never reaches the gesture. Both modifiers now sit inside, on the label, which also spans the full row width and minimum height — no visual change, and swipe-to-delete and drag reordering are untouched. Techniques were never affected: their rows are `NavigationLink`s, which a list makes fully tappable. No schema, migrations, `SlotAlternative` payload format, public Alternative Exercises semantics, scratch-editor architecture, active-workout switch behavior, exercise-deletion behavior, effort-target logic, cardio calculations, History data model, transfer/import/export payload, routine duplication, localization, project-settings, signing, bundle ID, team, marketing-version or build-number change.
 
+- **Build 10 C12 — the remaining low-risk UI polish bundle.** Seven items from the Build 10 UX audit, cleared together because each is copy, a title or a layout constraint, and none of them changes what the app does. **The Cardio Plan checklist now says what a tick is worth** — `Checklist only — not saved as results.` / `체크리스트 전용 — 결과로 저장되지 않음`. That footer had been refused once, on the grounds that "ticks are not saved to your history" is a sentence about internals on the one screen nobody reads; the objection was to the *sentence*, and four scanned words answering "did that count as logging something?" are a different thing. The ticks remain session-scoped and still cannot reach a `SetLog`. **Start Workout says Start Workout.** The toolbar button read `Start` while the screen title and the User Guide both said `Start Workout`, so the guide's own instruction named a control that did not exist. **Effort progression labels got their own keys.** They had been composed as the generic `Start` / `End` plus a metric — and `End` is the *workout-ending* word, so a Korean user editing a ramp read `종료 RIR`, "quit RIR". Now `시작 RIR` / `마지막 RIR` (and RPE), with `시작` / `종료` left to the workout controls that own them. **Block detail screens name the exercise.** Opening Details for Bench Press landed on a screen titled "Block" — the kind word is the one thing the user already knew. Single blocks title with the exercise; supersets join their members with `+`, resolved exactly as the routine editor's own row title resolves them; an all-deleted block keeps the kind word as the only honest thing left. **The destructive switch warning names what it buys.** It counted the sets a switch would destroy without saying what the switch was *to*, so a user mid-set had to remember which row they had tapped in order to judge the trade — now `Switching to Machine Press will remove 2 logged sets…`, with the original unnamed wording kept as the fallback for an exercise that cannot be resolved. **The Cardio Plan editor states its segment total**, and says when it disagrees with the slot's target distance — two independent fields that could silently describe different sessions. Agreement is decided on the *rendered* text rather than raw meters, so a difference the user cannot see is never flagged and the cue can never contradict the two numbers beside it; nothing is adjusted, nothing is blocked, because a plan that deliberately covers part of a longer target is a real thing to author. **Superset rows hint that effort exists** — a count (`2 effort targets` / `강도 목표 2개`), never the values, which are per-slot and would make the row unreadable. Before this a superset member carrying a full custom per-set ramp looked identical in the routine list to one with no target at all; a superset with none is worded exactly as before. **And the cardio detail fields stopped being rigid**: fixed control and unit-suffix widths became a minimum/maximum range, so a long Korean label or a large Dynamic Type setting takes width from the control instead of truncating against it. At default type in English nothing moves. No schema, migrations, model fields, `SetLog` / `WorkoutItem` / `PlannedPrescriptionSnapshot` fields, `SlotAlternative` payload format, switch behavior, workout lifecycle, rest-timer behavior, exercise-deletion behavior, effort-target *resolution* (display copy only), cardio persistence or calculations (the comparison reads the existing total), History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change. Thirteen new localization keys, all translated; nothing repointed.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -327,6 +331,7 @@ Current validation status:
 - Prepared-alternative scratch-context fix (Build 10 C9): tested with new warm-up and technique scratch-context suites; manual device re-check still pending.
 - Manual-test polish bundle (Build 10 C10): rest-origin, finish-label and Korean navigation copy are covered by pure tests; the section reorder and the History row layout are display-only and want the device pass.
 - Nested-editor persistence fix (Build 10 C11): the commit and refresh rules are covered by a new suite whose first test asserts the data loss itself; the warm-up tap target is a hit-testing change and wants the device pass.
+- Remaining low-risk UI polish bundle (Build 10 C12): every wording, title and summary rule is pinned by pure tests, including the Korean for all thirteen new keys; the cardio field widths are a layout-pressure change and can only be settled on a device.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
 - Exercise-switch compatibility: tested with 22 value-level adapter tests covering Keep/Reset across duration → normal, normal → duration, and same-type switches.
@@ -364,6 +369,14 @@ Current validation status:
 - Manual Build 10 C2 re-check on device: **pending** — the tests assert the
   compiled Korean strings, but the block-detail rows, the two workout dialogs,
   the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C12 re-check on device: **pending** — and the one item in it
+  that no test can reach is the reason it matters most: the cardio detail rows
+  need to be seen on a **small screen, at a large Dynamic Type setting, in
+  Korean**, which is the combination the old fixed widths clipped. The rest is a
+  read-through: the checklist caption, the Start Workout button, `시작 RIR` /
+  `마지막 RIR` in a progression, an exercise name in the Details title, a named
+  switch warning, a segment total that disagrees with its target, and a superset
+  row that says `강도 목표 2개`.
 - Manual Build 10 C11 re-check on device: **pending** — and the one whose whole
   point is a route a test cannot take. The sequence to walk is the reported one:
   add a warm-up step inside a prepared alternative, go **back to the routine and
@@ -526,8 +539,28 @@ Current validation status:
   hit-testing is not reachable without a UI harness, so the row carries a stable
   accessibility identifier for when one exists, and the evidence is the device
   pass.
-- Latest test suite result: **full scheme passes: 2,452 tests, 0 failures** —
-  2,450 unit tests plus 2 UI tests (Build 10 C11 run). Debug build succeeds and
+- Remaining low-risk UI polish (Build 10 C12): new `RoutineDisplayCopyTests`
+  (17) covering the block-detail titles (including the blank-name and
+  all-deleted fallbacks), the effort labels per metric and per end, the cardio
+  target comparison across mismatch / match / a difference below display
+  precision / no target / no distances / a zero total / miles on both sides, and
+  the named switch warning in all four shapes plus its nil-name fallback. 6
+  added to `BlockPrescriptionSummaryTests` for the superset marker — value-in
+  and model paths, that it names no RIR/RPE value, that autoregulation off shows
+  nothing, and that a superset without targets is worded exactly as before. 8
+  added to `KoreanLocalizationTests`, covering every new key, both
+  placeholder-retention rules (the two-placeholder switch variants stay
+  positional in **both** languages, since Korean puts the count after the noun),
+  that `End RIR` / `End RPE` never contain `종료`, and that the generic
+  `시작` / `종료` are untouched. **One existing test was rewritten rather than
+  deleted:** `testSupersetIgnoresEffortMetric` pinned "a superset shows no
+  effort at all", which is precisely the rule L7 asked to change; it is now
+  `testSupersetMarksEffortWithoutNamingValues` and still asserts the half that
+  must not change — that no RIR/RPE value reaches the row. No other existing
+  test was modified. The cardio field widths have **no** unit test: layout
+  pressure is not reachable without a UI harness.
+- Latest test suite result: **full scheme passes: 2,485 tests, 0 failures** —
+  2,483 unit tests plus 2 UI tests (Build 10 C12 run). Debug build succeeds and
   Release build succeeds.
 
 ---

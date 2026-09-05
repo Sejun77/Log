@@ -2170,6 +2170,105 @@ see §2.12** — kept separate from the search-policy commit as planned.
   alternative, return to the routine, **switch tabs**, come back, and confirm
   both are still there.
 
+### 2.39 Remaining low-risk UI polish bundle (Build 10 C12) — ✅ SHIPPED
+- **Source:** the Build 10 UX audit's remaining low-risk tail — M2, M7, M11, L2,
+  L4, L5, L7. Seven items cleared together because each is copy, a title or a
+  layout constraint; none changes behavior.
+- **M2 — Cardio Plan checklist says what a tick is worth.** A footer on the
+  active-workout checklist: `Checklist only — not saved as results.` /
+  `체크리스트 전용 — 결과로 저장되지 않음`. This **reverses a documented
+  refusal** — the note in `CardioSegmentChecklistSection` argued that "ticks are
+  not saved to your history" is a sentence about internals on the one screen a
+  user is not reading. That objection was to the *sentence*; four scanned words
+  answering "did that count as logging something?" are a different thing, and
+  the note now records both halves. Ticks stay session-scoped in
+  `CardioSegmentCheckStore`, which is still the only writer and still cannot
+  reach a `SetLog` or History.
+- **M7 — Start Workout, and effort labels with their own keys.** The toolbar
+  button read `Start` while the screen title and the User Guide both said
+  `Start Workout`, so the guide named a control that did not exist. Separately,
+  the progression rows were composed as `String(localized: "Start") + metric` —
+  and `End` is the **workout-ending** key, whose Korean `종료` made the row read
+  "quit RIR". New `EffortTargetLabels` gives each end its own key per metric:
+  `시작 RIR` / `마지막 RIR`, `시작 RPE` / `마지막 RPE`. The generic
+  `시작` / `종료` are untouched and still belong to the workout controls.
+- **M11 — block detail titles name the exercise.** Both detail screens were
+  titled by kind ("Block", "Superset"), so one tap after a row that said Bench
+  Press the name was gone. New `BlockDetailTitle`: a single block titles with
+  its exercise; a superset joins members with `+`, resolved exactly as the
+  routine editor's own `blockTitle` resolves them, so the row and the screen it
+  pushes cannot disagree; an all-deleted block keeps the kind word. No
+  truncation is applied — `.inline` display mode already truncates in the
+  middle, which beats guessing a width.
+- **L4 — the destructive switch warning names the incoming exercise.** It stated
+  a cost without stating what the cost buys.
+  `ExerciseSwitchConfirmationCopy.message(for:incomingExerciseName:)` takes the
+  name the swap already holds; a nil, empty or whitespace name falls back to the
+  original unnamed wording rather than rendering an empty slot into the
+  sentence. The gate itself is unchanged — no impact still returns nil.
+- **L5 — Cardio Plan segment total vs target distance.** Two independent fields
+  could silently describe different sessions. New `CardioPlanTargetCheck`
+  reports the total in the plan editor's footer and adds a mismatch line when it
+  disagrees with the slot's target. **Agreement is decided on the rendered
+  text, not the raw meters**, so a difference the user cannot see is never
+  flagged and the cue can never contradict the two numbers beside it. It never
+  adjusts either value and never blocks saving: a plan that deliberately covers
+  part of a longer target is a real thing to author. A duration-only plan (no
+  segment distances, or a zero total) renders nothing.
+- **L7 — superset rows hint that effort exists.** A count
+  (`%lld effort target(s)` / `강도 목표 %lld개`), appended last and absent at
+  zero, so a superset without targets is worded exactly as before. Deliberately
+  **not** the values: per-slot targets are ambiguous block-level and four
+  members' ramps would make the row unreadable. Counted through the same
+  resolver the normal branch words its effort with, so "has a target" here and
+  "shows a target" on the exercise's own row cannot disagree; autoregulation off
+  means no metric and therefore no marker. Reverses §2.30-era wording that
+  omitted effort for supersets entirely — the cost was that a member with a full
+  custom per-set ramp looked identical to one with no target at all.
+- **L2 — cardio detail fields flex.** The seven control widths and the unit
+  suffix were fixed (96pt / 34pt), which squeezed a long Korean label or a large
+  Dynamic Type label against a control that refused to yield. Controls are now
+  `minWidth: 72, maxWidth: 96`; the suffix keeps a `minWidth` so short units
+  still reserve the column that aligns the rows while a long one may exceed it;
+  the row label gains `lineLimit(2)` and a modest scale floor. At default type in
+  English nothing moves.
+- **No schema change**, no migrations, no model-field, `SetLog`, `WorkoutItem`
+  or `PlannedPrescriptionSnapshot` change, no `SlotAlternative` payload-format
+  change, and no switch-behavior, workout-lifecycle, rest-timer,
+  exercise-deletion, effort-target-**resolution** (display copy only),
+  cardio-persistence or cardio-calculation (the comparison reads the existing
+  `totalDistanceMeters`), History-data-model, transfer/import/export,
+  routine-duplication, project-settings, signing, bundle ID, team,
+  marketing-version or build-number change. Thirteen localization keys added,
+  all translated; none repointed. `Localizable.xcstrings` was **restored first**
+  — it was carrying build-artifact churn that had pruned two `#if DEBUG`-only
+  showcase keys — so the diff is exactly the thirteen additions.
+- **Tests:** new `LogTests/RoutineDisplayCopyTests.swift` (17) — block titles
+  including the blank-name and all-deleted fallbacks; effort labels per metric
+  and per end; the cardio comparison across mismatch, match, a difference below
+  display precision, no target, no distances, a zero total, and miles on both
+  sides; the named switch warning in all four shapes plus its nil-name fallback
+  and the unchanged no-impact nil. 6 added to `BlockPrescriptionSummaryTests`
+  for the superset marker, 8 to `KoreanLocalizationTests` for all thirteen keys,
+  the positional-placeholder rule for the two-placeholder switch variants, and
+  that `End RIR`/`End RPE` never contain `종료`. **One existing test was
+  rewritten, not deleted:** `testSupersetIgnoresEffortMetric` pinned the pre-L7
+  rule and is now `testSupersetMarksEffortWithoutNamingValues`, still asserting
+  the half that must not change — that no RIR/RPE value reaches the row. **Full
+  scheme passes: 2,485 tests, 0 failures** — 2,483 unit tests plus 2 UI tests.
+  Debug and Release builds succeed.
+- **L2 has no unit test, deliberately.** Layout pressure is not reachable
+  without a UI harness, and the device pass is the evidence.
+- Manual verification on device is still **pending**, and one check cannot be
+  substituted: the cardio detail rows on a **small screen, at a large Dynamic
+  Type setting, in Korean** — the exact combination the fixed widths clipped.
+- **Still deferred, untouched by this slice:** M6 (Custom Per Set editor
+  redesign — the 20-stepper wall), M12 (History list scaling), L3 (Korean font
+  strategy), L8 (Alternative detail Cancel / undo semantics), H4 (substitution
+  history) and H5(b) (logged RIR/RPE). With C12 the audit has nothing left in it
+  that is both low-risk and worth doing; everything remaining needs a design
+  pass or a schema change.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.
