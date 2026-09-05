@@ -315,7 +315,16 @@ struct SlotAlternativeDetailEditor: View {
                     isTimeBased: store.exercise.isTimeBased,
                     // No alternatives-of-alternatives: one level is the
                     // feature, two is a graph.
-                    showsAlternatives: false
+                    showsAlternatives: false,
+                    // The warm-up and technique editors are pushed **on top of
+                    // this screen**, so a step added in one mutates the scratch
+                    // graph while this view is off-screen. The `.onChange`
+                    // below cannot see that — it only fires when this body is
+                    // re-evaluated, which never happens if the user leaves by
+                    // switching tabs or popping straight back to the routine.
+                    // The edit then died with the draft container. This hook
+                    // makes the commit a call rather than an inference.
+                    onNestedGraphChange: { commit() }
                 )
                 // Every editor below this line writes into the throwaway
                 // store — `WarmupSchemeEditor`, `TechniquePlanEditor` and
@@ -329,12 +338,20 @@ struct SlotAlternativeDetailEditor: View {
         .navigationTitle(exerciseName.isEmpty ? Text("Alternative Exercises") : Text(exerciseName))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: load)
+        // Still the commit for everything edited *on this screen* —
+        // `PrescriptionFields`' sets / reps / rest / effort / distance rows all
+        // re-render this body, so the value change is seen. It is no longer the
+        // only commit: the nested editors call `commit()` directly.
         .onChange(of: draftPayload) { _, payload in
             guard let payload else { return }
             commit(payload: payload)
         }
         .onChange(of: isEnabled) { _, _ in commit() }
         .onChange(of: note) { _, _ in commit() }
+        // Belt to the hook's braces. Idempotent — committing the same payload
+        // twice rewrites identical bytes — and it catches any edit path that
+        // leaves without a value change this view happened to observe.
+        .onDisappear { commit() }
     }
 
     // MARK: - Load
@@ -395,17 +412,23 @@ struct SlotAlternativeDetailEditor: View {
 
     /// Write the edited alternative back, addressed by id.
     ///
-    /// Reads the stored list, replaces exactly this alternative's fields, and
-    /// writes the whole list back through `setSlotAlternatives` — so the slot's
-    /// own prescription and every other alternative are untouched, and `id` and
-    /// `order` survive an edit.
+    /// Delegates to `AlternativeDraftCommit`, which reads the stored list,
+    /// replaces exactly this alternative's fields, and writes the whole list
+    /// back through `setSlotAlternatives` — so the slot's own prescription and
+    /// every other alternative are untouched, and `id` and `order` survive an
+    /// edit. Extracted so the write-back rule is testable without a view, and
+    /// so the nested editors can trigger it directly.
     private func commit(payload: AlternativePrescriptionPayload? = nil) {
         guard didLoad else { return }
-        SlotAlternativeAuthoring.update(id: alternativeID, in: prescription) {
-            $0.isEnabled = isEnabled
-            $0.note = note
-            if let payload { $0.prescription = payload }
-        }
-        try? ctx.save()
+        // Falls back to the draft's *current* payload when the caller has none
+        // — which is every call from a nested editor, and from `onDisappear`.
+        AlternativeDraftCommit.commit(
+            draft: store,
+            alternativeID: alternativeID,
+            isEnabled: isEnabled,
+            note: note,
+            payload: payload,
+            into: prescription,
+            context: ctx)
     }
 }
