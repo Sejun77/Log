@@ -36,15 +36,18 @@ import Foundation
 ///      (structural — nil/deleted slots still count) and `M` = the **max**
 ///      child `prescription.sets` (matching `SupersetDetailNoRest.currentSetsValue`).
 ///    - `M` omitted when no child carries a positive `sets` → `"Superset · N exercises"`.
-///    - a **marker** when at least one member carries an effort target (Build
-///      10, audit L7) → `"… · 2 effort targets"`. Deliberately a count, not the
-///      values: per-slot targets are ambiguous block-level, and listing four
-///      members' ramps would make the row unreadable. Omitting them entirely
-///      was worse — a superset member with a full custom per-set ramp looked
-///      identical in the routine list to one with no target at all. Absent when
-///      no member has one, so a superset without effort is worded exactly as
-///      before. Prepared alternatives stay omitted: they are per-slot, and a
-///      block-level count would not say which exercise they belong to.
+///    - **no effort clause at all.** Build 10's audit L7 added a count marker
+///      here (`"… · 2 effort targets"`) on the reasoning that a member with a
+///      full custom ramp should not look identical to one with no target. A
+///      density pass reverted it: a bare count is not worth a row segment when
+///      the values behind it are deliberately withheld, so it told the user
+///      only that *something* was set — which is the question they would have
+///      to open the block to answer either way. The values themselves stay out
+///      for the original reason: per-slot targets are ambiguous block-level,
+///      and listing four members' ramps would make the row unreadable. Prepared
+///      alternatives stay omitted for the same shape of reason — they are
+///      per-slot, and a block-level count would not say which exercise they
+///      belong to. **Effort is summarized for normal blocks only.**
 ///  - Weight and tempo remain intentionally **out of scope for v1**.
 struct BlockPrescriptionSummary: Equatable {
     private enum Content: Equatable {
@@ -59,8 +62,7 @@ struct BlockPrescriptionSummary: Equatable {
             effort: String?,
             alternatives: Int
         )
-        case superset(
-            exerciseCount: Int, sets: Int?, effortTargetMembers: Int)
+        case superset(exerciseCount: Int, sets: Int?)
     }
 
     private let content: Content
@@ -93,17 +95,11 @@ struct BlockPrescriptionSummary: Equatable {
 
     /// Value-in initializer for a **superset** block.
     ///
-    /// `effortTargetMembers` is how many of its slots carry a usable effort
-    /// target in the caller's metric — 0 renders no marker at all.
-    init(
-        supersetExerciseCount: Int,
-        maxSets: Int?,
-        effortTargetMembers: Int = 0
-    ) {
+    /// There is no effort parameter: a superset's subtitle carries no effort
+    /// clause in any form — see the type's summary rules.
+    init(supersetExerciseCount: Int, maxSets: Int?) {
         content = .superset(
-            exerciseCount: supersetExerciseCount, sets: maxSets,
-            effortTargetMembers: effortTargetMembers
-        )
+            exerciseCount: supersetExerciseCount, sets: maxSets)
     }
 
     /// Build from a live `RoutineBlock`. Reads `block.isSuperset`,
@@ -125,17 +121,10 @@ struct BlockPrescriptionSummary: Equatable {
             let maxSets = block.exercises
                 .compactMap { $0.prescription?.sets }
                 .max()
-            // Counted through the same resolver the normal branch words its
-            // effort with, so "has a target" here and "shows a target" on the
-            // exercise's own row can never disagree.
-            let withEffort = block.exercises.filter {
-                Self.effortSummary(for: $0.prescription, metric: effortMetric)
-                    != nil
-            }.count
+            // `effortMetric` is deliberately unused on this branch: a superset
+            // shows neither effort values nor a count of them.
             content = .superset(
-                exerciseCount: block.exercises.count, sets: maxSets,
-                effortTargetMembers: withEffort
-            )
+                exerciseCount: block.exercises.count, sets: maxSets)
         } else {
             let p = block.exercises
                 .sorted { $0.order < $1.order }
@@ -215,7 +204,7 @@ struct BlockPrescriptionSummary: Equatable {
     /// Subtitle shown under the block row title.
     var subtitle: String {
         switch content {
-        case let .superset(exerciseCount, sets, effortTargetMembers):
+        case let .superset(exerciseCount, sets):
             let superset = String(localized: "Superset")
             let exercises = exerciseCount == 1
                 ? String(localized: "\(exerciseCount) exercise")
@@ -226,16 +215,6 @@ struct BlockPrescriptionSummary: Equatable {
                     m == 1
                         ? String(localized: "\(m) set")
                         : String(localized: "\(m) sets"))
-            }
-            // Last, and only when there is one — the marker is scanned for,
-            // not read, and a superset with no effort target reads exactly as
-            // it did before this slice.
-            if effortTargetMembers == 1 {
-                parts.append(
-                    String(localized: "\(effortTargetMembers) effort target"))
-            } else if effortTargetMembers > 1 {
-                parts.append(
-                    String(localized: "\(effortTargetMembers) effort targets"))
             }
             return parts.joined(separator: " · ")
 

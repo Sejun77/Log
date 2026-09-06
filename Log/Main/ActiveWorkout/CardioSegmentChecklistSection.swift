@@ -61,22 +61,26 @@ struct CardioSegmentChecklistSection: View {
                 }
             }
         } header: {
-            Text("Cardio Plan")
-        } footer: {
-            // The audit's M2, and a reversal of the note that stood here: a
-            // footer was refused because "ticks are not saved to your history"
-            // is a sentence about the app's internals, on the one screen a user
-            // is not reading. That objection was about the *sentence*, and it
-            // still holds — this is four words, scanned rather than read, and
-            // it answers the question a tick actually raises: did that count as
-            // logging something? It did not. The bout is still logged once,
-            // from the duration and Details fields below.
+            // The audit's M2 answer, moved: a permanent footer said
+            // `Checklist only — not saved as results.` under every render of
+            // this section. The question it answers — did ticking that count as
+            // logging something? — is asked once, on a screen where vertical
+            // space is the scarcest thing in the app, directly above the
+            // duration field and the Log button. So it moved behind the info
+            // glyph the app already uses for exactly this (`InfoButton`), in
+            // the header idiom Settings and the effort-mode picker use, and
+            // gained the room to say the whole rule rather than four words.
             //
             // Behaviour is untouched: the ticks remain session-scoped state in
             // `CardioSegmentCheckStore`, which is still the only writer and
             // still cannot reach a `SetLog` or History.
-            Text("Checklist only — not saved as results.")
-                .font(.dsCaption)
+            HStack(spacing: DSSpacing.xs) {
+                Text("Cardio Plan")
+                InfoButton(
+                    LocalizedStringKey(CardioChecklistHelp.title),
+                    message: LocalizedStringKey(
+                        CardioChecklistHelp.message))
+            }
         }
     }
 

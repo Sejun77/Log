@@ -130,3 +130,37 @@ struct CardioSegmentCheckStore {
         return result
     }
 }
+
+// ======================================================
+// MARK: - Checklist help copy (density pass)
+// ======================================================
+
+/// The explanation behind the Cardio Plan checklist's info button.
+///
+/// It used to be a permanent section footer reading
+/// `Checklist only — not saved as results.` — four words, but four words plus a
+/// footer's padding under every render of the section, on the active workout
+/// screen, directly above the duration field and the Log button. The question
+/// it answers is asked once. Behind the app's existing `InfoButton` it costs no
+/// vertical space and has room to state the whole rule instead of gesturing at
+/// it.
+///
+/// Held here, beside the store that owns the ticks, so the copy and the
+/// behaviour it describes are read together: if `CardioSegmentCheckStore` ever
+/// stopped being session-scoped, this text is the thing that would become a
+/// lie. Copy only — nothing here reads, writes or clears a tick, so it carries
+/// no actor isolation and its tests need no main-actor hop.
+enum CardioChecklistHelp {
+
+    /// Reuses the section header's own key, so the alert is titled with the
+    /// thing the user tapped next to.
+    static let title = "Cardio Plan"
+
+    /// Says both halves: the ticks are scoped to this workout (they do not
+    /// survive it), and they are not results (the bout is still logged once
+    /// from the fields below). The old footer only said the second.
+    static let message =
+        "Ticking segments only marks your place in this workout. The ticks are "
+        + "not saved as results and are cleared when the workout ends — your "
+        + "cardio is still logged once, from the duration and details below."
+}
