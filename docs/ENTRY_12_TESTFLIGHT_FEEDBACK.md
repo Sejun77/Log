@@ -84,8 +84,9 @@ discoverability pass (C4), a User Guide language default (C5) and an
 effort-target clarity pass (C6), planned effort targets in History (C7), the
 Calculus showcase hidden from Release (C8), a stability / data-integrity fix to
 prepared Alternative Exercises (C9), a manual-test polish bundle (C10), a
-nested-editor persistence fix (C11) and the remaining low-risk UI polish bundle
-(C12) — see the Build 10 entries under *Fixes Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
+nested-editor persistence fix (C11), the remaining low-risk UI polish bundle
+(C12) and a real-device warm-up refresh fix (C13) — see the Build 10 entries
+under *Fixes Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
 blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
 orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
 the crash needs a prepared alternative's *first* warm-up step to trigger, so it
@@ -97,6 +98,10 @@ screen. Build 9 carries it, and so did C9 — the crash fix made the edit
 possible, not durable. **C12 closes the audit's low-risk tail**: seven wording,
 title and layout items, none of them behavioral, and the point at which the
 Build 10 UX audit has nothing left in it that is both cheap and worth doing.
+**C13 came from the phone, not the audit**: a warm-up step added to a routine
+exercise or a prepared alternative was saved correctly but sometimes not drawn
+until the editor was reopened, and the `N steps` preview never updated until the
+page was. It reproduces only on device — the simulator masks it.
 
 ---
 
@@ -162,6 +167,10 @@ The checklist testers are asked to walk through (full version in
   shows the old value after you change the routine's target
 - _(Build 10)_ Open Settings and confirm there is no "Showcase" or "Calculus
   Analytics" row — and that everything else you used before is still there
+- _(Build 10)_ Add a warm-up step to a **normal** routine exercise and confirm it
+  appears immediately, without leaving the screen — then go back one level and
+  confirm the **Warmup** row's step count updated too. Repeat inside a prepared
+  alternative. Please do this on a real phone: the simulator hides this one
 
 ---
 
@@ -321,6 +330,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C12 — the remaining low-risk UI polish bundle.** Seven items from the Build 10 UX audit, cleared together because each is copy, a title or a layout constraint, and none of them changes what the app does. **The Cardio Plan checklist now says what a tick is worth** — `Checklist only — not saved as results.` / `체크리스트 전용 — 결과로 저장되지 않음`. That footer had been refused once, on the grounds that "ticks are not saved to your history" is a sentence about internals on the one screen nobody reads; the objection was to the *sentence*, and four scanned words answering "did that count as logging something?" are a different thing. The ticks remain session-scoped and still cannot reach a `SetLog`. **Start Workout says Start Workout.** The toolbar button read `Start` while the screen title and the User Guide both said `Start Workout`, so the guide's own instruction named a control that did not exist. **Effort progression labels got their own keys.** They had been composed as the generic `Start` / `End` plus a metric — and `End` is the *workout-ending* word, so a Korean user editing a ramp read `종료 RIR`, "quit RIR". Now `시작 RIR` / `마지막 RIR` (and RPE), with `시작` / `종료` left to the workout controls that own them. **Block detail screens name the exercise.** Opening Details for Bench Press landed on a screen titled "Block" — the kind word is the one thing the user already knew. Single blocks title with the exercise; supersets join their members with `+`, resolved exactly as the routine editor's own row title resolves them; an all-deleted block keeps the kind word as the only honest thing left. **The destructive switch warning names what it buys.** It counted the sets a switch would destroy without saying what the switch was *to*, so a user mid-set had to remember which row they had tapped in order to judge the trade — now `Switching to Machine Press will remove 2 logged sets…`, with the original unnamed wording kept as the fallback for an exercise that cannot be resolved. **The Cardio Plan editor states its segment total**, and says when it disagrees with the slot's target distance — two independent fields that could silently describe different sessions. Agreement is decided on the *rendered* text rather than raw meters, so a difference the user cannot see is never flagged and the cue can never contradict the two numbers beside it; nothing is adjusted, nothing is blocked, because a plan that deliberately covers part of a longer target is a real thing to author. **Superset rows hint that effort exists** — a count (`2 effort targets` / `강도 목표 2개`), never the values, which are per-slot and would make the row unreadable. Before this a superset member carrying a full custom per-set ramp looked identical in the routine list to one with no target at all; a superset with none is worded exactly as before. **And the cardio detail fields stopped being rigid**: fixed control and unit-suffix widths became a minimum/maximum range, so a long Korean label or a large Dynamic Type setting takes width from the control instead of truncating against it. At default type in English nothing moves. No schema, migrations, model fields, `SetLog` / `WorkoutItem` / `PlannedPrescriptionSnapshot` fields, `SlotAlternative` payload format, switch behavior, workout lifecycle, rest-timer behavior, exercise-deletion behavior, effort-target *resolution* (display copy only), cardio persistence or calculations (the comparison reads the existing total), History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change. Thirteen new localization keys, all translated; nothing repointed.
 
+- **Build 10 C13 — warm-up edits now render immediately, on a real phone.** A refresh / observation fix found by manual testing on device; the simulator never reproduced it. Adding a warm-up step saved it correctly but sometimes did not draw it until the editor was popped and re-pushed, and the prescription screen's `Warmup   N steps` preview did not update until the whole page was reopened. Both halves are the same defect and it is **not** device-specific — the simulator only masks it. `WarmupSchemeEditor` renders from `prescription.warmupScheme.steps`, but `steps` belongs to the `WarmupScheme`, a **grandchild** of the model the view binds, so the only warm-up mutation that invalidates the view is `prescription.warmupScheme = s` — the scheme attachment, which happens once, on the very first add. Every later add, edit, delete and move writes only to the scheme and its steps. The preview count was worse: `SlotPrescriptionSection` read it *two* models below its own `@Bindable`, so nothing the editor did could reach it at all. Neither view had a dependency on what it drew, so whether the stale value showed depended on whether something unrelated happened to re-run the body in the same frame — a sheet dismissing, a row recycling — which the simulator's cheaper layout and animation passes do often enough to hide it. That also explains the report's shape: the list was intermittent, the count never updated. The sharpest case is not intermittent at all — deleting the last step leaves the scheme attached, so the *next* "first" add attaches nothing and produces no observable change whatsoever. The fix is the workaround already used twice in this codebase (`RoutineEditor.blockSummaryRefresh`, `SupersetSetCountLabel`): a local revision token, written after every mutation, which invalidates the view unconditionally so the body re-reads the live relationship in the same frame. `WarmupSchemeEditor` owns one and funnels add / edit / delete / move through a single hook; the warm-up prescription row was pulled out as `WarmupSchemeRow` binding the `SlotPrescription` directly and owning its own token — the same shape `AlternativeExercisesRow` already had for the alternatives count, for the same reason. `WarmupSchemeAuthoring`, which had owned only `add`, now owns the real update / delete / move paths too, so one hook site covers all four and the tests exercise production code rather than copies of it; `WarmupSummary` is the single list source the editor's rows and the row's count both read, so they cannot disagree; and every mutation uses whole-array reassignment on `scheme.steps` (`delete` had mutated in place). **Normal routine slots and prepared-alternative scratch slots are both fixed by the same change**, because they are the same editor rendered against different prescriptions, and the alternative draft commit is unchanged — the row bumps its token first and then forwards to the existing `onNestedGraphChange`, so a normal routine slot refreshes without needing a commit path at all. View state only: no schema field was added to force observation, and no page is reloaded. No schema, migrations, model fields, `SlotAlternative` payload format, Alternative Exercises semantics, active-workout switching, workout lifecycle, rest-timer behavior, exercise-deletion behavior, effort-target logic, cardio calculations, History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change. **No new localization keys**: the `N steps` label stays a `LocalizedStringKey` interpolation on the existing, already-translated catalog key `%lld step%@`.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -332,6 +343,7 @@ Current validation status:
 - Manual-test polish bundle (Build 10 C10): rest-origin, finish-label and Korean navigation copy are covered by pure tests; the section reorder and the History row layout are display-only and want the device pass.
 - Nested-editor persistence fix (Build 10 C11): the commit and refresh rules are covered by a new suite whose first test asserts the data loss itself; the warm-up tap target is a hit-testing change and wants the device pass.
 - Remaining low-risk UI polish bundle (Build 10 C12): every wording, title and summary rule is pinned by pure tests, including the Korean for all thirteen new keys; the cardio field widths are a layout-pressure change and can only be settled on a device.
+- Warm-up immediate-render fix (Build 10 C13): the list source, the preview count and all four mutation paths are pinned by a new suite against the production authoring API; the refresh itself is view state, so the device pass is what confirms it — and the device is the only place the bug ever appeared.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
 - Exercise-switch compatibility: tested with 22 value-level adapter tests covering Keep/Reset across duration → normal, normal → duration, and same-type switches.
@@ -377,6 +389,15 @@ Current validation status:
   `마지막 RIR` in a progression, an exercise name in the Details title, a named
   switch warning, a segment total that disagrees with its target, and a superset
   row that says `강도 목표 2개`.
+- Manual Build 10 C13 re-check on device: **pending — and this one is the
+  point.** It is the only Build 10 item whose bug has never appeared anywhere
+  but a real phone, so the simulator cannot close it. In a **normal** routine
+  exercise: add the first warm-up step and confirm it draws without leaving the
+  screen; edit it, delete it, reorder two; go back one level and confirm the
+  **Warmup** row's count moved with each. Then the case that is not
+  intermittent: delete every step, add one again, and confirm it appears. Repeat
+  the whole sequence inside a **prepared alternative**, then leave by switching
+  tabs, return, and confirm the steps are still there and still counted.
 - Manual Build 10 C11 re-check on device: **pending** — and the one whose whole
   point is a route a test cannot take. The sequence to walk is the reported one:
   add a warm-up step inside a prepared alternative, go **back to the routine and
@@ -559,8 +580,32 @@ Current validation status:
   must not change — that no RIR/RPE value reaches the row. No other existing
   test was modified. The cardio field widths have **no** unit test: layout
   pressure is not reachable without a UI harness.
-- Latest test suite result: **full scheme passes: 2,485 tests, 0 failures** —
-  2,483 unit tests plus 2 UI tests (Build 10 C12 run). Debug build succeeds and
+- Warm-up immediate render (Build 10 C13): new
+  `WarmupImmediateRenderTests` (24), driving the production
+  `WarmupSchemeAuthoring` API and the shared `WarmupSummary` read model rather
+  than the view. They cover add / edit / delete / move all reaching the list
+  source on the very next read; the preview count moving on add and on delete;
+  the count and the list source never disagreeing; the **add-after-deleting-
+  every-step** case that produces no observable change at all; the list source
+  sorting by `order`; the same four mutations on a prepared alternative's
+  scratch slot with the commit reaching the stored payload each time;
+  leave-and-reopen still hydrating what was saved; the alternative still
+  carrying its warm-up into the session plan; the parent routine slot never
+  gaining the alternative's warm-up; siblings untouched including a disabled
+  one; and delete hygiene (rows leave the store, out-of-range offsets ignored,
+  a no-scheme delete is a no-op). `WarmupStepEditTests` was **rewritten to call
+  the production authoring API** instead of the hand-copied mirrors of the
+  editor's private methods it carried — same assertions, real code under them.
+  No existing test was weakened. One of the new tests caught a **genuine error
+  in the first cut of this fix**: it asserted that a reorder leaves
+  `scheme.steps` in display order, and the source comment claimed the array and
+  `order` agree afterwards. SwiftData promises no such thing, the array came
+  back permuted after a save, and both the test and the comment were corrected —
+  `order` is the sole record of position. The refresh itself has **no** unit
+  test, deliberately: view invalidation is not reachable without a UI harness,
+  and the device pass is the evidence.
+- Latest test suite result: **full scheme passes: 2,509 tests, 0 failures** —
+  2,507 unit tests plus 2 UI tests (Build 10 C13 run). Debug build succeeds and
   Release build succeeds.
 
 ---

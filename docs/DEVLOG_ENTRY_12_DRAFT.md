@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C12 fix._
+_Counts are from the latest verification run, after the Build 10 C13 fix._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C12 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,485 tests, 0 failures** — 2,483 unit tests plus 2 UI
+- **Full scheme passes: 2,509 tests, 0 failures** — 2,507 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -688,6 +688,67 @@ with a full custom per-set ramp used to look exactly like one with no target.
 long Korean label takes room from the control instead of truncating against it.
 That one I can't verify from here at all: it needs a small phone, a large type
 setting, and Korean, which is precisely the combination that broke it.
+
+---
+
+## Build 10 — The Step You Added, On the Screen You Added It
+
+Two builds ago the first warm-up step in a prepared alternative crashed the app.
+One build ago the step stopped disappearing when you left by the wrong route.
+This time the step saves correctly, is on the screen when you come back, and
+still isn't drawn the moment you add it.
+
+The simulator has never once reproduced it. A phone does, which is the part
+worth writing down: the bug was always there, and the simulator was hiding it.
+
+The warm-up editor renders from `prescription.warmupScheme.steps`. `steps`
+belongs to the scheme, and the scheme is a *grandchild* of the model the view
+binds — so the only warm-up mutation that invalidates that view is the one that
+writes a property of the prescription itself: attaching the scheme, which
+happens once, on the very first add. Every later add, and every edit, delete and
+move, writes to the scheme and its steps and tells the view nothing. It keeps
+drawing the array it read last. The prescription's `N steps` preview was worse
+and simpler: it read two models below its own binding, so nothing the editor did
+could ever reach it, and it was stale until the whole page was rebuilt.
+
+Neither view had a dependency on what it was drawing. Whether you saw the stale
+value came down to whether *something else* happened to re-run the body in the
+same frame — a sheet dismissing, a row recycling, a keyboard moving. The
+simulator's cheaper layout and animation passes do that often enough to paper
+over it. A phone does not. That is the whole of the device/simulator split, and
+it also explains the shape of the report: the list was intermittent, the preview
+count never updated at all.
+
+There is a sharper case hiding in it. Deleting the last step leaves the scheme
+attached, so the *next* "first" add no longer attaches anything and produces no
+observable change whatsoever. That one is not intermittent. It just doesn't
+render.
+
+The fix is the workaround this codebase already had, applied to a third place: a
+revision token in the view, written after every mutation. Writing it invalidates
+the view unconditionally, so the body re-reads the live relationship in the same
+frame. The prescription row was additionally pulled out into its own small view
+holding its own binding — the same shape `AlternativeExercisesRow` already had
+for the alternatives count, for exactly the same reason. Warm-up mutations were
+consolidated into `WarmupSchemeAuthoring`, which had owned only `add`, so a
+single hook covers all four; `WarmupSummary` became the one list source the
+editor's rows and the row's count both read, so they cannot disagree; and
+`deleteSteps` stopped mutating the relationship array in place. Both the normal
+routine slot and the alternative's scratch slot are fixed by the same change,
+because they are the same editor. The alternative's commit is untouched.
+
+Three times now — block subtitles, superset set counts, this — the same
+limitation has produced the same class of bug, and each time it has been fixed
+locally under a comment explaining that it is a workaround. That is starting to
+be worth a rule rather than a third comment.
+
+One thing I got wrong on the way: I first asserted that a reorder leaves the
+relationship array in display order, and wrote a comment in the source claiming
+the array and `order` agree afterwards. They don't. SwiftData makes no ordering
+promise for a to-many relationship, the array came back permuted after a save,
+and my own new test caught it on a later run. `order` is the only record of
+position, which is what the sorting was always for. The test and the comment now
+say so.
 
 ---
 

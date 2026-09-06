@@ -2097,6 +2097,9 @@ see §2.12** — kept separate from the search-policy commit as planned.
   Build 10 items: four of the five findings are things only a screen settles.
 
 ### 2.38 Prepared-alternative nested edits persist; warm-up row tap target (Build 10 C11) — ✅ SHIPPED
+- **Followed by §2.40 (Build 10 C13)**: this slice made the edit *durable*; C13
+  made it *visible* — the step was saved correctly and still not drawn until the
+  editor was reopened.
 - **Source:** manual testing, immediately after §2.36. Two findings, one of them
   **data loss** — not polish.
 - **Problem (A): the draft commit was inferred, not called.**
@@ -2268,6 +2271,101 @@ see §2.12** — kept separate from the search-policy commit as planned.
   history) and H5(b) (logged RIR/RPE). With C12 the audit has nothing left in it
   that is both low-risk and worth doing; everything remaining needs a design
   pass or a schema change.
+
+### 2.40 Warm-up edits render immediately; prescription preview count refreshes (Build 10 C13) — ✅ SHIPPED
+- **Source:** manual testing on a **real iPhone**, after §2.38. Not from the UX
+  audit, and **not reproducible in the simulator** — which is the finding as
+  much as the bug is.
+- **Problem: two views rendered warm-up state they had no dependency on.**
+  `WarmupSchemeEditor` renders from `prescription.warmupScheme?.steps`, but
+  `steps` belongs to the `WarmupScheme` — a **grandchild** of the model the view
+  binds via `@Bindable var prescription`. The only warm-up mutation that writes
+  a property *of the prescription* is `prescription.warmupScheme = s`, the lazy
+  scheme attachment on the very first add; every later add, and every edit,
+  delete and move, writes only to the scheme and its steps, so nothing
+  invalidated the body and the list kept rendering the array it read last.
+  `SlotPrescriptionSection` was worse: it read the `N steps` preview count *two*
+  models below its own `@Bindable var re`, so nothing the editor did could ever
+  invalidate it — deterministically stale until the page was rebuilt. This is
+  the same nested-`@Model` observation gap already worked around at
+  `RoutineEditor.blockSummaryRefresh`, `SupersetSetCountLabel` and
+  `AlternativeExercisesRow`; **this is its third occurrence.**
+- **Why the simulator passed.** The defect is unconditional on both platforms.
+  With no dependency registered, whether the stale value shows depends entirely
+  on whether something *else* re-evaluates the body in the same frame — the add
+  sheet dismissing, a list row recycling, a keyboard height change. The
+  simulator's cheaper layout and animation passes do so often enough to mask it;
+  the device does not. That also explains the report's asymmetry: the list was
+  intermittent ("sometimes"), the preview count never updated at all. The
+  sharpest case is **not** intermittent — deleting the last step leaves the
+  scheme attached (`deleteRule: .nullify`), so the *next* "first" add attaches
+  nothing and produces no observable change whatsoever.
+- **Status: Done.** A local revision token in each affected view, written after
+  every mutation: writing `@State` invalidates the view unconditionally, so the
+  body re-reads the live relationship in the same frame. `WarmupSchemeEditor`
+  owns `graphRevision` and funnels add / edit / delete / move through one
+  `didChangeGraph()`. The warm-up prescription row was extracted as
+  `WarmupSchemeRow`, binding the `SlotPrescription` directly (closing one level)
+  and owning its own token bumped from the `onGraphChange` hook the pushed
+  editor already called — the same shape `AlternativeExercisesRow` already had,
+  for the same reason. `WarmupSchemeAuthoring`, which had owned only `addStep`,
+  now owns the production `updateStep` / `deleteSteps` / `moveSteps` paths too,
+  so one hook site covers all four and the tests exercise real code rather than
+  copies of it. `WarmupSummary` is the single list source shared by the editor's
+  rows and the row's count, so they cannot disagree. All mutations use
+  whole-array reassignment on `scheme.steps` (`deleteSteps` had used an in-place
+  `removeAll`).
+- **Both paths fixed by one change.** Normal routine slots and prepared
+  Alternative Exercise scratch slots run the same editor against different
+  prescriptions. **The alternative draft commit is unchanged:** the row bumps
+  its own token first, then forwards to the existing `onNestedGraphChange`, so a
+  normal routine slot's preview refreshes with no commit path involved.
+- **No schema field was added to force observation**, and no page is reloaded —
+  the fix is view state, and a row whose state a lazy list discards simply reads
+  the count fresh. No schema change, migrations, model fields, `SlotAlternative`
+  payload format, Alternative Exercises semantics, active-workout switching,
+  workout lifecycle, rest-timer behavior, exercise-deletion behavior,
+  effort-target logic, cardio calculations, History data model,
+  transfer/import/export payload, routine duplication, localization keys,
+  project-settings, signing, bundle ID, team, marketing-version or build-number
+  change. **No new localization keys:** the `N steps` label stays a
+  `LocalizedStringKey` interpolation on the already-translated catalog key
+  `%lld step%@`.
+- **Tests:** new `LogTests/WarmupImmediateRenderTests.swift` (24), driving the
+  production authoring API and the shared `WarmupSummary` read model rather than
+  the view — add / edit / delete / move each reaching the list source on the
+  next read; the preview count on add and on delete; count and list source never
+  disagreeing; the add-after-deleting-every-step case; sorting by `order`; all
+  four mutations on an alternative's scratch slot with the commit reaching the
+  stored payload; leave-and-reopen; the alternative still carrying its warm-up
+  into the session plan; the parent slot never gaining it; siblings untouched
+  including a disabled one; and delete hygiene. `WarmupStepEditTests` was
+  **rewritten to call the production API** instead of the hand-copied mirrors of
+  the editor's private methods it carried — same assertions, real code under
+  them. No existing test weakened. **Full scheme passes: 2,509 tests, 0
+  failures** — 2,507 unit tests plus 2 UI tests. Debug and Release builds
+  succeed.
+- **One new test caught a real error in the first cut of this fix.** It asserted
+  that a reorder leaves `scheme.steps` in display order, and a source comment
+  claimed the array and `order` agree afterwards. SwiftData promises no ordering
+  for a to-many relationship; the array came back permuted after a save and the
+  assertion failed on a later run. `order` is the sole record of position — the
+  array is still reassigned wholesale, because that is what fires the change
+  notification, but nothing may read position off it. Test and comment corrected.
+- **The refresh has no unit test, deliberately.** View invalidation is not
+  reachable without a UI harness; the evidence is the device pass.
+- Manual verification on device is still **pending**, and for this item it is
+  the only verification that means anything — the simulator has never reproduced
+  the bug. In a normal routine exercise and again in a prepared alternative: add
+  the first step and confirm it draws without leaving the screen; edit, delete
+  and reorder; confirm the **Warmup** count follows each; then delete every step
+  and add one again.
+- **Worth a rule, not a fourth comment.** Three slices have now hit the same
+  nested-`@Model` observation limitation and fixed it locally under a comment
+  saying it is a workaround (§2.37's block subtitles, the superset set counts,
+  and this). A stated convention — *never render a grandchild model's property
+  without either binding it directly or owning a revision token* — would be
+  cheaper than finding the fourth one on a phone.
 
 ## 3. Optional / Future Features
 

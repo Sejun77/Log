@@ -310,12 +310,25 @@ Fixed in Build 10: on Build 9, adding a warm-up step to a prepared alternative
 crashed the app, and adding a technique quietly left a stray row behind. A later
 round of manual testing found more: the edit could **disappear** if you left the
 screen the wrong way, and you had to tap a warm-up row's *text* rather than the
-card to edit it. All of it is fixed, and nothing about how alternatives work has
-changed — these checks only confirm the editing itself is now solid.
+card to edit it. A last round found one more — the step was **saved but not
+drawn** until you reopened the editor, and the **Warmup** row's step count did
+not update until you reopened the page. All of it is fixed, and nothing about
+how alternatives work has changed — these checks only confirm the editing itself
+is now solid.
+
+**Please do this section on a real phone.** The last of those bugs never
+appeared in the simulator, only on device, which is why it survived three
+rounds.
 
 - [ ] Open a routine exercise's **Alternative Exercises** and open a prepared one
 - [ ] Add a **warm-up** step, and confirm the app does not crash
 - [ ] Confirm the step appears straight away, without leaving the screen
+- [ ] Go back one level and confirm the **Warmup** row now says `1 step`
+- [ ] Add a second step, edit one, delete one, and drag to reorder — confirm the
+      list updates each time without leaving the screen, and that the **Warmup**
+      count follows
+- [ ] Delete **every** step, then add one again, and confirm it appears — this
+      exact order is the case that used to fail outright
 - [ ] Add a **technique**, then edit it, then delete it
 - [ ] Leave the alternative editor, reopen it, and confirm what you kept is
       still there
@@ -342,12 +355,15 @@ And the tap target:
       shows
 - [ ] Log a set and confirm the rest timer still behaves normally
 - [ ] Check that a **normal** routine exercise's warm-ups and techniques still
-      work exactly as before
+      work exactly as before — including the same add / edit / delete / reorder
+      and **Warmup** count checks above, which the same fix covers
 
 What to report:
 
 - any crash, and what you had just tapped
 - a warm-up step or technique that does not appear until you leave and come back
+- a **Warmup** step count on the exercise screen that disagrees with the number
+  of steps actually in the editor
 - **anything you added to an alternative that is missing after switching tabs
   and returning** — and how you left the screen, which is the part that matters
 - a warm-up row where tapping the card does nothing but tapping the text works
