@@ -3,21 +3,24 @@ import XCTest
 
 @testable import Log
 
-/// Covers the editable-warmup-step behavior added to `WarmupSchemeEditor`.
+/// Covers the editable-warmup-step behavior of `WarmupSchemeEditor`.
 ///
-/// The edit write-back (`updateStep`) is a private SwiftUI View method, so
-/// these tests exercise the exact model-level contract it relies on: mutating
-/// a single `WarmupStep`'s fields (everything except `order`) and saving. The
-/// snapshot-immutability test additionally proves the data-safety invariant —
-/// an already-captured `WarmupStepSnapshot` is a value type fully decoupled
-/// from the live routine step, so editing the routine never touches a started
-/// workout's snapshot.
+/// The editor's add / edit / delete methods are private SwiftUI View methods,
+/// but each is now a thin wrapper over `WarmupSchemeAuthoring`, so these tests
+/// call the **production** authoring API directly rather than re-implementing
+/// it — the mirrors they used to carry could drift from the code they
+/// documented, and the immediate-render fix touched exactly those methods.
+///
+/// The snapshot-immutability test additionally proves the data-safety
+/// invariant — an already-captured `WarmupStepSnapshot` is a value type fully
+/// decoupled from the live routine step, so editing the routine never touches
+/// a started workout's snapshot.
 @MainActor
 final class WarmupStepEditTests: SwiftDataTestHarness {
 
-    // Mirrors `WarmupSchemeEditor.updateStep`: writes edited values back to the
-    // given step (order intentionally untouched) and saves. Kept in lockstep
-    // with the production method so these tests document its real contract.
+    // The **production** edit write-back, no longer a hand-copied mirror:
+    // `WarmupSchemeEditor.updateStep` is a thin wrapper over this call, so
+    // these tests can no longer drift from the code they document.
     private func applyEdit(
         to step: WarmupStep,
         kind: WarmupStepKind,
@@ -27,30 +30,25 @@ final class WarmupStepEditTests: SwiftDataTestHarness {
         note: String?,
         weight: Double?
     ) {
-        step.kind = kind
-        step.reps = reps
-        step.percentOfWorking = pct
-        step.restSecondsAfter = rest
-        step.note = note
-        step.weight = weight
-        try? context.save()
+        WarmupSchemeAuthoring.updateStep(
+            step,
+            in: owner(of: step),
+            kind: kind,
+            reps: reps,
+            percentOfWorking: pct,
+            restSecondsAfter: rest,
+            note: note,
+            weight: weight,
+            fallbackContext: context)
     }
 
-    // Mirrors `WarmupSchemeEditor.deleteSteps(at:)`: maps offsets from the
-    // *sorted* display list to steps, removes/deletes them, then renumbers the
-    // sorted survivors 0..<count (NOT the raw relationship array, which is the
-    // bug this test guards). Re-reads `scheme.steps` for the survivor sort so
-    // it is robust to unstable relationship-array ordering after a delete.
+    // The **production** delete path. Maps offsets from the *sorted* display
+    // list to steps, reassigns the relationship array without them, deletes
+    // them, then renumbers the sorted survivors 0..<count (NOT the raw
+    // relationship array, which is the bug these tests guard).
     private func deleteSteps(in scheme: WarmupScheme, at offsets: IndexSet) {
-        let sorted = scheme.steps.sorted { $0.order < $1.order }
-        for i in offsets {
-            let step = sorted[i]
-            scheme.steps.removeAll { $0.persistentModelID == step.persistentModelID }
-            context.delete(step)
-        }
-        let remaining = scheme.steps.sorted { $0.order < $1.order }
-        for (i, s) in remaining.enumerated() { s.order = i }
-        try? context.save()
+        WarmupSchemeAuthoring.deleteSteps(
+            at: offsets, in: owner(of: scheme), fallbackContext: context)
     }
 
     /// Notes of the scheme's steps in display (order-ascending) order.
@@ -58,12 +56,38 @@ final class WarmupStepEditTests: SwiftDataTestHarness {
         scheme.steps.sorted { $0.order < $1.order }.compactMap { $0.note }
     }
 
+    /// Owning prescription per scheme. The production authoring API is
+    /// addressed by prescription (it resolves the write context from the model
+    /// being edited — see `WarmupSchemeAuthoring`), so every fixture scheme
+    /// gets one and the tests look it back up rather than mirroring the code.
+    private var owners: [PersistentIdentifier: SlotPrescription] = [:]
+
+    private func owner(of scheme: WarmupScheme) -> SlotPrescription {
+        owners[scheme.persistentModelID] ?? makePrescription()
+    }
+
+    private func owner(of step: WarmupStep) -> SlotPrescription {
+        for (schemeID, prescription) in owners {
+            guard let scheme = context.model(for: schemeID) as? WarmupScheme
+            else { continue }
+            if scheme.steps.contains(where: {
+                $0.persistentModelID == step.persistentModelID
+            }) {
+                return prescription
+            }
+        }
+        return makePrescription()
+    }
+
     private func makeScheme(_ steps: [WarmupStep]) -> WarmupScheme {
         let scheme = WarmupScheme(name: "Warmup")
         context.insert(scheme)
         for s in steps { context.insert(s) }
         scheme.steps = steps
+        let prescription = makePrescription()
+        prescription.warmupScheme = scheme
         try? context.save()
+        owners[scheme.persistentModelID] = prescription
         return scheme
     }
 
@@ -259,11 +283,9 @@ final class WarmupStepEditTests: SwiftDataTestHarness {
 
     // MARK: - 6. Add appends immediately + preserves order.
 
-    /// Mirrors `WarmupSchemeEditor.addStep`: lazily creates the scheme on the
+    /// The **production** add path: lazily creates the scheme on the
     /// prescription, computes the next `order` from the max, inserts the step,
-    /// and appends via a **whole-array reassignment** (`steps + [step]`) — the
-    /// exact fix that makes the new row observable/render immediately. Kept in
-    /// lockstep with the production method.
+    /// and appends via a whole-array reassignment (`steps + [step]`).
     @discardableResult
     private func addStep(
         to prescription: SlotPrescription,
@@ -274,22 +296,18 @@ final class WarmupStepEditTests: SwiftDataTestHarness {
         note: String?,
         weight: Double?
     ) -> WarmupStep {
-        let scheme: WarmupScheme
-        if let existing = prescription.warmupScheme {
-            scheme = existing
-        } else {
-            let s = WarmupScheme(name: "Warmup")
-            context.insert(s)
-            prescription.warmupScheme = s
-            scheme = s
+        let step = WarmupSchemeAuthoring.addStep(
+            to: prescription,
+            kind: kind,
+            reps: reps,
+            percentOfWorking: pct,
+            restSecondsAfter: rest,
+            note: note,
+            weight: weight,
+            fallbackContext: context)
+        if let scheme = prescription.warmupScheme {
+            owners[scheme.persistentModelID] = prescription
         }
-        let nextOrder = (scheme.steps.map(\.order).max() ?? -1) + 1
-        let step = WarmupStep(order: nextOrder, kind: kind, reps: reps,
-                              percentOfWorking: pct, restSecondsAfter: rest,
-                              note: note, weight: weight)
-        context.insert(step)
-        scheme.steps = scheme.steps + [step]
-        try? context.save()
         return step
     }
 

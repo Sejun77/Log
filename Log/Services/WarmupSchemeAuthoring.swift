@@ -102,4 +102,128 @@ enum WarmupSchemeAuthoring {
         try? ctx.save()
         return step
     }
+
+    /// Write edited values back to an existing step.
+    ///
+    /// Only the passed step is mutated — `order` is deliberately left untouched
+    /// so reordering stays the sole owner of position. The kind-conditional
+    /// nil-ing happens in the edit sheet, so stale fields clear when the kind
+    /// changes.
+    static func updateStep(
+        _ step: WarmupStep,
+        in prescription: SlotPrescription,
+        kind: WarmupStepKind,
+        reps: Int?,
+        percentOfWorking: Double?,
+        restSecondsAfter: Int?,
+        note: String?,
+        weight: Double?,
+        fallbackContext: ModelContext
+    ) {
+        step.kind = kind
+        step.reps = reps
+        step.percentOfWorking = percentOfWorking
+        step.restSecondsAfter = restSecondsAfter
+        step.note = note
+        step.weight = weight
+        try? writeContext(for: prescription, fallback: fallbackContext).save()
+    }
+
+    /// Delete the steps at `offsets` **into the sorted display list**, then
+    /// renumber the survivors contiguously.
+    ///
+    /// Renumbering operates on the re-sorted survivors, never on the raw
+    /// relationship array: `scheme.steps` ordering is not guaranteed to match
+    /// `order`, so reindexing it directly could swap surviving rows.
+    static func deleteSteps(
+        at offsets: IndexSet,
+        in prescription: SlotPrescription,
+        fallbackContext: ModelContext
+    ) {
+        guard let scheme = prescription.warmupScheme else { return }
+        let ctx = writeContext(for: prescription, fallback: fallbackContext)
+        let sorted = WarmupSummary.steps(of: scheme)
+        let doomed = offsets.compactMap { $0 < sorted.count ? sorted[$0] : nil }
+        guard !doomed.isEmpty else { return }
+
+        let doomedIDs = Set(doomed.map(\.persistentModelID))
+        // Whole-array reassignment, not an in-place `removeAll` — same rule the
+        // append above follows, so a delete fires the relationship's mutation
+        // exactly like an add does.
+        scheme.steps = scheme.steps.filter {
+            !doomedIDs.contains($0.persistentModelID)
+        }
+        for step in doomed { ctx.delete(step) }
+
+        renumber(WarmupSummary.steps(of: scheme))
+        try? ctx.save()
+    }
+
+    /// Reorder the sorted display list and write the new positions back.
+    ///
+    /// `order` is the sole record of position — SwiftData does not promise any
+    /// particular ordering for a to-many relationship array, and `scheme.steps`
+    /// is observed to come back permuted after a save. The array is still
+    /// reassigned wholesale rather than mutated in place: that is what fires
+    /// the relationship's change notification, the same rule `addStep` and
+    /// `deleteSteps` follow. Read positions through `WarmupSummary.steps`,
+    /// never off the raw array.
+    static func moveSteps(
+        fromOffsets source: IndexSet,
+        toOffset destination: Int,
+        in prescription: SlotPrescription,
+        fallbackContext: ModelContext
+    ) {
+        guard let scheme = prescription.warmupScheme else { return }
+        var sorted = WarmupSummary.steps(of: scheme)
+        sorted.move(fromOffsets: source, toOffset: destination)
+        renumber(sorted)
+        scheme.steps = sorted
+        try? writeContext(for: prescription, fallback: fallbackContext).save()
+    }
+
+    /// Contiguous 0..<count in the given (display) order.
+    private static func renumber(_ steps: [WarmupStep]) {
+        for (index, step) in steps.enumerated() { step.order = index }
+    }
+}
+
+// ======================================================
+// MARK: - Warm-up read model — the one list source
+// ======================================================
+//
+// Both the warm-up editor's own list and the prescription row's `N steps`
+// preview used to compute their own answer inline, straight off
+// `prescription.warmupScheme?.steps`. Neither read is observed by the view that
+// performs it (see `WarmupSchemeRow` for why), and having two of them meant the
+// refresh fix had to be written twice and could be tested in neither place.
+//
+// These are pure functions of the scheme, so the render source and the preview
+// count are literally the same value, and both are unit-testable without a view.
+
+/// Sorted step list and step count for a warm-up scheme.
+@MainActor
+enum WarmupSummary {
+
+    /// The display order: ascending `order`, which is the sequence the editor
+    /// lists and the session freeze captures. Never the raw relationship array
+    /// — its ordering is not guaranteed to match `order`.
+    static func steps(of scheme: WarmupScheme?) -> [WarmupStep] {
+        (scheme?.steps ?? []).sorted { $0.order < $1.order }
+    }
+
+    /// Same list, addressed from the prescription.
+    static func steps(of prescription: SlotPrescription?) -> [WarmupStep] {
+        steps(of: prescription?.warmupScheme)
+    }
+
+    /// How many steps the preview reports — the same relationship the editor
+    /// lists, so the row can never disagree with the screen it pushes.
+    ///
+    /// The `N steps` wording stays in the view: it is a `LocalizedStringKey`
+    /// interpolation (catalog key `%lld step%@`, already translated), and
+    /// rebuilding it here as a `String` would orphan that translation.
+    static func stepCount(of prescription: SlotPrescription?) -> Int {
+        prescription?.warmupScheme?.steps.count ?? 0
+    }
 }

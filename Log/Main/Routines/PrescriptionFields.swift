@@ -112,26 +112,11 @@ struct SlotPrescriptionSection: View {
                 // warm-up. Any stored scheme is left untouched — hidden, not
                 // deleted — so a slot switched back to strength still has it.
                 if CardioRoutineRules.showsWarmupScheme(trackingMode) {
-                    NavigationLink {
-                        WarmupSchemeEditor(
-                            prescription: prescription,
-                            isBodyweight: isBodyweightEquipment(re.exercise?.equipmentType),
-                            onGraphChange: onNestedGraphChange
-                        )
-                    } label: {
-                        HStack {
-                            Text("Warmup")
-                            Spacer()
-                            let count = prescription.warmupScheme?.steps.count ?? 0
-                            if count > 0 {
-                                Text("\(count) step\(count == 1 ? "" : "s")")
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text("None")
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+                    WarmupSchemeRow(
+                        prescription: prescription,
+                        isBodyweight: isBodyweightEquipment(
+                            re.exercise?.equipmentType),
+                        onGraphChange: onNestedGraphChange)
                 }
 
                 // Phase 3.5: Technique plans navigation. Hidden for cardio —
@@ -264,6 +249,80 @@ struct SlotPrescriptionSection: View {
         }
 
         if didChange { try? ctx.save() }
+    }
+}
+
+// ======================================================
+// MARK: - The warm-up prescription row
+// ======================================================
+
+/// `Warmup        2 steps ›` — the slot's warm-up preview, and the push into
+/// `WarmupSchemeEditor`.
+///
+/// Its **own** view, holding its own `@Bindable` and its own revision token,
+/// for the same reason `AlternativeExercisesRow` is one: the count it shows
+/// lives on `prescription.warmupScheme.steps`, two models below
+/// `SlotPrescriptionSection`'s `@Bindable var re`. Nothing the warm-up editor
+/// does writes a property of `re`, so read from the section directly the count
+/// was never invalidated and stayed stale until the whole screen was rebuilt —
+/// the "preview does not update until the page is reopened" half of the report.
+///
+/// Binding the prescription here closes one level. The other level — the
+/// scheme's own `steps` array — is closed by `graphRevision`: writing it
+/// invalidates this row unconditionally, and it is written from the
+/// `onGraphChange` hook the pushed editor already calls after every add, edit,
+/// delete and move. That hook fires while this row sits behind the push, so
+/// the count is already correct by the time the user pops back to it.
+///
+/// View state only: no schema field, no forced reload. The count is still read
+/// straight off the live relationship — the token decides only *when* it is
+/// re-read, and a row whose state a lazy list discards simply reads it fresh.
+private struct WarmupSchemeRow: View {
+    @Bindable var prescription: SlotPrescription
+    var isBodyweight: Bool
+    /// Forwarded from `SlotPrescriptionSection`. Nil for a routine slot, whose
+    /// prescription is already the stored model; non-nil for a prepared
+    /// alternative, where it commits the scratch draft. Either way the local
+    /// refresh below happens first, so a normal routine slot's preview updates
+    /// immediately without needing a commit path at all.
+    var onGraphChange: (() -> Void)?
+
+    @State private var graphRevision = 0
+
+    /// Re-read on every bump. The `_ = graphRevision` read does not create the
+    /// dependency (writing the token already invalidates the view); it marks
+    /// this as the value the token exists to refresh.
+    private var stepCount: Int {
+        _ = graphRevision
+        return WarmupSummary.stepCount(of: prescription)
+    }
+
+    var body: some View {
+        NavigationLink {
+            WarmupSchemeEditor(
+                prescription: prescription,
+                isBodyweight: isBodyweight,
+                onGraphChange: {
+                    graphRevision &+= 1
+                    onGraphChange?()
+                }
+            )
+        } label: {
+            HStack {
+                Text("Warmup")
+                Spacer()
+                let count = stepCount
+                if count > 0 {
+                    // Left as a `LocalizedStringKey` interpolation: this is the
+                    // catalog key `%lld step%@`, which is already translated.
+                    Text("\(count) step\(count == 1 ? "" : "s")")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("None")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 }
 

@@ -42,9 +42,42 @@ struct WarmupSchemeEditor: View {
     /// intentionally dropped — `EditButton` still drives reordering via
     /// `.onMove`.
     @State private var pendingDeleteOffsets: IndexSet? = nil
+    /// Bumped after **every** warm-up graph mutation this editor makes.
+    ///
+    /// The list is rendered from `prescription.warmupScheme?.steps` — a
+    /// property of the `WarmupScheme`, which is a **grandchild** of the model
+    /// this view actually binds. `@Bindable var prescription` invalidates this
+    /// body when a property of the *prescription* changes, which happens on
+    /// exactly one warm-up mutation: `prescription.warmupScheme = s`, the
+    /// lazy scheme creation on the very first add. Every other mutation —
+    /// each subsequent add, an edit, a delete, a move, and notably the first
+    /// add *after* a delete emptied a scheme that is still attached — writes
+    /// only to the scheme and its steps, so nothing invalidates this body and
+    /// the list keeps rendering the array it read last. Re-pushing the editor
+    /// rebuilds it and the missing row appears, which is the reported symptom.
+    ///
+    /// This is the same nested-`@Model` observation gap
+    /// `RoutineEditor.blockSummaryRefresh` and `SupersetSetCountLabel` already
+    /// work around, and it is a defect in both simulator and device — the
+    /// simulator only masks it, because its cheaper layout/animation passes
+    /// re-evaluate this body for incidental reasons (the add sheet's dismissal
+    /// among them) often enough to hide the stale read.
+    ///
+    /// **Writing** this `@State` is what invalidates the view — SwiftUI does
+    /// that unconditionally, whether or not the body reads it — so the body
+    /// re-evaluates, re-reads the relationship, and renders the change in the
+    /// frame it was made. It is view state only: nothing is persisted, and no
+    /// schema field exists to force observation.
+    @State private var graphRevision = 0
 
+    /// The list source. The `_ = graphRevision` read does not create the
+    /// dependency (the write above already did); it marks this as the value the
+    /// token exists to refresh, so deleting the token breaks the build rather
+    /// than silently restoring the stale-list bug. Same shape as
+    /// `RoutineEditor.blocksSection`.
     private var sortedSteps: [WarmupStep] {
-        (prescription.warmupScheme?.steps ?? []).sorted { $0.order < $1.order }
+        _ = graphRevision
+        return WarmupSummary.steps(of: prescription)
     }
 
     var body: some View {
@@ -96,7 +129,7 @@ struct WarmupSchemeEditor: View {
 
     private var schemeSummarySection: some View {
         Section {
-            let count = prescription.warmupScheme?.steps.count ?? 0
+            let count = sortedSteps.count
             if count == 0 {
                 Text("No warmup steps. Tap + to add one.")
                     .foregroundStyle(.secondary)
@@ -157,19 +190,22 @@ struct WarmupSchemeEditor: View {
         }
     }
 
-    /// The store this editor writes into: **the one the edited prescription
-    /// already lives in**, not whatever `@Environment(\.modelContext)` resolves
-    /// to.
+    // Every mutation below delegates to `WarmupSchemeAuthoring`, which resolves
+    // the store to write into from **the prescription being edited** rather
+    // than from `@Environment(\.modelContext)` — the difference that keeps a
+    // prepared alternative's scratch rows out of the user's database, and out
+    // of the cross-container `fatalError` documented there. `ctx` is passed as
+    // the fallback for a prescription not yet registered anywhere.
+
+    /// The one funnel every mutation below returns through.
     ///
-    /// For every routine slot the two are the same object, so ordinary warm-up
-    /// editing is unchanged. They differ for the scratch slot the Alternative
-    /// Exercises detail editor binds this editor to, which lives in
-    /// `AlternativeDraftStore`'s own in-memory container: writing there through
-    /// the environment created the scheme in the *app's* store and then related
-    /// it to a model from another container, which SwiftData traps on. See
-    /// `WarmupSchemeAuthoring` for the full crash note.
-    private var writeContext: ModelContext {
-        WarmupSchemeAuthoring.writeContext(for: prescription, fallback: ctx)
+    /// Bumps the local revision so this editor re-renders immediately (see
+    /// `graphRevision`), then reports the change outward so whoever owns the
+    /// prescription can refresh its own preview and — for a prepared
+    /// alternative — commit the scratch draft.
+    private func didChangeGraph() {
+        graphRevision &+= 1
+        onGraphChange?()
     }
 
     private func addStep(kind: WarmupStepKind, reps: Int?, pct: Double?, rest: Int?, note: String?, weight: Double?) {
@@ -182,7 +218,7 @@ struct WarmupSchemeEditor: View {
             note: note,
             weight: weight,
             fallbackContext: ctx)
-        onGraphChange?()
+        didChangeGraph()
     }
 
     /// Writes edited values back to an existing step (edit mode). Only the
@@ -190,45 +226,30 @@ struct WarmupSchemeEditor: View {
     /// reordering stays the sole owner of position. The kind-conditional
     /// nil-ing happens in the sheet, so stale fields clear when kind changes.
     private func updateStep(_ step: WarmupStep, kind: WarmupStepKind, reps: Int?, pct: Double?, rest: Int?, note: String?, weight: Double?) {
-        step.kind = kind
-        step.reps = reps
-        step.percentOfWorking = pct
-        step.restSecondsAfter = rest
-        step.note = note
-        step.weight = weight
-        try? writeContext.save()
-        onGraphChange?()
+        WarmupSchemeAuthoring.updateStep(
+            step,
+            in: prescription,
+            kind: kind,
+            reps: reps,
+            percentOfWorking: pct,
+            restSecondsAfter: rest,
+            note: note,
+            weight: weight,
+            fallbackContext: ctx)
+        didChangeGraph()
     }
 
     private func deleteSteps(at offsets: IndexSet) {
-        guard let scheme = prescription.warmupScheme else { return }
-        let ctx = writeContext
-        let sorted = sortedSteps
-        for i in offsets {
-            let step = sorted[i]
-            scheme.steps.removeAll { $0.id == step.id }
-            ctx.delete(step)
-        }
-        // Renumber the *sorted* remaining steps, not the raw relationship
-        // array: `scheme.steps` ordering is not guaranteed to match `order`,
-        // so renumbering it directly could swap surviving rows. Re-sorting by
-        // `order` first preserves their relative order before reindexing.
-        renumber(sortedSteps)
-        try? ctx.save()
-        onGraphChange?()
+        WarmupSchemeAuthoring.deleteSteps(
+            at: offsets, in: prescription, fallbackContext: ctx)
+        didChangeGraph()
     }
 
     private func moveSteps(from source: IndexSet, to destination: Int) {
-        guard let scheme = prescription.warmupScheme else { return }
-        var sorted = sortedSteps
-        sorted.move(fromOffsets: source, toOffset: destination)
-        renumber(sorted)
-        try? writeContext.save()
-        onGraphChange?()
-    }
-
-    private func renumber(_ steps: [WarmupStep]) {
-        for (i, s) in steps.enumerated() { s.order = i }
+        WarmupSchemeAuthoring.moveSteps(
+            fromOffsets: source, toOffset: destination,
+            in: prescription, fallbackContext: ctx)
+        didChangeGraph()
     }
 }
 
