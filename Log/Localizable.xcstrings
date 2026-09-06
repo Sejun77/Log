@@ -5055,18 +5055,6 @@
         }
       }
     },
-    "Ticking segments only marks your place in this workout. The ticks are not saved as results and are cleared when the workout ends — your cardio is still logged once, from the duration and details below." : {
-      "comment" : "Active workout Cardio Plan checklist info button. Says both halves of the rule: the ticks are scoped to this workout, and they are never a result \u2014 the bout is still logged once from the duration and Details fields below. Replaced a permanent section footer.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "구간을 체크해도 이번 운동에서의 진행 위치만 표시됩니다. 체크는 결과로 저장되지 않으며 운동이 끝나면 사라집니다. 유산소 기록은 아래의 시간과 세부 정보로 한 번만 기록됩니다."
-          }
-        }
-      }
-    },
     "Time-based" : {
       "localizations" : {
         "ko" : {
@@ -5212,6 +5200,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "달리기, 사이클, 로잉, 걷기 또는 유산소 머신에 사용하세요."
+          }
+        }
+      }
+    },
+    "Use these checkmarks to track your place in the plan. History shows the Cardio Plan you followed; your cardio result itself is logged from the duration and details below." : {
+      "comment" : "Active workout Cardio Plan checklist info button. Answers which of the two similar-looking lists is the result: History renders the planned segments under the same \"Cardio Plan\" header and layout as this checklist, which is why the previous wording (\"not saved as results\") read as false. Deliberately makes no claim about whether a tick is stored.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "체크 표시는 계획에서 어디까지 진행했는지 표시하는 용도입니다. 기록에는 진행한 유산소 계획이 표시되며, 실제 유산소 결과는 아래의 시간과 세부 정보로 기록됩니다."
           }
         }
       }

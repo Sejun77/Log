@@ -1180,9 +1180,9 @@ final class KoreanLocalizationTests: XCTestCase {
         XCTAssertEqual(localized("Start Workout", in: en), "Start Workout")
     }
 
-    /// Audit M2, after the density pass moved it behind an info button: the
-    /// Cardio Plan checklist still says what a tick is worth, in both
-    /// languages, and now says both halves of the rule.
+    /// Audit M2, after the density pass moved it behind an info button and the
+    /// copy fix corrected what it claims: the Cardio Plan checklist explains
+    /// what the checkmarks are for, in both languages.
     func testCardioChecklistInfoMessageLocalizes() throws {
         let ko = try XCTUnwrap(localizationBundle("ko"))
         let en = try XCTUnwrap(localizationBundle("en"))
@@ -1193,16 +1193,55 @@ final class KoreanLocalizationTests: XCTestCase {
             korean, key,
             "the info message must be translated, not fall through to English")
         XCTAssertEqual(localized(key, in: en), key)
-        // The two halves the copy exists to state.
+        // The progress purpose...
         XCTAssertTrue(
-            korean.contains("결과로 저장되지 않으며"),
-            "Korean lost the 'not saved as results' half: \(korean)")
+            korean.contains("어디까지 진행했는지"),
+            "Korean lost the progress-tracking purpose: \(korean)")
+        // ...and the plan-versus-result distinction, both halves named.
         XCTAssertTrue(
-            korean.contains("운동이 끝나면 사라집니다"),
-            "Korean lost the 'session-only' half: \(korean)")
+            korean.contains("기록에는"),
+            "Korean lost the History clause: \(korean)")
+        XCTAssertTrue(
+            korean.contains("실제 유산소 결과는"),
+            "Korean lost the actual-result clause: \(korean)")
+        XCTAssertTrue(
+            korean.contains("시간과 세부 정보로"),
+            "Korean lost where the result is logged from: \(korean)")
         // The alert's title is the section header the glyph sits in.
         XCTAssertEqual(
             localized(CardioChecklistHelp.title, in: ko), "유산소 계획")
+    }
+
+    /// The Korean must not re-introduce the claims the English dropped. The
+    /// first version said the ticks were not saved and disappeared at the end
+    /// of the workout; a user who finds their Cardio Plan in History reads that
+    /// as false, whichever language they read it in.
+    func testCardioChecklistKoreanMakesNoStorageClaim() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let korean = localized(CardioChecklistHelp.message, in: ko)
+
+        for banned in [
+            "저장되지 않",      // "is not saved"
+            "사라집니다",        // "disappears"
+            "삭제됩니다",        // "is deleted"
+            "표시되지 않",      // "is not shown"
+        ] {
+            XCTAssertFalse(
+                korean.contains(banned),
+                "Korean re-introduced the inaccurate claim '\(banned)': "
+                    + korean)
+        }
+    }
+
+    /// The first info message — the one that was factually wrong — is gone from
+    /// the catalog, so it cannot be resurrected by a stale reference.
+    func testTheInaccurateChecklistInfoMessageIsGone() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let retired = "Ticking segments only marks your place in this workout. The ticks are not saved as results and are cleared when the workout ends — your cardio is still logged once, from the duration and details below."
+        XCTAssertEqual(
+            localized(retired, in: ko), retired,
+            "the retired info message still has a Korean entry, which means "
+                + "the inaccurate key was left in the catalog")
     }
 
     /// The permanent footer this replaced is gone from the catalog, so it
