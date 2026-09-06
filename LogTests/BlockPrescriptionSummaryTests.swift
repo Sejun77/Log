@@ -420,16 +420,18 @@ final class BlockPrescriptionSummaryTests: SwiftDataTestHarness {
         )
     }
 
-    /// A superset states **that** effort targets exist, never what they are.
+    /// A superset row carries **no effort clause at all** — neither the values
+    /// nor a count of them.
     ///
-    /// This test previously pinned "a superset ignores the effort metric
-    /// entirely", which was the pre-L7 rule: per-slot targets are ambiguous
-    /// block-level, so none were shown. The audit's L7 found the cost — a
-    /// member with a full custom ramp was indistinguishable in the routine list
-    /// from one with no target — so the values stay out and a count goes in.
-    /// The half that has not changed, and is asserted here, is that no RIR/RPE
-    /// value reaches the row.
-    func testSupersetMarksEffortWithoutNamingValues() {
+    /// This assertion has moved twice. It first pinned "a superset ignores the
+    /// effort metric entirely"; audit L7 replaced that with a count marker, on
+    /// the reasoning that a member with a full custom ramp should not look
+    /// identical to one with no target; the density pass reverted the marker,
+    /// because a count the user cannot act on is not worth a row segment when
+    /// the values behind it are deliberately withheld. The half that has never
+    /// changed, and is still asserted here, is that no RIR/RPE value reaches
+    /// the row.
+    func testSupersetShowsNeitherEffortValuesNorACount() {
         let block = makeBlock(isSuperset: true, slots: [
             makeSlot(sets: 3, order: 0, rir: 2, effortModeRaw: "single"),
             makeSlot(sets: 3, order: 1, rir: 2, effortModeRaw: "single"),
@@ -437,10 +439,66 @@ final class BlockPrescriptionSummaryTests: SwiftDataTestHarness {
         let subtitle = BlockPrescriptionSummary(
             block: block, effortMetric: .rir).subtitle
 
-        XCTAssertEqual(
-            subtitle, "Superset · 2 exercises · 3 sets · 2 effort targets")
+        XCTAssertEqual(subtitle, "Superset · 2 exercises · 3 sets")
+        // No values...
         XCTAssertFalse(subtitle.contains("RIR"))
+        XCTAssertFalse(subtitle.contains("RPE"))
         XCTAssertFalse(subtitle.contains("2 → "))
+        // ...and no count marker either.
+        XCTAssertFalse(subtitle.localizedCaseInsensitiveContains("effort"))
+    }
+
+    /// The metric is inert on a superset: passing one, or none, produces the
+    /// identical row. Guards the branch where `effortMetric` is now unused.
+    func testSupersetSubtitleIsIdenticalWithAndWithoutAMetric() {
+        let block = makeBlock(isSuperset: true, slots: [
+            makeSlot(sets: 4, order: 0, rir: 1, effortModeRaw: "single"),
+            makeSlot(
+                sets: 4, order: 1, effortModeRaw: "progression",
+                rirStart: 3, rirEnd: 0),
+        ])
+
+        let withMetric = BlockPrescriptionSummary(
+            block: block, effortMetric: .rir).subtitle
+        let withoutMetric = BlockPrescriptionSummary(block: block).subtitle
+
+        XCTAssertEqual(withMetric, withoutMetric)
+        XCTAssertEqual(withMetric, "Superset · 2 exercises · 4 sets")
+    }
+
+    /// A superset whose members carry a **custom per-set ramp** — the case L7
+    /// was introduced for — is still worded exactly like one with no targets.
+    func testSupersetWithCustomRampsShowsNoMarker() {
+        let ramped = makeSlot(sets: 3, order: 0, effortModeRaw: "custom")
+        ramped.prescription?.customRIRTargetsRaw = "3,2,1"
+        let block = makeBlock(
+            isSuperset: true, slots: [ramped, makeSlot(sets: 3, order: 1)])
+
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            "Superset · 2 exercises · 3 sets")
+    }
+
+    /// The other half of the rule: removing the superset marker did **not**
+    /// touch how a single-exercise block words its effort. Single, progression
+    /// and custom all still render their values.
+    func testSingleExerciseEffortSummariesAreUnchanged() {
+        let single = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12, rir: 2,
+                     effortModeRaw: "single"),
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: single, effortMetric: .rir).subtitle,
+            "3 × 8–12 · RIR 2")
+
+        let progression = makeBlock(isSuperset: false, slots: [
+            makeSlot(sets: 3, repMin: 8, repMax: 12,
+                     effortModeRaw: "progression", rirStart: 2, rirEnd: 0),
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(
+                block: progression, effortMetric: .rir).subtitle,
+            "3 × 8–12 · RIR 2 → 0")
     }
 
     // MARK: - map(for:)
@@ -594,93 +652,63 @@ final class BlockPrescriptionSummaryTests: SwiftDataTestHarness {
             BlockPrescriptionSummary(sets: 3, repMin: 8).subtitle, "3 × 8")
     }
 
-    // MARK: - Superset effort marker (Build 10, audit L7)
+    // MARK: - Superset effort clause: removed (density pass)
 
-    /// A superset member with a full custom per-set ramp used to look
-    /// identical in the routine list to one with no target at all.
-    func testSupersetMarksThatEffortTargetsExist() {
-        XCTAssertEqual(
-            BlockPrescriptionSummary(
-                supersetExerciseCount: 3, maxSets: 3, effortTargetMembers: 2
-            ).subtitle,
-            "Superset · 3 exercises · 3 sets · 2 effort targets"
-        )
-    }
+    // Build 10's audit L7 added a count marker here — `"… · 2 effort targets"`
+    // — because a member with a full custom ramp looked identical in the
+    // routine list to one with no target. The density pass reverted it: a bare
+    // count is not worth a row segment when the values behind it are
+    // deliberately withheld, since it answers only "is something set?", which
+    // the user must open the block to act on either way. These tests are the
+    // former marker tests, inverted — they now pin that no effort clause of any
+    // kind reaches a superset row.
 
-    func testSupersetEffortMarkerIsSingularForOneMember() {
-        XCTAssertEqual(
-            BlockPrescriptionSummary(
-                supersetExerciseCount: 2, maxSets: 4, effortTargetMembers: 1
-            ).subtitle,
-            "Superset · 2 exercises · 4 sets · 1 effort target"
-        )
-    }
-
-    /// A superset with no effort target is worded exactly as before — the
-    /// marker is additive, never a placeholder.
-    func testSupersetWithNoEffortIsUnchanged() {
-        XCTAssertEqual(
-            BlockPrescriptionSummary(
-                supersetExerciseCount: 3, maxSets: 3, effortTargetMembers: 0
-            ).subtitle,
-            "Superset · 3 exercises · 3 sets"
-        )
-        XCTAssertEqual(
-            BlockPrescriptionSummary(supersetExerciseCount: 3, maxSets: 3)
-                .subtitle,
-            "Superset · 3 exercises · 3 sets",
-            "the default keeps every pre-existing call site's wording"
-        )
-    }
-
-    /// The marker is a count, deliberately — never the values, which are
-    /// per-slot and would make the row unreadable.
-    func testSupersetMarkerNamesNoValues() {
+    /// The value-in initializer has no effort parameter at all, so no caller
+    /// can reintroduce a marker without changing the type.
+    func testSupersetValueInSubtitleHasNoEffortClause() {
         let subtitle = BlockPrescriptionSummary(
-            supersetExerciseCount: 2, maxSets: 3, effortTargetMembers: 2
+            supersetExerciseCount: 3, maxSets: 3
         ).subtitle
-        XCTAssertFalse(subtitle.contains("RIR"))
-        XCTAssertFalse(subtitle.contains("RPE"))
+        XCTAssertEqual(subtitle, "Superset · 3 exercises · 3 sets")
+        XCTAssertFalse(subtitle.localizedCaseInsensitiveContains("effort"))
     }
 
-    /// From live models: only members with a usable target in the caller's
-    /// metric are counted, through the same resolver the normal branch words
-    /// its effort with.
-    func testSupersetEffortMarkerFromModel() {
-        let slots = [
+    /// From live models: members carrying real targets in the caller's metric
+    /// produce exactly the same row as members carrying none. This is the
+    /// direct inversion of `testSupersetEffortMarkerFromModel`.
+    func testSupersetFromModelShowsNoMarkerHoweverManyMembersHaveTargets() {
+        let withTargets = makeBlock(isSuperset: true, slots: [
             makeSlot(sets: 3, order: 0, rir: 2),
             makeSlot(sets: 3, order: 1),
             makeSlot(sets: 3, order: 2, rir: 1),
-        ]
-        let block = makeBlock(isSuperset: true, slots: slots)
-        XCTAssertEqual(
-            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
-            "Superset · 3 exercises · 3 sets · 2 effort targets"
-        )
-    }
-
-    /// Autoregulation off means there is no metric to state a target in, so
-    /// nothing is marked — matching every other effort display in the app.
-    func testSupersetEffortMarkerAbsentWhenAutoregIsOff() {
-        let slots = [
-            makeSlot(sets: 3, order: 0, rir: 2),
-            makeSlot(sets: 3, order: 1, rir: 1),
-        ]
-        let block = makeBlock(isSuperset: true, slots: slots)
-        XCTAssertEqual(
-            BlockPrescriptionSummary(block: block, effortMetric: nil).subtitle,
-            "Superset · 2 exercises · 3 sets"
-        )
-    }
-
-    func testSupersetWithNoTargetsFromModelIsUnchanged() {
-        let slots = [
+        ])
+        let withoutTargets = makeBlock(isSuperset: true, slots: [
             makeSlot(sets: 3, order: 0),
             makeSlot(sets: 3, order: 1),
-        ]
-        let block = makeBlock(isSuperset: true, slots: slots)
+            makeSlot(sets: 3, order: 2),
+        ])
+
+        let expected = "Superset · 3 exercises · 3 sets"
         XCTAssertEqual(
-            BlockPrescriptionSummary(block: block, effortMetric: .rir).subtitle,
+            BlockPrescriptionSummary(
+                block: withTargets, effortMetric: .rir).subtitle,
+            expected)
+        XCTAssertEqual(
+            BlockPrescriptionSummary(
+                block: withoutTargets, effortMetric: .rir).subtitle,
+            expected,
+            "a superset with targets must read exactly like one without")
+    }
+
+    /// Autoregulation off was already a no-marker case and still is — the row
+    /// is unchanged by the metric in every direction.
+    func testSupersetIsUnchangedWhenAutoregIsOff() {
+        let block = makeBlock(isSuperset: true, slots: [
+            makeSlot(sets: 3, order: 0, rir: 2),
+            makeSlot(sets: 3, order: 1, rir: 1),
+        ])
+        XCTAssertEqual(
+            BlockPrescriptionSummary(block: block, effortMetric: nil).subtitle,
             "Superset · 2 exercises · 3 sets"
         )
     }
