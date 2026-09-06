@@ -13,45 +13,77 @@ struct RoutineBlockDetailView: View {
     /// row already communicates the lock state to the user.
     var isRoutineLocked: Bool = false
 
+    /// Resolved member names in execution order — the same list the navigation
+    /// title is built from, so the title and the header decision below cannot
+    /// disagree about what this screen already says.
+    private var memberNames: [String] {
+        block.exercises
+            .sorted { $0.order < $1.order }
+            .compactMap { $0.safeExercise(in: ctx)?.name }
+    }
+
+    /// The set-template rows for one member. Extracted so the two Section
+    /// shapes below — with and without a name header — share one body instead
+    /// of duplicating it.
+    @ViewBuilder
+    private func setRows(for re: RoutineExercise, ex: Exercise) -> some View {
+        let templates = re.resolvedTemplates(in: ctx)
+        ForEach(templates.indices, id: \.self) { i in
+            let t = templates[i]
+            HStack {
+                Text("\(i + 1). \(t.kind.historyRowLabel)")
+                Spacer()
+
+                if ex.isTimeBased {
+                    Text("Duration \((t.durationSeconds ?? 0))s")
+                        .monospacedDigit()
+                    if let rest = t.restSecondsAfter, rest > 0 {
+                        Text("· \(rest)s")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Reps \(t.targetReps)")
+                        .monospacedDigit()
+                    if let rest = t.restSecondsAfter, rest > 0 {
+                        Text("· \(rest)s")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    if let w = t.targetWeight, w > 0 {
+                        let unit = Units.weightIsKg ? "kg" : "lb"
+                        Text("· \(Units.formatWeight(w)) \(unit)")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         List {
+            // False for the ordinary case — one exercise, whose name is already
+            // the navigation title — so the name is not printed twice within
+            // one screen height. See `BlockDetailMemberHeader`.
+            //
+            // The whole `Section` is branched rather than just its header: a
+            // conditional *inside* a header ViewBuilder still yields a header
+            // view, and a grouped List reserves its inset for one. Since the
+            // point of dropping the name is the vertical space it costs, the
+            // headerless form has to be a genuinely headerless Section.
+            let showsHeaders = BlockDetailMemberHeader.showsMemberHeaders(
+                exerciseNames: memberNames, isSuperset: false)
+
             ForEach(block.exercises.sorted { $0.order < $1.order }) { re in
                 if let ex = re.safeExercise(in: ctx) {
-                    Section(header: Text(ex.name)) {
-                        let templates = re.resolvedTemplates(in: ctx)
-                        ForEach(templates.indices, id: \.self) { i in
-                            let t = templates[i]
-                            HStack {
-                                Text("\(i + 1). \(t.kind.historyRowLabel)")
-                                Spacer()
-
-                                if ex.isTimeBased {
-                                    Text(
-                                        "Duration \((t.durationSeconds ?? 0))s"
-                                    )
-                                    .monospacedDigit()
-                                    if let rest = t.restSecondsAfter, rest > 0 {
-                                        Text("· \(rest)s")
-                                            .monospacedDigit()
-                                            .foregroundStyle(.secondary)
-                                    }
-                                } else {
-                                    Text("Reps \(t.targetReps)")
-                                        .monospacedDigit()
-                                    if let rest = t.restSecondsAfter, rest > 0 {
-                                        Text("· \(rest)s")
-                                            .monospacedDigit()
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    if let w = t.targetWeight, w > 0 {
-                                        let unit =
-                                            Units.weightIsKg ? "kg" : "lb"
-                                        Text("· \(Units.formatWeight(w)) \(unit)")
-                                            .monospacedDigit()
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
+                    if showsHeaders {
+                        Section(header: Text(ex.name)) {
+                            setRows(for: re, ex: ex)
+                        }
+                    } else {
+                        Section {
+                            setRows(for: re, ex: ex)
                         }
                     }
                     SlotPrescriptionSection(
@@ -258,6 +290,31 @@ struct SupersetDetailNoRest: View {
         block.exercises.count > 2
     }
 
+    /// A section header carrying its explanation behind the app's `InfoButton`
+    /// instead of a permanent footer under the section.
+    ///
+    /// The three explanations on this screen described how the screen works —
+    /// read once, then occupying a footer's height on every render afterwards.
+    /// The glyph is the idiom the app already uses for exactly this
+    /// (`SettingsView`'s Bodyweight and Autoregulation headers, the
+    /// effort-mode picker's caption), so this is a move, not a new pattern.
+    ///
+    /// `label` defaults to the alert `title` for the two sections whose header
+    /// text and alert title are the same word.
+    private func infoHeader(
+        _ label: LocalizedStringKey? = nil,
+        title: String,
+        message: String
+    ) -> some View {
+        HStack(spacing: DSSpacing.xs) {
+            Text(label ?? LocalizedStringKey(title))
+            InfoButton(
+                LocalizedStringKey(title),
+                message: LocalizedStringKey(message))
+            Spacer()
+        }
+    }
+
     var body: some View {
         List {
             Section {
@@ -287,9 +344,14 @@ struct SupersetDetailNoRest: View {
                 )
                 .disabled(isRoutineLocked)
             } header: {
-                Text("Timing")
-            } footer: {
-                Text("A round runs one set of each exercise that still has sets remaining; shorter exercises drop out of the later rounds. Rest after round fires between completed rounds. Rest before next block fires after the final round, replacing round rest.")
+                // Explanation moved off a permanent footer and behind the info
+                // glyph, in the header idiom Settings and the effort-mode
+                // picker already use. The literal is unchanged, so it resolves
+                // to the key it always had and keeps its Korean — see
+                // `SupersetHelp`.
+                infoHeader(
+                    title: SupersetHelp.timingTitle,
+                    message: SupersetHelp.timingMessage)
             }
 
             Section {
@@ -308,9 +370,9 @@ struct SupersetDetailNoRest: View {
                 }
                 .disabled(isRoutineLocked)
             } header: {
-                Text("Set All Exercises")
-            } footer: {
-                Text("Optional shortcut. Choose a count, then tap Apply to set every exercise in this superset to that many sets at once. Adjusting the stepper alone changes nothing — each exercise still keeps its own set count (edit it in that exercise's section below), so they can differ.")
+                infoHeader(
+                    title: SupersetHelp.bulkSetsTitle,
+                    message: SupersetHelp.bulkSetsMessage)
             }
 
             Section {
@@ -366,9 +428,13 @@ struct SupersetDetailNoRest: View {
                 .onMove(perform: moveExercises)
                 .moveDisabled(isRoutineLocked)
             } header: {
-                Text("Exercises (drag to reorder)")
-            } footer: {
-                Text("A superset must keep at least 2 exercises. The same exercise can appear more than once — each slot logs independently.")
+                // The header keeps its longer wording: "(drag to reorder)" is
+                // an affordance hint, not an explanation, so it stays on
+                // screen. Only the membership *rules* moved behind the glyph.
+                infoHeader(
+                    "Exercises (drag to reorder)",
+                    title: SupersetHelp.membershipTitle,
+                    message: SupersetHelp.membershipMessage)
             }
 
             ForEach(block.exercises.sorted { $0.order < $1.order }) { re in

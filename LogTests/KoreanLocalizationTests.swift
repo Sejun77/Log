@@ -1180,16 +1180,75 @@ final class KoreanLocalizationTests: XCTestCase {
         XCTAssertEqual(localized("Start Workout", in: en), "Start Workout")
     }
 
-    /// Audit M2 — the Cardio Plan checklist says what a tick is worth.
-    func testCardioChecklistSessionOnlyCaptionLocalizes() throws {
+    /// Audit M2, after the density pass moved it behind an info button: the
+    /// Cardio Plan checklist still says what a tick is worth, in both
+    /// languages, and now says both halves of the rule.
+    func testCardioChecklistInfoMessageLocalizes() throws {
         let ko = try XCTUnwrap(localizationBundle("ko"))
-        let korean = localized(
-            "Checklist only — not saved as results.", in: ko)
+        let en = try XCTUnwrap(localizationBundle("en"))
+        let key = CardioChecklistHelp.message
+        let korean = localized(key, in: ko)
 
-        XCTAssertEqual(korean, "체크리스트 전용 — 결과로 저장되지 않음")
         XCTAssertNotEqual(
-            korean, "Checklist only — not saved as results.",
-            "the caption must be translated, not fall through to English")
+            korean, key,
+            "the info message must be translated, not fall through to English")
+        XCTAssertEqual(localized(key, in: en), key)
+        // The two halves the copy exists to state.
+        XCTAssertTrue(
+            korean.contains("결과로 저장되지 않으며"),
+            "Korean lost the 'not saved as results' half: \(korean)")
+        XCTAssertTrue(
+            korean.contains("운동이 끝나면 사라집니다"),
+            "Korean lost the 'session-only' half: \(korean)")
+        // The alert's title is the section header the glyph sits in.
+        XCTAssertEqual(
+            localized(CardioChecklistHelp.title, in: ko), "유산소 계획")
+    }
+
+    /// The permanent footer this replaced is gone from the catalog, so it
+    /// cannot quietly come back as dead weight on the active workout screen.
+    func testTheOldChecklistFooterCaptionIsGone() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let retired = "Checklist only — not saved as results."
+        XCTAssertEqual(
+            localized(retired, in: ko), retired,
+            "the retired footer caption still has a Korean entry, which means "
+                + "the key was left in the catalog")
+    }
+
+    /// The three superset explanations moved from permanent footers to info
+    /// buttons **without changing their strings**, so each must still resolve
+    /// to the Korean it already had. A reworded literal in `SupersetHelp`
+    /// would silently fall through to English; this is what catches that.
+    func testSupersetInfoButtonMessagesKeepTheirKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let en = try XCTUnwrap(localizationBundle("en"))
+
+        for (title, message) in SupersetHelp.all {
+            let koreanTitle = localized(title, in: ko)
+            XCTAssertNotEqual(
+                koreanTitle, title,
+                "info-button title has no Korean: \(title)")
+
+            let koreanMessage = localized(message, in: ko)
+            XCTAssertNotEqual(
+                koreanMessage, message,
+                "info-button message has no Korean — the literal in "
+                    + "SupersetHelp no longer matches its catalog key: "
+                    + "\(message)")
+            XCTAssertEqual(
+                localized(message, in: en), message,
+                "English should render the literal key text")
+        }
+    }
+
+    /// The header text kept beside the glyph is still translated — only the
+    /// explanation moved, not the affordance hint.
+    func testSupersetMembershipHeaderTextStillLocalizes() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        XCTAssertEqual(
+            localized("Exercises (drag to reorder)", in: ko),
+            "운동 (드래그하여 순서 변경)")
     }
 
     /// Audit L5 — the segment total and its mismatch cue.
@@ -1206,16 +1265,17 @@ final class KoreanLocalizationTests: XCTestCase {
             "목표 거리와 일치하지 않습니다.")
     }
 
-    /// Audit L7 — the superset effort marker. Korean has no plural form, so
-    /// both count keys share one translation.
-    func testSupersetEffortMarkerLocalizes() throws {
+    /// Audit L7's superset effort marker, **reverted** by the density pass: a
+    /// bare count was not worth a row segment when the values behind it are
+    /// deliberately withheld. Both count keys are gone from the catalog, so the
+    /// marker cannot reappear by accident.
+    func testTheSupersetEffortMarkerKeysAreGone() throws {
         let ko = try XCTUnwrap(localizationBundle("ko"))
         for key in ["%lld effort target", "%lld effort targets"] {
-            let value = localized(key, in: ko)
-            XCTAssertEqual(value, "강도 목표 %lld개")
-            XCTAssertTrue(
-                value.contains("%lld"),
-                "\(key) dropped its count placeholder: \(value)")
+            XCTAssertEqual(
+                localized(key, in: ko), key,
+                "\(key) still has a Korean entry, which means the retired "
+                    + "marker key was left in the catalog")
         }
     }
 

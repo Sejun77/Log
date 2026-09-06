@@ -4,42 +4,6 @@
     "" : {
 
     },
-    "%lld effort target" : {
-      "comment" : "Routine editor: superset block subtitle marker — how many members carry an effort target. Korean has no plural form, so both count keys share one translation.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "강도 목표 %lld개"
-          }
-        }
-      }
-    },
-    "%lld effort targets" : {
-      "comment" : "Routine editor: superset block subtitle marker — how many members carry an effort target. Korean has no plural form, so both count keys share one translation.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "강도 목표 %lld개"
-          }
-        }
-      }
-    },
-    "Checklist only — not saved as results." : {
-      "comment" : "Active workout Cardio Plan checklist footer. The ticks are session-scoped and never reach a SetLog or History; the bout is still logged once from the duration and Details fields.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "체크리스트 전용 — 결과로 저장되지 않음"
-          }
-        }
-      }
-    },
     "Does not match the target distance." : {
       "comment" : "Cardio Plan editor: shown under the segment total when it differs from the slot's target distance. A cue, not an error — nothing is blocked or adjusted.",
       "extractionState" : "manual",
@@ -5087,6 +5051,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이 구성은 더 이상 추가할 수 없습니다."
+          }
+        }
+      }
+    },
+    "Ticking segments only marks your place in this workout. The ticks are not saved as results and are cleared when the workout ends — your cardio is still logged once, from the duration and details below." : {
+      "comment" : "Active workout Cardio Plan checklist info button. Says both halves of the rule: the ticks are scoped to this workout, and they are never a result \u2014 the bout is still logged once from the duration and Details fields below. Replaced a permanent section footer.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구간을 체크해도 이번 운동에서의 진행 위치만 표시됩니다. 체크는 결과로 저장되지 않으며 운동이 끝나면 사라집니다. 유산소 기록은 아래의 시간과 세부 정보로 한 번만 기록됩니다."
           }
         }
       }
