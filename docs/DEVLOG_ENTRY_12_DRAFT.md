@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C13 fix._
+_Counts are from the latest verification run, after the Build 10 C14 slice._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C13 fix._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,509 tests, 0 failures** — 2,507 unit tests plus 2 UI
+- **Full scheme passes: 2,523 tests, 0 failures** — 2,521 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -749,6 +749,65 @@ promise for a to-many relationship, the array came back permuted after a save,
 and my own new test caught it on a later run. `order` is the only record of
 position, which is what the sorting was always for. The test and the comment now
 say so.
+
+---
+
+## Build 10 — Taking Four Explanations Off the Screen
+
+The audit had been adding sentences for eight slices. This one takes four away.
+
+Every explanation the app had written this build was correct, and each of them
+was read exactly once. After that they were furniture: a permanent footer under
+the Cardio Plan checklist on the active workout screen, three more under the
+superset editor's sections, all of them costing their height on every render
+forever, to answer a question the user had already answered for themselves.
+
+So they moved behind the info glyph the app already had. That component was
+built for precisely this — its own doc comment says passing the same literal
+that used to live in a footer preserves its string-catalog translation — and
+that turned out to be the whole of the localization story for the superset half:
+the three messages are the byte-identical strings their footers used, so each
+one still resolves to the key it already had, still finds its Korean, and the
+catalog needed no new entry at all. The one place I did write new copy is the
+checklist, where an alert has room the footer never did: `Checklist only — not
+saved as results.` could only say the second half of the rule, and the info
+message now says both — the ticks are scoped to this workout, *and* they are not
+results.
+
+What deliberately did not move is the superset's "needs at least 2 exercises"
+alert. It looks like the same kind of sentence and it is not: it fires at the
+moment the constraint is hit, which is the one moment it cannot be behind a tap.
+Explanations go behind a glyph; constraints do not.
+
+Then two removals with no replacement. The block Details screen had been titled
+`Bench Press` since the audit's M11, and had gone on heading its only section
+`Bench Press` underneath — the name twice, within one screen height, one of
+which was the fix. A superset keeps its member headers, because there the name
+is not a repeat of the title but the only thing separating one member's sets
+from the next.
+
+And the effort-target count marker from three slices ago is gone. L7's reasoning
+was that a superset member with a full custom ramp looked identical in the
+routine list to one with no target, which was true. What the fix produced was a
+row saying `2 effort targets` — a number the user cannot act on, because the
+values behind it are deliberately withheld, so the row still answered only "is
+something set?", which they had to open the block to use either way. Adding it
+was right about the problem and wrong about the remedy. The half that has never
+changed, across all three revisions now, is that no RIR/RPE value reaches a
+superset row.
+
+The tests moved with it rather than being deleted: each marker assertion became
+its own inverse, plus a new one that a superset carrying targets and a superset
+carrying none produce the identical row, and another that single-exercise effort
+summaries are untouched — which is the thing this slice had to not break.
+
+One note for whoever picks this up next. The string catalog arrives dirty on
+every branch now: Xcode prunes two DEBUG-only showcase keys during a build, and
+that churn had been sitting in the working tree before I typed anything. I
+restored it, then edited the four keys by hand as text rather than round-tripping
+the JSON, which keeps Xcode's own ordering and turns a 578-line reformat into a
+48-line diff. Worth doing every time; worth automating before it gets committed
+by accident.
 
 ---
 

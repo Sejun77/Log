@@ -85,8 +85,8 @@ effort-target clarity pass (C6), planned effort targets in History (C7), the
 Calculus showcase hidden from Release (C8), a stability / data-integrity fix to
 prepared Alternative Exercises (C9), a manual-test polish bundle (C10), a
 nested-editor persistence fix (C11), the remaining low-risk UI polish bundle
-(C12) and a real-device warm-up refresh fix (C13) — see the Build 10 entries
-under *Fixes Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
+(C12), a real-device warm-up refresh fix (C13) and a UI density cleanup (C14)
+— see the Build 10 entries under *Fixes Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
 blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
 orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
 the crash needs a prepared alternative's *first* warm-up step to trigger, so it
@@ -102,6 +102,9 @@ Build 10 UX audit has nothing left in it that is both cheap and worth doing.
 exercise or a prepared alternative was saved correctly but sometimes not drawn
 until the editor was reopened, and the `N steps` preview never updated until the
 page was. It reproduces only on device — the simulator masks it.
+**C14 subtracts rather than adds**: four permanent explanations move behind info
+buttons, a duplicated exercise name and the C12 superset effort-count marker are
+removed outright. Nothing behaves differently, and no live warning was hidden.
 
 ---
 
@@ -171,6 +174,18 @@ The checklist testers are asked to walk through (full version in
   appears immediately, without leaving the screen — then go back one level and
   confirm the **Warmup** row's step count updated too. Repeat inside a prepared
   alternative. Please do this on a real phone: the simulator hides this one
+- _(Build 10)_ Open a single-exercise block's Details and confirm the exercise
+  name appears once, in the title — not again as a heading underneath. Then open
+  a **superset**'s Details and confirm each member is still clearly separated by
+  its own name
+- _(Build 10)_ On the superset Details screen, tap the ⓘ next to **Timing**,
+  **Set All Exercises** and **Exercises** and say whether the explanations still
+  make sense there rather than on the screen. Then try removing an exercise from
+  a 2-exercise superset and confirm the "needs at least 2 exercises" warning
+  still appears **on screen**, not behind a button
+- _(Build 10)_ Start a cardio workout with a Cardio Plan and confirm the
+  checklist has no caption under it, and that the ⓘ in its header explains the
+  ticks are not saved as results
 
 ---
 
@@ -332,6 +347,8 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 
 - **Build 10 C13 — warm-up edits now render immediately, on a real phone.** A refresh / observation fix found by manual testing on device; the simulator never reproduced it. Adding a warm-up step saved it correctly but sometimes did not draw it until the editor was popped and re-pushed, and the prescription screen's `Warmup   N steps` preview did not update until the whole page was reopened. Both halves are the same defect and it is **not** device-specific — the simulator only masks it. `WarmupSchemeEditor` renders from `prescription.warmupScheme.steps`, but `steps` belongs to the `WarmupScheme`, a **grandchild** of the model the view binds, so the only warm-up mutation that invalidates the view is `prescription.warmupScheme = s` — the scheme attachment, which happens once, on the very first add. Every later add, edit, delete and move writes only to the scheme and its steps. The preview count was worse: `SlotPrescriptionSection` read it *two* models below its own `@Bindable`, so nothing the editor did could reach it at all. Neither view had a dependency on what it drew, so whether the stale value showed depended on whether something unrelated happened to re-run the body in the same frame — a sheet dismissing, a row recycling — which the simulator's cheaper layout and animation passes do often enough to hide it. That also explains the report's shape: the list was intermittent, the count never updated. The sharpest case is not intermittent at all — deleting the last step leaves the scheme attached, so the *next* "first" add attaches nothing and produces no observable change whatsoever. The fix is the workaround already used twice in this codebase (`RoutineEditor.blockSummaryRefresh`, `SupersetSetCountLabel`): a local revision token, written after every mutation, which invalidates the view unconditionally so the body re-reads the live relationship in the same frame. `WarmupSchemeEditor` owns one and funnels add / edit / delete / move through a single hook; the warm-up prescription row was pulled out as `WarmupSchemeRow` binding the `SlotPrescription` directly and owning its own token — the same shape `AlternativeExercisesRow` already had for the alternatives count, for the same reason. `WarmupSchemeAuthoring`, which had owned only `add`, now owns the real update / delete / move paths too, so one hook site covers all four and the tests exercise production code rather than copies of it; `WarmupSummary` is the single list source the editor's rows and the row's count both read, so they cannot disagree; and every mutation uses whole-array reassignment on `scheme.steps` (`delete` had mutated in place). **Normal routine slots and prepared-alternative scratch slots are both fixed by the same change**, because they are the same editor rendered against different prescriptions, and the alternative draft commit is unchanged — the row bumps its token first and then forwards to the existing `onNestedGraphChange`, so a normal routine slot refreshes without needing a commit path at all. View state only: no schema field was added to force observation, and no page is reloaded. No schema, migrations, model fields, `SlotAlternative` payload format, Alternative Exercises semantics, active-workout switching, workout lifecycle, rest-timer behavior, exercise-deletion behavior, effort-target logic, cardio calculations, History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change. **No new localization keys**: the `N steps` label stays a `LocalizedStringKey` interpolation on the existing, already-translated catalog key `%lld step%@`.
 
+- **Build 10 C14 — the UI density cleanup.** Four explanations moved behind info buttons and two pieces of low-value text removed outright; no behavior, no data, nothing hidden that needed to stay visible. **The Cardio Plan checklist lost its permanent footer.** `Checklist only — not saved as results.` sat under every render of that section, on the active workout screen, directly above the duration field and the Log button — answering once, then costing its height forever. It is now an `InfoButton` in the section header, the idiom Settings' Bodyweight/Autoregulation headers and the effort-mode picker already use, and the alert's room let the copy say **both** halves of the rule rather than only the second: the ticks are scoped to this workout *and* they are not results. Tick behavior, `CardioSegmentCheckStore` and History are untouched. **A single-exercise block's Details stopped saying the exercise name twice.** Audit M11 titled that screen with the exercise; the screen went on heading its only section with the same name, one of the two being the fix. A new pure rule (`BlockDetailMemberHeader`) drops the header only when the block has **exactly one** named exercise — supersets always keep theirs, because there the name is not a repeat of the title but the only thing separating one member's sets and prescription from the next, and a block with no resolvable names falls back to the kind word, so its header duplicates nothing. The whole `Section` is branched rather than just its header: a conditional inside a header `ViewBuilder` still yields a header view and a grouped List reserves the inset for one, so the headerless case had to be genuinely headerless or the space would not come back. **The three superset explanation footers moved behind info buttons** — Timing, Set All Exercises, and the membership rules under Exercises (whose header keeps its `(drag to reorder)` wording, an affordance hint rather than an explanation). What deliberately did **not** move is the `Superset needs at least 2 exercises` alert: it fires at the moment the constraint is hit, which is the one moment it cannot be behind a tap. Explanations go behind a glyph; live constraints and destructive warnings do not, and a test pins that this one is not among the three. **And C12's superset effort-target count marker is gone.** Audit L7 added `… · 2 effort targets` because a member with a full custom ramp looked identical in the routine list to one with no target — true about the problem, wrong about the remedy: a bare count is not actionable when the values behind it are deliberately withheld, so the row still said only "something is set", which the user had to open the block to use either way. A superset row now reads `Superset · 2 exercises · 3 sets` whatever its members carry. **Single-exercise effort summaries are unchanged** (`3 × 8–12 · RIR 2`, `… · RIR 2 → 0`), and the half that has never changed across all three revisions — that no RIR/RPE value reaches a superset row — is still asserted. **Localization was intentional-only.** The catalog arrived dirty with Xcode's DEBUG-only showcase-key pruning already in the working tree; it was restored from `HEAD` first and then edited as text rather than round-tripped through JSON, which preserves Xcode's key ordering and turns a 578-line reformat into a 48-line diff. Net: **one key added** (the fuller Cardio Plan info message, with Korean), **three removed** (the retired checklist footer and both `%lld effort target` / `%lld effort targets` marker keys), **none changed** — the three superset messages are the byte-identical strings their footers used, so each still resolves to the key it already had and keeps its existing Korean, and all three are `extractionState: manual`, so dropping the `Text(...)` literals does not strip them. No schema, migrations, model fields, `SlotAlternative` payload format, active-workout behavior or switching, workout lifecycle, rest-timer behavior, exercise-deletion behavior, effort-target *resolution* (only whether a superset row prints a clause), cardio calculations or persistence, History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
 Current validation status:
 
 - Routine startability crash fix: tested with regression coverage.
@@ -344,6 +361,7 @@ Current validation status:
 - Nested-editor persistence fix (Build 10 C11): the commit and refresh rules are covered by a new suite whose first test asserts the data loss itself; the warm-up tap target is a hit-testing change and wants the device pass.
 - Remaining low-risk UI polish bundle (Build 10 C12): every wording, title and summary rule is pinned by pure tests, including the Korean for all thirteen new keys; the cardio field widths are a layout-pressure change and can only be settled on a device.
 - Warm-up immediate-render fix (Build 10 C13): the list source, the preview count and all four mutation paths are pinned by a new suite against the production authoring API; the refresh itself is view state, so the device pass is what confirms it — and the device is the only place the bug ever appeared.
+- UI density cleanup (Build 10 C14): the header rule, all four info-copy blocks and the removed superset marker are pinned by pure tests, including that each superset message is still the exact retired footer string and that the min-exercise alert is not among them; what the removals *look* like — the reclaimed header inset, three alerts at Korean line lengths — is display-only and wants the device pass.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
 - Exercise-switch compatibility: tested with 22 value-level adapter tests covering Keep/Reset across duration → normal, normal → duration, and same-type switches.
@@ -385,10 +403,22 @@ Current validation status:
   that no test can reach is the reason it matters most: the cardio detail rows
   need to be seen on a **small screen, at a large Dynamic Type setting, in
   Korean**, which is the combination the old fixed widths clipped. The rest is a
-  read-through: the checklist caption, the Start Workout button, `시작 RIR` /
-  `마지막 RIR` in a progression, an exercise name in the Details title, a named
-  switch warning, a segment total that disagrees with its target, and a superset
-  row that says `강도 목표 2개`.
+  read-through: the Start Workout button, `시작 RIR` / `마지막 RIR` in a
+  progression, an exercise name in the Details title, a named switch warning,
+  and a segment total that disagrees with its target. Two items from this
+  bundle were **superseded by C14** and should no longer be looked for: the
+  checklist caption is now behind an info button, and the superset row's
+  `강도 목표 2개` marker was removed.
+- Manual Build 10 C14 re-check on device: **pending**, and it is the only
+  evidence this slice can have: every rule is unit-tested, but *density* is by
+  definition a thing you look at. Confirm the Cardio Plan checklist has no
+  caption under it and its header ⓘ explains the ticks; that a single-exercise
+  Details screen shows the name once and a superset still separates its members
+  by name; that the three superset ⓘs read sensibly as alerts; that removing an
+  exercise from a 2-exercise superset still shows the warning **on screen**; and
+  that a superset row no longer carries an effort count while a single-exercise
+  row still shows its effort. Korean is the harder half — three explanations
+  that were footers are now alert bodies, which wrap differently.
 - Manual Build 10 C13 re-check on device: **pending — and this one is the
   point.** It is the only Build 10 item whose bug has never appeared anywhere
   but a real phone, so the simulator cannot close it. In a **normal** routine
@@ -604,9 +634,32 @@ Current validation status:
   `order` is the sole record of position. The refresh itself has **no** unit
   test, deliberately: view invalidation is not reachable without a UI harness,
   and the device pass is the evidence.
-- Latest test suite result: **full scheme passes: 2,509 tests, 0 failures** —
-  2,507 unit tests plus 2 UI tests (Build 10 C13 run). Debug build succeeds and
-  Release build succeeds.
+- UI density cleanup (Build 10 C14): 18 added to `RoutineDisplayCopyTests` —
+  the member-header rule across single / multi / superset / no-name / blank-name
+  inputs, that the dropped header is exactly the navigation title (both computed
+  from one input, so neither rule can be changed alone), that all three superset
+  explanations are still available, that each message is the **exact retired
+  footer string** (the tripwire for a reworded literal silently falling back to
+  English), that the titles match their section headers, that the min-exercise
+  alert is **not** one of the three, and that the cardio info copy states both
+  halves of the rule. In `BlockPrescriptionSummaryTests` the six L7 marker tests
+  were **replaced by their inverses rather than deleted** — no effort clause in
+  the value-in form, a superset with targets and one without producing the
+  identical row from live models, autoreg-off unchanged — plus new cases that
+  the metric is inert on a superset, that a **custom per-set ramp** (the case L7
+  existed for) shows no marker, and that single-exercise single/progression
+  summaries are untouched. 5 updated or added in `KoreanLocalizationTests`: the
+  new info message localizes and keeps both halves, the retired footer key and
+  both marker keys are **gone from the catalog**, all three superset info titles
+  and messages keep their Korean, and the membership header text still
+  localizes. Nothing was weakened — every removed assertion was replaced by its
+  inverse, and the "no RIR/RPE values in a superset row" check survives with an
+  added `contains("effort")` guard. The reclaimed vertical space itself has
+  **no** unit test: layout density is not reachable without a UI harness.
+- Latest test suite result: **full scheme passes: 2,523 tests, 0 failures** —
+  2,521 unit tests plus 2 UI tests (Build 10 C14 run). Targeted copy, summary
+  and localization tests pass 152/152. Debug build succeeds and Release build
+  succeeds.
 
 ---
 

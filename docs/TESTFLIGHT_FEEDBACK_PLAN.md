@@ -421,8 +421,9 @@ titles now say more, and the cardio detail fields flex instead of clipping.
 Nothing behaves differently — this is a read-through, and the last two checks
 are the ones that need a small phone.
 
-- [ ] Start a cardio workout with a **Cardio Plan** and confirm the checklist
-      says it is not saved as results
+- [ ] Start a cardio workout with a **Cardio Plan** and confirm the ⓘ in the
+      checklist header says the ticks are not saved as results (this moved off a
+      caption in a later Build 10 slice — see *Less On Screen* below)
 - [ ] Finish it and confirm History shows no ticks — only the logged bout
 - [ ] On the Start Workout screen, confirm the button says **Start Workout**,
       matching the guide
@@ -440,7 +441,8 @@ are the ones that need a small phone.
 - [ ] Change the plan so the totals match, and confirm the mismatch line goes
       away
 - [ ] Put an effort target on one exercise in a superset, and confirm the
-      routine row hints that effort exists without printing RIR/RPE values
+      routine row prints no RIR/RPE values. (The `2 effort targets` hint this
+      check was written for was removed again — see *Less On Screen* below.)
 
 And the two that need the right device:
 
@@ -457,7 +459,54 @@ What to report:
 - a switch warning naming the wrong exercise
 - a segment-total mismatch warning that appears when the two numbers shown are
   the same, or is missing when they differ
-- a superset row that prints an RIR or RPE value rather than a count
+- a superset row that prints an RIR or RPE value (the count it used to print
+  instead was itself removed later in Build 10)
+
+---
+
+### Less On Screen (Build 10)
+
+Changed in Build 10, after everything above: four permanent explanations moved
+behind the small ⓘ button the app already uses, and two pieces of text were
+removed for good. Nothing behaves differently and nothing you need to *act* on
+was hidden — that is the thing to check.
+
+- [ ] Start a cardio workout with a **Cardio Plan** and confirm there is no
+      caption under the checklist any more
+- [ ] Tap the **ⓘ** beside the **Cardio Plan** heading and confirm it explains
+      that ticking is only your place in this workout and is not saved as a
+      result
+- [ ] Open **Details** for a single exercise and confirm its name appears once,
+      as the screen title — not repeated as a heading underneath
+- [ ] Open Details for a **superset** and confirm each member still has its own
+      name above its sets, so you can tell whose prescription you are editing
+- [ ] On that superset screen, tap the **ⓘ** beside **Timing**, **Set All
+      Exercises** and **Exercises**, and say whether each explanation still
+      makes sense as a pop-up
+
+Then the one thing that must **not** have moved:
+
+- [ ] With a superset of exactly 2 exercises, try to remove one, and confirm the
+      "needs at least 2 exercises" warning still appears **on screen** — a
+      warning behind a button would be a bug
+
+And the two removals:
+
+- [ ] Put an effort target on one or two members of a superset, and confirm the
+      routine row says only `Superset · N exercises · M sets` — no effort count,
+      no RIR/RPE values
+- [ ] Confirm a **single** exercise's routine row still shows its effort
+      summary, e.g. `3 × 8–12 · RIR 2`
+
+What to report:
+
+- an explanation you now cannot find at all
+- any warning or error that is behind an ⓘ instead of on screen
+- a superset member you can no longer tell apart from its neighbour
+- a single-exercise row that lost its effort summary
+- **in Korean**: an ⓘ pop-up that reads awkwardly, is cut off, or says something
+  different from the footer it replaced
+- anything that feels like information was taken away rather than tidied
 
 ---
 

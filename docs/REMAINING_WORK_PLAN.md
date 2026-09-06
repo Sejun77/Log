@@ -2174,6 +2174,9 @@ see §2.12** — kept separate from the search-policy commit as planned.
   both are still there.
 
 ### 2.39 Remaining low-risk UI polish bundle (Build 10 C12) — ✅ SHIPPED
+- **Partly reverted by §2.41 (Build 10 C14)**: L7's superset effort-target count
+  marker was removed again, and M2's checklist caption moved behind an info
+  button. The other five items stand.
 - **Source:** the Build 10 UX audit's remaining low-risk tail — M2, M7, M11, L2,
   L4, L5, L7. Seven items cleared together because each is copy, a title or a
   layout constraint; none changes behavior.
@@ -2366,6 +2369,111 @@ see §2.12** — kept separate from the search-policy commit as planned.
   and this). A stated convention — *never render a grandchild model's property
   without either binding it directly or owning a revision token* — would be
   cheaper than finding the fourth one on a phone.
+
+### 2.41 UI density cleanup — explanations behind info buttons; two removals (Build 10 C14) — ✅ SHIPPED
+- **Source:** manual UI review after §2.40. Not from the UX audit — the audit
+  spent eight slices *adding* explanations, and this is the pass that asks which
+  of them should be permanently on screen.
+- **The rule applied:** an explanation is read once and then costs its height on
+  every render forever, so it belongs behind the app's existing `InfoButton`. A
+  live constraint, a destructive warning, or a state warning is read at the
+  moment it fires and must stay visible. Four things were explanations; one that
+  looks like an explanation is a constraint and did not move.
+- **(1) Cardio Plan checklist footer → info button.**
+  `Checklist only — not saved as results.` sat under every render of the
+  checklist section, on the active workout screen, directly above the duration
+  field and the Log button. It is now an `InfoButton` in the section header, the
+  idiom `SettingsView`'s Bodyweight/Autoregulation headers and the effort-mode
+  picker already use. The alert's room let the copy state **both** halves of the
+  rule rather than only the second: the ticks are scoped to this workout *and*
+  they are not results. `CardioSegmentCheckStore` remains the only writer,
+  session-scoped, still unable to reach a `SetLog` or History.
+- **(2) Duplicate exercise name removed from single-exercise Details.** §2.39's
+  M11 titled that screen with the exercise name; the screen went on heading its
+  only section with the same name, so one screen height contained the name twice
+  — one of which was the fix. New pure rule `BlockDetailMemberHeader`
+  (`RoutineDisplayCopy.swift`) drops the header only when the block has
+  **exactly one** named exercise. A superset always keeps its headers: there the
+  name is not a repeat of the title (a `+` join of every member) but the only
+  thing separating one member's sets and prescription from the next. A block
+  with no resolvable names keeps them too — its title fell back to the kind
+  word, so a header duplicates nothing. Both decisions read the same name list
+  `BlockDetailTitle` is given, so they cannot disagree about what the screen
+  already says.
+  - **The whole `Section` is branched, not just its header.** A conditional
+    inside a header `ViewBuilder` still yields a header view and a grouped List
+    reserves its inset for one; since the reclaimed space *is* the point, the
+    headerless case had to be a genuinely headerless `Section`. Rows were
+    extracted to a shared `setRows(for:ex:)` so both shapes have one body.
+- **(3) Three superset explanation footers → info buttons.** Timing, Set All
+  Exercises, and the membership rules under Exercises — whose header keeps its
+  longer `(drag to reorder)` wording, an affordance hint rather than an
+  explanation. Held as `SupersetHelp` constants so the view and its tests name
+  one string.
+- **(4) What deliberately did not move.** The
+  `Superset needs at least 2 exercises` alert fires at the moment the floor is
+  hit, which is the one moment it cannot be behind a tap. A test asserts it is
+  not among the three.
+- **(5) L7's superset effort-target count marker removed.** §2.39 added
+  `"… · 2 effort targets"` because a member with a full custom ramp looked
+  identical in the routine list to one with no target — correct about the
+  problem, wrong about the remedy. A bare count is not actionable when the
+  values behind it are deliberately withheld, so the row still said only
+  "something is set", which the user had to open the block to use either way.
+  `effortTargetMembers` is gone from the content case, the value-in
+  initializer, the model-init counting pass and the subtitle, so no caller can
+  reintroduce it without changing the type. **Single-exercise effort summaries
+  are unchanged** (`3 × 8–12 · RIR 2`, `… · RIR 2 → 0`), and the half that has
+  never changed across all three revisions — no RIR/RPE value in a superset row
+  — is still asserted.
+- **Localization: intentional-only, verified.** The catalog arrived dirty with
+  Xcode's DEBUG-only showcase-key pruning already in the working tree. It was
+  restored from `HEAD` first, then edited **as text** rather than round-tripped
+  through JSON, which preserves Xcode's own key ordering and turns a 578-line
+  reformat into a 48-line diff. Net: **1 key added** (the fuller Cardio Plan
+  info message, with Korean), **3 removed** (the retired checklist footer,
+  `%lld effort target`, `%lld effort targets`), **0 changed**. Items (3) needed
+  no catalog work at all: the three messages are the byte-identical strings
+  their footers used, so each still resolves to the key it already had and keeps
+  its Korean, and all three are `extractionState: manual`, so dropping the
+  `Text(...)` literals does not strip them.
+- **UI, copy, layout and tests only.** No schema change, migrations, model
+  fields, `SlotAlternative` payload format, active-workout behavior or
+  switching, workout lifecycle, rest-timer behavior, exercise-deletion
+  behavior, effort-target *resolution* (only whether a superset row prints a
+  clause), cardio calculations or persistence, History data model,
+  transfer/import/export payload, routine duplication, project-settings,
+  signing, bundle ID, team, marketing-version or build-number change.
+- **Tests:** 18 added to `RoutineDisplayCopyTests` — the member-header rule
+  across single / multi / superset / no-name / blank-name inputs, that the
+  dropped header is exactly the navigation title, that all three superset
+  explanations survive, that each message is the **exact retired footer string**
+  (the tripwire for a reworded literal silently falling back to English), that
+  the titles match their headers, that the min-exercise alert is not one of the
+  three, and that the cardio info states both halves. In
+  `BlockPrescriptionSummaryTests` the six L7 marker tests were **replaced by
+  their inverses rather than deleted**, plus new cases that the metric is inert
+  on a superset, that a custom per-set ramp shows no marker, and that
+  single-exercise summaries are untouched. 5 updated or added in
+  `KoreanLocalizationTests`: the new message localizes and keeps both halves,
+  all three retired keys are gone from the catalog, the superset info
+  titles/messages keep their Korean, and the membership header still localizes.
+  Nothing weakened. **Full scheme passes: 2,523 tests, 0 failures** — 2,521 unit
+  tests plus 2 UI tests; targeted copy/summary/localization tests 152/152. Debug
+  and Release builds succeed.
+- **The reclaimed space has no unit test, deliberately.** Layout density is not
+  reachable without a UI harness; the device pass is the evidence.
+- Manual verification on device is still **pending**, and it is the only
+  evidence a density slice can have: every rule here is unit-tested, but whether
+  the screens actually read better is a thing you look at. Korean is the harder
+  half — three strings that were footers are now alert bodies, which wrap
+  differently.
+- **A convention worth writing down.** Three info-button moves have now been
+  made ad hoc (Settings, the effort-mode picker, and these four). The rule they
+  all follow — *explanations behind the glyph; constraints, destructive
+  warnings and state warnings stay on screen* — is stable enough to state once
+  rather than re-derive per slice, and it pairs with §2.40's open observation
+  convention.
 
 ## 3. Optional / Future Features
 
