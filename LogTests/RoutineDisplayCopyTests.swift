@@ -313,29 +313,69 @@ final class RoutineDisplayCopyTests: XCTestCase {
     // MARK: - Density pass — cardio checklist info copy
     // ==================================================
 
-    /// The explanation survived the move off the footer, and now states both
-    /// halves of the rule rather than only "not saved as results".
-    func test_cardioChecklistInfoStatesBothHalvesOfTheRule() {
+    /// The copy says what the checkmarks are **for** — the first question a
+    /// user asks about a control that looks like logging.
+    func test_cardioChecklistInfoExplainsTheProgressPurpose() {
         let message = CardioChecklistHelp.message
         XCTAssertFalse(message.isEmpty)
         XCTAssertTrue(
-            message.localizedCaseInsensitiveContains("not saved as results"),
-            message)
+            message.localizedCaseInsensitiveContains("checkmarks"), message)
         XCTAssertTrue(
-            message.localizedCaseInsensitiveContains(
-                "cleared when the workout ends"),
+            message.localizedCaseInsensitiveContains("track your place"),
             message)
         // Titled with the section header the glyph sits in.
         XCTAssertEqual(CardioChecklistHelp.title, "Cardio Plan")
     }
 
-    /// The retired four-word footer is not the info copy — if it were, the
-    /// move would have kept the caption's terseness on a screen that now has
-    /// room for the whole rule.
-    func test_cardioChecklistInfoIsNotTheOldFooterCaption() {
+    /// And it separates the two things that look alike: the plan History shows
+    /// under the same `Cardio Plan` header, and the actual logged result.
+    func test_cardioChecklistInfoDistinguishesPlanFromResult() {
+        let message = CardioChecklistHelp.message
+        XCTAssertTrue(
+            message.localizedCaseInsensitiveContains("History"), message)
+        XCTAssertTrue(
+            message.localizedCaseInsensitiveContains("cardio result"), message)
+        XCTAssertTrue(
+            message.localizedCaseInsensitiveContains("duration and details"),
+            message)
+    }
+
+    /// The claim that was reported as wrong, and the family of claims around
+    /// it, must not come back.
+    ///
+    /// The first version said the ticks "are not saved as results and are
+    /// cleared when the workout ends". Both halves are true of the code, and
+    /// the message still read as false to a user who finishes a cardio workout
+    /// and finds their Cardio Plan in History — that is
+    /// `HistoryView.plannedCardioRows` rendering the frozen *plan* under the
+    /// same header and layout as this checklist. The copy now answers "which of
+    /// these is my result?" and makes no storage claim in either direction, so
+    /// it stays true whichever way tick progress is surfaced later.
+    func test_cardioChecklistInfoMakesNoStorageClaim() {
+        let message = CardioChecklistHelp.message
+        for banned in [
+            "not saved",
+            "cleared when the workout ends",
+            "disappear",
+            "only marks your place in this workout",
+            "checklist only",
+        ] {
+            XCTAssertFalse(
+                message.localizedCaseInsensitiveContains(banned),
+                "info copy re-introduced the inaccurate claim '\(banned)': "
+                    + message)
+        }
+    }
+
+    /// Neither retired string is the current copy — the four-word footer this
+    /// replaced, nor the first info message that replaced *it*.
+    func test_cardioChecklistInfoIsNeitherRetiredWording() {
         XCTAssertNotEqual(
             CardioChecklistHelp.message,
             "Checklist only — not saved as results.")
+        XCTAssertNotEqual(
+            CardioChecklistHelp.message,
+            "Ticking segments only marks your place in this workout. The ticks are not saved as results and are cleared when the workout ends — your cardio is still logged once, from the duration and details below.")
     }
 }
 

@@ -146,21 +146,42 @@ struct CardioSegmentCheckStore {
 /// it.
 ///
 /// Held here, beside the store that owns the ticks, so the copy and the
-/// behaviour it describes are read together: if `CardioSegmentCheckStore` ever
-/// stopped being session-scoped, this text is the thing that would become a
-/// lie. Copy only — nothing here reads, writes or clears a tick, so it carries
-/// no actor isolation and its tests need no main-actor hop.
+/// behaviour it describes are read together. Copy only — nothing here reads,
+/// writes or clears a tick, so it carries no actor isolation and its tests need
+/// no main-actor hop.
+///
+/// ## Why the wording avoids talking about storage
+///
+/// The first version of this message said the ticks "are not saved as results
+/// and are cleared when the workout ends". Both halves are true of the code —
+/// `clearAll()` runs on `unlockAndDismiss`, and no tick has ever reached a
+/// `SetLog` — and the message was still reported as wrong, because a user who
+/// finishes a cardio workout and opens History *sees their Cardio Plan there*.
+///
+/// What they are seeing is `HistoryView.plannedCardioRows`, which renders the
+/// **plan** from the frozen `plannedPrescriptionSnapshot` under the same
+/// `Cardio Plan` header and the same row layout as this checklist. History
+/// reads no ticks — it holds no reference to `CardioSegmentCheckStore` and
+/// `CardioPlannedSegmentRow` has no completion field — but from the outside the
+/// two screens look like the same list, so "not saved" reads as a lie about
+/// something the user can plainly see.
+///
+/// So this copy answers the question actually being asked — *which of these two
+/// things is my result?* — and stays out of the storage claim entirely. It is
+/// therefore accurate whether or not a future slice decides to surface tick
+/// progress in History, and it does not have to be revisited if one does.
 enum CardioChecklistHelp {
 
     /// Reuses the section header's own key, so the alert is titled with the
     /// thing the user tapped next to.
     static let title = "Cardio Plan"
 
-    /// Says both halves: the ticks are scoped to this workout (they do not
-    /// survive it), and they are not results (the bout is still logged once
-    /// from the fields below). The old footer only said the second.
+    /// Three clauses, in the order the confusion arises: what the checkmarks
+    /// are *for*, what the similar-looking list in History is, and where the
+    /// result actually comes from. Deliberately says nothing about whether a
+    /// tick is stored — see the note above.
     static let message =
-        "Ticking segments only marks your place in this workout. The ticks are "
-        + "not saved as results and are cleared when the workout ends — your "
-        + "cardio is still logged once, from the duration and details below."
+        "Use these checkmarks to track your place in the plan. History shows "
+        + "the Cardio Plan you followed; your cardio result itself is logged "
+        + "from the duration and details below."
 }

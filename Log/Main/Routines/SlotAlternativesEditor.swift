@@ -30,8 +30,10 @@ import SwiftUI
 /// around.
 struct AlternativeExercisesRow: View {
     @Bindable var prescription: SlotPrescription
-    /// The slot's own exercise, for the authoring-time "this is already the
-    /// slot's exercise" note (§8.5). Nil for an orphan slot.
+    /// The slot's own exercise. Not a note any more: it is what keeps the slot's
+    /// exercise out of the Add Alternative picker, guards the write behind it,
+    /// and marks any row authored before that rule
+    /// (`SlotAlternativeEligibility`). Nil for an orphan slot.
     let slotExerciseID: UUID?
 
     var body: some View {
@@ -102,6 +104,10 @@ struct SlotAlternativesEditor: View {
                         } label: {
                             AlternativeRowLabel(
                                 alternative: alternative,
+                                isSlotsOwnExercise: SlotAlternativeEligibility
+                                    .isSameAsSlotExercise(
+                                        alternative,
+                                        slotExerciseID: slotExerciseID),
                                 effortMetric: effortMetric,
                                 displayUnit: distanceUnit)
                         }
@@ -116,9 +122,15 @@ struct SlotAlternativesEditor: View {
                     Label("Add Alternative", systemImage: "plus")
                 }
             } footer: {
-                Text(
-                    "Alternatives appear when you switch this exercise during a workout."
-                )
+                VStack(alignment: .leading, spacing: DSSpacing.xs) {
+                    Text(
+                        "Alternatives appear when you switch this exercise during a workout."
+                    )
+                    // Says why the picker is one row shorter than the library.
+                    // Without it the slot's own exercise simply is not there,
+                    // which reads as a missing exercise rather than a rule.
+                    Text("The slot's own exercise cannot be an alternative.")
+                }
             }
         }
         .navigationTitle("Alternative Exercises")
@@ -159,23 +171,38 @@ struct SlotAlternativesEditor: View {
     // MARK: - Mutations
 
     /// The exercise library, sorted by name — the order every other exercise
-    /// picker in the app presents.
+    /// picker in the app presents — minus the slot's own exercise.
+    ///
+    /// An alternative replaces the slot's exercise, so offering that exercise
+    /// as its own replacement is the one choice the picker must not present.
+    /// Filtering by `exerciseID` (`SlotAlternativeEligibility`) and not by name
+    /// keeps a second library row that happens to share the display name
+    /// selectable — it is a different exercise.
     private func libraryExercises() -> [Exercise] {
-        (try? ctx.fetch(
-            FetchDescriptor<Exercise>(
-                sortBy: [SortDescriptor(\Exercise.name)]))) ?? []
+        let all =
+            (try? ctx.fetch(
+                FetchDescriptor<Exercise>(
+                    sortBy: [SortDescriptor(\Exercise.name)]))) ?? []
+        return SlotAlternativeEligibility.selectable(
+            all, slotExerciseID: slotExerciseID, id: \.id)
     }
 
     /// Seeded from the app's defaults for the **picked** exercise's tracking
     /// mode, never from the slot's own plan (§6.3): the premise of the feature
     /// is that the primary's plan may be wrong for this exercise.
     private func add(_ exercise: Exercise) {
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: exercise.id,
-            exerciseName: exercise.name,
-            prescription: AlternativeDraftStore.defaultPayload(
-                for: exercise.trackingMode),
-            to: prescription)
+        // `append` refuses the slot's own exercise and returns nil. The picker
+        // above never lists it, so this is the guard behind the filter rather
+        // than a reachable path — and nothing is saved or pushed when it fires.
+        guard
+            let added = SlotAlternativeAuthoring.append(
+                exerciseID: exercise.id,
+                exerciseName: exercise.name,
+                prescription: AlternativeDraftStore.defaultPayload(
+                    for: exercise.trackingMode),
+                mainExerciseID: slotExerciseID,
+                to: prescription)
+        else { return }
         try? ctx.save()
         pushedAlternativeID = added.id
     }
@@ -203,6 +230,11 @@ struct SlotAlternativesEditor: View {
 /// user no way to switch it back on (§8.7).
 private struct AlternativeRowLabel: View {
     let alternative: SlotAlternative
+    /// Legacy data only: authoring one is refused now. Marked here rather than
+    /// hidden, and rather than deleted on read — the row is the only way the
+    /// user can see it exists and swipe it away, exactly as an alternative
+    /// whose exercise was deleted stays visible and named (§8.7).
+    let isSlotsOwnExercise: Bool
     let effortMetric: EffortMetric?
     let displayUnit: DistanceUnit
 
@@ -226,8 +258,15 @@ private struct AlternativeRowLabel: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .truncationMode(.tail)
+
+            if isSlotsOwnExercise {
+                Text("Same as the slot's exercise — not offered in workouts")
+                    .font(.dsCaption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
         }
-        .opacity(alternative.isEnabled ? 1 : 0.6)
+        .opacity(alternative.isEnabled && !isSlotsOwnExercise ? 1 : 0.6)
     }
 }
 
@@ -302,10 +341,16 @@ struct SlotAlternativeDetailEditor: View {
                     }
             } footer: {
                 if isSlotsOwnExercise {
-                    // Warned, not blocked (§8.5). The switch sheet will hide a
-                    // same-exercise alternative rather than refuse to store it,
-                    // so authoring one is pointless but never destructive.
-                    Text("This is already the slot's exercise.")
+                    // Legacy data only — the picker no longer offers the slot's
+                    // own exercise and `SlotAlternativeAuthoring.append`
+                    // refuses it. What remains is a row authored before that
+                    // rule, or carried in by import / duplication. It is stated
+                    // and left in place rather than deleted on read: the work
+                    // is the user's, and this screen plus swipe-to-delete one
+                    // level up is how they clear it.
+                    Text(
+                        "This is already the slot's exercise, so it is never offered during workouts. Delete it from the list to clear it."
+                    )
                 }
             }
 
