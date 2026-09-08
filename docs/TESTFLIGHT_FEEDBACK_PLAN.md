@@ -510,6 +510,47 @@ What to report:
 
 ---
 
+### An Alternative That Is the Same Exercise (Build 10)
+
+Changed in Build 10, after everything above. An Alternative Exercise is meant to
+be a *replacement*, so a slot's own exercise is no longer offered as one of its
+own alternatives. Nothing you already prepared was deleted.
+
+- [ ] Open a routine slot whose exercise is **Bench Press**, open **Alternative
+      Exercises**, tap **Add Alternative**, and confirm **Bench Press is not in
+      the list** — every other exercise still is
+- [ ] Confirm the note under the list says the slot's own exercise cannot be an
+      alternative, so the missing row reads as a rule and not as a bug
+- [ ] Add a **different** exercise as an alternative and confirm it saves and
+      appears exactly as before
+- [ ] Start the workout, tap **Switch Exercise**, and confirm only the valid
+      different alternatives are offered
+
+If you have a routine from an earlier build where the same exercise *was* added
+as its own alternative, that one is worth finding:
+
+- [ ] Confirm it is still listed in the routine editor, dimmed, marked **Same as
+      the slot's exercise — not offered in workouts** — it should not have
+      disappeared
+- [ ] Confirm you can delete it, and that the other alternatives on that slot
+      are unaffected
+- [ ] Confirm it is **not** offered in the switch sheet, and is not included in
+      the alternative count on the routine row or on the Switch Exercise button
+- [ ] Switch that slot to a different exercise mid-workout, open Switch Exercise
+      again, and confirm the same-as-slot row still does not appear
+
+What to report:
+
+- an exercise missing from the Add Alternative picker that is **not** the slot's
+  own exercise
+- a prepared alternative that disappeared without you deleting it
+- a count on a routine row or the Switch Exercise button that does not match the
+  number of alternatives actually offered
+- **in Korean**: the two new notes, or the marker on an old same-as-slot row,
+  reading awkwardly or being cut off
+
+---
+
 ### Opening the User Guide (Build 10)
 
 Changed in Build 10: the in-app guide opens in your phone's language instead of

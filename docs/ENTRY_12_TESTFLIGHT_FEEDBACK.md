@@ -656,10 +656,34 @@ Current validation status:
   inverse, and the "no RIR/RPE values in a superset row" check survives with an
   added `contains("effort")` guard. The reclaimed vertical space itself has
   **no** unit test: layout density is not reachable without a UI harness.
-- Latest test suite result: **full scheme passes: 2,523 tests, 0 failures** —
-  2,521 unit tests plus 2 UI tests (Build 10 C14 run). Targeted copy, summary
-  and localization tests pass 152/152. Debug build succeeds and Release build
-  succeeds.
+- Fixed Alternative Exercise authoring validation (Build 10 C15): a routine
+  slot's own exercise can no longer be added as its own prepared alternative.
+  Found by manual review, not by a tester. Eligibility is one rule
+  (`SlotAlternativeEligibility`) compared by `exerciseID` and never by display
+  name, so a different exercise that happens to share a name stays valid. It is
+  applied in four places: the Add Alternative picker filters the slot's exercise
+  out, the append path refuses it defensively, the active-workout switch sheet
+  does not offer it, and the workout-facing counts (the routine row's
+  `… · N alternatives` and the Switch Exercise badge) do not count it. The
+  switch filter now reads `slotExerciseID` as well as `currentExerciseID`, which
+  is what closes the real hole: the invalid alternative used to become offerable
+  again once the user switched away from the original exercise. **Existing
+  same-as-slot alternatives are not deleted** — they stay visible in the routine
+  editor, marked `Same as the slot's exercise — not offered in workouts`, and
+  the user can remove them. Valid alternatives, disabled alternatives, routine
+  duplication, transfer/import and the `SlotAlternative` payload format are all
+  unchanged. Localization was limited to the intended changes only (2 keys
+  added, 1 reworded in place, 27 insertions / 3 deletions), with the DEBUG-only
+  Calculus/Showcase keys preserved. Tests: new `SlotAlternativeEligibilityTests`
+  (14) and 5 added to `PreparedAlternativeSwitchTests`, covering the picker
+  filter, the append guard, the same-name-different-ID case, both workout-facing
+  counts, and legacy rows surviving read, deletion and sibling edits;
+  `KoreanLocalizationTests` covers the new copy and asserts the superseded key
+  is gone.
+- Latest test suite result: **full scheme passes: 2,546 tests, 0 failures** —
+  2,544 unit tests plus 2 UI tests (Build 10 C15 run). Debug build succeeds and
+  Release build succeeds. Manual UI verification of the Build 10 C15 fix is
+  still pending.
 
 ---
 

@@ -2475,6 +2475,73 @@ see §2.12** — kept separate from the search-policy commit as planned.
   rather than re-derive per slice, and it pairs with §2.40's open observation
   convention.
 
+### 2.42 A slot's own exercise cannot be its own alternative (Build 10 C15) — ✅ SHIPPED
+- **Source:** manual finding after §2.41. In the routine editor, a slot whose
+  exercise was Bench Press could add Bench Press again as a prepared
+  Alternative Exercise.
+- **Root cause.** The Add Alternative picker was handed the entire library, and
+  `SlotAlternativeAuthoring.append` had no eligibility check. By design (§8.5)
+  the app *warned* rather than blocked: the detail editor showed a passive note,
+  and the switch sheet hid the row only incidentally, via `currentExerciseID` —
+  which stops matching the moment the user switches away. So the invalid
+  alternative was storable, was counted in workout-facing counts, and became
+  offerable again after any switch.
+- **The rule, in one place.** New `SlotAlternativeEligibility`
+  (`Log/Services/`): an exercise is eligible unless its `exerciseID` equals the
+  slot's. **Compared by `exerciseID`, never by display name** — two library rows
+  may legitimately share a name and one is a perfectly valid alternative for the
+  other. A nil slot exercise (orphan slot) restricts nothing.
+- **Applied in four places, thin views.** The picker list (`selectable`), the
+  `append` guard behind it (now returns `SlotAlternative?` and refuses),
+  `PreparedAlternatives.offers`, and `BlockPrescriptionSummary`'s count. The
+  last two share `workoutFacing` (`isEnabled && !isSameAsSlotExercise`), so the
+  routine row's `… · N alternatives` and the active workout's Switch Exercise
+  badge cannot promise a row the switch sheet would refuse to show.
+- **The offer filter now takes `slotExerciseID` alongside `currentExerciseID`.**
+  The two diverge the moment the user switches, and that gap was the actual
+  hole: an alternative naming the slot's *original* exercise was never a switch,
+  so it stays hidden even once the slot holds something else. The original
+  itself is still reachable through `Choose another exercise…`.
+- **Legacy data is never deleted.** A same-as-slot alternative authored before
+  this rule stays on the slot, is shown in the routine editor dimmed and
+  captioned `Same as the slot's exercise — not offered in workouts`, keeps
+  swipe-to-delete, and carries an explanatory footer in its detail editor. This
+  is the app's existing treatment of a deleted-exercise alternative (§8.7: shown
+  and marked, never silently dropped) applied to a second invalid case.
+- **Duplication and transfer/import deliberately unchanged.** Both faithfully
+  copy existing data; dropping the row there would be exactly the silent
+  deletion the rule above refuses. It arrives marked and inert either way.
+- **Localization: intentional-only, verified.** Same discipline as §2.41 — the
+  catalog was restored from `HEAD` and edited **as text**, not round-tripped, so
+  the final diff is **27 insertions / 3 deletions** rather than a several-hundred
+  line reformat. Net: **2 keys added** (the list footer and the row marker, with
+  Korean), **1 reworded in place** (the detail-editor footer, which now says the
+  alternative is never offered and can be deleted, replacing the passive
+  `This is already the slot's exercise.`), **0 unrelated keys touched** — the
+  DEBUG-only Calculus/Showcase keys are confirmed still present.
+- **Validation-only fix.** No schema change, migrations, model fields,
+  `SlotAlternative` payload format, workout lifecycle, rest-timer behavior,
+  exercise-deletion behavior, effort-target logic, cardio calculations, History
+  data model, transfer/import/export payload behavior, routine-duplication
+  behavior, project settings, signing, bundle ID, team, marketing version or
+  build number changed.
+- **Tests:** new `SlotAlternativeEligibilityTests` (14) — the rule, orphan
+  slots, the picker filter, a same-named-but-different-ID exercise staying both
+  selectable and appendable, the append refusal, a refusal leaving siblings
+  intact, a legacy row surviving read, being deletable, and not breaking a
+  sibling edit, plus the two workout-facing counts. 5 added to
+  `PreparedAlternativeSwitchTests`: never offered including post-switch, a slot
+  whose only alternative is itself offers nothing, same-name-different-ID still
+  offered, disabled behavior unchanged alongside the new filter, and a
+  same-as-slot row hidden rather than marked unavailable. 3 keys added to the
+  `KoreanLocalizationTests` fixture plus one asserting the superseded key is
+  gone. 20 `append` call sites across 9 test files updated for the new
+  signature. **Full scheme passes: 2,546 tests, 0 failures.** Debug and Release
+  builds succeed.
+- Manual verification on device is still **pending** — the picker filter, the
+  row marker and the two footers are the three surfaces to look at, and a
+  legacy same-as-slot row is the case worth constructing deliberately.
+
 ## 3. Optional / Future Features
 
 **Everything in §3 is optional / future** — product ideas, not refactor blockers.

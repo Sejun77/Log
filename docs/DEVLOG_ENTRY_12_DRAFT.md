@@ -192,7 +192,7 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C14 slice._
+_Counts are from the latest verification run, after the Build 10 C15 slice._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -201,7 +201,7 @@ _Counts are from the latest verification run, after the Build 10 C14 slice._
   one was pinned to UI that no longer exists; the replacement checks that the app
   launches and its main screens are reachable — the thing a UI test can actually
   catch reliably.
-- **Full scheme passes: 2,523 tests, 0 failures** — 2,521 unit tests plus 2 UI
+- **Full scheme passes: 2,546 tests, 0 failures** — 2,544 unit tests plus 2 UI
   tests.
 - **Debug build succeeds.**
 - **Release build succeeds.**
@@ -808,6 +808,45 @@ restored it, then edited the four keys by hand as text rather than round-trippin
 the JSON, which keeps Xcode's own ordering and turns a 578-line reformat into a
 48-line diff. Worth doing every time; worth automating before it gets committed
 by accident.
+
+## Build 10 — An Alternative That Was the Same Exercise
+
+A slot for Bench Press would let you add Bench Press as its alternative.
+
+The feature had a rule for this and had chosen to state it rather than enforce
+it: the detail editor said *This is already the slot's exercise.* and left you
+to it. That was a defensible call when it was written — the switch sheet filtered
+the row out anyway, so authoring one was pointless but harmless. What made it
+not harmless is that the sheet was filtering on the *current* exercise, and the
+current exercise stops being the original one the moment you switch. Prepare a
+same-as-slot alternative, switch to something else mid-workout, and it becomes
+offerable: an alternative whose effect is to replace the exercise with itself.
+
+So the rule moved from a sentence into `SlotAlternativeEligibility`, and the
+picker stopped listing the slot's own exercise at all. The comparison is on
+`exerciseID` and not on the name, which matters more than it sounds: two rows in
+the library can legitimately be called the same thing, and one of them is a
+perfectly good alternative for the other. The write path refuses independently
+of the picker, because a filter is a courtesy and a guard is a guarantee.
+
+The part that took the longest to decide was what to do with the alternatives
+people have already prepared. Deleting them on read would have been one line and
+would have been wrong — that is someone's prepared work vanishing during a
+routine open, with no record that it ever existed. The app already had an answer
+for the neighbouring case: an alternative whose exercise was deleted stays
+visible, named, and marked. So this one does the same. It sits in the editor,
+dimmed, saying `Same as the slot's exercise — not offered in workouts`, and you
+can swipe it away when you feel like it. Duplication and import copy it forward
+untouched for the same reason.
+
+The counts had to follow. A routine row saying `2 alternatives` when one of them
+can never be offered is a lie the user only discovers mid-set, so the block
+subtitle and the Switch Exercise badge now read the same `workoutFacing` filter
+the sheet does. One rule, four call sites, no view doing its own arithmetic.
+
+The string catalog behaved this time, because I did what the last entry said to
+do: restore first, edit as text, never round-trip the JSON. 27 lines added,
+3 removed, and the DEBUG-only Calculus keys still where Xcode left them.
 
 ---
 
