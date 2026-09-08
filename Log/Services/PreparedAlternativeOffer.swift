@@ -42,27 +42,40 @@ enum PreparedAlternatives {
     ///     start (§4.2).
     ///   - currentExerciseID: the exercise in the slot right now, which may
     ///     already be an alternative the user applied.
+    ///   - slotExerciseID: the exercise the slot **started** with
+    ///     (`PlanExercise.originalExerciseID`). Distinct from
+    ///     `currentExerciseID` the moment the user switches: after a switch the
+    ///     original becomes a legitimate thing to switch *back* to, while an
+    ///     alternative that names it was never a switch at all. Nil imposes no
+    ///     restriction.
     ///   - availableExerciseIDs: ids present in the library, for the
     ///     unavailable check.
     ///
-    /// Three rules, all from §8.5 / §8.7:
+    /// Four rules, all from §8.5 / §8.7:
     ///
     ///  1. **Disabled alternatives are hidden.** `isEnabled == false` means
     ///     "keep the prepared work, don't offer it" — the routine editor still
     ///     lists it with an `Off` marker.
-    ///  2. **The slot's own exercise is hidden.** Switching Bench Press to
-    ///     Bench Press is not a switch; offering it would quietly turn the
-    ///     feature into a second plan-preset system. No warning is shown
-    ///     mid-workout — the authoring screen already gave one.
-    ///  3. **A deleted exercise is kept, and marked.** Hiding it silently would
+    ///  2. **The exercise currently in the slot is hidden.** Switching Bench
+    ///     Press to Bench Press is not a switch; offering it would quietly turn
+    ///     the feature into a second plan-preset system.
+    ///  3. **An alternative that names the slot's own exercise is hidden**,
+    ///     even once the slot holds something else. Authoring one is refused
+    ///     now (`SlotAlternativeEligibility`), but a slot prepared before that
+    ///     rule — or imported / duplicated from a document that carries one —
+    ///     can still hold it, and applying it would "replace" the exercise
+    ///     with itself. No warning is shown mid-workout; the routine editor
+    ///     marks the row instead.
+    ///  4. **A deleted exercise is kept, and marked.** Hiding it silently would
     ///     look like the app lost the user's prepared work.
     static func offers(
         from alternatives: [SlotAlternative],
         currentExerciseID: UUID?,
+        slotExerciseID: UUID? = nil,
         availableExerciseIDs: Set<UUID>
     ) -> [PreparedAlternativeOffer] {
-        alternatives
-            .filter(\.isEnabled)
+        SlotAlternativeEligibility
+            .workoutFacing(alternatives, slotExerciseID: slotExerciseID)
             .filter { $0.exerciseID != currentExerciseID }
             .map {
                 PreparedAlternativeOffer(
@@ -81,10 +94,12 @@ enum PreparedAlternatives {
     static func hasOffers(
         from alternatives: [SlotAlternative],
         currentExerciseID: UUID?,
+        slotExerciseID: UUID? = nil,
         availableExerciseIDs: Set<UUID>
     ) -> Bool {
         !offers(
             from: alternatives, currentExerciseID: currentExerciseID,
+            slotExerciseID: slotExerciseID,
             availableExerciseIDs: availableExerciseIDs
         ).isEmpty
     }

@@ -2329,9 +2329,10 @@ struct ActiveWorkoutView: View {
                             // would actually offer. Derived from the same
                             // `preparedAlternativeOffers` the sheet is built
                             // from, so the badge can never promise a row the
-                            // sheet does not show: disabled alternatives, the
-                            // slot's own exercise, and (post-switch) whatever
-                            // is now current are already filtered out by
+                            // sheet does not show: disabled alternatives, an
+                            // alternative naming the slot's own exercise, and
+                            // (post-switch) whatever is now current are already
+                            // filtered out by
                             // `PreparedAlternatives.offers`. Display only —
                             // the button's action is unchanged, and a slot
                             // with nothing to offer shows no badge and still
@@ -3177,13 +3178,20 @@ struct ActiveWorkoutView: View {
     /// Sourced from the slot's **frozen** `SessionPlan`, never from the
     /// routine: the session offers what it froze at start, so editing the
     /// routine mid-workout changes nothing here (§4.2). Filtering — disabled,
-    /// already-current, unavailable — is the pure `PreparedAlternatives`.
+    /// already-current, same-as-the-slot's-own, unavailable — is the pure
+    /// `PreparedAlternatives`.
+    ///
+    /// `originalExerciseID` is passed alongside `currentExerciseID` because the
+    /// two diverge the moment the user switches: an alternative naming the
+    /// slot's original exercise was never a switch and stays hidden, while the
+    /// original itself remains reachable through `Choose another exercise…`.
     private func preparedAlternativeOffers(
         for exercise: PlanExercise
     ) -> [PreparedAlternativeOffer] {
         PreparedAlternatives.offers(
             from: sessionPlans[exercise.routineSlotID]?.alternatives ?? [],
             currentExerciseID: exercise.currentExerciseID,
+            slotExerciseID: exercise.originalExerciseID,
             availableExerciseIDs: Set(allExercises.map(\.id)))
     }
 

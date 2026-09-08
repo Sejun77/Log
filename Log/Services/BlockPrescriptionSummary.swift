@@ -24,12 +24,13 @@ import Foundation
 ///      The value is resolved through `EffortTargetResolver.summary`, so legacy
 ///      single-value prescriptions (`rir`/`rpe` with nil `effortModeRaw`) render
 ///      as single effort exactly as before they had a mode.
-///    - trailing prepared-alternative count when the slot has any **enabled**
+///    - trailing prepared-alternative count when the slot has any **offerable**
 ///      alternative (Build 10 C4) → `"… · 2 alternatives"`. Disabled
-///      alternatives are excluded: this line is workout-facing
-///      discoverability, and a disabled alternative is never offered mid-
-///      workout. The authoring row one screen down still counts every
-///      prepared alternative, disabled included — a different question.
+///      alternatives are excluded, and so is one that names the slot's own
+///      exercise: this line is workout-facing discoverability, and neither is
+///      ever offered mid-workout. The authoring row one screen down still
+///      counts every prepared alternative, disabled and same-as-slot
+///      included — a different question.
 ///    - no prescription / no usable sets → `"Not set"`
 ///  - **Superset block** — block-level:
 ///    - `"Superset · N exercises · M sets"` where `N = block.exercises.count`
@@ -126,10 +127,10 @@ struct BlockPrescriptionSummary: Equatable {
             content = .superset(
                 exerciseCount: block.exercises.count, sets: maxSets)
         } else {
-            let p = block.exercises
+            let slot = block.exercises
                 .sorted { $0.order < $1.order }
-                .first?
-                .prescription
+                .first
+            let p = slot?.prescription
             content = .normal(
                 sets: p?.sets,
                 repMin: p?.repMin,
@@ -146,11 +147,21 @@ struct BlockPrescriptionSummary: Equatable {
                     .displayText,
                 restSeconds: p?.restSecondsBetweenSets,
                 effort: Self.effortSummary(for: p, metric: effortMetric),
-                // Enabled only — see the summary rules above. Reading this is
+                // Enabled, and not the slot's own exercise — see the summary
+                // rules above and `SlotAlternativeEligibility`. Reading this is
                 // a decode of the additive `alternativesData` column through
                 // the tolerant Phase C accessor, so a corrupt payload counts
                 // zero and never breaks the row.
-                alternatives: p?.slotAlternatives.filter(\.isEnabled).count ?? 0
+                //
+                // `slot?.exercise?.id` is the one place this initializer reads
+                // the slot's `exercise` relationship. It is a to-one fault the
+                // block row has already taken (it renders the exercise name),
+                // and the alternative is a count that promises rows the switch
+                // sheet would refuse to show.
+                alternatives: SlotAlternativeEligibility.workoutFacing(
+                    p?.slotAlternatives ?? [],
+                    slotExerciseID: slot?.exercise?.id
+                ).count
             )
         }
     }

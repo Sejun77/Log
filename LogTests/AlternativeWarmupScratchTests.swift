@@ -67,11 +67,13 @@ final class AlternativeWarmupScratchTests: SwiftDataTestHarness {
     /// alternative's id.
     private func slotWithAlternative() throws -> (SlotPrescription, UUID) {
         let p = appPrescription()
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: UUID(),
-            exerciseName: "Machine Chest Press",
-            prescription: AlternativeDraftStore.defaultPayload(for: .strength),
-            to: p)
+        let added = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: UUID(),
+                exerciseName: "Machine Chest Press",
+                prescription: AlternativeDraftStore.defaultPayload(for: .strength),
+                mainExerciseID: nil,
+                to: p))
         try context.save()
         return (p, added.id)
     }

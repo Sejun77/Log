@@ -39,11 +39,13 @@ final class AlternativeNestedEditorCommitTests: SwiftDataTestHarness {
         context.insert(p)
         var ids: [UUID] = []
         for name in names {
-            let added = SlotAlternativeAuthoring.append(
-                exerciseID: UUID(),
-                exerciseName: name,
-                prescription: AlternativeDraftStore.defaultPayload(for: .strength),
-                to: p)
+            let added = try XCTUnwrap(
+                SlotAlternativeAuthoring.append(
+                    exerciseID: UUID(),
+                    exerciseName: name,
+                    prescription: AlternativeDraftStore.defaultPayload(for: .strength),
+                    mainExerciseID: nil,
+                    to: p))
             ids.append(added.id)
         }
         try context.save()

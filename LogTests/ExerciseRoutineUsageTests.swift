@@ -249,6 +249,7 @@ final class ExerciseAlternativeUsageTests: SwiftDataTestHarness {
                 exerciseID: exercise.id,
                 exerciseName: exercise.name,
                 prescription: AlternativePrescriptionPayload(sets: 3),
+                mainExerciseID: nil,
                 to: prescription)
             _ = index
         }
@@ -406,16 +407,18 @@ final class ExerciseAlternativeUsageTests: SwiftDataTestHarness {
 
     /// A disabled alternative is hidden from the switch sheet but is still
     /// prepared work, and deleting the exercise still destroys it.
-    func testDisabledAlternativesAreStillCounted() {
+    func testDisabledAlternativesAreStillCounted() throws {
         let primary = makeExercise(name: "Bench Press")
         let target = makeExercise(name: "Dumbbell Press")
         let routine = makeRoutine(name: "Push")
         let prescription = addSlot(to: routine, exercise: primary)
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: target.id,
-            exerciseName: target.name,
-            prescription: AlternativePrescriptionPayload(sets: 3),
-            to: prescription)
+        let added = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: target.id,
+                exerciseName: target.name,
+                prescription: AlternativePrescriptionPayload(sets: 3),
+                mainExerciseID: primary.id,
+                to: prescription))
         SlotAlternativeAuthoring.update(id: added.id, in: prescription) {
             $0.isEnabled = false
         }

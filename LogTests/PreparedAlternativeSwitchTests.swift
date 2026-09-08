@@ -231,6 +231,96 @@ final class PreparedAlternativeSwitchTests: XCTestCase {
             "the frozen name is what makes the row legible at all")
     }
 
+    /// The manual finding, on the workout side: a slot prepared before the
+    /// authoring rule existed can still hold an alternative naming its own
+    /// exercise. It is never offered — not even once the slot holds something
+    /// else, which is the case `currentExerciseID` alone cannot catch.
+    func testAnAlternativeNamingTheSlotsOwnExerciseIsNeverOffered() {
+        let list = [
+            alternative("Bench Press", exerciseID: benchID, order: 0),
+            alternative("Machine", exerciseID: machineID, order: 1),
+        ]
+
+        XCTAssertEqual(
+            PreparedAlternatives.offers(
+                from: list, currentExerciseID: benchID,
+                slotExerciseID: benchID,
+                availableExerciseIDs: [benchID, machineID]
+            ).map(\.exerciseName),
+            ["Machine"])
+
+        // After switching to the machine, the bench-as-alternative row is
+        // still hidden: it was never a switch. The bench itself is still
+        // reachable through `Choose another exercise…`.
+        XCTAssertEqual(
+            PreparedAlternatives.offers(
+                from: list, currentExerciseID: machineID,
+                slotExerciseID: benchID,
+                availableExerciseIDs: [benchID, machineID]
+            ).map(\.exerciseName),
+            [])
+    }
+
+    /// A slot whose only prepared alternative is its own exercise offers
+    /// nothing, so the switch flow stays byte-identical to pre-F1: the picker
+    /// opens directly and the Switch Exercise badge shows no count.
+    func testASlotWhoseOnlyAlternativeIsItsOwnExerciseOffersNothing() {
+        let list = [alternative("Bench Press", exerciseID: benchID)]
+
+        XCTAssertFalse(
+            PreparedAlternatives.hasOffers(
+                from: list, currentExerciseID: benchID,
+                slotExerciseID: benchID,
+                availableExerciseIDs: [benchID, machineID]))
+    }
+
+    /// Requirement 10 — by `exerciseID`, never by name. A second library row
+    /// that merely shares the slot exercise's display name is a different
+    /// exercise and stays offerable.
+    func testASameNamedButDifferentExerciseIsStillOffered() {
+        let twinID = UUID()
+
+        let offers = PreparedAlternatives.offers(
+            from: [alternative("Bench Press", exerciseID: twinID)],
+            currentExerciseID: benchID,
+            slotExerciseID: benchID,
+            availableExerciseIDs: [benchID, twinID])
+
+        XCTAssertEqual(offers.map(\.alternative.exerciseID), [twinID])
+    }
+
+    /// Disabled stays disabled, and stays disabled for the same reason as
+    /// before — the new filter is additive, not a replacement.
+    func testDisabledBehaviorIsUnchangedAlongsideTheNewFilter() {
+        let list = [
+            alternative("Bench Press", exerciseID: benchID, order: 0),
+            alternative("Machine", exerciseID: machineID, order: 1,
+                enabled: false),
+            alternative("Treadmill", exerciseID: treadmillID, order: 2),
+        ]
+
+        XCTAssertEqual(
+            PreparedAlternatives.offers(
+                from: list, currentExerciseID: benchID,
+                slotExerciseID: benchID,
+                availableExerciseIDs: [benchID, machineID, treadmillID]
+            ).map(\.exerciseName),
+            ["Treadmill"])
+    }
+
+    /// An unavailable *and* same-as-slot alternative is hidden, not shown as
+    /// `Exercise unavailable`: the two rules do not fight, because it would
+    /// never be offered even if the exercise came back.
+    func testASameAsSlotAlternativeIsHiddenRatherThanMarkedUnavailable() {
+        let offers = PreparedAlternatives.offers(
+            from: [alternative("Bench Press", exerciseID: benchID)],
+            currentExerciseID: machineID,
+            slotExerciseID: benchID,
+            availableExerciseIDs: [machineID])
+
+        XCTAssertEqual(offers, [])
+    }
+
     func testOrderAndNotesSurviveIntoTheOffer() {
         let offers = PreparedAlternatives.offers(
             from: [
