@@ -4233,6 +4233,18 @@
         }
       }
     },
+    "Same as the slot's exercise — not offered in workouts" : {
+      "comment" : "Alternative Exercises: routine-editor row marker for a legacy alternative that names the slot's own exercise. Shown, not hidden, so the user can find and delete it.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 슬롯의 운동과 동일 — 운동 중에는 표시되지 않음"
+          }
+        }
+      }
+    },
     "Same Target" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4958,6 +4970,18 @@
         }
       }
     },
+    "The slot's own exercise cannot be an alternative." : {
+      "comment" : "Alternative Exercises: routine-editor list footer explaining why the slot's own exercise is missing from the Add Alternative picker.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "슬롯의 기본 운동은 대체 운동으로 추가할 수 없습니다."
+          }
+        }
+      }
+    },
     "These notes are saved to the exercise and reused across routines and workouts." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4990,14 +5014,14 @@
         }
       }
     },
-    "This is already the slot's exercise." : {
-      "comment" : "Alternative Exercises Phase D: authoring-time note when an alternative names the slot's own exercise",
+    "This is already the slot's exercise, so it is never offered during workouts. Delete it from the list to clear it." : {
+      "comment" : "Alternative Exercises: detail-editor footer for a legacy alternative that names the slot's own exercise. Authoring one is refused now, so this only ever describes existing data.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이미 이 슬롯에 사용 중인 운동입니다."
+            "value" : "이미 이 슬롯에 사용 중인 운동이라 운동 중에는 표시되지 않습니다. 목록에서 삭제해 정리하세요."
           }
         }
       }

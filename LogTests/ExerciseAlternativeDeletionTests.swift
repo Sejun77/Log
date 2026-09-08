@@ -76,11 +76,12 @@ final class ExerciseAlternativeDeletionTests: SwiftDataTestHarness {
     private func addAlternative(
         _ exercise: Exercise, to prescription: SlotPrescription,
         note: String? = nil
-    ) -> SlotAlternative {
+    ) -> SlotAlternative? {
         SlotAlternativeAuthoring.append(
             exerciseID: exercise.id,
             exerciseName: exercise.name,
             prescription: AlternativePrescriptionPayload(sets: 4, repMin: 6),
+            mainExerciseID: nil,
             to: prescription)
     }
 
@@ -212,7 +213,7 @@ final class ExerciseAlternativeDeletionTests: SwiftDataTestHarness {
         XCTAssertEqual(survivors.count, 1)
         XCTAssertEqual(survivors.first?.exerciseID, keeper.id)
         // Identity and prepared prescription both survive untouched.
-        XCTAssertEqual(survivors.first?.id, keptAlternative.id)
+        XCTAssertEqual(survivors.first?.id, keptAlternative?.id)
         XCTAssertEqual(survivors.first?.prescription.sets, 4)
         XCTAssertEqual(survivors.first?.prescription.repMin, 6)
     }

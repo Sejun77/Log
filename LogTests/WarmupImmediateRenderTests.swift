@@ -319,11 +319,13 @@ final class WarmupImmediateRenderTests: SwiftDataTestHarness {
     /// A slot carrying one prepared alternative, and that alternative's id.
     private func slotWithAlternative() throws -> (SlotPrescription, UUID) {
         let p = routineSlotPrescription()
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: UUID(),
-            exerciseName: "Machine Chest Press",
-            prescription: AlternativeDraftStore.defaultPayload(for: .strength),
-            to: p)
+        let added = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: UUID(),
+                exerciseName: "Machine Chest Press",
+                prescription: AlternativeDraftStore.defaultPayload(for: .strength),
+                mainExerciseID: nil,
+                to: p))
         try context.save()
         return (p, added.id)
     }
@@ -560,13 +562,15 @@ final class WarmupImmediateRenderTests: SwiftDataTestHarness {
         var ids: [UUID] = []
         for name in ["First", "Second", "Third"] {
             ids.append(
-                SlotAlternativeAuthoring.append(
-                    exerciseID: UUID(),
-                    exerciseName: name,
-                    prescription: AlternativeDraftStore.defaultPayload(
-                        for: .strength),
-                    to: p
-                ).id)
+                try XCTUnwrap(
+                    SlotAlternativeAuthoring.append(
+                        exerciseID: UUID(),
+                        exerciseName: name,
+                        prescription: AlternativeDraftStore.defaultPayload(
+                            for: .strength),
+                        mainExerciseID: nil,
+                        to: p
+                    )).id)
         }
         SlotAlternativeAuthoring.update(id: ids[2], in: p) {
             $0.isEnabled = false

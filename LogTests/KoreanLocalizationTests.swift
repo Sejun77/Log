@@ -557,8 +557,25 @@ final class KoreanLocalizationTests: XCTestCase {
         "Alternatives appear when you switch this exercise during a workout.",
         "Off",
         "Enabled",
-        "This is already the slot's exercise.",
+        // Build 10 — the slot's own exercise can no longer be added as an
+        // alternative. Two of these describe the rule; the third is the marker
+        // on a row authored before it existed, which is kept and shown rather
+        // than deleted, so a Korean user can see why it will never come up.
+        "The slot's own exercise cannot be an alternative.",
+        "Same as the slot's exercise — not offered in workouts",
+        "This is already the slot's exercise, so it is never offered during workouts. Delete it from the list to clear it.",
     ]
+
+    /// The pre-Build-10 wording is gone, not merely superseded: it said the
+    /// alternative *was* the slot's exercise and stopped there, which read as a
+    /// note rather than as "this will never be offered".
+    func testTheSupersededSameAsSlotWordingIsNoLongerInTheCatalog() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let key = "This is already the slot's exercise."
+        XCTAssertEqual(
+            localized(key, in: ko), key,
+            "a retired key must fall back to its own text, not stay translated")
+    }
 
     func testAlternativeExerciseStringsLocalizeToKorean() throws {
         let ko = try XCTUnwrap(localizationBundle("ko"))

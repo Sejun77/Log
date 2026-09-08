@@ -70,13 +70,16 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
 
     func testAddingAnAlternativeWritesTheColumn() throws {
         let p = prescription()
+        let bench = exercise("Bench Press")
         let machine = exercise("Machine Chest Press")
 
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: machine.id,
-            exerciseName: machine.name,
-            prescription: AlternativeDraftStore.defaultPayload(for: .strength),
-            to: p)
+        let added = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: machine.id,
+                exerciseName: machine.name,
+                prescription: AlternativeDraftStore.defaultPayload(for: .strength),
+                mainExerciseID: bench.id,
+                to: p))
         try context.save()
 
         XCTAssertNotNil(p.alternativesData)
@@ -95,7 +98,8 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
         for name in ["first", "second", "third"] {
             SlotAlternativeAuthoring.append(
                 exerciseID: UUID(), exerciseName: name,
-                prescription: AlternativePrescriptionPayload(), to: p)
+                prescription: AlternativePrescriptionPayload(),
+                mainExerciseID: nil, to: p)
         }
         try context.save()
 
@@ -280,10 +284,12 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
     /// exactly what gets stored — this is tests 11 and 18–21 in one shape.
     func testEditsMadeOnTheDraftPersistToTheAlternative() throws {
         let p = prescription()
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: UUID(), exerciseName: "Machine Chest Press",
-            prescription: AlternativeDraftStore.defaultPayload(for: .strength),
-            to: p)
+        let added = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: UUID(), exerciseName: "Machine Chest Press",
+                prescription: AlternativeDraftStore.defaultPayload(for: .strength),
+                mainExerciseID: nil,
+                to: p))
 
         // What the detail editor does: hydrate, let the existing editors
         // mutate the scratch slot, read back, commit.
@@ -405,9 +411,11 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
 
     func testEditingTheNotePersists() throws {
         let p = prescription()
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: UUID(), exerciseName: "DB Bench Press",
-            prescription: AlternativePrescriptionPayload(), to: p)
+        let added = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: UUID(), exerciseName: "DB Bench Press",
+                prescription: AlternativePrescriptionPayload(),
+                mainExerciseID: nil, to: p))
 
         SlotAlternativeAuthoring.update(id: added.id, in: p) {
             $0.note = "when the rack is busy"
@@ -419,9 +427,11 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
 
     func testTogglingEnabledPersistsBothWays() throws {
         let p = prescription()
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: UUID(), exerciseName: "DB Bench Press",
-            prescription: AlternativePrescriptionPayload(), to: p)
+        let added = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: UUID(), exerciseName: "DB Bench Press",
+                prescription: AlternativePrescriptionPayload(),
+                mainExerciseID: nil, to: p))
 
         SlotAlternativeAuthoring.update(id: added.id, in: p) {
             $0.isEnabled = false
@@ -446,7 +456,8 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
         let p = prescription()
         SlotAlternativeAuthoring.append(
             exerciseID: UUID(), exerciseName: "kept",
-            prescription: AlternativePrescriptionPayload(), to: p)
+            prescription: AlternativePrescriptionPayload(),
+            mainExerciseID: nil, to: p)
 
         SlotAlternativeAuthoring.update(id: UUID(), in: p) {
             $0.exerciseName = "ghost"
@@ -462,7 +473,8 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
         for name in ["first", "second", "third"] {
             SlotAlternativeAuthoring.append(
                 exerciseID: UUID(), exerciseName: name,
-                prescription: AlternativePrescriptionPayload(), to: p)
+                prescription: AlternativePrescriptionPayload(),
+                mainExerciseID: nil, to: p)
         }
 
         SlotAlternativeAuthoring.delete(atOffsets: IndexSet(integer: 1), in: p)
@@ -479,7 +491,8 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
         let p = prescription()
         SlotAlternativeAuthoring.append(
             exerciseID: UUID(), exerciseName: "only",
-            prescription: AlternativePrescriptionPayload(), to: p)
+            prescription: AlternativePrescriptionPayload(),
+            mainExerciseID: nil, to: p)
 
         SlotAlternativeAuthoring.delete(atOffsets: IndexSet(integer: 0), in: p)
         try context.save()
@@ -494,7 +507,8 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
         for name in ["first", "second", "third"] {
             SlotAlternativeAuthoring.append(
                 exerciseID: UUID(), exerciseName: name,
-                prescription: AlternativePrescriptionPayload(), to: p)
+                prescription: AlternativePrescriptionPayload(),
+                mainExerciseID: nil, to: p)
         }
 
         // Drag "third" to the top.
@@ -513,7 +527,8 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
         for name in ["a", "b"] {
             SlotAlternativeAuthoring.append(
                 exerciseID: UUID(), exerciseName: name,
-                prescription: AlternativePrescriptionPayload(), to: p)
+                prescription: AlternativePrescriptionPayload(),
+                mainExerciseID: nil, to: p)
         }
         SlotAlternativeAuthoring.move(
             fromOffsets: IndexSet(integer: 1), toOffset: 0, in: p)
@@ -538,10 +553,12 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
         let slotPlan = try cardioPlan()
         p.setStructuredCardioPlan(slotPlan)
 
-        let added = SlotAlternativeAuthoring.append(
-            exerciseID: UUID(), exerciseName: "Machine Chest Press",
-            prescription: AlternativeDraftStore.defaultPayload(for: .strength),
-            to: p)
+        let added = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: UUID(), exerciseName: "Machine Chest Press",
+                prescription: AlternativeDraftStore.defaultPayload(for: .strength),
+                mainExerciseID: nil,
+                to: p))
         let store = try draft(p.slotAlternatives[0].prescription)
         store.prescription.sets = 12
         store.prescription.tempo = "5-0-5-0"
@@ -563,13 +580,17 @@ final class SlotAlternativeAuthoringTests: SwiftDataTestHarness {
 
     func testEditingOneAlternativeDoesNotTouchAnother() throws {
         let p = prescription()
-        let first = SlotAlternativeAuthoring.append(
-            exerciseID: UUID(), exerciseName: "first",
-            prescription: AlternativePrescriptionPayload(sets: 3, repMin: 8, repMax: 12),
-            to: p)
+        let first = try XCTUnwrap(
+            SlotAlternativeAuthoring.append(
+                exerciseID: UUID(), exerciseName: "first",
+                prescription: AlternativePrescriptionPayload(
+                    sets: 3, repMin: 8, repMax: 12),
+                mainExerciseID: nil,
+                to: p))
         SlotAlternativeAuthoring.append(
             exerciseID: UUID(), exerciseName: "second",
             prescription: AlternativePrescriptionPayload(sets: 5, repMin: 5, repMax: 5),
+            mainExerciseID: nil,
             to: p)
         let untouched = try XCTUnwrap(p.slotAlternatives.last)
 

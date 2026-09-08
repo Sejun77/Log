@@ -352,13 +352,30 @@ final class AlternativeDraftStore {
 enum SlotAlternativeAuthoring {
 
     /// Append a new alternative, ordered last.
+    ///
+    /// Refuses the slot's **own** exercise and returns nil: an alternative is a
+    /// replacement for the slot's exercise, so the slot's exercise is not one.
+    /// The picker in `SlotAlternativesEditor` already filters it out, and this
+    /// is the guard behind that filter — the single write path for a new
+    /// alternative, so no caller can store one by another route. The rule
+    /// itself is `SlotAlternativeEligibility`, compared by `exerciseID` so two
+    /// library rows that merely share a display name stay independent.
+    ///
+    /// - Parameter mainExerciseID: the slot's own exercise. Nil (an orphan
+    ///   slot) imposes no restriction — there is nothing to collide with.
     @discardableResult
     static func append(
         exerciseID: UUID,
         exerciseName: String,
         prescription payload: AlternativePrescriptionPayload,
+        mainExerciseID: UUID?,
         to slotPrescription: SlotPrescription
-    ) -> SlotAlternative {
+    ) -> SlotAlternative? {
+        guard
+            SlotAlternativeEligibility.isEligible(
+                exerciseID: exerciseID, slotExerciseID: mainExerciseID)
+        else { return nil }
+
         var list = slotPrescription.slotAlternatives
         let alternative = SlotAlternative(
             order: list.count,

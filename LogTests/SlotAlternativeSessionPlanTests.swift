@@ -285,7 +285,8 @@ final class SlotAlternativeSessionPlanTests: SwiftDataTestHarness {
         }
         SlotAlternativeAuthoring.append(
             exerciseID: UUID(), exerciseName: "Added later",
-            prescription: AlternativePrescriptionPayload(), to: p)
+            prescription: AlternativePrescriptionPayload(),
+            mainExerciseID: nil, to: p)
         try context.save()
 
         XCTAssertEqual(planEx.alternativesSnapshot, [authored])

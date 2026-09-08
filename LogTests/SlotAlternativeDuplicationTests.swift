@@ -356,6 +356,7 @@ final class SlotAlternativeDuplicationTests: SwiftDataTestHarness {
         SlotAlternativeAuthoring.append(
             exerciseID: UUID(), exerciseName: "Added on the copy",
             prescription: AlternativePrescriptionPayload(),
+            mainExerciseID: nil,
             to: copiedPrescription)
         try context.save()
 
