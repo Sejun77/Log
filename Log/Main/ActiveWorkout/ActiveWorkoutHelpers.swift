@@ -54,6 +54,23 @@ func normalizedOptionalNote(_ text: String) -> String? {
     text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
 }
 
+/// Writes a committed session-notes draft to `workout.notes`, normalizing
+/// empty/whitespace-only input to nil so the History detail row stays
+/// suppressed. Returns whether anything changed, so the caller can skip a save
+/// it does not need.
+///
+/// Extracted from `ActiveWorkoutView.commitSessionNotes` so the commit rule
+/// itself — including "clearing a note stores nil" — is testable without
+/// standing up the view.
+@discardableResult
+func applySessionNotesCommit(_ text: String, to workout: Workout?) -> Bool {
+    guard let workout else { return false }
+    let normalized = normalizedOptionalNote(text)
+    guard workout.notes != normalized else { return false }
+    workout.notes = normalized
+    return true
+}
+
 // MARK: - Equipment classification
 
 /// The canonical equipment-type string for bodyweight exercises.

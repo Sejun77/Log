@@ -19,8 +19,12 @@ import UserNotifications
 //   `ExerciseNotesEditSheet`                → `ExerciseNotesEditSheet.swift`
 //   `SetupNotesEditSheet`                   → `SetupNotesEditSheet.swift`
 //   `EditSessionPlanSheet` (+ its private
-//    `intStepperRow`, `doubleStepperRow`,
-//    `optionalString` helpers)              → `EditSessionPlanSheet.swift`
+//    `intStepperRow` / `doubleStepperRow`
+//    helpers; its `optionalString` binding
+//    is gone — the slot-notes field now
+//    stages into a `TextDraftController`
+//    rather than writing through to the
+//    plan on every keystroke)              → `EditSessionPlanSheet.swift`
 //
 // Phase 11.6-A — pure helpers lifted to module-internal free functions
 // in `Log/Main/ActiveWorkout/ActiveWorkoutHelpers.swift` (no access bumps
@@ -119,12 +123,25 @@ struct ActiveWorkoutView: View {
     @State private var showEditPlanSheet = false
     @State private var showExerciseNotesSheet = false
     @State private var showSetupNotesSheet = false
-    /// Local draft for session notes. Typing mutates only this string; it is
-    /// committed to `Workout.notes` at discrete points (focus loss, disappear,
-    /// scene backgrounding) so per-keystroke edits never invalidate this
-    /// ~3400-line body via the model's Observation tracking.
-    @State private var sessionNotesDraft = ""
-    @FocusState private var sessionNotesFocused: Bool
+    /// Session-notes draft. Held in a **non-observable** `TextDraftController`
+    /// (see `TextDraft.swift`), not in a `@State String` on this view.
+    ///
+    /// The distinction is the whole fix. An earlier pass already stopped
+    /// per-keystroke writes to `Workout.notes`, but kept the draft as `@State`
+    /// *here* — so every character still re-evaluated this view's whole `body`,
+    /// which rebuilds a multi-section `List`, runs SwiftData fetches, and does
+    /// per-set technique / superset-completeness resolution. Typing stayed slow
+    /// and the main-thread stalls broke caret placement and word selection.
+    /// Now the only per-keystroke state lives inside `DraftNotesField`; this
+    /// view holds the controller so it can still commit at its own lifecycle
+    /// points, and never reads the draft text in `body`.
+    @State private var sessionNotes = TextDraftController()
+
+    /// Edit Plan's slot-notes draft. Owned here rather than inside
+    /// `EditSessionPlanSheet` for the same reason plus one more: the sheet's
+    /// `onDismiss` persists the session plans, and only a controller this view
+    /// holds can be committed *before* that runs on a swipe-down dismissal.
+    @State private var editPlanNotes = TextDraftController()
     @Environment(\.scenePhase) private var scenePhase
     /// Tracks soft-keyboard visibility (driven by keyboardWillShow/Hide). While
     /// the keyboard is up the bottom Back/Next/Finish panel is withdrawn so it
@@ -1775,16 +1792,41 @@ struct ActiveWorkoutView: View {
         return result
     }
 
-    /// Commits the local `sessionNotesDraft` to the active `Workout.notes`.
+    /// Commits the pending session-notes draft to the active `Workout.notes`.
+    ///
     /// Normalizes empty/whitespace-only input to nil (so the history detail row
-    /// stays suppressed) and only writes when the value actually changed — this
-    /// keeps the model un-dirtied on no-op commits and avoids a needless body
-    /// invalidation. Called on focus loss, disappear, and scene backgrounding,
-    /// never per keystroke.
+    /// stays suppressed) and **saves the context**. The save matters: Save &
+    /// Exit and Finish both persist and then dismiss, and the old
+    /// commit-on-`onDisappear` ran after that persistence with no save of its
+    /// own, so the last thing typed before either button rode on whatever save
+    /// happened next. Both paths now call this first (see `finishWorkout` and
+    /// the Save & Exit action) and the write lands before the workout is
+    /// persisted or marked complete.
+    ///
+    /// `TextDraftController.commit` no-ops when nothing is pending, so the
+    /// several commit points (focus loss, disappear, backgrounding, Save &
+    /// Exit, Finish) cost one write between them rather than one each, and a
+    /// no-op commit neither dirties the model nor forces a save.
     private func commitSessionNotes() {
-        let normalized = normalizedOptionalNote(sessionNotesDraft)
-        if workout?.notes != normalized {
-            workout?.notes = normalized
+        sessionNotes.commit { text in
+            if applySessionNotesCommit(text, to: workout) {
+                try? ctx.save()
+            }
+        }
+    }
+
+    /// Commits the pending Edit Plan slot-notes draft into the session plan for
+    /// `slotID`. Mirrors `commitSessionNotes`: a no-op when nothing is pending,
+    /// so calling it from both the sheet's Close button and the sheet's
+    /// `onDismiss` writes once.
+    private func commitEditPlanNotes(slotID: UUID?) {
+        guard let slotID else { return }
+        editPlanNotes.commit { text in
+            var sp = sessionPlans[slotID] ?? SessionPlan()
+            let normalized = normalizedOptionalNote(text)
+            guard sp.slotNotes != normalized else { return }
+            sp.slotNotes = normalized
+            sessionPlans[slotID] = sp
         }
     }
 
@@ -1871,6 +1913,10 @@ struct ActiveWorkoutView: View {
         Section("Plan") {
             Button {
                 capturePreEditTargets()
+                // `reset(to:)`, not `seed(from:)`: the sheet may be reopened on
+                // a DIFFERENT slot, and seed's protect-the-draft rule would
+                // carry the previous slot's text across.
+                editPlanNotes.reset(to: sp.slotNotes ?? "")
                 showEditPlanSheet = true
             } label: {
                 HStack {
@@ -2427,17 +2473,20 @@ struct ActiveWorkoutView: View {
                         // not a second done/check key competing with the shared
                         // keyboard checkmark accessory, which is the sole
                         // dismissal control.
-                        TextField(
+                        //
+                        // `DraftNotesField` owns the per-keystroke state and the
+                        // focus, so typing here does not re-evaluate this body.
+                        // Its open-ended `1...` line limit is also the layout
+                        // fix: the previous `lineLimit(1...6)` clamped the
+                        // field's frame at six lines while its text container
+                        // kept growing, leaving a blank, untypeable region under
+                        // long notes and two competing scroll views. The field
+                        // now only grows and the List does all the scrolling.
+                        DraftNotesField(
                             "Notes for this session…",
-                            text: $sessionNotesDraft,
-                            axis: .vertical
+                            controller: sessionNotes,
+                            onCommit: commitSessionNotes
                         )
-                        .lineLimit(1...6)
-                        .textInputAutocapitalization(.sentences)
-                        .focused($sessionNotesFocused)
-                        .onChange(of: sessionNotesFocused) { _, focused in
-                            if !focused { commitSessionNotes() }
-                        }
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -2578,6 +2627,12 @@ struct ActiveWorkoutView: View {
                 titleVisibility: .visible
             ) {
                 Button("Save & Exit") {
+                    // Flush the session-notes draft FIRST. The keyboard can
+                    // still be up when this dialog is confirmed, so focus loss
+                    // has not fired; committing afterwards (via onDisappear)
+                    // would land the write after `saveAndExit` had already
+                    // saved.
+                    commitSessionNotes()
                     // Resumable exit: persist any in-flight writes only.
                     // AppState / activeGuard / draft stores are intentionally
                     // left intact so the workout is resumable via both the
@@ -2668,10 +2723,11 @@ struct ActiveWorkoutView: View {
                     activeGuard.activeWorkoutID = w.id
                 }
 
-                // Seed the local session-notes draft from the bound workout so
-                // the field shows persisted notes on (re)appear; typing edits
-                // only the draft until a commit point.
-                sessionNotesDraft = workout?.notes ?? ""
+                // Seed the session-notes draft from the bound workout so the
+                // field shows persisted notes on (re)appear; typing edits only
+                // the draft until a commit point. `seed(from:)` protects an
+                // in-flight edit, so a re-appear mid-edit cannot clobber it.
+                sessionNotes.seed(from: workout?.notes ?? "")
 
                 // Restore the stable notification ID from AppState so that
                 // any subsequent rest start (or stop) can cancel the
@@ -2899,6 +2955,11 @@ struct ActiveWorkoutView: View {
             .sheet(
                 isPresented: $showEditPlanSheet,
                 onDismiss: {
+                    // Before `persistSessionPlans()` below: a swipe-down
+                    // dismissal never fires the sheet's Close action, so this is
+                    // the only commit point that covers it. No-ops when Close
+                    // (or focus loss inside the sheet) already committed.
+                    commitEditPlanNotes(slotID: currentExercise?.routineSlotID)
                     applySessionPlanToInputs()
                     // The cardio counterpart of `applySessionPlanToInputs`:
                     // reps and duration already refreshed here from the edited
@@ -2915,6 +2976,11 @@ struct ActiveWorkoutView: View {
                     EditSessionPlanSheet(
                         plan: sessionPlanBinding(
                             for: exercise.routineSlotID),
+                        notes: editPlanNotes,
+                        onCommitNotes: {
+                            commitEditPlanNotes(
+                                slotID: exercise.routineSlotID)
+                        },
                         snapshotEffort: exercise.prescriptionSnapshot.map {
                             WorkoutEffortTargetResolver.Fields(payload: $0)
                         },
@@ -3109,6 +3175,11 @@ struct ActiveWorkoutView: View {
         applySwaps: Bool,
         applySlotPrescription: Bool = false
     ) {
+        // Same ordering rule as Save & Exit: the draft must reach
+        // `Workout.notes` before the workout is marked complete and saved, or
+        // the last thing typed before Finish is not in the History record this
+        // call produces.
+        commitSessionNotes()
         if applySwaps { applyExerciseSwapsToRoutine() }
         if applySlotPrescription { applySessionPlansToSlotPrescriptions() }
 
@@ -4811,6 +4882,18 @@ struct ActiveWorkoutView: View {
         return restSec
     }
 
+    /// The live `Exercise` for `id`, or nil when the library row is gone.
+    ///
+    /// `body` reaches this three times per evaluation (Exercise Notes twice,
+    /// Equipment & Setup once), and on a *swapped* slot many more — the per-set
+    /// technique and superset-completeness passes call `resolvedActiveEquipment`
+    /// O(sets²) times. Serving it from the view's existing `allExercises`
+    /// `@Query` was tried and measured: the fetch is steady at ~0.1 ms a call,
+    /// while the array scan swung between 0.006 ms and 0.19 ms per call across
+    /// runs depending on whether those 300 model objects were already
+    /// materialized — sometimes faster, sometimes slower. A swap for an
+    /// unpredictable cost is not an optimization, so the round trip stays. The
+    /// actual fix was to stop evaluating this body on every keystroke.
     private func fetchExercise(by id: UUID) -> Exercise? {
         let d = FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
         return try? ctx.fetch(d).first
