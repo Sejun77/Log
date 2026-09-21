@@ -73,9 +73,9 @@ From the tested iPhone layout, before the investigation moved above Log:
 - switching to the sibling reps/weight field in the same row could still fail
   **after** that automatic scroll had made the row visible
 
-The diagnostic harnesses that produced these numbers were not retained, because
-no production fix was validated and keeping them would have shipped dead debug
-code. They are recoverable from this branch's history if ever needed.
+The diagnostic harnesses that produced these numbers were temporary,
+uncommitted investigation code and were removed because no production fix was
+validated.
 
 ---
 
