@@ -557,6 +557,12 @@ struct ExerciseDetailView: View {
     /// Observation tracking.
     @State private var notesDraft = ""
     @State private var setupDraft = ""
+    /// Same treatment for the name. It was the one field still bound straight
+    /// to the model (`$exercise.name`), so each character wrote `Exercise.name`
+    /// and invalidated everything observing it — including the Exercises tab's
+    /// `@Query(sort: [order, name])`, which re-sorted the whole library, and
+    /// `ExerciseDetailHost`'s own `@Query`. Committed with the other two.
+    @State private var nameDraft = ""
 
     /// Max routine rows shown before collapsing the remainder into a
     /// "+N more" row. Realistic routine counts are tiny; this only guards
@@ -626,6 +632,7 @@ struct ExerciseDetailView: View {
     /// bound exercise changes identity, never during ordinary body redraws, so
     /// an in-progress edit is not clobbered.
     private func seedDrafts() {
+        nameDraft = exercise.name
         notesDraft = exercise.notes ?? ""
         setupDraft = exercise.setupDefaults ?? ""
     }
@@ -634,6 +641,12 @@ struct ExerciseDetailView: View {
     /// to nil and writing only when the value changed (no-op commits leave the
     /// model un-dirtied). Never called per keystroke.
     private func commitDrafts() {
+        // Name keeps its existing semantics exactly — whatever is in the field
+        // is what is stored, with no trimming or emptiness rule added here.
+        // Only the *timing* of the write changed.
+        if exercise.name != nameDraft {
+            exercise.name = nameDraft
+        }
         let normalizedNotes = normalizedOptionalNote(notesDraft)
         if exercise.notes != normalizedNotes {
             exercise.notes = normalizedNotes
@@ -659,7 +672,7 @@ struct ExerciseDetailView: View {
             }
 
             Section("Basics") {
-                TextField("Name", text: $exercise.name)
+                TextField("Name", text: $nameDraft)
                     .font(.dsBody)
                     .focused($focusedField, equals: "name")
                     .submitLabel(.done)
