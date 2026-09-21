@@ -170,3 +170,12 @@ C) Performance
 ## Primary References
 - Follow docs/REFACTOR_PLAN.md as the blueprint.
 - If a plan section conflicts with code reality, propose a plan update first.
+
+---
+
+## Known Issues (do not re-investigate)
+- Caret placement / word selection inside text fields: reproduces in
+  independent stock SwiftUI and UIKit apps on iOS/iPadOS 26.6.2, not just in
+  Log. No Log-specific cause or fix was established — do not work around it in
+  Log without new evidence.
+  See docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md before touching text input.
