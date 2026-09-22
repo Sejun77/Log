@@ -73,6 +73,36 @@ final class ActiveWorkoutGuard: ObservableObject {
     func unlockRoutine(_ id: UUID) { lockedRoutineIDs.remove(id) }
     func isRoutineLocked(_ id: UUID) -> Bool { lockedRoutineIDs.contains(id) }
 
+    // Routine blocks
+
+    /// Whether one routine *block* is in use by the active workout.
+    ///
+    /// The two lock sets answer two different questions and must not be
+    /// confused:
+    ///
+    /// • `lockedExerciseIDs` is **Exercise-definition** identity. It holds
+    ///   every Exercise the active plan references, which is exactly what the
+    ///   exercise library needs — deleting Bench Press mid-session is unsafe
+    ///   no matter which screen you delete it from. It says nothing about
+    ///   which *routine* is being trained.
+    ///
+    /// • `lockedRoutineIDs` is **routine ownership**, seeded from
+    ///   `plan.routineID` in `beginSession`. Only that routine's blocks are
+    ///   the slots the session is executing.
+    ///
+    /// Block identity follows routine ownership: a block in Routine B is a
+    /// different slot in a different plan than a block in Routine A, even when
+    /// both point at the same Exercise. Consulting the exercise set alone
+    /// froze blocks in unrelated routines that merely reuse a shared exercise
+    /// (Bench Press in Push A and Push B), so the routine check gates it.
+    func isBlockInUse<S: Sequence>(
+        routineID: UUID,
+        exerciseIDs: S
+    ) -> Bool where S.Element == UUID {
+        guard isRoutineLocked(routineID) else { return false }
+        return exerciseIDs.contains { isExerciseLocked($0) }
+    }
+
     // Session lifecycle
     func beginSession(plan: WorkoutPlan) {
         activePlan = plan
