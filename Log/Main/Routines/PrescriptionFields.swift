@@ -815,7 +815,9 @@ struct TempoEditorView: View {
             .foregroundStyle(.secondary)
     }
 
-    private func label(_ v: Int) -> String { v == 0 ? "—" : "\(v)s" }
+    private func label(_ v: Int) -> String {
+        v == 0 ? "—" : DurationDisplay.seconds(v)
+    }
 
     private func parseTempo() {
         guard let t = tempo, !t.isEmpty else {

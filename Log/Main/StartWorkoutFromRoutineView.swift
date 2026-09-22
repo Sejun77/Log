@@ -89,14 +89,14 @@ struct TechniquePlanSnapshot: Codable, Equatable {
             if let n = dropCount { parts.append("×\(n)") }
             switch dropsetEffort {
             case .amrap:            parts.append("(AMRAP)")
-            case .fixedReps(let n): parts.append("(\(n) reps)")
+            case .fixedReps(let n): parts.append("(\(TechniqueSummaryCopy.reps(n)))")
             }
-            if let r = restSeconds, r > 0 { parts.append("\(r)s") }
+            if let r = restSeconds, r > 0 { parts.append(DurationDisplay.seconds(r)) }
             let tail = parts.isEmpty ? "" : " " + parts.joined(separator: " ")
-            return "\(String(localized: "Drop Set"))\(tail)"
+            return "\(TechniqueType.dropset.displayName)\(tail)"
         case .restPause:
-            var s = String(localized: "Rest-Pause")
-            if let r = restSeconds, r > 0 { s += " \(r)s" }
+            var s = TechniqueType.restPause.displayName
+            if let r = restSeconds, r > 0 { s += " \(DurationDisplay.seconds(r))" }
             if let n = rounds, n > 0 { s += " ×\(n)" }
             return s
         case .tempoOverride:
@@ -110,13 +110,13 @@ struct TechniquePlanSnapshot: Codable, Equatable {
             }
             if let n = reps, n > 0 { s += " (\(n))" }
             return s
-        case .amrap:    return String(localized: "AMRAP")
-        case .toFailure: return String(localized: "To Failure")
+        case .amrap:    return TechniqueType.amrap.displayName
+        case .toFailure: return TechniqueType.toFailure.displayName
         case .cluster:
-            var s = String(localized: "Cluster")
+            var s = TechniqueType.cluster.displayName
             if let n = reps, n > 0 { s += " \(n)r" }
             if let c = rounds, c > 0 { s += " ×\(c)" }
-            if let r = restSeconds, r > 0 { s += " (\(r)s)" }
+            if let r = restSeconds, r > 0 { s += " (\(DurationDisplay.seconds(r)))" }
             return s
         }
     }
@@ -125,15 +125,21 @@ struct TechniquePlanSnapshot: Codable, Equatable {
     var summaryLabel: String {
         var label = setAttachedLabel
         // Append set qualifier. Prefer explicit indices when available.
+        // The words come from `TechniqueSummaryCopy` so this chip and the
+        // routine editor's row say "set"/"sets"/"all" in the same language;
+        // the brackets stay notation.
         let indices = appliesToSetIndices
-        if !indices.isEmpty {
-            let nums = indices.sorted().map { String($0 + 1) }.joined(separator: ",")
-            label += indices.count == 1 ? " [set \(nums)]" : " [sets \(nums)]"
+        if let sets = TechniqueSummaryCopy.appliesToSets(indices: indices) {
+            label += " " + TechniqueSummaryCopy.bracketed(sets)
         } else {
             switch appliesTo {
             case .lastWorkingSet: break
-            case .allWorkingSets:   label += " [all]"
-            case .setNumber(let n): label += " [set \(n)]"
+            case .allWorkingSets:
+                label += " " + TechniqueSummaryCopy.bracketed(
+                    TechniqueSummaryCopy.allSets)
+            case .setNumber(let n):
+                label += " " + TechniqueSummaryCopy.bracketed(
+                    String(localized: "set \(n)"))
             }
         }
         return label

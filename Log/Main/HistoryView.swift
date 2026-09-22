@@ -660,16 +660,12 @@ struct WorkoutDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                 } else if let end = workout.completedAt {
-                    let total = max(0, Int(end.timeIntervalSince(workout.date)))
-                    let h = total / 3600
-                    let m = (total % 3600) / 60
+                    // Same formatter as the History row (`WorkoutRowFormat`),
+                    // which used to hold a verbatim copy of this arithmetic.
                     LabeledContent("Duration") {
-                        Text(
-                            h > 0
-                                ? String(format: "%dh %02dm", h, m)
-                                : String(localized: "\(max(1, m))m")
-                        )
-                        .monospacedDigit()
+                        Text(verbatim: DurationDisplay.elapsed(
+                            Int(end.timeIntervalSince(workout.date))))
+                            .monospacedDigit()
                     }
                 }
 

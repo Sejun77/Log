@@ -17,9 +17,6 @@
         }
       }
     },
-    "· %llds" : {
-
-    },
     "“%@” already exists." : {
       "localizations" : {
         "ko" : {
@@ -55,6 +52,17 @@
     },
     "%" : {
 
+    },
+    "% of working" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메인 세트 기준 %"
+          }
+        }
+      }
     },
     "% of Working" : {
       "localizations" : {
@@ -131,12 +139,67 @@
         }
       }
     },
+    "%@ rest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "휴식 %@"
+          }
+        }
+      }
+    },
+    "%@–%@s" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@–%2$@초"
+          }
+        }
+      }
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@h" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@시간"
+          }
+        }
+      }
+    },
+    "%@m" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@분"
+          }
+        }
+      }
+    },
+    "%@s" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@초"
           }
         }
       }
@@ -206,6 +269,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 반복"
+          }
+        }
+      }
+    },
+    "%lld reps/drop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "드롭당 %lld 반복"
+          }
+        }
+      }
+    },
+    "%lld rounds" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 라운드"
+          }
+        }
+      }
+    },
+    "%lld segment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld구간"
+          }
+        }
+      }
+    },
+    "%lld segments" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld구간"
           }
         }
       }
@@ -293,6 +400,17 @@
         }
       }
     },
+    "%lld–%lld reps" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld–%2$lld 반복"
+          }
+        }
+      }
+    },
     "%lld." : {
 
     },
@@ -306,12 +424,24 @@
         }
       }
     },
-    "%lld%@" : {
+    "%lld%% drop" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "en" : {
+        "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%2$@"
+            "state" : "translated",
+            "value" : "%lld%% 감량"
+          }
+        }
+      }
+    },
+    "%lld%% of working" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메인 세트의 %lld%%"
           }
         }
       }
@@ -326,17 +456,19 @@
         }
       }
     },
-    "%lld%%%@" : {
+    "%lldh %@m" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "en" : {
+        "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%%%2$@"
+            "state" : "translated",
+            "value" : "%1$lld시간 %2$@분"
           }
         }
       }
     },
     "%lldm" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -347,6 +479,7 @@
       }
     },
     "%llds rest" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -520,6 +653,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이전"
+          }
+        }
+      }
+    },
+    "activeWorkout.timer.duration" : {
+      "comment" : "Active workout toolbar: the running set-duration timer. A symbolic key because \"Duration: %@\" collides with \"Duration %@\" under String Catalog symbol generation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duration: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시간: %@"
+          }
+        }
+      }
+    },
+    "activeWorkout.timer.rest" : {
+      "comment" : "Active workout toolbar: the running rest timer. Symbolic for the same reason as its duration sibling.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "휴식: %@"
           }
         }
       }
@@ -939,6 +1108,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "기본"
+          }
+        }
+      }
+    },
+    "Best reps" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "최고 반복"
+          }
+        }
+      }
+    },
+    "Best wt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "최고 중량"
           }
         }
       }
@@ -1688,7 +1879,19 @@
         }
       }
     },
+    "Duration %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시간 %@"
+          }
+        }
+      }
+    },
     "Duration %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -1721,6 +1924,7 @@
       }
     },
     "Duration: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -3099,6 +3303,17 @@
         }
       }
     },
+    "No segments" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구간 없음"
+          }
+        }
+      }
+    },
     "No sets" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4095,7 +4310,19 @@
         }
       }
     },
+    "Rest between clusters: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "클러스터 간 휴식: %@"
+          }
+        }
+      }
+    },
     "Rest between clusters: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -4115,7 +4342,19 @@
         }
       }
     },
+    "Rest between drops: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "드롭 간 휴식: %@"
+          }
+        }
+      }
+    },
     "Rest between drops: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -4158,6 +4397,7 @@
       }
     },
     "Rest: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -4504,6 +4744,28 @@
         }
       }
     },
+    "set %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트 %@"
+          }
+        }
+      }
+    },
+    "set %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트 %lld"
+          }
+        }
+      }
+    },
     "Set %lld" : {
       "localizations" : {
         "ko" : {
@@ -4553,6 +4815,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "세트 및 휴식"
+          }
+        }
+      }
+    },
+    "sets %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트 %@"
           }
         }
       }
@@ -5124,6 +5397,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "목표 거리"
+          }
+        }
+      }
+    },
+    "technique.appliesTo.all" : {
+      "comment" : "Technique chip qualifier meaning every working set, shown inside brackets as [all]. A symbolic key: a bare \"all\" collides with the \"All\" filter label under symbol generation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "all"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체"
+          }
+        }
+      }
+    },
+    "technique.restPause.rest" : {
+      "comment" : "Rest-Pause technique editor: intra-set rest stepper. Symbolic because \"Rest: %@\" collides with \"%@ rest\" under String Catalog symbol generation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "휴식: %@"
           }
         }
       }

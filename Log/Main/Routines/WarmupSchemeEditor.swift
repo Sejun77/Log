@@ -82,7 +82,6 @@ struct WarmupSchemeEditor: View {
 
     var body: some View {
         List {
-            schemeSummarySection
             stepsSection
         }
         .navigationTitle("Warmup")
@@ -127,20 +126,29 @@ struct WarmupSchemeEditor: View {
         }
     }
 
-    private var schemeSummarySection: some View {
+    /// The screen's only section.
+    ///
+    /// It used to be preceded by a second `Section` ("Warmup Steps") whose body
+    /// was *empty whenever any step existed* — it held only the no-steps
+    /// message. That is what produced the large blank band under the navigation
+    /// title: a grouped section header plus an empty grouped container, both
+    /// rendered before the first row, for every non-empty warm-up. Removing the
+    /// text alone would have left the container; the fix is that the section is
+    /// gone and its empty state moved here, beside the rows it describes.
+    ///
+    /// The header was redundant besides — the navigation title already reads
+    /// "Warmup", exactly the duplication removed from the Techniques screen.
+    ///
+    /// Everything the screen does is unchanged: `EditButton` and `+` live in
+    /// the toolbar, `.onMove`, `.swipeActions` and the row's edit-on-tap are on
+    /// the rows below, and the empty state is now a row in this section (the
+    /// shape the Techniques screen uses).
+    private var stepsSection: some View {
         Section {
-            let count = sortedSteps.count
-            if count == 0 {
+            if sortedSteps.isEmpty {
                 Text("No warmup steps. Tap + to add one.")
                     .foregroundStyle(.secondary)
             }
-        } header: {
-            Text("Warmup Steps")
-        }
-    }
-
-    private var stepsSection: some View {
-        Section {
             ForEach(sortedSteps) { step in
                 Button {
                     editingStep = step
@@ -277,15 +285,22 @@ private struct WarmupStepRow: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 if let r = step.restSecondsAfter, r > 0 {
-                    Text("\(r)s rest")
+                    Text(verbatim: DurationDisplay.rest(r))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
+            // Both previews compose their reps segment through
+            // `TechniqueSummaryCopy.reps`, so the word matches the rest of the
+            // app instead of being an English literal pasted into a `String`
+            // that `Text` then rendered verbatim. `%` and `×` stay notation,
+            // and the weight unit keeps the app's universal `kg`/`lb`.
             if step.kind == .percentage {
                 if let pct = step.percentOfWorking {
-                    let repsStr = step.reps.map { " × \($0) reps" } ?? ""
-                    Text("\(Int(pct * 100))%\(repsStr)")
+                    let repsStr = step.reps.map {
+                        " × " + TechniqueSummaryCopy.reps($0)
+                    } ?? ""
+                    Text(verbatim: "\(Int(pct * 100))%\(repsStr)")
                         .font(.dsBody)
                 }
             } else if step.kind == .fixedReps {
@@ -293,10 +308,12 @@ private struct WarmupStepRow: View {
                 let weightStr: String? = step.weight.map {
                     "\(Units.formatWeight($0)) \(unit)"
                 }
-                let repsStr: String? = step.reps.map { "\($0) reps" }
+                let repsStr: String? = step.reps.map {
+                    TechniqueSummaryCopy.reps($0)
+                }
                 let parts = [weightStr, repsStr].compactMap { $0 }
                 if !parts.isEmpty {
-                    Text(parts.joined(separator: " × "))
+                    Text(verbatim: parts.joined(separator: " × "))
                         .font(.dsBody)
                 }
             }
@@ -413,7 +430,11 @@ private struct WarmupStepEditSheet: View {
 
                 if kind != .noteOnly {
                     Section {
-                        Stepper(reps == 1 ? "1 rep" : "\(reps) reps", value: $reps, in: 1...30)
+                        Stepper(
+                            reps == 1
+                                ? String(localized: "1 rep")
+                                : TechniqueSummaryCopy.reps(reps),
+                            value: $reps, in: 1...30)
                     } header: {
                         Text("Reps")
                     }
