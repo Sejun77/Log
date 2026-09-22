@@ -58,6 +58,10 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                DSPageIntro(
+                    "Units, defaults, effort tracking, data, and help.",
+                    systemImage: "gear"
+                )
                 unitsSection
                 bodyweightSection
                 autoregSection
