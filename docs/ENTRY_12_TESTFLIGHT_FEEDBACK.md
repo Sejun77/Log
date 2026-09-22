@@ -1,9 +1,9 @@
 # Entry #12 — TestFlight Beta Testing, Korean Support & External Feedback
 
-> **Draft.** This entry is a template for the TestFlight beta phase. It is filled
-> in as the beta happens. Unresolved areas use `[TBD]` placeholders — no results
-> are recorded until they actually happen. Testers have **not** completed testing
-> yet.
+> **Draft.** This entry is filled in as the TestFlight beta happens. Unresolved
+> areas use `[TBD]` placeholders — no results are recorded until they actually
+> happen. The beta is **under way** on Build 10 and testers have **not** completed
+> testing yet, so nothing here should be read as a final result.
 
 ---
 
@@ -20,7 +20,22 @@ Entry #12 asks a different question:
 This phase is about external feedback from a small group of friends and family
 through TestFlight. It is **not** about a public App Store release.
 
-**Status:** planned / just beginning. TestFlight testing has not started yet.
+**Status:** in progress. Build 10 was uploaded to TestFlight on 2026-09-21 and
+distributed to the Friends & Family group; initial peer feedback has been
+collected and is recorded in the Feedback Log below. Testing is **not**
+complete.
+
+Three feedback-driven slices — root-page discoverability, training term help and
+Korean localization consistency — have since been implemented and merged to
+`main`. They are **not in Build 10**, so no tester has seen them yet; they await
+the next distributed build and a peer re-test.
+
+Three kinds of item are kept distinct throughout this document:
+
+- **Tester feedback on Build 10** — what people actually reported.
+- **Developer-discovered issues** — found in follow-up validation, marked as
+  such in the log rather than presented as tester feedback.
+- **Merged after Build 10** — implemented work testers have not yet used.
 
 ---
 
@@ -66,8 +81,9 @@ in real use? `[TBD]`
 
 ## TestFlight Setup
 
-- Build prepared for TestFlight: **Build 9 — uploaded**
-- Build number / version tested: **1.0 (9)**
+- Build currently distributed to testers: **Build 10 — uploaded 2026-09-21**
+- Build number / version being tested: **1.0 (10)**
+- Previous builds: Build 8 (prepared and archived), Build 9 (uploaded)
 - Internal vs. external testing group: `[TBD]`
 - Beta notes sent to testers: `[TBD]`
 - Date invites sent: `[TBD]`
@@ -77,8 +93,12 @@ Set RIR/RPE effort targets, the improved automatic RIR/RPE progression, the
 destructive confirmation before removing logged sets, and the updated
 guide/tester docs.
 
-**Build 10 work has started.** It opens with a safety/UX fix to Alternative
-Exercises deletion handling (C1), followed by a Korean terminology and naming
+**Not in any distributed build yet:** the post-Build-10 work — root-page
+discoverability and the History restructure, training term help, and Korean
+localization consistency. It is merged to `main` and awaits the next upload.
+
+**Build 10 shipped, and is the build testers are using.** It opened with a
+safety/UX fix to Alternative Exercises deletion handling (C1), followed by a Korean terminology and naming
 pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
 discoverability pass (C4), a User Guide language default (C5) and an
 effort-target clarity pass (C6), planned effort targets in History (C7), the
@@ -86,7 +106,7 @@ Calculus showcase hidden from Release (C8), a stability / data-integrity fix to
 prepared Alternative Exercises (C9), a manual-test polish bundle (C10), a
 nested-editor persistence fix (C11), the remaining low-risk UI polish bundle
 (C12), a real-device warm-up refresh fix (C13) and a UI density cleanup (C14)
-— see the Build 10 entries under *Fixes Made* below. C1–C8 are UX polish or visibility improvements, not Build 9
+— see the Build 10 entries under *Fixes Made* below. C1–C8 were UX polish or visibility improvements, not Build 9
 blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
 orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
 the crash needs a prepared alternative's *first* warm-up step to trigger, so it
@@ -286,6 +306,34 @@ Severity:
 - **Feedback:** A tester asked for cardio support, which the app had no obvious answer for.
 - **Status:** Fixed for the beta, in the same slice as the duration/rest limits above (lightweight cardio depends on usable long-duration input). Cardio can be logged as a duration-based exercise. For now, details like distance, speed, incline, resistance, or heart-rate zone can be written in notes. In Korean: 유산소 운동은 시간 기반 운동으로 기록할 수 있습니다. 현재는 거리, 속도, 경사, 저항 단계, 심박 구간 같은 세부 정보는 메모에 기록할 수 있습니다. Structured cardio metrics are deferred (see Deferred Feedback).
 
+### 2026-09-21 — Peer/family tester usability feedback
+
+- **Group:** Friends & Family Beta
+- **Severity:** P1
+- **Feedback:** New users were not always sure what each root page was for, or what the app expected them to do first. The overall workflow — make a routine, start a workout from it, look at history — was not obvious without being told.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Each root page now opens with a one-line statement of what the page is for, and the first-use empty states say what to do next rather than only that the list is empty.
+
+### 2026-09-21 — Peer/family tester usability feedback
+
+- **Group:** Friends & Family Beta
+- **Severity:** P2
+- **Feedback:** The root pages felt too similar to each other — it was hard to tell at a glance which page you were on. Testers were explicit that they still like the simple, plain design and were **not** asking for a colourful redesign; the problem was hierarchy and page identity.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Addressed through page-purpose intros and a clearer History structure rather than new colour or ornament. A section-header typography experiment was tried and reverted — the original typography is retained.
+
+### 2026-09-21 — Peer/family tester usability feedback
+
+- **Group:** Friends & Family Beta
+- **Severity:** P1
+- **Feedback:** Advanced training terminology was not self-explanatory. **RIR** was called out specifically: the app asks for a value before it ever says what the letters mean. The same applies to RPE, e1RM, and the technique names.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Point-of-use explanations were added behind the app's existing info glyph, and the technique descriptions were consolidated so every screen gives the same definition.
+
+### 2026-09-22 — Developer manual review (Korean)
+
+- **Group:** Developer validation — **not tester-reported**
+- **Severity:** P1
+- **Feedback:** A manual pass through the app in Korean found mixed Korean/English output in several places: technique **names** as well as their previews, time units rendered as bare `s` / `m` / `h`, the cardio **Segments** vocabulary, the History **In Progress** pill, and warm-up previews. The warm-up editor also showed a large blank band between the navigation title and the first row.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Recorded here to keep the log complete; these were found during follow-up testing, not raised by a tester.
+
 ### TBD — Peer/family tester
 
 - **Group:** Friends & Family Beta
@@ -300,6 +348,11 @@ Peer/family testing has started, and the entries above reflect issues found thro
 ## Fixes Made From Feedback / TestFlight Validation
 
 These fixes came from Friends & Family Beta feedback, TestFlight crash reports, developer reproduction, and manual validation.
+
+Everything up to and including the Build 10 entries shipped in a build testers
+have used. The last four bullets are marked *Implemented, pending
+distribution/re-test* — they were merged to `main` after Build 10 was uploaded,
+so they are not in the build anyone is testing.
 
 - Removed a fragile SwiftData predicate from the routine startability path after a TestFlight crash occurred when opening routines or adding the first exercise to a blank routine.
 - Removed a second fragile SwiftData predicate from the routine deletion path after deleting or removing an exercise from a routine caused another TestFlight crash.
@@ -680,6 +733,60 @@ Current validation status:
   counts, and legacy rows surviving read, deletion and sibling edits;
   `KoreanLocalizationTests` covers the new copy and asserts the superseded key
   is gone.
+- **Root page discoverability and History navigation.** *(Implemented, pending
+  distribution/re-test — merged after Build 10.)* From the first-use feedback
+  above. Each root page — Routines, Exercises, History, Settings —
+  now opens with a compact one-line statement of what the page is for, rendered
+  on the standard row background rather than as a new surface, and the first-use
+  empty states say what to do next. History's information architecture changed
+  so a bounded **Recent Workouts** section appears *before* Calendar and
+  Progression, limited to 4 entries, with a **View All Workouts** destination
+  for the complete history. The existing minimal/native design style is
+  preserved: no new colour, ornament or per-page accent. A section-header
+  typography experiment was part of this work and was **reverted** — the
+  original typography is retained.
+- **Training term help at point of use.** *(Implemented, pending
+  distribution/re-test — merged after Build 10.)* From the RIR feedback above. **RIR**
+  and **RPE** definitions are available behind the app's existing info glyph
+  where the metric is chosen (Settings → Autoregulation) and where a target is
+  authored (the prescription editor's effort row). **e1RM** gained a contextual
+  explanation attached to the History progression metric selector itself, shown
+  only while e1RM is the selected metric. Technique descriptions were
+  consolidated into one shared help copy used by the Add Technique picker, the
+  technique parameter editor and the active-workout detail sheet, so the same
+  technique can no longer be described three different ways. The technique
+  conflict/disable messages were localized — they had been English sentences
+  composed around an already-translated technique name. The redundant
+  **Techniques** section header was removed; the navigation title already says
+  it.
+- **Korean localization consistency.** *(Implemented, pending
+  distribution/re-test — merged after Build 10.)* Partly from the tester
+  terminology feedback, mostly from the developer manual review above. Technique **names**
+  now come from the single canonical localized display name everywhere, instead
+  of private English tables in the technique list and the technique editor's
+  navigation title. Technique preview vocabulary (`set`/`sets`, `reps`,
+  `rounds`, `drop`, `all`) is localized through one shared vocabulary rather
+  than English fragments joined into a string. The warm-up editor's redundant
+  section and the large blank band under its navigation title were fixed — the
+  band was an empty grouped section that rendered whenever the scheme had any
+  steps — and its previews were localized. Time formatting was centralized:
+  **English uses `s` / `m` / `h`, Korean uses `초` / `분` / `시간`**, applied to
+  tempo seconds, rest, prescription and cardio durations, warm-up and technique
+  rest, workout durations, timers and the duration picker wheels. Cardio
+  **segment counts and segment-kind labels** (Warm-up / Work / Recovery /
+  Cool-down) are localized, History's **In Progress** pill is localized, and
+  **Best wt** / **Best reps** gained Korean. Standard measurement abbreviations
+  remain universal in both languages: `kg`, `lb`, `km`, `mi`, `m`, `km/h`,
+  `bpm`, `kcal`, `%`, `×`, plus `AMRAP`, `RIR`, `RPE` and `e1RM`. **Calculus
+  Analytics localization was deliberately reverted** so that feature stays
+  consistently English until it can be localized as a whole (see Deferred
+  Feedback).
+- Validation for the three slices above: Debug build, full test suite and
+  Release build passed for each before merge. Korean was verified by resolving
+  every new string through the compiled Korean bundle in tests; a full manual
+  Korean pass through the affected screens is **still pending**. None of the
+  three is in Build 10, so none has been validated by a tester — they need a
+  new TestFlight build before the re-test cycle can run.
 - Latest test suite result: **full scheme passes: 2,546 tests, 0 failures** —
   2,544 unit tests plus 2 UI tests (Build 10 C15 run). Debug build succeeds and
   Release build succeeds. Manual UI verification of the Build 10 C15 fix is
@@ -689,15 +796,51 @@ Current validation status:
 
 ## Planned Fixes From Feedback
 
-- None currently. The setup-notes editing request was implemented, and the cardio
-  request is answered for the beta by duration-based cardio logging (see Fixes
-  above). Structured cardio metrics are tracked under Deferred Feedback.
+**Open bugs** — found during follow-up testing, not yet fixed:
+
+- **Active-workout lock scope.** When an exercise appears both in the active
+  workout's source routine and in a *different, unrelated* routine, blocks in
+  that unrelated routine can incorrectly become frozen/locked. The lock is
+  scoped more widely than the session it belongs to. **Open.**
+- **History calendar interaction.** Highlighted workout dates can be
+  interactively deselected, even though deselecting them means nothing — the
+  highlight describes history, so it should not behave like a selection control.
+  **Open.**
+
+**Remaining peer-feedback work** — identified, not yet started:
+
+- User-facing **Block** / **Slot** terminology needs review; both are internal
+  words that reached the interface.
+- **Start Workout** discoverability still needs review.
+- **User Guide** discoverability still needs review — it is under
+  Settings → Help, which a new user may never open.
+- A **first-launch orientation / tutorial** is planned for later, deliberately
+  after the UI improvements above rather than before them.
+- A **peer re-test should happen before onboarding is finalized**, on a build
+  that actually contains the three slices — they are not in Build 10, so no
+  tester has used them. Until that build ships and someone tries it, it is not
+  known whether a tutorial is still needed once the page intros, the History
+  restructure and the terminology help are in front of real users.
+
+The setup-notes editing request was implemented, and the cardio request is
+answered for the beta by duration-based cardio logging (see Fixes above).
+Structured cardio metrics are tracked under Deferred Feedback.
 
 ---
 
 ## Deferred Feedback
 
 Feedback that is real but intentionally not addressed in this phase, such as P2/P3 polish, larger redesigns, or out-of-scope ideas.
+
+- **Full Korean localization of Calculus Analytics.** The localization pass
+  reached this screen and was **deliberately reverted**. Its contents could have
+  been translated, but the Settings entry, title, card and footer that lead to
+  it would still have been English — translating only the inside would have
+  produced exactly the mixed-language inconsistency the pass existed to remove.
+  The feature stays consistently English until it can be localized as one
+  cohesive slice, entry point included. Its mathematical notation (`S(t)`,
+  `S′(t)`, `ΔS/Δt`, `Σ`, `≈`, `e1RM`) stays as-is in every language when that
+  happens.
 
 - **Structured cardio metrics.** The cardio request is answered for the beta by
   duration-based logging plus notes. Dedicated fields are deferred:
@@ -821,8 +964,21 @@ TestFlight builds, keeping it for local development. Six are UX polish, C7 is a
 visibility improvement and C8 is a TestFlight-facing cleanup. Nothing here
 blocks Build 9, which stays in testers' hands.
 
-**Build 9 — next build scope:** the redesigned RIR/RPE effort targets, which
-landed after Build 8 was prepared: whole-step automatic Progression and the new
-**Custom Per Set** mode. Both are implemented and test-covered. Build 9 has
-**not** been uploaded. Remaining work is the manual custom-effort regression
-pass on device (still pending) and the build prep itself.
+**Build 9 — scope, as planned at the time:** the redesigned RIR/RPE effort
+targets, which landed after Build 8 was prepared: whole-step automatic
+Progression and the new **Custom Per Set** mode. Both were implemented and
+test-covered before the build went out.
+
+**Where the builds stand now:** Build 9 shipped, and **Build 10** followed with
+the C1–C14 audit series — Alternative Exercises deletion and persistence fixes,
+a Korean terminology pass, active-workout layout and density polish, a User
+Guide language default, effort-target clarity, and planned effort targets in
+History — and was uploaded to TestFlight on **2026-09-21**. Build 10 is the
+build testers are using.
+
+**Merged to `main` after Build 10, not yet distributed:** root-page
+discoverability and the History restructure, training term help, and Korean
+localization consistency. All three are implemented, merged and passing their
+Debug build, full test suite and Release build — and none of them is in Build
+10, so no tester has used them. They are *implemented, pending
+distribution/re-test*: the next tester cycle needs a build that contains them.

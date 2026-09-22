@@ -5,12 +5,28 @@ This is a practical plan for the first small TestFlight beta of **Log**.
 It exists to make the beta easy to run: what to send testers, what to ask them
 to try, what questions to ask, and where to write down what comes back.
 
-**Status:** planned. TestFlight testing has not started yet.
+**Status:** in progress. The first round is running on Build 10, uploaded to
+TestFlight on 2026-09-21, and initial peer/family feedback has been collected
+(see the Feedback Log).
 
-**Build for this round:** Build 9, the next tester round after Build 8. Build 8
-was prepared and archived with the cardio system and Alternative Exercises;
-Build 9 adds the redesigned RIR/RPE effort targets, including **Custom Per Set**.
-Build 9 has not been uploaded — this plan is what the round runs on once it is.
+**Currently distributed build:** **Build 10**. Build 8 was prepared and archived
+with the cardio system and Alternative Exercises; Build 9 added the redesigned
+RIR/RPE effort targets, including **Custom Per Set**; Build 10 followed with the
+C1–C14 audit series — Alternative Exercises deletion and persistence fixes, a
+Korean terminology pass, active-workout layout and density polish, a User Guide
+language default, effort-target clarity, and planned effort targets in History —
+and is what testers have in their hands today. It contains none of the
+post-Build-10 work listed below.
+
+**Merged to `main` after Build 10, not yet distributed:**
+
+- root-page discoverability and the History restructure
+- training term help (RIR / RPE / e1RM, consolidated technique descriptions)
+- Korean localization consistency
+
+These came out of the Build 10 feedback below. They are implemented and merged,
+but **no tester has seen them** — Build 10 does not contain them. The next
+validation cycle needs a build that does.
 
 ---
 
@@ -703,9 +719,21 @@ Fill this in as feedback arrives.
 | 2026-07-30 | Peer/family tester | Friends & Family Beta | P1 | Switching an exercise mid-workout gave an inconsistent plan between duration-based and normal exercises: switching could leave mixed duration/reps prescription state (duration fields on a reps/weight exercise), the set count was inconsistent after switching ("Keep Current Plan" changed 2 → 3), and the two resume paths restored different plans. Fixed: "Keep Current Plan" and "Reset Plan" now use one compatibility adapter so neither leaves mixed prescription state; incompatible tempo, Tempo Override, warm-ups, techniques, and prescription notes are handled safely; and all resume paths restore the same active session plan. Switching may still prefill input fields from the new exercise's previous performance, but that is draft-only and does not change the workout plan. | fixed |
 | 2026-08-02 | Peer/family tester | Friends & Family Beta | P2 | Duration and rest inputs were too limited: duration maxed out around 10 minutes, which is too low for long duration exercises or cardio, and the 15-second steppers would have taken far too many taps to reach 30+ minutes. Fixed: exercise duration now goes up to 6 hours and rest up to 60 minutes, both entered with one-tap presets plus hour/minute/second wheels instead of a stepper. Values are stored as seconds as before, and every write is clamped so negative or out-of-range values cannot be entered. | fixed |
 | 2026-08-02 | Peer/family tester | Friends & Family Beta | P2 | Asked for cardio support. Fixed in the same slice as the duration/rest limits above, because lightweight cardio depends on usable long-duration input: cardio can be logged as a duration-based exercise, and the built-in catalogue now seeds Walking, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine as duration-based exercises under the existing Cardio body part (Korean: 유산소). For now, details like distance, speed, incline, resistance, or heart-rate zone can be written in notes. Structured cardio metrics (distance, pace, calories, heart-rate zone, incline, resistance / machine level) are deferred, not forgotten. | fixed |
+| 2026-09-21 | Peer/family tester | Friends & Family Beta | P1 | Not always sure what each root page was for, or what to do first; the overall workflow was not obvious without being told. Implemented after Build 10: each root page opens with a one-line statement of its purpose, and first-use empty states say what to do next. | implemented, pending distribution/re-test |
+| 2026-09-21 | Peer/family tester | Friends & Family Beta | P2 | Root pages felt too similar to tell apart at a glance. Testers still like the simple, plain design and were not asking for a colourful redesign — the problem was hierarchy and page identity. Implemented after Build 10 through page intros and a clearer History structure; a section-header typography experiment was reverted. | implemented, pending distribution/re-test |
+| 2026-09-21 | Peer/family tester | Friends & Family Beta | P1 | Advanced terminology was not self-explanatory — RIR specifically, and also RPE, e1RM and the technique names. Implemented after Build 10: point-of-use explanations behind the existing info glyph, and one shared set of technique descriptions. | implemented, pending distribution/re-test |
+| 2026-09-22 | Developer manual review | — (not tester-reported) | P1 | Korean pass found mixed Korean/English technique names and previews, bare `s`/`m`/`h` time units, English cardio "Segments", an English "In Progress" pill, and warm-up preview/layout problems. Implemented after Build 10; centralized time formatting now gives EN `s`/`m`/`h` and KO `초`/`분`/`시간`. | implemented, pending distribution/re-test |
 | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] |
 
-Status values: `new`, `investigating`, `fixed`, `deferred`, `won't fix`.
+Status values: `new`, `investigating`, `fixed`,
+`implemented, pending distribution/re-test`, `deferred`, `won't fix`.
+
+`implemented, pending distribution/re-test` means the change is written, merged
+to `main`, and has passed its Debug build, full test suite and Release build —
+but it is **not in the TestFlight build testers are using**, so no peer has seen
+it. The feedback that prompted it is not confirmed resolved until it ships in a
+build and someone else tries it. `fixed` is reserved for work that testers have
+actually had in their hands.
 
 ---
 
@@ -714,7 +742,9 @@ Status values: `new`, `investigating`, `fixed`, `deferred`, `won't fix`.
 Testers should know this going in:
 
 - Public App Store readiness is **not** claimed.
-- TestFlight feedback phase is **planned / just beginning** — not completed.
+- TestFlight feedback phase is **in progress on Build 10** — started, not
+  completed. Changes made in response to the first round of feedback are not
+  in the build you have; they need a later one.
 - UI polish may continue during and after this beta.
 - Broader distribution is deferred until this small beta is useful and settled.
 - Korean translations are new and may need refinement.
@@ -780,14 +810,57 @@ you figure out what to do, and did the core flow work?
 
 ---
 
+## Next Validation Cycle
+
+The three UX slices merged on 2026-09-22 (root-page discoverability, training
+term help, Korean localization consistency) all came from feedback in the list
+above, and **none of them has been in front of a peer yet** — they landed after
+Build 10 and are not in it. This cycle therefore needs a **new TestFlight build
+containing them**; re-running the checklist on Build 10 would test the app the
+feedback was about. The round exists to answer whether the changes worked, not
+to gather new feature requests.
+
+What this round specifically needs to find out:
+
+- [ ] Can a new user tell **what each root page does**, without being told?
+- [ ] Is **starting a workout** discoverable — does a first-time user find their
+      way from a routine to an active session?
+- [ ] Is the **RIR / RPE help** enough? Does the info glyph get noticed, and does
+      the definition answer the question once tapped?
+- [ ] Is the **revised History structure** understandable — Recent Workouts
+      first, then Calendar and Progression, with View All Workouts for the rest?
+- [ ] Does the **Korean UI stay consistent** in ordinary use — no English words
+      surfacing inside Korean screens, and time reading as 초 / 분 / 시간?
+- [ ] Is the **Block / Slot** terminology understandable, or does it read as
+      developer vocabulary?
+- [ ] After all of the above, **is a first-launch tutorial still needed?** This
+      is the question the round is really for. The tutorial is deliberately not
+      built yet, so that it is designed for whatever confusion survives these
+      changes rather than the confusion they already removed.
+
+---
+
 ## Next Steps
 
-1. Prepare the Build 9 TestFlight build and internal notes.
-2. Invite the first small group of testers.
-3. Share tester instructions and the testing checklist.
-4. Collect feedback into the Feedback Log above.
-5. Triage feedback by severity (P0–P3).
-6. Fix clear P0/P1 issues; defer P2/P3 as appropriate.
-7. Record outcomes in `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
+Done so far: Build 10 was prepared and uploaded, the first small group was
+invited, tester instructions and the checklist were shared, and the first round
+of feedback was collected, triaged and recorded in
+`docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
 
-TestFlight testing is planned but has not started yet.
+What comes next:
+
+1. Fix the two open bugs (active-workout lock scope, History calendar
+   deselection) — see Planned Fixes From Feedback in the entry document.
+2. Prepare and upload the next TestFlight build. It must contain the
+   post-Build-10 work listed at the top of this plan; Build 10 does not.
+3. Re-invite the same small group and run the **Next Validation Cycle**
+   checklist above, which is a re-test of specific changes rather than an open
+   feedback round.
+4. Collect feedback into the Feedback Log above.
+5. Triage by severity (P0–P3); fix clear P0/P1 issues, defer P2/P3.
+6. Record outcomes in `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
+7. Decide whether a first-launch tutorial is still needed, using that round's
+   result rather than the pre-Build-10 confusion.
+
+TestFlight testing is **in progress** on Build 10. The post-Build-10 changes
+await the next distributed build and a peer re-test.

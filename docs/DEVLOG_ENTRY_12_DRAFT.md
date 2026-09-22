@@ -850,13 +850,156 @@ do: restore first, edit as text, never round-trip the JSON. 27 lines added,
 
 ---
 
+## After Build 10 — What People Couldn't Find
+
+Build 10 went out and the feedback that came back was not about features. Nobody
+reported a broken flow. What they reported was not being sure what they were
+looking at.
+
+Three things kept coming up. People opening the app for the first time were not
+certain what each of the four root pages was for, or what the app wanted them to
+do first. The pages themselves felt too alike — and this one came with a caveat I
+was glad to get, because testers said plainly that they *liked* the plain design
+and were not asking for colour. The problem was that four quiet pages look like
+each other. Hierarchy, not decoration. And the third: the vocabulary. One tester
+named RIR specifically. The app asks you for a number before it has ever said
+what the letters stand for.
+
+That last one is the kind of feedback that is easy to wave away — it is a
+training term, and someone who lifts knows it. But the app is the thing asking
+the question, so the app is what should answer it.
+
+---
+
+## After Build 10 — Giving the Pages an Identity
+
+The fix had to survive the caveat. Making each page recognisable by giving it a
+colour or an ornament would have solved the stated problem and broken the thing
+testers actually valued.
+
+So each root page now opens with a single line saying what the page is for, on
+the same plain row background everything else uses. The navigation bar already
+names every page; what it cannot say is what the page is *for*, and that turned
+out to be the whole gap. The first-use empty states changed in the same spirit —
+they used to report that a list was empty, which the empty list had already
+established, and now they say what to do next.
+
+History got a structural change rather than a cosmetic one. The page opened on a
+calendar, which is a good way to look back and a poor way to see what you just
+did. Now a short Recent Workouts section comes first, capped at four, with a View
+All Workouts destination behind it for the whole history. Calendar and
+Progression follow. The most recent thing you did is the first thing you see.
+
+One experiment did not survive: a typography change to the section headers, tried
+and reverted. It looked like hierarchy and read like inconsistency. The original
+typography is back, which is the right outcome — the page intros were doing the
+work, and the headers were being changed because they were there.
+
+---
+
+## After Build 10 — Saying What RIR Means
+
+The terminology fix reuses a component this entry already talked about. Build 10
+moved four explanations off the screen and behind an info glyph; this puts three
+new ones behind the same glyph, in the places where the word first appears
+rather than in a glossary someone would have to go looking for.
+
+RIR and RPE are explained where the metric is chosen and where a target is
+written. e1RM is explained in the History metric selector, and only while e1RM is
+the metric selected — an explanation for a word that is not currently on screen
+is just clutter. The technique descriptions got a different treatment: they
+existed already, in three places, worded three different ways, so AMRAP said one
+thing in the routine editor and another in the middle of a workout. They are one
+set of sentences now.
+
+What made this slice larger than its copy was what the audit found underneath.
+The messages telling you *why* a technique could not be added were English
+sentences built around a technique name that was already translated, so a Korean
+user read "부분 반복 already exists on set 2." That is not a translation gap; it
+is a sentence assembled in the wrong order. Fixing it meant the messages became
+proper format strings, which is the same lesson the app keeps relearning:
+anything composed at runtime has to be composed out of translated pieces, not
+translated after the fact.
+
+---
+
+## After Build 10 — Reading the App in Korean
+
+Then I went through the app in Korean, properly, screen by screen. That pass
+found more than the terminology work had.
+
+The technique *names* were still English in two screens, because both had kept a
+private copy of the list instead of asking the one place that knows. The preview
+lines under them mixed languages for the reason above — English fragments glued
+into a string before anyone could translate them. Cardio said "Segments" in a
+Korean sentence. History said "In Progress". The warm-up editor had a band of
+empty space under its title that turned out to be an entire empty section
+rendering itself for no reason.
+
+The one that needed a decision rather than a fix was time. The app had been
+rendering durations as `30s` and `1m 30s` in both languages, on the reasoning
+that `s` and `m` are units like `kg` and `km`. Read in Korean, that reasoning is
+wrong: a weight unit is a symbol, but a duration is something you say. So time
+now localizes — `30초`, `1분 30초`, `1시간 5분` — while the measurement units stay
+exactly as they were, because `kg` really is `kg` in both languages. Every
+duration in the app goes through one formatter now, so a tempo stepper, a rest
+line, a cardio segment and a picker wheel cannot disagree about what a second is
+called.
+
+One feature was deliberately left in English. The Calculus Analytics screen could
+have been translated, but everything leading to it — its Settings entry, its
+title, its card and footer — would still have been English, and a translated
+interior behind an English door is precisely the inconsistency the pass existed
+to remove. It waits until it can be done whole.
+
+---
+
+## After Build 10 — What Testing Turned Up Next
+
+Testing the fixes surfaced two bugs that are still open. A lock meant to protect
+the active workout reaches too far: an exercise that appears both in the routine
+you are training and in some unrelated routine can freeze blocks in the unrelated
+one. And the History calendar lets you deselect a highlighted date, which is a
+control gesture attached to something that is not a control — the highlight is a
+record of what happened.
+
+The more interesting outcome is what is *not* being built yet. A first-launch
+tutorial has been on the list since the first round of confusion. It is still on
+the list, on purpose. Three changes just went in that exist to answer the same
+question a tutorial would answer, and none of them has been in front of another
+person yet. Building the tutorial now would mean designing it for confusion that
+may already be gone.
+
+So the next round is a re-test, not a feature — and it needs a build first,
+because everything described above landed after Build 10 went out and none of it
+is in the copy anyone is using. Can someone tell what each page is
+for. Can they find how to start a workout. Is the RIR explanation enough. Does
+the new History order make sense. Does the Korean hold together. And the two
+words still leaking out of the codebase and into the interface — Block and Slot —
+which nobody has complained about yet, which is not the same as nobody being
+confused by them.
+
+Entry #12 is not finished. It was supposed to be about whether other people could
+use the app, and it is still answering that.
+
+---
+
 ## Next Steps
 
-- Continue Build 10 from the UX audit backlog.
+- Fix the two open bugs: the active-workout lock reaching into unrelated
+  routines, and the deselectable History calendar dates.
+- Review the **Block** / **Slot** wording, and the discoverability of Start
+  Workout and the User Guide.
 - Re-run the full test suite and the release build before the next upload.
-- Get Build 9 feedback from the small friends-and-family group during real
-  training.
-- Collect feedback, especially on confusing steps and on Korean wording.
+- Upload a TestFlight build containing the discoverability, terminology and
+  Korean work. Build 10 is what testers have, and none of it is in Build 10.
+- Put that build in front of the friends-and-family group during real training,
+  and find out whether the changes landed — this is a re-test of specific
+  changes, not an open feedback round.
+- Decide whether a first-launch tutorial is still needed **after** that re-test,
+  not before it.
+- Localize Calculus Analytics as one whole feature, entry point included, when
+  it comes up.
 - Fix confusing UI and translation problems **before** adding major new features —
   the point of this build is to learn what other people don't understand, and
   piling on more surface area first would defeat it.
