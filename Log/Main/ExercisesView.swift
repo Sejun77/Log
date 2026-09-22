@@ -78,6 +78,10 @@ struct ExercisesView: View {
 
     private var ListContent: some View {
         List {
+            DSPageIntro(
+                "Your movement library. Tap one to edit its defaults.",
+                systemImage: "dumbbell"
+            )
             addExerciseSection
             exerciseListSections
         }

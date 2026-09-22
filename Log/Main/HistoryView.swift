@@ -281,9 +281,20 @@ struct HistoryView: View {
     var body: some View {
         NavigationStack {
             List {
+                DSPageIntro(
+                    "Review completed workouts and track how your training is progressing.",
+                    systemImage: "calendar"
+                )
+                // History opens on history. The record is the reason the page
+                // exists and is what a returning user came for; the calendar is
+                // an at-a-glance overview of that same record, and Progression
+                // is secondary power-user analysis behind ~400pt of controls
+                // (metric menu, exercise picker, date presets, chart). Order
+                // only — every section's contents, queries and precomputes are
+                // unchanged.
+                recentWorkoutsSection
                 calendarSection
                 progressionSection
-                recentWorkoutsSection
             }
             .navigationTitle("History")
             .listStyle(.insetGrouped)
@@ -324,7 +335,10 @@ struct HistoryView: View {
     private var calendarSection: some View {
         Section {
             if workouts.isEmpty {
-                Text("No workouts yet. Your calendar will light up here.")
+                // Deliberately short and non-repeating: the Recent Workouts
+                // empty state directly above already says "No workouts yet",
+                // so this only needs to say what the calendar itself is for.
+                Text("Your training days will be highlighted here.")
                     .font(.dsBodySecondary)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
@@ -412,6 +426,14 @@ struct HistoryView: View {
                     userBodyweight: AppSettings.userBodyweight
                 )
                 .frame(height: 240)
+            } else if workouts.isEmpty {
+                // With no logged workouts there is nothing any exercise could
+                // chart, so "Select an exercise" would send the user into a
+                // picker that cannot help. Display-only branch — the metric
+                // options, gating and chart calculations are untouched.
+                Text("Progression appears here once you've logged a workout.")
+                    .font(.dsBodySecondary)
+                    .foregroundStyle(.secondary)
             } else {
                 Text("Select an exercise to view progression.")
                     .font(.dsBodySecondary)
@@ -478,83 +500,55 @@ struct HistoryView: View {
         let summaries = WorkoutSummary.map(for: workouts)
         return Section {
             if workouts.isEmpty {
-                Text("You don't have any workouts yet.")
-                    .font(.dsBodySecondary)
-                    .foregroundStyle(.secondary)
+                // This is now the first section on the page, so on a fresh
+                // install it is the whole first impression of History — a
+                // native empty state that says what will appear here, rather
+                // than a bare sentence restating that the list is empty.
+                ContentUnavailableView {
+                    Label(
+                        "No workouts yet",
+                        systemImage: "clock.arrow.circlepath"
+                    )
+                } description: {
+                    Text(
+                        "Finish a workout and it will appear here with every set you logged."
+                    )
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
-                ForEach(workouts) { w in
-                    let isActive = activeGuard.activeWorkoutID == w.id
+                // Only the most recent few. Listing every workout here made the
+                // page grow without bound, so Calendar and Progression sank
+                // further below the fold with every session logged; the rest of
+                // the history lives on `AllWorkoutsView`. See
+                // `HistoryDisplay.recentWorkoutLimit` for the size rationale.
+                ForEach(HistoryDisplay.recent(workouts)) { w in
+                    WorkoutRow(
+                        workout: w,
+                        isActive: activeGuard.activeWorkoutID == w.id,
+                        routineLabel: resolver.label(for: w),
+                        summarySubtitle: (summaries[w.id]
+                            ?? WorkoutSummary(workout: w)).subtitle,
+                        onRequestDelete: {
+                            toDelete = w
+                            showConfirmDelete = true
+                        },
+                        onBlockedDelete: { showActiveDeleteWarning = true }
+                    )
+                }
+
+                // Offered only when the slice above actually hides something,
+                // so a user with five or fewer workouts never sees a link to a
+                // screen identical to the one they are already on.
+                if HistoryDisplay.hasMore(workouts) {
                     NavigationLink {
-                        WorkoutDetailView(workout: w)
+                        AllWorkoutsView()
                     } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(
-                                    w.date.formatted(
-                                        date: .abbreviated,
-                                        time: .omitted
-                                    )
-                                )
-                                .font(.dsBody)
-
-                                Spacer()
-
-                                if isActive {
-                                    StatusPill(text: "In Progress")
-                                } else if let duration = workoutDuration(w) {
-                                    Text(duration)
-                                        .font(.dsBodySecondary.monospacedDigit())
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-
-                            if let name = resolver.label(for: w) {
-                                Text(name)
-                                    .font(.dsBodySecondary)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            // Read-only slot/set glance line. Shown for every
-                            // workout including in-progress ones (it reflects
-                            // what's logged so far; the "In Progress" pill above
-                            // still conveys status). Falls back to a fresh
-                            // summary if the once-per-render map ever misses.
-                            Text(
-                                (summaries[w.id]
-                                    ?? WorkoutSummary(workout: w)).subtitle
-                            )
-                            .font(.dsCaption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        }
-                    }
-                    .swipeActions(allowsFullSwipe: false) {
-                        if isActive {
-                            // Deletion is blocked while this workout is the
-                            // active session. Gray + lock icon matches the
-                            // app-wide "blocked / in use" swipe convention
-                            // (locked Exercise / Routine rows); red is reserved
-                            // for an available destructive action. Wording uses
-                            // this screen's existing "In Progress" terminology
-                            // (row pill + the blocked-delete alert). Tapping
-                            // still surfaces the existing "Can't delete active
-                            // workout" alert — behavior unchanged.
-                            Button {
-                                showActiveDeleteWarning = true
-                            } label: {
-                                Label("In Progress", systemImage: "lock.fill")
-                            }
-                            .tint(.gray)
-                        } else {
-                            Button {
-                                toDelete = w
-                                showConfirmDelete = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                            .tint(.red)
-                        }
+                        Label(
+                            "View All Workouts",
+                            systemImage: "list.bullet.rectangle.portrait"
+                        )
+                        .font(.dsBodySecondary.weight(.semibold))
                     }
                 }
             }
@@ -566,23 +560,18 @@ struct HistoryView: View {
         }
     }
 
-    /// Formats workout duration from `date` → `completedAt`.
-    /// Returns nil when the workout has no `completedAt` (in-progress or legacy).
-    private func workoutDuration(_ w: Workout) -> String? {
-        guard let end = w.completedAt else { return nil }
-        let total = max(0, Int(end.timeIntervalSince(w.date)))
-        let h = total / 3600
-        let m = (total % 3600) / 60
-        if h > 0 {
-            return String(format: "%dh %02dm", h, m)
-        }
-        return String(localized: "\(max(1, m))m")
-    }
+    // Duration formatting moved to `WorkoutRowFormat.duration(for:)` (unchanged)
+    // when the row was extracted, so this page and `AllWorkoutsView` cannot
+    // drift apart on it.
 }
 
 // MARK: - Workout Detail
 
-private struct WorkoutDetailView: View {
+/// Module-internal (not file-private) so the shared `WorkoutRow` in
+/// `WorkoutHistoryRow.swift` can push it from both the root History page and
+/// `AllWorkoutsView`. Same reason `BlockRow` is internal rather than private.
+/// Sole declaration in the module — no name collision.
+struct WorkoutDetailView: View {
     let workout: Workout
     @Query private var routines: [Routine]
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared

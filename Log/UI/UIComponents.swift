@@ -309,3 +309,81 @@ struct DSSectionHeader: View {
         .padding(.bottom, DSSpacing.xs)
     }
 }
+
+// ======================================================
+// MARK: - Page Intro
+// ======================================================
+
+/// A one-line statement of what a root page is for, rendered as the first
+/// section of that page's `List` / `Form`.
+///
+/// Deliberately **not** a title. The navigation bar already names every root
+/// page ("Routines", "Exercises", "History", "Settings"), so repeating the name
+/// inside the list would read as a duplicated heading. This supplies the line
+/// the nav title cannot — *what the page is for* — which is what gives each
+/// root page an identity without per-page accent colors or a bespoke surface.
+///
+/// The `systemImage` is the page's own tab-bar symbol (see `RootTabView`), so
+/// the intro echoes the identity mark the user just tapped and introduces no
+/// new symbol vocabulary.
+///
+/// **Surface.** The intro sits on the *standard inset-grouped row background* —
+/// it simply does not clear `listRowBackground`. That is deliberate: the rounded
+/// grouped row is already the card style every other row on these four pages
+/// uses, so the intro is anchored by reusing the page's own surface rather than
+/// by inventing a second one. `DSCard` was considered and rejected here: it
+/// carries `dsCardShadow()` and its own `DSRadius.lg` corner, so nesting it
+/// inside a grouped row would render a shadowed card inside a card and
+/// introduce a competing card language on the most-visited screens.
+///
+/// **Density.** `Section` + `.listSectionSpacing(.compact)` closes the gap to
+/// the next section, `listRowInsets` supplies the card's internal padding, and
+/// `defaultMinListRowHeight` is reset to 0 for this row only — the three root
+/// pages set it to 56 for tappable content rows, which would otherwise pad this
+/// single line of 14pt text to more than twice its natural height. Content
+/// stays `.dsBodySecondary` secondary, a step below body rows, so the card
+/// frames the page without competing with it.
+struct DSPageIntro: View {
+    private let subtitle: LocalizedStringKey
+    private let systemImage: String
+
+    init(_ subtitle: LocalizedStringKey, systemImage: String) {
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        Section {
+            HStack(alignment: .firstTextBaseline, spacing: DSSpacing.sm) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    // Fixed width so the four pages' subtitles all start on the
+                    // same x position despite their symbols differing in width.
+                    .frame(width: 16, alignment: .leading)
+                    .accessibilityHidden(true)
+
+                Text(subtitle)
+                    .font(.dsBodySecondary)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+            }
+            .listRowInsets(
+                EdgeInsets(
+                    top: DSSpacing.md,
+                    leading: DSSpacing.lg,
+                    bottom: DSSpacing.md,
+                    trailing: DSSpacing.lg
+                )
+            )
+            .listRowSeparator(.hidden)
+            .accessibilityElement(children: .combine)
+        }
+        // Row height floor is set per-List (56) for tappable rows; this one is
+        // a static single line and sizes itself from its own insets.
+        .environment(\.defaultMinListRowHeight, 0)
+        .listSectionSpacing(.compact)
+    }
+}
