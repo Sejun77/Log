@@ -76,6 +76,61 @@
         }
       }
     },
+    "%@ already defines AMRAP/fixed reps; remove it to use AMRAP." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: 이미 AMRAP/고정 반복을 지정합니다. AMRAP을 사용하려면 해당 기법을 제거하세요."
+          }
+        }
+      }
+    },
+    "%@ already exists on set %lld." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: 세트 %2$lld에 이미 있습니다."
+          }
+        }
+      }
+    },
+    "%@ and %@ can't share a set." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@: 같은 세트에 함께 사용할 수 없습니다."
+          }
+        }
+      }
+    },
+    "%@ can't combine with %@ on the same set." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@: 같은 세트에서 함께 사용할 수 없습니다."
+          }
+        }
+      }
+    },
+    "%@ is already on this set." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: 이 세트에 이미 있습니다."
+          }
+        }
+      }
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
@@ -350,6 +405,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 반복"
+          }
+        }
+      }
+    },
+    "A 1–10 effort scale. RPE 10 is maximal effort; RPE 8 is roughly equivalent to RIR 2." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1~10으로 나타내는 강도 척도입니다. RPE 10은 최대 강도이며, RPE 8은 대략 RIR 2에 해당합니다."
           }
         }
       }
@@ -681,6 +747,17 @@
         }
       }
     },
+    "AMRAP exists on an overlapping set; can't use fixed reps." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "겹치는 세트에 AMRAP이 있어 고정 반복을 사용할 수 없습니다."
+          }
+        }
+      }
+    },
     "Applies To" : {
       "localizations" : {
         "ko" : {
@@ -741,6 +818,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "팔"
+          }
+        }
+      }
+    },
+    "As many reps as possible in the set." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "해당 세트에서 가능한 만큼 반복합니다."
           }
         }
       }
@@ -1936,6 +2024,17 @@
         }
       }
     },
+    "Estimated one-rep max: an estimate of the heaviest single rep you could perform, calculated from your logged sets." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추정 1회 최대 중량: 기록한 세트를 바탕으로 1회 들어 올릴 수 있는 최대 중량을 추정한 값입니다."
+          }
+        }
+      }
+    },
     "Every field is optional. Fill in at least one." : {
       "comment" : "Structured Cardio Slice 12C: footer of the segment editor sheet explaining that a segment needs at least one target",
       "extractionState" : "manual",
@@ -2327,6 +2426,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "기록"
+          }
+        }
+      }
+    },
+    "How many more reps you could have completed before failure. RIR 2 means you could have done about 2 more reps." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "실패 지점까지 반복을 몇 회 더 할 수 있었는지를 뜻합니다. RIR 2는 약 2회를 더 할 수 있었다는 의미입니다."
           }
         }
       }
@@ -2810,6 +2920,17 @@
         }
       }
     },
+    "No additional parameters." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가 설정은 없습니다."
+          }
+        }
+      }
+    },
     "No alternatives added" : {
       "comment" : "Alternative Exercises Phase D: empty state for the alternatives list",
       "extractionState" : "manual",
@@ -3085,6 +3206,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "없음: 강도 목표를 표시하지 않습니다.\n동일 목표: 모든 세트에 같은 목표를 사용합니다.\n프로그레션: 시작 목표와 마지막 목표를 세트에 나누어 적용합니다.\n세트별 지정: 세트마다 목표를 직접 정합니다."
+          }
+        }
+      }
+    },
+    "Not available for bodyweight exercises." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "맨몸 운동에서는 사용할 수 없습니다."
+          }
+        }
+      }
+    },
+    "Not available for duration-based exercises." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시간 기반 운동에서는 사용할 수 없습니다."
           }
         }
       }
@@ -4050,6 +4193,17 @@
     "RIR" : {
 
     },
+    "RIR — Reps in Reserve" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RIR — 남은 반복 수 (Reps in Reserve)"
+          }
+        }
+      }
+    },
     "Round %lld/%lld" : {
       "comment" : "Structured Cardio Slice 12D: which round of a repeated cardio segment group a checklist row is, e.g. Round 2/5",
       "extractionState" : "manual",
@@ -4163,6 +4317,17 @@
     },
     "RPE" : {
 
+    },
+    "RPE — Rate of Perceived Exertion" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPE — 운동자각도 (Rate of Perceived Exertion)"
+          }
+        }
+      }
     },
     "Same as the slot's exercise — not offered in workouts" : {
       "comment" : "Alternative Exercises: routine-editor row marker for a legacy alternative that names the slot's own exercise. Shown, not hidden, so the user can find and delete it.",
@@ -4612,6 +4777,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "속도"
+          }
+        }
+      }
+    },
+    "Split a set into small groups of reps separated by short rests." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "한 세트를 짧은 휴식으로 나눈 적은 반복 묶음으로 쪼개어 수행합니다."
           }
         }
       }

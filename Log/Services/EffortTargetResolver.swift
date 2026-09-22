@@ -386,3 +386,85 @@ enum EffortTargetPresence {
             || !EffortTargetList.decode(fields.customRPETargetsRaw).isEmpty
     }
 }
+
+// ======================================================
+// MARK: - RIR / RPE term help (ux/training-term-help)
+// ======================================================
+
+/// What **RIR** and **RPE** actually mean, in the user's words.
+///
+/// Repeated tester feedback: the app asks for an RIR before it ever says what
+/// one is. Every surface that names the metric — the Settings picker that
+/// chooses it, the prescription editor that authors a target in it — showed the
+/// acronym and nothing else, and the User Guide's one line ("effort ratings
+/// used to describe how hard a set felt") is a category, not a definition.
+///
+/// Copy only, in the shape `EffortTargetHelp` / `SupersetHelp` /
+/// `CardioChecklistHelp` already use: constants the view and its tests name,
+/// rather than two hand-copied literals that drift. Nothing here reads, writes,
+/// converts or resolves a target — the RIR↔RPE mirroring (`10 - x`) and the
+/// resolver are untouched.
+///
+/// The title/definition split exists because an `InfoButton` renders an alert:
+/// the expansion of the acronym is the alert's title and the sentence is its
+/// body, so the term is named where the user is looking.
+enum AutoregulationHelp {
+
+    static let rirTitle = "RIR — Reps in Reserve"
+
+    /// Deliberately concrete: the abstract definition alone still leaves "so is
+    /// RIR 2 hard or easy?" unanswered, and one worked example settles it.
+    static let rirMessage =
+        "How many more reps you could have completed before failure. RIR 2 "
+        + "means you could have done about 2 more reps."
+
+    static let rpeTitle = "RPE — Rate of Perceived Exertion"
+
+    /// Anchored to RIR on purpose: the two are one setting with two dialects,
+    /// and a user who has read the RIR line gets the RPE scale for free.
+    static let rpeMessage =
+        "A 1–10 effort scale. RPE 10 is maximal effort; RPE 8 is roughly "
+        + "equivalent to RIR 2."
+
+    /// The pre-existing Settings explanation — kept verbatim so it resolves to
+    /// the string-catalog key it already had, with its existing Korean.
+    static let autoregScopeMessage =
+        "Applies to new slots and the intensity field in active workouts."
+
+    static func title(for metric: EffortMetric) -> String {
+        switch metric {
+        case .rir: return rirTitle
+        case .rpe: return rpeTitle
+        }
+    }
+
+    static func message(for metric: EffortMetric) -> String {
+        switch metric {
+        case .rir: return rirMessage
+        case .rpe: return rpeMessage
+        }
+    }
+
+    /// The Settings alert: both definitions plus what the setting governs.
+    ///
+    /// **Composed at runtime from the localized pieces**, not stored as a
+    /// fourth combined key. The Settings picker offers RIR *and* RPE in one
+    /// control, so one well-placed explanation has to cover both — and a
+    /// combined catalog entry would be a second copy of every definition,
+    /// free to drift from the per-metric one the prescription editor shows.
+    /// Each sentence is translated exactly once; this only joins them.
+    static func settingsMessage() -> String {
+        [
+            "\(localized(rirTitle))\n\(localized(rirMessage))",
+            "\(localized(rpeTitle))\n\(localized(rpeMessage))",
+            localized(autoregScopeMessage),
+        ].joined(separator: "\n\n")
+    }
+
+    /// Catalog lookup with the key as its own fallback — the same resolution
+    /// `LocalizedStringKey` performs at render time, which is what lets the
+    /// English keys above double as the English copy.
+    private static func localized(_ key: String) -> String {
+        NSLocalizedString(key, comment: "")
+    }
+}
