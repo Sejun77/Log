@@ -362,12 +362,33 @@ struct HistoryView: View {
             // row, which cramped/truncated with up to 6 options; the Menu shows
             // the selected metric inline and lists the available metrics on tap.
             // Binding, option source, availability rules, and labels unchanged.
-            Picker("Metric", selection: $metric) {
-                ForEach(metricsForSelectedExercise) { m in
-                    Text(LocalizedStringKey(m.title)).tag(m)
+            // e1RM is the default metric and the only option named by an
+            // acronym; every other one names a quantity the app logs directly,
+            // so only this one carries a glyph, and only while it is selected.
+            //
+            // The glyph is a **sibling of the picker inside the picker's own
+            // row**, not a row of its own: an extra row would read as a second
+            // grouped control and cost a row's height permanently. It is not
+            // inside the `Picker`'s label either — a Form picker owns its
+            // label's taps and would swallow the button (the constraint the
+            // effort-mode row in `PrescriptionFields` works around). As a
+            // sibling it keeps its own `.borderless` hit target while the
+            // picker keeps the rest of the row.
+            HStack(spacing: DSSpacing.xs) {
+                Picker("Metric", selection: $metric) {
+                    ForEach(metricsForSelectedExercise) { m in
+                        Text(LocalizedStringKey(m.title)).tag(m)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if metric == .e1rm {
+                    InfoButton(
+                        LocalizedStringKey(ProgressionMetricHelp.e1RMTitle),
+                        message: LocalizedStringKey(
+                            ProgressionMetricHelp.e1RMMessage))
                 }
             }
-            .pickerStyle(.menu)
 
             NavigationLink {
                 ExercisePicker(selectedID: $selectedExerciseID)

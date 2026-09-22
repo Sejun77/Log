@@ -330,3 +330,31 @@ enum StrengthAnalytics {
         )
     }
 }
+
+// ======================================================
+// MARK: - Progression metric term help (ux/training-term-help)
+// ======================================================
+
+/// What **e1RM** means, for the History progression picker.
+///
+/// The only progression metric whose name is an acronym for something the user
+/// has never typed. Volume, Reps, Best wt, Duration, Pace, Calories and Avg HR
+/// all name a quantity the app logs directly and are deliberately left alone —
+/// an info glyph on each would be clutter answering nothing.
+///
+/// Held beside `StrengthAnalytics.e1RM` so the sentence and the formula it
+/// describes are read together. Copy only: no calculation here, and the Epley
+/// estimate itself is untouched.
+enum ProgressionMetricHelp {
+
+    /// Reuses the picker's own option label, so the alert is titled with the
+    /// thing the user selected.
+    static let e1RMTitle = "e1RM"
+
+    /// States the estimate *and* that it is an estimate derived from logged
+    /// sets — the second half is what stops it being read as a tested max the
+    /// user never performed.
+    static let e1RMMessage =
+        "Estimated one-rep max: an estimate of the heaviest single rep you "
+        + "could perform, calculated from your logged sets."
+}

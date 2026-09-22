@@ -87,12 +87,26 @@ func dismissKeyboard() {
 /// most TestFlight-stable option for read-only helper text.
 struct InfoButton: View {
     private let title: LocalizedStringKey
-    private let message: LocalizedStringKey
+    private let message: Text
     @State private var isShowing = false
 
     init(_ title: LocalizedStringKey, message: LocalizedStringKey) {
         self.title = title
-        self.message = message
+        self.message = Text(message)
+    }
+
+    /// For a body that is **assembled at runtime from already-localized
+    /// pieces** rather than being one catalog key — e.g. Settings'
+    /// autoregulation alert, which joins the RIR and RPE definitions that the
+    /// prescription editor shows separately (see `AutoregulationHelp`). Passing
+    /// such a string as a `LocalizedStringKey` would look up a key that cannot
+    /// exist and silently render the English composition, so it is rendered
+    /// verbatim instead.
+    ///
+    /// The title stays a `LocalizedStringKey`: it is always a literal.
+    init(_ title: LocalizedStringKey, localizedMessage: String) {
+        self.title = title
+        self.message = Text(verbatim: localizedMessage)
     }
 
     var body: some View {
@@ -110,7 +124,7 @@ struct InfoButton: View {
         .alert(title, isPresented: $isShowing) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(message)
+            message
         }
     }
 }
