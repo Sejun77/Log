@@ -531,6 +531,22 @@ private struct PrescriptionFields: View {
             InfoButton(
                 LocalizedStringKey(EffortTargetHelp.modesTitle),
                 message: LocalizedStringKey(EffortTargetHelp.modesMessage))
+
+            // Second glyph, not a duplicate: the one on the left says what the
+            // four *modes* are, this one says what the *metric* is. The steppers
+            // below are labelled "RIR"/"RPE" and nothing on this screen ever
+            // expanded either acronym — the first point of use, and the gap
+            // testers reported. Labelled with the metric so the two are
+            // distinguishable at a glance; only the active metric is shown,
+            // because only one can be authored here.
+            Text(verbatim: label)
+                .font(.dsCaption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, DSSpacing.sm)
+            InfoButton(
+                LocalizedStringKey(AutoregulationHelp.title(for: paths.metric)),
+                message: LocalizedStringKey(
+                    AutoregulationHelp.message(for: paths.metric)))
             Spacer()
         }
 
@@ -799,7 +815,9 @@ struct TempoEditorView: View {
             .foregroundStyle(.secondary)
     }
 
-    private func label(_ v: Int) -> String { v == 0 ? "—" : "\(v)s" }
+    private func label(_ v: Int) -> String {
+        v == 0 ? "—" : DurationDisplay.seconds(v)
+    }
 
     private func parseTempo() {
         guard let t = tempo, !t.isEmpty else {

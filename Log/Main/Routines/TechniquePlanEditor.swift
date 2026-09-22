@@ -81,9 +81,15 @@ struct TechniquePlanEditor: View {
                     }
                 }
                 .onMove(perform: movePlans)
-            } header: {
-                Text("Techniques")
             }
+            // No section header: the navigation title already says
+            // "Techniques", and this screen has exactly one section, so the
+            // header repeated the title one line below it and cost a header's
+            // vertical space on every render. The `Section` itself stays —
+            // it is what gives the rows their inset-grouped card, the empty
+            // state its row, and `EditButton` / `.onMove` / swipe-to-delete
+            // their container. VoiceOver keeps the screen's heading from the
+            // navigation title.
         }
         .navigationTitle("Techniques")
         .toolbar {
@@ -173,44 +179,43 @@ struct TechniquePlanEditor: View {
 private struct TechniquePlanRow: View {
     @Bindable var plan: TechniquePlan
 
-    private var title: String {
-        switch plan.type {
-        case .dropset:       return "Drop Set"
-        case .partialReps:   return "Partial Reps"
-        case .restPause:     return "Rest-Pause"
-        case .amrap:         return "AMRAP"
-        case .toFailure:     return "To Failure"
-        case .cluster:       return "Cluster"
-        case .tempoOverride: return "Tempo Override"
-        }
-    }
+    /// The canonical localized name. Was a private English switch rendered
+    /// through `Text(String)` — verbatim, so this row showed "Drop Set" on a
+    /// Korean phone no matter what the catalog held. `TechniqueType.displayName`
+    /// is the one source every other surface already reads.
+    private var title: String { plan.type.displayName }
 
+    /// Every word here now comes from `TechniqueSummaryCopy`, so the routine
+    /// editor and the active-workout chip share one vocabulary and one rest
+    /// format. Output is unchanged in English.
     private var detail: String {
-        var parts: [String] = []
+        var parts: [String?] = []
         let indices = plan.appliesToSetIndices
-        if !indices.isEmpty {
-            let nums = indices.sorted().map { String($0 + 1) }.joined(separator: ",")
-            parts.append(indices.count == 1 ? "set \(nums)" : "sets \(nums)")
-        } else if plan.appliesToRaw != "lastWorkingSet" {
+        if let sets = TechniqueSummaryCopy.appliesToSets(indices: indices) {
+            parts.append(sets)
+        } else if indices.isEmpty, plan.appliesToRaw != "lastWorkingSet" {
             parts.append(plan.appliesTo.displayLabel)
         }
-        if let r = plan.rounds,   r > 0  { parts.append("\(r) rounds") }
-        if let r = plan.reps,     r > 0  { parts.append("\(r) reps") }
-        if let d = plan.dropPercent, d > 0 { parts.append("\(Int(d))% drop") }
-        if plan.type == .dropset {
-            switch plan.dropsetEffort {
-            case .amrap:            parts.append("AMRAP")
-            case .fixedReps(let n): parts.append("\(n) reps/drop")
-            }
+        if let r = plan.rounds, r > 0 { parts.append(TechniqueSummaryCopy.rounds(r)) }
+        if let r = plan.reps, r > 0 { parts.append(TechniqueSummaryCopy.reps(r)) }
+        if let d = plan.dropPercent, d > 0 {
+            parts.append(TechniqueSummaryCopy.dropPercent(Int(d)))
         }
-        if let s = plan.restSeconds, s > 0 { parts.append(String(localized: "\(s)s rest")) }
-        if let n = plan.note, !n.isEmpty  { parts.append(n) }
-        return parts.joined(separator: " · ")
+        if plan.type == .dropset {
+            parts.append(TechniqueSummaryCopy.dropsetEffort(plan.dropsetEffort))
+        }
+        if let s = plan.restSeconds, s > 0 {
+            parts.append(DurationDisplay.rest(s))
+        }
+        if let n = plan.note, !n.isEmpty { parts.append(n) }
+        return TechniqueSummaryCopy.join(parts)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.dsBody)
+            // Already localized by `displayName`, so rendered verbatim: a
+            // `LocalizedStringKey` here would look up the Korean text as a key.
+            Text(verbatim: title).font(.dsBody)
             if !detail.isEmpty {
                 Text(detail)
                     .font(.dsBodySecondary)
@@ -233,15 +238,13 @@ private struct TechniqueTypePickerSheet: View {
     var onPick: (TechniqueType) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    private let types: [(TechniqueType, String, String)] = [
-        (.dropset,       "Drop Set",       "Reduce weight immediately after reaching failure."),
-        (.partialReps,   "Partial Reps",   "Continue with partial range of motion after failure."),
-        (.restPause,     "Rest-Pause",      "Short intra-set rest, then continue."),
-        (.amrap,         "AMRAP",           "As many reps as possible on last set."),
-        (.toFailure,     "To Failure",      "Push until technical failure."),
-        (.cluster,       "Cluster",         "Intra-set pause clusters."),
-        (.tempoOverride, "Tempo Override",  "Override tempo for this exercise."),
-    ]
+    /// Every technique the app models, in declaration order. Was a hand-written
+    /// tuple table carrying its own copy of each name and description; both now
+    /// come from the single sources (`TechniqueType.displayName`,
+    /// `TechniqueHelp`), so a new case cannot be added to the enum and quietly
+    /// missed here. Order and contents are unchanged — `allCases` is declared
+    /// in exactly the order this list held.
+    private var types: [TechniqueType] { TechniqueType.allCases }
 
     /// Effective 0-based indices for an existing technique (uses new field or migrates old).
     private func effectiveIndices(for plan: TechniquePlan) -> Set<Int> {
@@ -271,7 +274,8 @@ private struct TechniqueTypePickerSheet: View {
 
         // 1. Duplicate: same type already exists on the last set (set-number message).
         if onDefault.contains(where: { $0.type == newType }) {
-            return "\(newType.displayName) already exists on set \(defaultIdx + 1)."
+            return TechniqueConflictCopy.duplicateOnSet(
+                newType, setNumber: defaultIdx + 1)
         }
 
         // 2. Cross-technique structural conflicts (shared pairwise rules).
@@ -286,7 +290,7 @@ private struct TechniqueTypePickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List(types, id: \.0) { type, name, desc in
+            List(types, id: \.self) { type in
                 let conflict = conflictMessage(for: type)
                 Button {
                     guard conflict == nil else { return }
@@ -294,10 +298,15 @@ private struct TechniqueTypePickerSheet: View {
                     dismiss()
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(LocalizedStringKey(name))
+                        // `displayName` is already localized (NSLocalizedString),
+                        // so it is rendered as-is — wrapping it in a
+                        // `LocalizedStringKey` would look up the Korean string
+                        // as a key and fall through to itself.
+                        Text(verbatim: type.displayName)
                             .font(.dsBody)
                             .foregroundStyle(conflict != nil ? Color.secondary : Color.primary)
-                        Text(LocalizedStringKey(conflict ?? desc))
+                        Text(LocalizedStringKey(
+                            conflict ?? TechniqueHelp.description(for: type)))
                             .font(.dsBodySecondary)
                             .foregroundStyle(conflict != nil ? Color.red.opacity(0.75) : Color.secondary)
                     }
@@ -342,10 +351,10 @@ func techniqueConflictMessage(
     for type: TechniqueType, isBodyweight: Bool, usesDuration: Bool
 ) -> String? {
     if isBodyweight && type == .dropset {
-        return "Not available for bodyweight exercises."
+        return TechniqueConflictCopy.unavailableForBodyweight()
     }
     if usesDuration && techniquesIncompatibleWithDuration.contains(type) {
-        return "Not available for duration-based exercises."
+        return TechniqueConflictCopy.unavailableForDuration()
     }
     return nil
 }
@@ -409,7 +418,7 @@ func compatibleTechniquePlans(
 func techniquePairConflict(_ a: TechniqueType, _ b: TechniqueType) -> String? {
     // Same technique twice on one set.
     if a == b {
-        return "\(a.displayName) is already on this set."
+        return TechniqueConflictCopy.duplicateOnThisSet(a)
     }
 
     let pair: Set<TechniqueType> = [a, b]
@@ -417,20 +426,20 @@ func techniquePairConflict(_ a: TechniqueType, _ b: TechniqueType) -> String? {
     // Drop Set already carries its own AMRAP / fixed-reps effort mode, so a
     // separate AMRAP technique on the same set is redundant.
     if pair == [.dropset, .amrap] {
-        return "Dropset already defines AMRAP/fixed reps; remove it to use AMRAP."
+        return TechniqueConflictCopy.dropsetAlreadyDefinesEffort()
     }
     // Drop Set and Cluster describe different set structures; the dropset card
     // cannot represent a cluster.
     if pair == [.dropset, .cluster] {
-        return "Cluster can't combine with Drop Set on the same set."
+        return TechniqueConflictCopy.cannotCombine(.cluster, with: .dropset)
     }
     // Rest-Pause and Cluster are both intra-set rest structures.
     if pair == [.restPause, .cluster] {
-        return "Rest-Pause and Cluster can't share a set."
+        return TechniqueConflictCopy.cannotShareSet(.restPause, .cluster)
     }
     // Cluster prescribes fixed reps per mini-set; AMRAP changes the rep target.
     if pair == [.cluster, .amrap] {
-        return "Cluster and AMRAP can't share a set."
+        return TechniqueConflictCopy.cannotShareSet(.cluster, .amrap)
     }
     return nil
 }
@@ -497,7 +506,8 @@ private struct TechniqueParamEditView: View {
 
         // Duplicate type on same index (set-number message).
         if sibsOnIdx.contains(where: { $0.type == plan.type }) {
-            return "\(plan.type.displayName) already on set \(idx + 1)."
+            return TechniqueConflictCopy.duplicateOnSet(
+                plan.type, setNumber: idx + 1)
         }
         // Cross-technique structural conflicts (shared pairwise rules).
         for sib in sibsOnIdx {
@@ -517,7 +527,8 @@ private struct TechniqueParamEditView: View {
                 && $0.type == .amrap
                 && !effectiveIndices(for: $0).isDisjoint(with: planIndices)
         }
-        return amrapOverlap ? "AMRAP exists on an overlapping set; can't use fixed reps." : nil
+        return amrapOverlap
+            ? TechniqueConflictCopy.amrapOverlapBlocksFixedReps() : nil
     }
 
     var body: some View {
@@ -608,16 +619,11 @@ private struct TechniqueParamEditView: View {
         appliesToErrorMsg = nil
     }
 
+    /// Same fix as `TechniquePlanRow.title`: this screen's navigation title
+    /// was a second private English switch, so the pushed editor's title stayed
+    /// English on a Korean phone while the sheet that opened it was translated.
     private var typeName: String {
-        switch plan.type {
-        case .dropset:       return "Drop Set"
-        case .partialReps:   return "Partial Reps"
-        case .restPause:     return "Rest-Pause"
-        case .amrap:         return "AMRAP"
-        case .toFailure:     return "To Failure"
-        case .cluster:       return "Cluster"
-        case .tempoOverride: return "Tempo Override"
-        }
+        plan.type.displayName
     }
 
     /// Effective Partial Range picker selection (`""` = Not set). Maps a legacy
@@ -654,7 +660,7 @@ private struct TechniqueParamEditView: View {
                     step: 5
                 )
                 Stepper(
-                    "Rest between drops: \(plan.restSeconds ?? 0)s",
+                    "Rest between drops: \(DurationDisplay.seconds(plan.restSeconds ?? 0))",
                     value: Binding(
                         get: { plan.restSeconds ?? 0 },
                         set: { plan.restSeconds = $0 > 0 ? $0 : nil }
@@ -710,7 +716,14 @@ private struct TechniqueParamEditView: View {
                     in: 1...10
                 )
                 Stepper(
-                    "Rest: \(plan.restSeconds ?? 15)s",
+                    // Symbolic key: the natural `"Rest: %@"` collides with
+                    // `DurationDisplay.rest`'s `"%@ rest"` under String
+                    // Catalog symbol generation. Already localized, so the
+                    // `String` overload (verbatim) is the right one here.
+                    String(
+                        format: NSLocalizedString(
+                            "technique.restPause.rest", comment: ""),
+                        DurationDisplay.seconds(plan.restSeconds ?? 15)),
                     value: Binding(
                         get: { plan.restSeconds ?? 15 },
                         set: { plan.restSeconds = $0 }
@@ -739,7 +752,7 @@ private struct TechniqueParamEditView: View {
                     in: 1...10
                 )
                 Stepper(
-                    "Rest between clusters: \(plan.restSeconds ?? 10)s",
+                    "Rest between clusters: \(DurationDisplay.seconds(plan.restSeconds ?? 10))",
                     value: Binding(
                         get: { plan.restSeconds ?? 10 },
                         set: { plan.restSeconds = $0 }
@@ -805,19 +818,32 @@ private struct TechniqueParamEditView: View {
                     .foregroundStyle(.secondary)
             }
 
+        // The two types that configure nothing. Their sections used to carry a
+        // second, separately worded copy of the definition; both now read the
+        // shared one and append the "nothing to set here" trailer, so this
+        // screen and the picker can no longer describe the same technique
+        // differently.
         case .amrap:
             Section("AMRAP") {
-                Text("As many reps as possible on the last set. No additional parameters.")
-                    .font(.dsBodySecondary)
-                    .foregroundStyle(.secondary)
+                noParameterExplanation(for: .amrap)
             }
 
         case .toFailure:
             Section("To Failure") {
-                Text("Push until technical failure. No additional parameters.")
-                    .font(.dsBodySecondary)
-                    .foregroundStyle(.secondary)
+                noParameterExplanation(for: .toFailure)
             }
         }
+    }
+
+    /// Shared body for a technique with no parameters: its one-line definition
+    /// followed by the trailer saying so.
+    @ViewBuilder
+    private func noParameterExplanation(for type: TechniqueType) -> some View {
+        Text(LocalizedStringKey(TechniqueHelp.description(for: type)))
+            .font(.dsBodySecondary)
+            .foregroundStyle(.secondary)
+        Text(LocalizedStringKey(TechniqueHelp.noParameters))
+            .font(.dsBodySecondary)
+            .foregroundStyle(.secondary)
     }
 }

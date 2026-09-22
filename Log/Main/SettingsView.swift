@@ -58,6 +58,10 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                DSPageIntro(
+                    "Units, defaults, effort tracking, data, and help.",
+                    systemImage: "gear"
+                )
                 unitsSection
                 bodyweightSection
                 autoregSection
@@ -184,9 +188,17 @@ struct SettingsView: View {
         } header: {
             HStack(spacing: DSSpacing.xs) {
                 Text("Autoregulation")
+                // The picker below is where RIR and RPE are *chosen*, and it
+                // named both without defining either — the terminology gap
+                // testers reported. Both definitions plus the pre-existing
+                // scope sentence go into this one alert rather than a second
+                // glyph: one control, one explanation. The body is composed
+                // from the same localized sentences the prescription editor
+                // shows per metric (`AutoregulationHelp`), so there is exactly
+                // one copy of each definition.
                 InfoButton(
                     "Autoregulation",
-                    message: "Applies to new slots and the intensity field in active workouts."
+                    localizedMessage: AutoregulationHelp.settingsMessage()
                 )
             }
         }

@@ -4,138 +4,6 @@
     "" : {
 
     },
-    "Does not match the target distance." : {
-      "comment" : "Cardio Plan editor: shown under the segment total when it differs from the slot's target distance. A cue, not an error — nothing is blocked or adjusted.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "목표 거리와 일치하지 않습니다."
-          }
-        }
-      }
-    },
-    "End RIR" : {
-      "comment" : "Routine editor: the RIR a progression finishes on. Its own key rather than the generic End (종료 = terminate), which read as \"quit RIR\" in Korean.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "마지막 RIR"
-          }
-        }
-      }
-    },
-    "End RPE" : {
-      "comment" : "Routine editor: the RPE a progression finishes on. See End RIR.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "마지막 RPE"
-          }
-        }
-      }
-    },
-    "Segment total: %@" : {
-      "comment" : "Cardio Plan editor: the distance all segments add up to, in the user's display unit.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "구간 합계: %@"
-          }
-        }
-      }
-    },
-    "Start RIR" : {
-      "comment" : "Routine editor: the RIR a progression starts from. Paired with End RIR.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "시작 RIR"
-          }
-        }
-      }
-    },
-    "Start RPE" : {
-      "comment" : "Routine editor: the RPE a progression starts from. Paired with End RPE.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "시작 RPE"
-          }
-        }
-      }
-    },
-    "Switching to %@ will remove %lld logged sets for this exercise." : {
-      "comment" : "Destructive switch confirmation, naming the incoming exercise. Two placeholders, so both languages are positional.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Switching to %1$@ will remove %2$lld logged sets for this exercise."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@(으)로 변경하면 이 운동에 기록된 세트 %2$lld개가 삭제됩니다."
-          }
-        }
-      }
-    },
-    "Switching to %@ will remove %lld logged sets from this block." : {
-      "comment" : "Destructive switch confirmation for a superset, naming the incoming exercise. Two placeholders, so both languages are positional.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Switching to %1$@ will remove %2$lld logged sets from this block."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@(으)로 변경하면 이 블록에 기록된 세트 %2$lld개가 삭제됩니다."
-          }
-        }
-      }
-    },
-    "Switching to %@ will remove 1 logged set for this exercise." : {
-      "comment" : "Destructive switch confirmation, naming the incoming exercise. Korean uses the (으)로 particle so a name ending in either a consonant or a vowel reads correctly.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@(으)로 변경하면 이 운동에 기록된 세트 1개가 삭제됩니다."
-          }
-        }
-      }
-    },
-    "Switching to %@ will remove 1 logged set from this block." : {
-      "comment" : "Destructive switch confirmation for a superset, naming the incoming exercise.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@(으)로 변경하면 이 블록에 기록된 세트 1개가 삭제됩니다."
-          }
-        }
-      }
-    },
     "—" : {
 
     },
@@ -148,9 +16,6 @@
           }
         }
       }
-    },
-    "· %llds" : {
-
     },
     "“%@” already exists." : {
       "localizations" : {
@@ -188,6 +53,17 @@
     "%" : {
 
     },
+    "% of working" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메인 세트 기준 %"
+          }
+        }
+      }
+    },
     "% of Working" : {
       "localizations" : {
         "ko" : {
@@ -208,12 +84,122 @@
         }
       }
     },
+    "%@ already defines AMRAP/fixed reps; remove it to use AMRAP." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: 이미 AMRAP/고정 반복을 지정합니다. AMRAP을 사용하려면 해당 기법을 제거하세요."
+          }
+        }
+      }
+    },
+    "%@ already exists on set %lld." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: 세트 %2$lld에 이미 있습니다."
+          }
+        }
+      }
+    },
+    "%@ and %@ can't share a set." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@: 같은 세트에 함께 사용할 수 없습니다."
+          }
+        }
+      }
+    },
+    "%@ can't combine with %@ on the same set." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@: 같은 세트에서 함께 사용할 수 없습니다."
+          }
+        }
+      }
+    },
+    "%@ is already on this set." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: 이 세트에 이미 있습니다."
+          }
+        }
+      }
+    },
+    "%@ rest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "휴식 %@"
+          }
+        }
+      }
+    },
+    "%@–%@s" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@–%2$@초"
+          }
+        }
+      }
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@h" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@시간"
+          }
+        }
+      }
+    },
+    "%@m" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@분"
+          }
+        }
+      }
+    },
+    "%@s" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@초"
           }
         }
       }
@@ -283,6 +269,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 반복"
+          }
+        }
+      }
+    },
+    "%lld reps/drop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "드롭당 %lld 반복"
+          }
+        }
+      }
+    },
+    "%lld rounds" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 라운드"
+          }
+        }
+      }
+    },
+    "%lld segment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld구간"
+          }
+        }
+      }
+    },
+    "%lld segments" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld구간"
           }
         }
       }
@@ -370,6 +400,17 @@
         }
       }
     },
+    "%lld–%lld reps" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld–%2$lld 반복"
+          }
+        }
+      }
+    },
     "%lld." : {
 
     },
@@ -383,12 +424,24 @@
         }
       }
     },
-    "%lld%@" : {
+    "%lld%% drop" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "en" : {
+        "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%2$@"
+            "state" : "translated",
+            "value" : "%lld%% 감량"
+          }
+        }
+      }
+    },
+    "%lld%% of working" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메인 세트의 %lld%%"
           }
         }
       }
@@ -403,17 +456,19 @@
         }
       }
     },
-    "%lld%%%@" : {
+    "%lldh %@m" : {
+      "extractionState" : "manual",
       "localizations" : {
-        "en" : {
+        "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%%%2$@"
+            "state" : "translated",
+            "value" : "%1$lld시간 %2$@분"
           }
         }
       }
     },
     "%lldm" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -424,6 +479,7 @@
       }
     },
     "%llds rest" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -486,6 +542,17 @@
         }
       }
     },
+    "A 1–10 effort scale. RPE 10 is maximal effort; RPE 8 is roughly equivalent to RIR 2." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1~10으로 나타내는 강도 척도입니다. RPE 10은 최대 강도이며, RPE 8은 대략 RIR 2에 해당합니다."
+          }
+        }
+      }
+    },
     "A round runs one set of each exercise that still has sets remaining; shorter exercises drop out of the later rounds. Rest after round fires between completed rounds. Rest before next block fires after the final round, replacing round rest." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -493,6 +560,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "한 라운드는 세트가 남아 있는 각 운동을 한 세트씩 진행합니다. 세트가 적은 운동은 이후 라운드에서 빠집니다. 라운드 후 휴식은 완료된 라운드 사이에 적용되고, 다음 블록 전 휴식은 마지막 라운드 후에 라운드 휴식을 대신해 적용됩니다."
+          }
+        }
+      }
+    },
+    "A routine is a reusable workout plan. Create one above to get ready to train." : {
+      "comment" : "Routines: empty-state description shown when no routines exist yet.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "루틴은 반복해서 사용하는 운동 계획입니다. 위에서 만들어 운동을 준비하세요."
           }
         }
       }
@@ -574,6 +653,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이전"
+          }
+        }
+      }
+    },
+    "activeWorkout.timer.duration" : {
+      "comment" : "Active workout toolbar: the running set-duration timer. A symbolic key because \"Duration: %@\" collides with \"Duration %@\" under String Catalog symbol generation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duration: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시간: %@"
+          }
+        }
+      }
+    },
+    "activeWorkout.timer.rest" : {
+      "comment" : "Active workout toolbar: the running rest timer. Symbolic for the same reason as its duration sibling.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "휴식: %@"
           }
         }
       }
@@ -689,6 +804,17 @@
         }
       }
     },
+    "Add this exercise to a routine to see it here." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동을 루틴에 추가하면 여기에 표시됩니다."
+          }
+        }
+      }
+    },
     "Add warm-up, work, recovery, or cool-down segments." : {
       "comment" : "Structured Cardio Slice 12C: empty state of the cardio segment editor",
       "extractionState" : "manual",
@@ -697,17 +823,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "워밍업, 본 운동, 회복, 쿨다운 구간을 추가하세요."
-          }
-        }
-      }
-    },
-    "Add this exercise to a routine to see it here." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 운동을 루틴에 추가하면 여기에 표시됩니다."
           }
         }
       }
@@ -754,14 +869,14 @@
         }
       }
     },
-    "Alternatives appear when you switch this exercise during a workout." : {
-      "comment" : "Alternative Exercises Phase D: footer explaining where prepared alternatives are offered",
+    "All Workouts" : {
+      "comment" : "Navigation title of the full workout-history screen reached from History.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "운동 중 이 운동을 교체할 때 대체 운동이 표시됩니다."
+            "value" : "전체 운동 기록"
           }
         }
       }
@@ -778,6 +893,18 @@
         }
       }
     },
+    "Alternatives appear when you switch this exercise during a workout." : {
+      "comment" : "Alternative Exercises Phase D: footer explaining where prepared alternatives are offered",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 중 이 운동을 교체할 때 대체 운동이 표시됩니다."
+          }
+        }
+      }
+    },
     "AMRAP" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -789,8 +916,16 @@
         }
       }
     },
-    "AP Calculus AB demo using in-memory sample workout data. Does not touch your history." : {
-
+    "AMRAP exists on an overlapping set; can't use fixed reps." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "겹치는 세트에 AMRAP이 있어 고정 반복을 사용할 수 없습니다."
+          }
+        }
+      }
     },
     "Applies To" : {
       "localizations" : {
@@ -856,6 +991,17 @@
         }
       }
     },
+    "As many reps as possible in the set." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "해당 세트에서 가능한 만큼 반복합니다."
+          }
+        }
+      }
+    },
     "As many reps as possible on last set." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -911,8 +1057,7 @@
         }
       }
     },
-    "Avg HR" : {
-      "comment" : "Cardio Slice 11: History chart metric — average heart rate. Abbreviated to fit the metric picker",
+    "Average Heart Rate" : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
@@ -923,7 +1068,8 @@
         }
       }
     },
-    "Average Heart Rate" : {
+    "Avg HR" : {
+      "comment" : "Cardio Slice 11: History chart metric — average heart rate. Abbreviated to fit the metric picker",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
@@ -962,6 +1108,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "기본"
+          }
+        }
+      }
+    },
+    "Best reps" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "최고 반복"
+          }
+        }
+      }
+    },
+    "Best wt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "최고 중량"
           }
         }
       }
@@ -1605,6 +1773,18 @@
         }
       }
     },
+    "Does not match the target distance." : {
+      "comment" : "Cardio Plan editor: shown under the segment total when it differs from the slot's target distance. A cue, not an error — nothing is blocked or adjusted.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "목표 거리와 일치하지 않습니다."
+          }
+        }
+      }
+    },
     "Done" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1699,7 +1879,19 @@
         }
       }
     },
+    "Duration %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시간 %@"
+          }
+        }
+      }
+    },
     "Duration %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -1732,6 +1924,7 @@
       }
     },
     "Duration: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -1903,18 +2096,6 @@
         }
       }
     },
-    "None: No effort target is shown.\nSame Target: Use one target for every set.\nProgression: Spread start and end targets across the sets.\nCustom Per Set: Choose a target for each set." : {
-      "comment" : "Body of the effort-mode info alert: all four modes the picker offers, one per line. Mode names must match the picker's own translations.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "없음: 강도 목표를 표시하지 않습니다.\n동일 목표: 모든 세트에 같은 목표를 사용합니다.\n프로그레션: 시작 목표와 마지막 목표를 세트에 나누어 적용합니다.\n세트별 지정: 세트마다 목표를 직접 정합니다."
-          }
-        }
-      }
-    },
     "Empty routine" : {
       "localizations" : {
         "ko" : {
@@ -1954,6 +2135,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "종료"
+          }
+        }
+      }
+    },
+    "End RIR" : {
+      "comment" : "Routine editor: the RIR a progression finishes on. Its own key rather than the generic End (종료 = terminate), which read as \"quit RIR\" in Korean.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "마지막 RIR"
+          }
+        }
+      }
+    },
+    "End RPE" : {
+      "comment" : "Routine editor: the RPE a progression finishes on. See End RIR.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "마지막 RPE"
           }
         }
       }
@@ -2019,6 +2224,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "장비 및 세팅"
+          }
+        }
+      }
+    },
+    "Estimated one-rep max: an estimate of the heaviest single rep you could perform, calculated from your logged sets." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추정 1회 최대 중량: 기록한 세트를 바탕으로 1회 들어 올릴 수 있는 최대 중량을 추정한 값입니다."
           }
         }
       }
@@ -2263,6 +2479,18 @@
         }
       }
     },
+    "Finish a workout and it will appear here with every set you logged." : {
+      "comment" : "History: Recent Workouts empty-state description.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동을 완료하면 기록한 모든 세트와 함께 여기에 표시됩니다."
+          }
+        }
+      }
+    },
     "Finish a workout with logged working sets to analyze your real progress, or switch to Sample Data to see the showcase." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2402,6 +2630,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "기록"
+          }
+        }
+      }
+    },
+    "How many more reps you could have completed before failure. RIR 2 means you could have done about 2 more reps." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "실패 지점까지 반복을 몇 회 더 할 수 있었는지를 뜻합니다. RIR 2는 약 2회를 더 할 수 있었다는 의미입니다."
           }
         }
       }
@@ -2718,6 +2957,18 @@
         }
       }
     },
+    "Log now supports dedicated cardio tracking. Older exercises in the Cardio category can be updated to use distance, pace, heart rate, calories, incline, and resistance fields." : {
+      "comment" : "Cardio Slice 10: message of the one-time assisted cardio-migration alert",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이제 Log에서 유산소 전용 기록을 지원합니다. 유산소 부위에 있는 기존 운동을 거리, 페이스, 심박수, 칼로리, 경사, 저항 항목을 사용하도록 업데이트할 수 있습니다."
+          }
+        }
+      }
+    },
     "Logged %lld/%lld sets" : {
       "localizations" : {
         "en" : {
@@ -2730,18 +2981,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld/%lld 세트 기록됨"
-          }
-        }
-      }
-    },
-    "Log now supports dedicated cardio tracking. Older exercises in the Cardio category can be updated to use distance, pace, heart rate, calories, incline, and resistance fields." : {
-      "comment" : "Cardio Slice 10: message of the one-time assisted cardio-migration alert",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이제 Log에서 유산소 전용 기록을 지원합니다. 유산소 부위에 있는 기존 운동을 거리, 페이스, 심박수, 칼로리, 경사, 저항 항목을 사용하도록 업데이트할 수 있습니다."
           }
         }
       }
@@ -2885,6 +3124,17 @@
         }
       }
     },
+    "No additional parameters." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가 설정은 없습니다."
+          }
+        }
+      }
+    },
     "No alternatives added" : {
       "comment" : "Alternative Exercises Phase D: empty state for the alternatives list",
       "extractionState" : "manual",
@@ -2904,6 +3154,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이 운동에는 분석할 수 있는 작업 세트가 없습니다."
+          }
+        }
+      }
+    },
+    "No calories logged for this exercise yet." : {
+      "comment" : "Cardio Slice 11: empty state for the History calories chart",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동에 기록된 칼로리가 아직 없습니다."
           }
         }
       }
@@ -2961,6 +3223,18 @@
         }
       }
     },
+    "No heart rate logged for this exercise yet." : {
+      "comment" : "Cardio Slice 11: empty state for the History average-heart-rate chart",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동에 기록된 심박수가 아직 없습니다."
+          }
+        }
+      }
+    },
     "No importable rows were found in this file." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2979,18 +3253,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "아직 메모가 없습니다."
-          }
-        }
-      }
-    },
-    "No heart rate logged for this exercise yet." : {
-      "comment" : "Cardio Slice 11: empty state for the History average-heart-rate chart",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 운동에 기록된 심박수가 아직 없습니다."
           }
         }
       }
@@ -3029,25 +3291,25 @@
         }
       }
     },
-    "No routines yet. Create one above." : {
+    "No routines yet" : {
+      "comment" : "Routines: empty-state title. No trailing period — it is a ContentUnavailableView title.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "아직 루틴이 없습니다. 위에서 만들어 보세요."
+            "value" : "아직 루틴이 없습니다"
           }
         }
       }
     },
-    "No calories logged for this exercise yet." : {
-      "comment" : "Cardio Slice 11: empty state for the History calories chart",
+    "No segments" : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 운동에 기록된 칼로리가 아직 없습니다."
+            "value" : "구간 없음"
           }
         }
       }
@@ -3128,13 +3390,14 @@
         }
       }
     },
-    "No workouts yet. Your calendar will light up here." : {
+    "No workouts yet" : {
+      "comment" : "History: Recent Workouts empty-state title. No trailing period — it is a ContentUnavailableView title.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "아직 운동이 없습니다. 캘린더가 여기에 표시됩니다."
+            "value" : "아직 운동 기록이 없습니다"
           }
         }
       }
@@ -3146,6 +3409,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "없음"
+          }
+        }
+      }
+    },
+    "None: No effort target is shown.\nSame Target: Use one target for every set.\nProgression: Spread start and end targets across the sets.\nCustom Per Set: Choose a target for each set." : {
+      "comment" : "Body of the effort-mode info alert: all four modes the picker offers, one per line. Mode names must match the picker's own translations.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "없음: 강도 목표를 표시하지 않습니다.\n동일 목표: 모든 세트에 같은 목표를 사용합니다.\n프로그레션: 시작 목표와 마지막 목표를 세트에 나누어 적용합니다.\n세트별 지정: 세트마다 목표를 직접 정합니다."
+          }
+        }
+      }
+    },
+    "Not available for bodyweight exercises." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "맨몸 운동에서는 사용할 수 없습니다."
+          }
+        }
+      }
+    },
+    "Not available for duration-based exercises." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시간 기반 운동에서는 사용할 수 없습니다."
           }
         }
       }
@@ -3426,17 +3723,6 @@
         }
       }
     },
-    "Percent of Working Weight" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "메인 세트 기준 %"
-          }
-        }
-      }
-    },
     "Per-set targets are fixed for this session." : {
       "comment" : "In-workout Edit Plan sheet: why a custom per-set effort list is read-only. States the rule; the previous copy read as an unfinished feature.",
       "extractionState" : "manual",
@@ -3445,6 +3731,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "세트별 목표는 이 세션에서 고정됩니다."
+          }
+        }
+      }
+    },
+    "Percent of Working Weight" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메인 세트 기준 %"
           }
         }
       }
@@ -3538,6 +3835,18 @@
         }
       }
     },
+    "Progression appears here once you've logged a workout." : {
+      "comment" : "History: shown in place of the Progression chart when no workouts exist at all.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동을 기록하면 여기에 프로그레션이 표시됩니다."
+          }
+        }
+      }
+    },
     "Progression targets are fixed for this session." : {
       "comment" : "In-workout Edit Plan sheet: why a progression is read-only. States the rule; the previous copy read as an unfinished feature.",
       "extractionState" : "manual",
@@ -3614,6 +3923,17 @@
         }
       }
     },
+    "Recent Workouts" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "최근 운동"
+          }
+        }
+      }
+    },
     "Recovery" : {
       "comment" : "Structured Cardio Slice 12C: cardio segment type: the easy part between efforts",
       "extractionState" : "manual",
@@ -3622,17 +3942,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "회복"
-          }
-        }
-      }
-    },
-    "Recent Workouts" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "최근 운동"
           }
         }
       }
@@ -3655,18 +3964,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "제거"
-          }
-        }
-      }
-    },
-    "Remove Segment" : {
-      "comment" : "Structured Cardio Slice 12C: destructive button in the segment editor sheet",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "구간 삭제"
           }
         }
       }
@@ -3708,6 +4005,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "슈퍼세트에서 운동을 제거할까요?"
+          }
+        }
+      }
+    },
+    "Remove Segment" : {
+      "comment" : "Structured Cardio Slice 12C: destructive button in the segment editor sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구간 삭제"
           }
         }
       }
@@ -4001,7 +4310,19 @@
         }
       }
     },
+    "Rest between clusters: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "클러스터 간 휴식: %@"
+          }
+        }
+      }
+    },
     "Rest between clusters: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -4021,7 +4342,19 @@
         }
       }
     },
+    "Rest between drops: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "드롭 간 휴식: %@"
+          }
+        }
+      }
+    },
     "Rest between drops: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -4064,6 +4397,7 @@
       }
     },
     "Rest: %llds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -4084,8 +4418,31 @@
         }
       }
     },
+    "Review completed workouts and track how your training is progressing." : {
+      "comment" : "History: page intro line under the navigation title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "완료한 운동을 확인하고 훈련의 발전 과정을 살펴보세요."
+          }
+        }
+      }
+    },
     "RIR" : {
 
+    },
+    "RIR — Reps in Reserve" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RIR — 남은 반복 수 (Reps in Reserve)"
+          }
+        }
+      }
     },
     "Round %lld/%lld" : {
       "comment" : "Structured Cardio Slice 12D: which round of a repeated cardio segment group a checklist row is, e.g. Round 2/5",
@@ -4201,6 +4558,40 @@
     "RPE" : {
 
     },
+    "RPE — Rate of Perceived Exertion" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPE — 운동자각도 (Rate of Perceived Exertion)"
+          }
+        }
+      }
+    },
+    "Same as the slot's exercise — not offered in workouts" : {
+      "comment" : "Alternative Exercises: routine-editor row marker for a legacy alternative that names the slot's own exercise. Shown, not hidden, so the user can find and delete it.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 슬롯의 운동과 동일 — 운동 중에는 표시되지 않음"
+          }
+        }
+      }
+    },
+    "Same Target" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "동일 목표"
+          }
+        }
+      }
+    },
     "Save" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4233,29 +4624,6 @@
         }
       }
     },
-    "Same as the slot's exercise — not offered in workouts" : {
-      "comment" : "Alternative Exercises: routine-editor row marker for a legacy alternative that names the slot's own exercise. Shown, not hidden, so the user can find and delete it.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 슬롯의 운동과 동일 — 운동 중에는 표시되지 않음"
-          }
-        }
-      }
-    },
-    "Same Target" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "동일 목표"
-          }
-        }
-      }
-    },
     "Saved Routines" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4284,6 +4652,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "검색"
+          }
+        }
+      }
+    },
+    "Segment total: %@" : {
+      "comment" : "Cardio Plan editor: the distance all segments add up to, in the user's display unit.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구간 합계: %@"
           }
         }
       }
@@ -4364,6 +4744,28 @@
         }
       }
     },
+    "set %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트 %@"
+          }
+        }
+      }
+    },
+    "set %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트 %lld"
+          }
+        }
+      }
+    },
     "Set %lld" : {
       "localizations" : {
         "ko" : {
@@ -4413,6 +4815,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "세트 및 휴식"
+          }
+        }
+      }
+    },
+    "sets %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세트 %@"
           }
         }
       }
@@ -4535,9 +4948,6 @@
         }
       }
     },
-    "Showcase" : {
-
-    },
     "Single" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4644,6 +5054,17 @@
         }
       }
     },
+    "Split a set into small groups of reps separated by short rests." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "한 세트를 짧은 휴식으로 나눈 적은 반복 묶음으로 쪼개어 수행합니다."
+          }
+        }
+      }
+    },
     "Squeeze pause: %@" : {
       "localizations" : {
         "ko" : {
@@ -4682,6 +5103,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "새로 시작"
+          }
+        }
+      }
+    },
+    "Start RIR" : {
+      "comment" : "Routine editor: the RIR a progression starts from. Paired with End RIR.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시작 RIR"
+          }
+        }
+      }
+    },
+    "Start RPE" : {
+      "comment" : "Routine editor: the RPE a progression starts from. Paired with End RPE.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시작 RPE"
           }
         }
       }
@@ -4874,6 +5319,66 @@
         }
       }
     },
+    "Switching to %@ will remove %lld logged sets for this exercise." : {
+      "comment" : "Destructive switch confirmation, naming the incoming exercise. Two placeholders, so both languages are positional.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switching to %1$@ will remove %2$lld logged sets for this exercise."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@(으)로 변경하면 이 운동에 기록된 세트 %2$lld개가 삭제됩니다."
+          }
+        }
+      }
+    },
+    "Switching to %@ will remove %lld logged sets from this block." : {
+      "comment" : "Destructive switch confirmation for a superset, naming the incoming exercise. Two placeholders, so both languages are positional.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switching to %1$@ will remove %2$lld logged sets from this block."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@(으)로 변경하면 이 블록에 기록된 세트 %2$lld개가 삭제됩니다."
+          }
+        }
+      }
+    },
+    "Switching to %@ will remove 1 logged set for this exercise." : {
+      "comment" : "Destructive switch confirmation, naming the incoming exercise. Korean uses the (으)로 particle so a name ending in either a consonant or a vowel reads correctly.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@(으)로 변경하면 이 운동에 기록된 세트 1개가 삭제됩니다."
+          }
+        }
+      }
+    },
+    "Switching to %@ will remove 1 logged set from this block." : {
+      "comment" : "Destructive switch confirmation for a superset, naming the incoming exercise.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@(으)로 변경하면 이 블록에 기록된 세트 1개가 삭제됩니다."
+          }
+        }
+      }
+    },
     "Tap Details to set Rest after round" : {
       "localizations" : {
         "ko" : {
@@ -4892,6 +5397,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "목표 거리"
+          }
+        }
+      }
+    },
+    "technique.appliesTo.all" : {
+      "comment" : "Technique chip qualifier meaning every working set, shown inside brackets as [all]. A symbolic key: a bare \"all\" collides with the \"All\" filter label under symbol generation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "all"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체"
+          }
+        }
+      }
+    },
+    "technique.restPause.rest" : {
+      "comment" : "Rest-Pause technique editor: intra-set rest stepper. Symbolic because \"Rest: %@\" collides with \"%@ rest\" under String Catalog symbol generation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "휴식: %@"
           }
         }
       }
@@ -5026,6 +5567,18 @@
         }
       }
     },
+    "This plan is full." : {
+      "comment" : "Structured Cardio Slice 12C: footer shown when a cardio plan has reached the maximum number of segments",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 구성은 더 이상 추가할 수 없습니다."
+          }
+        }
+      }
+    },
     "This removes the option from the picker list. Exercises already using this value will keep it until you change them." : {
       "localizations" : {
         "ko" : {
@@ -5063,18 +5616,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이 운동과 모든 세트가 영구적으로 삭제됩니다."
-          }
-        }
-      }
-    },
-    "This plan is full." : {
-      "comment" : "Structured Cardio Slice 12C: footer shown when a cardio plan has reached the maximum number of segments",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 구성은 더 이상 추가할 수 없습니다."
           }
         }
       }
@@ -5194,6 +5735,18 @@
         }
       }
     },
+    "Units, defaults, effort tracking, data, and help." : {
+      "comment" : "Settings: page intro line under the navigation title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "단위, 기본값, 운동 강도, 데이터, 도움말."
+          }
+        }
+      }
+    },
     "Update Cardio Exercises" : {
       "comment" : "Cardio Slice 10: title of the one-time assisted cardio-migration alert",
       "extractionState" : "manual",
@@ -5240,17 +5793,6 @@
         }
       }
     },
-    "Used for bodyweight-inclusive exercises (e.g. pull-ups, dips) in History load metrics. Leave empty if not set. Stored in the unit shown above." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "풀업, 딥스처럼 체중이 포함되는 운동의 기록 부하 계산에 사용됩니다. 설정하지 않으려면 비워 두세요. 위에 표시된 단위로 저장됩니다."
-          }
-        }
-      }
-    },
     "Used as %lld alternative" : {
       "localizations" : {
         "ko" : {
@@ -5267,6 +5809,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "대체 운동 %lld개로 사용"
+          }
+        }
+      }
+    },
+    "Used for bodyweight-inclusive exercises (e.g. pull-ups, dips) in History load metrics. Leave empty if not set. Stored in the unit shown above." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "풀업, 딥스처럼 체중이 포함되는 운동의 기록 부하 계산에 사용됩니다. 설정하지 않으려면 비워 두세요. 위에 표시된 단위로 저장됩니다."
           }
         }
       }
@@ -5308,6 +5861,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "사용자 가이드"
+          }
+        }
+      }
+    },
+    "View All Workouts" : {
+      "comment" : "History: row that opens the full workout history when more workouts exist than Recent Workouts shows.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체 운동 기록 보기"
           }
         }
       }
@@ -5446,6 +6011,18 @@
         }
       }
     },
+    "Work" : {
+      "comment" : "Structured Cardio Slice 12C: cardio segment type: the main effort",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "본 운동"
+          }
+        }
+      }
+    },
     "Working Set" : {
       "comment" : "History row label for an ordinary working set",
       "extractionState" : "manual",
@@ -5480,18 +6057,6 @@
         }
       }
     },
-    "Work" : {
-      "comment" : "Structured Cardio Slice 12C: cardio segment type: the main effort",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "본 운동"
-          }
-        }
-      }
-    },
     "Workout Days" : {
       "localizations" : {
         "ko" : {
@@ -5512,13 +6077,38 @@
         }
       }
     },
-    "You don't have any workouts yet." : {
+    "Your movement library. Tap one to edit its defaults." : {
+      "comment" : "Exercises: page intro line under the navigation title.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "아직 운동이 없습니다."
+            "value" : "내 운동 목록입니다. 운동을 눌러 기본값을 편집하세요."
+          }
+        }
+      }
+    },
+    "Your training days will be highlighted here." : {
+      "comment" : "History: Calendar empty state. Deliberately does not repeat “No workouts yet”, which the Recent Workouts empty state above it already says.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동한 날이 여기에 표시됩니다."
+          }
+        }
+      }
+    },
+    "Your training plans. Pick one to start a workout." : {
+      "comment" : "Routines: page intro line under the navigation title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "내 운동 계획입니다. 루틴을 선택해 운동을 시작하세요."
           }
         }
       }

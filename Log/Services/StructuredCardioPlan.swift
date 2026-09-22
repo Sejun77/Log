@@ -60,12 +60,16 @@ enum CardioSegmentKind: String, Codable, CaseIterable, Equatable {
     /// Display label. Plain English by design in this slice — see the file's
     /// summary-text note. The 12C editor is what introduces these as
     /// user-facing strings, and it localizes them there.
+    /// User-facing, so localized at the source: these words are composed into
+    /// summary strings that are rendered verbatim (`shortSummary`, the group
+    /// and plan summaries), where an English literal could never translate.
+    /// The catalog already carried all four.
     var label: String {
         switch self {
-        case .warmUp: return "Warm-up"
-        case .work: return "Work"
-        case .recovery: return "Recovery"
-        case .coolDown: return "Cool-down"
+        case .warmUp: return String(localized: "Warm-up")
+        case .work: return String(localized: "Work")
+        case .recovery: return String(localized: "Recovery")
+        case .coolDown: return String(localized: "Cool-down")
         }
     }
 
@@ -519,9 +523,17 @@ struct CardioSegmentPlan: Codable, Equatable {
     /// "3 segments" for a 5 × (work/recovery) plan would be the author's view,
     /// not the athlete's.
     func summary(distanceUnit: DistanceUnit) -> String {
-        guard !isEmpty else { return "No segments" }
+        guard !isEmpty else { return String(localized: "No segments") }
 
-        var parts = ["\(expandedCount) \(expandedCount == 1 ? "segment" : "segments")"]
+        // The count segment was the one piece of this line still composed from
+        // English literals, which is why a Korean cardio plan read
+        // "6 segments · 32분 · 5 km". 구간 is the term the catalog already uses
+        // for Segments / Add Segment / Remove Segment.
+        var parts = [
+            expandedCount == 1
+                ? String(localized: "\(expandedCount) segment")
+                : String(localized: "\(expandedCount) segments")
+        ]
         if let totalDurationSeconds {
             parts.append(DurationFormat.compact(totalDurationSeconds))
         }
@@ -536,7 +548,7 @@ struct CardioSegmentPlan: Codable, Equatable {
     /// One line per group: "5m warm-up · 20m work · 5m cool-down", or
     /// "5 × (1m work / 2m recovery)". The detail view of `summary`.
     func structureSummary(distanceUnit: DistanceUnit) -> String {
-        guard !isEmpty else { return "No segments" }
+        guard !isEmpty else { return String(localized: "No segments") }
         return groups
             .map { $0.summary(distanceUnit: distanceUnit) }
             .joined(separator: " · ")

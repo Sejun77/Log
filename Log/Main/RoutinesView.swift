@@ -43,6 +43,10 @@ struct RoutinesView: View {
     var body: some View {
         NavigationStack {
             List {
+                DSPageIntro(
+                    "Your training plans. Pick one to start a workout.",
+                    systemImage: "list.bullet.rectangle"
+                )
                 activeSessionSection
                 createRoutineSection
                 savedRoutinesSection
@@ -220,14 +224,22 @@ struct RoutinesView: View {
         let summaries = RoutineSummary.map(for: routines)
         return Section {
             if routines.isEmpty {
-                Text("No routines yet. Create one above.")
-                    .font(.dsBodySecondary)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                // Native empty state rather than a bare sentence: on a fresh
+                // install this row *is* the first impression of the page, so it
+                // says what a routine is and what creating one is for, not just
+                // that the list is empty.
+                ContentUnavailableView {
+                    Label(
+                        "No routines yet",
+                        systemImage: "list.bullet.rectangle"
+                    )
+                } description: {
+                    Text(
+                        "A routine is a reusable workout plan. Create one above to get ready to train."
+                    )
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
                 ForEach(routines) { r in
                     // A `Button` (not a `NavigationLink`) so the tap handler can

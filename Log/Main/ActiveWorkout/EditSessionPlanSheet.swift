@@ -16,6 +16,18 @@ import SwiftUI
 /// nobody has reported yet. Deferred to 12E/12F, gated on that report.
 struct EditSessionPlanSheet: View {
     @Binding var plan: SessionPlan
+    /// Slot-notes draft, owned by `ActiveWorkoutView`.
+    ///
+    /// Typing used to write straight through `plan` into that view's
+    /// `sessionPlans` `@State`, so every character re-evaluated the whole
+    /// active-workout body underneath this sheet. The draft is staged here and
+    /// written into the plan only at a commit point. The controller lives in
+    /// the parent so the sheet's `onDismiss` — which persists the session plans
+    /// — can flush it even when the sheet is swiped away.
+    var notes: TextDraftController
+    /// Writes the pending draft into `plan.slotNotes`. Supplied by the parent;
+    /// safe to call repeatedly (it no-ops when nothing is pending).
+    var onCommitNotes: () -> Void
     /// Immutable session-snapshot effort fields for this slot (nil when the
     /// slot had no prescription). Drives whether the Intensity section offers
     /// an editable single override or a read-only progression/none summary —
@@ -103,11 +115,16 @@ struct EditSessionPlanSheet: View {
                 }
 
                 Section("Notes") {
-                    TextField(
-                        "Slot notes", text: optionalString(\.slotNotes),
-                        axis: .vertical
+                    // Open-ended line limit, like Session Notes: a closed range
+                    // clamps the field's frame while its text container keeps
+                    // growing, which leaves blank untypeable space under a long
+                    // note and puts a second scroll view inside the Form.
+                    DraftNotesField(
+                        "Slot notes",
+                        controller: notes,
+                        lineLimit: 3...,
+                        onCommit: onCommitNotes
                     )
-                    .lineLimit(3...6)
                 }
             }
             .navigationTitle("Edit Plan")
@@ -122,7 +139,10 @@ struct EditSessionPlanSheet: View {
                     KeyboardDismissButton()
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Close") { dismiss() }
+                    Button("Close") {
+                        onCommitNotes()
+                        dismiss()
+                    }
                 }
             }
         }
@@ -296,17 +316,6 @@ struct EditSessionPlanSheet: View {
             ),
             in: sentinel...range.upperBound,
             step: step
-        )
-    }
-
-    // MARK: - Binding Helpers
-
-    private func optionalString(_ kp: WritableKeyPath<SessionPlan, String?>)
-        -> Binding<String>
-    {
-        Binding(
-            get: { plan[keyPath: kp] ?? "" },
-            set: { plan[keyPath: kp] = $0.isEmpty ? nil : $0 }
         )
     }
 }

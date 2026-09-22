@@ -184,24 +184,33 @@ struct DurationWheelPicker: View {
     private var wheels: some View {
         HStack(spacing: 0) {
             if showsHours {
-                wheel(values: hourRange, unit: "h", binding: hoursBinding)
+                wheel(
+                    values: hourRange, unit: DurationUnitText.hours,
+                    binding: hoursBinding)
             }
-            wheel(values: minuteRange, unit: "m", binding: minutesBinding)
-            wheel(values: secondRange, unit: "s", binding: secondsBinding)
+            wheel(
+                values: minuteRange, unit: DurationUnitText.minutes,
+                binding: minutesBinding)
+            wheel(
+                values: secondRange, unit: DurationUnitText.seconds,
+                binding: secondsBinding)
         }
         .frame(height: 120)
         .clipped()
     }
 
-    /// One wheel column. The unit letters match `DurationFormat.compact`, which
-    /// keeps them untranslated for the same reason the app's existing `"\(x)s"`
-    /// suffixes are untranslated.
-    private func wheel(values: [Int], unit: String, binding: Binding<Int>)
-        -> some View
-    {
+    /// One wheel column. The unit text comes from `DurationUnitText`, the same
+    /// source `DurationFormat.compact` uses, so a wheel and the value it edits
+    /// name the unit identically — `30s` in English, `30초` in Korean.
+    ///
+    /// Takes the formatter rather than a unit letter: the Korean word is not a
+    /// suffix that can be concatenated onto a number by the caller.
+    private func wheel(
+        values: [Int], unit: @escaping (Int) -> String, binding: Binding<Int>
+    ) -> some View {
         Picker(selection: binding) {
             ForEach(values, id: \.self) { v in
-                Text("\(v)\(unit)").monospacedDigit().tag(v)
+                Text(verbatim: unit(v)).monospacedDigit().tag(v)
             }
         } label: {
             Text(LocalizedStringKey(accessibilityTitle))

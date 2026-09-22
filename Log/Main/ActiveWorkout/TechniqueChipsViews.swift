@@ -88,6 +88,20 @@ struct TechniqueDetailSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                // The one-line definition, first: this sheet is reached by
+                // tapping a chip mid-workout, which is where a technique is
+                // most likely to be met for the first time and least likely to
+                // be looked up elsewhere. Shared with the Add Technique picker
+                // (`TechniqueHelp`), so the sentence a user reads here is the
+                // one they read while authoring the routine. Read-only, like
+                // the rest of the sheet.
+                Section {
+                    Text(LocalizedStringKey(
+                        TechniqueHelp.description(for: snap.type)))
+                        .font(.dsBodySecondary)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Applies To") {
                     let indices = snap.appliesToSetIndices
                     if !indices.isEmpty {
@@ -102,7 +116,7 @@ struct TechniqueDetailSheet: View {
                     Section("Drop Set") {
                         if let n = snap.dropCount { LabeledContent("Drops", value: "\(n)") }
                         if let p = snap.dropPercent { LabeledContent("Weight reduction", value: "\(Int(p))%") }
-                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between drops", value: "\(r)s") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between drops", value: DurationDisplay.seconds(r)) }
                         switch snap.dropsetEffort {
                         case .amrap:             LabeledContent("Effort", value: "AMRAP")
                         case .fixedReps(let n):  LabeledContent("Reps per drop", value: "\(n)")
@@ -111,13 +125,13 @@ struct TechniqueDetailSheet: View {
                 case .restPause:
                     Section("Rest-Pause") {
                         if let n = snap.rounds { LabeledContent("Rounds", value: "\(n)") }
-                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest", value: "\(r)s") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest", value: DurationDisplay.seconds(r)) }
                     }
                 case .cluster:
                     Section("Cluster") {
                         if let n = snap.reps { LabeledContent("Reps per cluster", value: "\(n)") }
                         if let c = snap.rounds { LabeledContent("Clusters", value: "\(c)") }
-                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between clusters", value: "\(r)s") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between clusters", value: DurationDisplay.seconds(r)) }
                     }
                 case .partialReps:
                     Section("Partial Reps") {
@@ -132,16 +146,13 @@ struct TechniqueDetailSheet: View {
                     Section("Tempo") {
                         if let t = snap.note, !t.isEmpty { LabeledContent("Tempo", value: t) }
                     }
-                case .amrap:
-                    Section("AMRAP") {
-                        Text("As many reps as possible on this set.")
-                            .foregroundStyle(.secondary)
-                    }
-                case .toFailure:
-                    Section("To Failure") {
-                        Text("Push to technical failure on this set.")
-                            .foregroundStyle(.secondary)
-                    }
+                // AMRAP and To Failure snapshot no parameters, so they have
+                // nothing to render below the description above — which is
+                // where their (previously duplicated, differently worded)
+                // explanation now lives. An empty section under a header
+                // repeating the navigation title would say nothing twice.
+                case .amrap, .toFailure:
+                    EmptyView()
                 }
             }
             .navigationTitle(snap.type.displayName)

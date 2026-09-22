@@ -34,11 +34,23 @@ final class ActiveWorkoutGuard: ObservableObject {
     // UI/session caches that must survive navigation away/back.
     // Keyed by routineSlotID (per-slot identity) — NOT Exercise.id —
     // so duplicate Exercise usage across slots doesn't collide.
-    @Published var inputsCache:
+    //
+    // Deliberately NOT `@Published`. `ActiveWorkoutView` rewrites both on every
+    // character typed into a reps / weight / duration / cardio field
+    // (`syncToGuardCaches`), and nine views hold this singleton as an
+    // `@ObservedObject` — RootTabView, RoutinesView, ExercisesView (x2),
+    // HistoryView (x2), RoutineEditor, StartWorkoutFromRoutineView and the
+    // active workout itself. Publishing here therefore invalidated the entire
+    // tab hierarchy twice per keystroke, which is what made typing lag app-wide
+    // rather than only on the workout screen. Nothing renders these: they are
+    // read imperatively by `syncFromGuardCachesIfAny()` and
+    // `ensureInputsInitializedFromPlan()` on appear, never inside a `body`, so
+    // no observer loses an update by dropping the wrapper.
+    var inputsCache:
         [UUID: [Int: (reps: String, weight: String, duration: String)]] = [:]
 
     // routineSlotID -> set indexes that are logged (UI checkmarks)
-    @Published var loggedCache: [UUID: Set<Int>] = [:]
+    var loggedCache: [UUID: Set<Int>] = [:]
 
     // Exercises
     func lockExercises<S: Sequence>(_ ids: S) where S.Element == UUID {
