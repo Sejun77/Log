@@ -335,7 +335,7 @@ struct RoutineEditor: View {
         let blocks = sortedBlocks
         guard let first = offsets.first, first < blocks.count else { return }
         let block = blocks[first]
-        if blockContainsLockedExercise(block, guard: activeGuard) {
+        if blockIsInUseByActiveWorkout(block, guard: activeGuard) {
             blockedBlocks = [blockTitle(block)]
             showLockedBlockAlert = true
             return
@@ -352,7 +352,7 @@ struct RoutineEditor: View {
         for block: RoutineBlock,
         summary: BlockPrescriptionSummary?
     ) -> some View {
-        let isLocked = blockContainsLockedExercise(block, guard: activeGuard)
+        let isLocked = blockIsInUseByActiveWorkout(block, guard: activeGuard)
         let routineLocked = activeGuard.isRoutineLocked(routine.id)
 
         return BlockRow(
@@ -416,7 +416,7 @@ struct RoutineEditor: View {
 
     @ViewBuilder
     private func blockSwipeActions(for block: RoutineBlock) -> some View {
-        if blockContainsLockedExercise(block, guard: activeGuard) {
+        if blockIsInUseByActiveWorkout(block, guard: activeGuard) {
             Button {
                 blockedBlocks = [blockTitle(block)]
                 showLockedBlockAlert = true
@@ -592,16 +592,32 @@ struct RoutineEditor: View {
             : names.joined(separator: " + ")
     }
 
-    private func blockContainsLockedExercise(
+    /// Whether this block is one the active workout is executing.
+    ///
+    /// Previously this asked only `g.isLocked(ex.id)` — Exercise-*definition*
+    /// identity — so any block that referenced an exercise the active session
+    /// happened to use was frozen, including blocks in completely unrelated
+    /// routines. Reusing Bench Press in Push A and Push B is normal, and
+    /// training Push A must not lock Push B's block.
+    ///
+    /// The rule now runs through `ActiveWorkoutGuard.isBlockInUse`, which
+    /// requires routine ownership first: only blocks belonging to the routine
+    /// the active session was started from can be in use. Inside that routine
+    /// the exercise check is unchanged, so every existing protection for the
+    /// source routine still applies. Supersets take this same path (both
+    /// `SupersetDetailNoRest` and `RoutineBlockDetailView` rows resolve their
+    /// lock here), so a shared exercise inside an unrelated superset is
+    /// likewise free.
+    private func blockIsInUseByActiveWorkout(
         _ block: RoutineBlock,
         guard g: ActiveWorkoutGuard
     ) -> Bool {
-        block.exercises.contains { re in
-            if let ex = re.safeExercise(in: ctx) {
-                return g.isLocked(ex.id)
+        g.isBlockInUse(
+            routineID: routine.id,
+            exerciseIDs: block.exercises.compactMap { re in
+                re.safeExercise(in: ctx)?.id
             }
-            return false
-        }
+        )
     }
 
 
