@@ -35,10 +35,10 @@ struct RoutineBlockDetailView: View {
                 Spacer()
 
                 if ex.isTimeBased {
-                    Text("Duration \((t.durationSeconds ?? 0))s")
+                    Text(verbatim: DurationDisplay.labeledDuration(t.durationSeconds ?? 0))
                         .monospacedDigit()
                     if let rest = t.restSecondsAfter, rest > 0 {
-                        Text("· \(rest)s")
+                        Text(verbatim: "· " + DurationDisplay.seconds(rest))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
@@ -46,7 +46,7 @@ struct RoutineBlockDetailView: View {
                     Text("Reps \(t.targetReps)")
                         .monospacedDigit()
                     if let rest = t.restSecondsAfter, rest > 0 {
-                        Text("· \(rest)s")
+                        Text(verbatim: "· " + DurationDisplay.seconds(rest))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
@@ -456,7 +456,7 @@ struct SupersetDetailNoRest: View {
 
                                     if ex.isTimeBased {
                                         Text(
-                                            "Duration \((t.durationSeconds ?? 0))s"
+                                            DurationDisplay.labeledDuration(t.durationSeconds ?? 0)
                                         )
                                         .monospacedDigit()
                                     } else {
@@ -557,7 +557,7 @@ private struct SupersetSetCountLabel: View {
     @Bindable var prescription: SlotPrescription
 
     var body: some View {
-        Text("\(prescription.sets ?? 0) sets")
+        Text(verbatim: String(localized: "\(prescription.sets ?? 0) sets"))
             .foregroundStyle(.secondary)
             .monospacedDigit()
     }

@@ -149,7 +149,9 @@ enum CardioHistorySummary {
     /// Exactly the string History has always rendered for a duration. Kept as
     /// its own function so the compatibility guarantee has one obvious place to
     /// be read and reviewed.
-    static func durationSegment(_ seconds: Int) -> String { "\(seconds)s" }
+    static func durationSegment(_ seconds: Int) -> String {
+        DurationDisplay.seconds(seconds)
+    }
 
     private static func distanceSegment(
         _ metrics: CardioMetrics, unit: DistanceUnit

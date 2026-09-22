@@ -278,7 +278,10 @@ struct DSTag: View {
 /// for `DSTag` when accent/error emphasis is wanted. The two existing
 /// `LockBadge` types are intentionally left as-is for now (separate slice).
 struct StatusPill: View {
-    let text: String
+    /// `LocalizedStringKey`, not `String`: a `String` binds `Text`'s verbatim
+    /// initializer, which is why the History row's "In Progress" pill stayed
+    /// English on a Korean phone even though the catalog held 진행 중.
+    let text: LocalizedStringKey
     var systemImage: String? = nil
 
     var body: some View {

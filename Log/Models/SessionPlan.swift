@@ -126,21 +126,31 @@ struct SessionPlan: Codable, Equatable {
     ///   rather than defaulted so this stays pure — the active-workout view
     ///   passes `AppSettings.distanceUnit`.
     func primarySummary(distanceUnit: DistanceUnit) -> String {
+        // Every word here is localized (`String(localized:)` / the shared
+        // copy namespaces) rather than an English literal joined into a
+        // `String` — this summary is rendered verbatim, so a literal could
+        // never translate. `secondarySummary` below always did this; the two
+        // halves of the same plan line now agree.
         var parts: [String] = []
-        if let s = sets { parts.append("\(s) sets") }
+        // Always the plural key, including for one set: that is the exact
+        // English this summary has always produced ("1 sets · 1800s · 5 km",
+        // as the doc comment above records and `CardioTargetPropagationTests`
+        // asserts), and Korean has no plural form to get wrong. Localizing it
+        // was the fix; re-wording it was not in scope.
+        if let s = sets { parts.append(String(localized: "\(s) sets")) }
         if usesDuration {
             if let lo = durationMinSeconds, let hi = durationMaxSeconds,
                 lo != hi
             {
-                parts.append("\(lo)–\(hi)s")
+                parts.append(DurationDisplay.secondsRange(lo, hi))
             } else if let d = durationMaxSeconds ?? durationMinSeconds {
-                parts.append("\(d)s")
+                parts.append(DurationDisplay.seconds(d))
             }
         } else {
             if let lo = repMin, let hi = repMax, lo != hi {
-                parts.append("\(lo)–\(hi) reps")
+                parts.append(String(localized: "\(lo)–\(hi) reps"))
             } else if let r = repMax ?? repMin {
-                parts.append("\(r) reps")
+                parts.append(TechniqueSummaryCopy.reps(r))
             }
         }
         // Rendered in the caller's preferred unit, not the one stored beside
@@ -176,7 +186,9 @@ struct SessionPlan: Codable, Equatable {
     /// shows a tempo segment even if one is stored.
     func secondarySummary(effortSummary: String?) -> String {
         var parts: [String] = []
-        if let r = restSecondsBetweenSets, r > 0 { parts.append(String(localized: "\(r)s rest")) }
+        if let r = restSecondsBetweenSets, r > 0 {
+            parts.append(DurationDisplay.rest(r))
+        }
         if let effortSummary, !effortSummary.isEmpty { parts.append(effortSummary) }
         if let t = effectiveTempo { parts.append(String(localized: "Tempo \(t)")) }
         return parts.joined(separator: " · ")

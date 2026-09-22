@@ -116,7 +116,7 @@ struct TechniqueDetailSheet: View {
                     Section("Drop Set") {
                         if let n = snap.dropCount { LabeledContent("Drops", value: "\(n)") }
                         if let p = snap.dropPercent { LabeledContent("Weight reduction", value: "\(Int(p))%") }
-                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between drops", value: "\(r)s") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between drops", value: DurationDisplay.seconds(r)) }
                         switch snap.dropsetEffort {
                         case .amrap:             LabeledContent("Effort", value: "AMRAP")
                         case .fixedReps(let n):  LabeledContent("Reps per drop", value: "\(n)")
@@ -125,13 +125,13 @@ struct TechniqueDetailSheet: View {
                 case .restPause:
                     Section("Rest-Pause") {
                         if let n = snap.rounds { LabeledContent("Rounds", value: "\(n)") }
-                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest", value: "\(r)s") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest", value: DurationDisplay.seconds(r)) }
                     }
                 case .cluster:
                     Section("Cluster") {
                         if let n = snap.reps { LabeledContent("Reps per cluster", value: "\(n)") }
                         if let c = snap.rounds { LabeledContent("Clusters", value: "\(c)") }
-                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between clusters", value: "\(r)s") }
+                        if let r = snap.restSeconds, r > 0 { LabeledContent("Rest between clusters", value: DurationDisplay.seconds(r)) }
                     }
                 case .partialReps:
                     Section("Partial Reps") {

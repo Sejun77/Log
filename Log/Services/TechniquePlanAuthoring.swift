@@ -282,3 +282,96 @@ enum TechniqueConflictCopy {
         String(localized: "Not available for duration-based exercises.")
     }
 }
+
+// ======================================================
+// MARK: - Technique summary vocabulary (ux/korean-localization-consistency)
+// ======================================================
+
+/// The localized fragments every technique preview is built from.
+///
+/// Two screens describe the same `TechniquePlan` at two densities: the routine
+/// editor's row subtitle ("sets 1,3 · 20% drop · AMRAP") and the active
+/// workout's chip label ("Drop Set −20% ×3 (AMRAP)"). Both composed their text
+/// from **plain English literals** joined into a `String`, which `Text` then
+/// rendered verbatim — so the fragments could never localize no matter what the
+/// catalog held, and the two screens had drifted into different vocabularies
+/// for the same fields.
+///
+/// This namespace does not force the two densities into one output — a chip has
+/// to stay short and a subtitle does not, and collapsing them would change what
+/// the workout screen shows. It gives them **one vocabulary**: every
+/// natural-language word comes from here, so "reps" is translated once and both
+/// screens move together.
+///
+/// ## What is translated and what is not
+///
+/// Words are translated (`set`, `sets`, `reps`, `rounds`, `drop`, `all`).
+/// Notation is not: `%`, `×`, `−`, digits, and `AMRAP` — an acronym this app
+/// deliberately keeps identical in both languages, like `kg` and `bpm`.
+/// Durations route through `DurationDisplay`, so a technique's rest reads the
+/// same as every other rest in the app.
+///
+/// Pure copy: nothing here reads, writes or validates a plan.
+enum TechniqueSummaryCopy {
+
+    /// Which sets a technique applies to, from 0-based indices: `"set 2"` /
+    /// `"sets 1,3"`. The numbers keep their bare comma-joined form — a list of
+    /// digits, not prose.
+    static func appliesToSets(indices: Set<Int>) -> String? {
+        guard !indices.isEmpty else { return nil }
+        let numbers = indices.sorted().map { String($0 + 1) }
+            .joined(separator: ",")
+        return indices.count == 1
+            ? String(localized: "set \(numbers)")
+            : String(localized: "sets \(numbers)")
+    }
+
+    /// The bracketed qualifier a chip appends: `"[set 2]"` / `"[sets 1,3]"` /
+    /// `"[all]"`. The brackets are notation; what is inside them is prose.
+    static func bracketed(_ inner: String) -> String { "[\(inner)]" }
+
+    /// Every working set, as the word inside a chip's `[…]` qualifier.
+    ///
+    /// A **symbolic** key (the shape `activeWorkout.back` already uses), not
+    /// the English word: a bare `"all"` key collides with the catalog's
+    /// existing `"All"` filter label under String Catalog symbol generation,
+    /// which fails the build. The English value lives in the catalog beside
+    /// the Korean one.
+    static var allSets: String {
+        String(localized: "technique.appliesTo.all")
+    }
+
+    static func rounds(_ count: Int) -> String {
+        String(localized: "\(count) rounds")
+    }
+
+    static func reps(_ count: Int) -> String {
+        String(localized: "\(count) reps")
+    }
+
+    /// The weight cut on a drop set, as a percentage: `"20% drop"`.
+    static func dropPercent(_ percent: Int) -> String {
+        String(localized: "\(percent)% drop")
+    }
+
+    /// Fixed reps on each drop of a drop set: `"3 reps/drop"`.
+    static func repsPerDrop(_ count: Int) -> String {
+        String(localized: "\(count) reps/drop")
+    }
+
+    /// The effort mode of a drop set. AMRAP stays AMRAP.
+    static func dropsetEffort(_ effort: DropsetEffort) -> String {
+        switch effort {
+        case .amrap: return "AMRAP"
+        case .fixedReps(let n): return repsPerDrop(n)
+        }
+    }
+
+    /// The separator every summary in this app joins its segments with.
+    static let separator = " · "
+
+    static func join(_ parts: [String?]) -> String {
+        parts.compactMap { $0 }.filter { !$0.isEmpty }
+            .joined(separator: separator)
+    }
+}

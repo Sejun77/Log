@@ -1438,7 +1438,7 @@ struct ActiveWorkoutView: View {
                         .foregroundStyle(.secondary)
                 }
                 if let r = restSec, r > 0 {
-                    Text("\(r)s rest")
+                    Text(verbatim: DurationDisplay.rest(r))
                         .font(.dsBodySecondary)
                         .foregroundStyle(.secondary)
                 }
@@ -1502,15 +1502,23 @@ struct ActiveWorkoutView: View {
                 let unit = Units.weightIsKg ? "kg" : "lb"
                 parts.append("\(Units.formatWeight(w)) \(unit)")
             }
-            if let r = step.reps { parts.append("\(r) reps") }
-            return parts.isEmpty ? "Reps" : parts.joined(separator: " × ")
+            // Composed here and rendered verbatim by the caller, so every
+            // word must arrive already localized — an English literal could
+            // never translate. Shares `TechniqueSummaryCopy.reps` with the
+            // routine-side warm-up preview.
+            if let r = step.reps { parts.append(TechniqueSummaryCopy.reps(r)) }
+            return parts.isEmpty
+                ? String(localized: "Reps")
+                : parts.joined(separator: " × ")
         case .percentage:
             if let pct = step.percentOfWorking {
                 let p = Int(pct * 100)
-                if let r = step.reps { return "\(p)% × \(r) reps" }
-                return "\(p)% of working"
+                if let r = step.reps {
+                    return "\(p)% × \(TechniqueSummaryCopy.reps(r))"
+                }
+                return String(localized: "\(p)% of working")
             }
-            return "% of working"
+            return String(localized: "% of working")
         case .noteOnly:
             return step.note ?? "—"
         }
@@ -2606,11 +2614,13 @@ struct ActiveWorkoutView: View {
                 }
                 ToolbarItem(placement: .principal) {
                     if setTimer.isRunning {
-                        Text("Duration: \(setTimer.remaining)s")
+                        Text(verbatim: ActiveWorkoutTimerLabel.duration(
+                            setTimer.remaining))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     } else if rest.isRunning {
-                        Text("Rest: \(rest.remaining)s")
+                        Text(verbatim: ActiveWorkoutTimerLabel.rest(
+                            rest.remaining))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }

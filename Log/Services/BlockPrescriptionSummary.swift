@@ -236,7 +236,7 @@ struct BlockPrescriptionSummary: Equatable {
             let core: String
             if usesDuration {
                 if let d = duration, d > 0 {
-                    core = "\(s) × \(d)s"
+                    core = "\(s) × \(DurationDisplay.seconds(d))"
                 } else {
                     core = s == 1 ? String(localized: "\(s) set") : String(localized: "\(s) sets")
                 }
@@ -250,7 +250,7 @@ struct BlockPrescriptionSummary: Equatable {
             // belongs with, before the rest and effort suffixes. Absent, it
             // contributes nothing — no placeholder.
             if let targetDistance { parts.append(targetDistance) }
-            if let r = rest, r > 0 { parts.append(String(localized: "\(r)s rest")) }
+            if let r = rest, r > 0 { parts.append(DurationDisplay.rest(r)) }
             if let effort { parts.append(effort) }
             // Last: the plan itself reads first, and this is the one segment a
             // user scans for rather than reads. Reuses the count strings the

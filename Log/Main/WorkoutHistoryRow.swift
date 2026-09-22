@@ -62,13 +62,11 @@ enum WorkoutRowFormat {
     /// Returns nil when the workout has no `completedAt` (in-progress or legacy).
     static func duration(for w: Workout) -> String? {
         guard let end = w.completedAt else { return nil }
-        let total = max(0, Int(end.timeIntervalSince(w.date)))
-        let h = total / 3600
-        let m = (total % 3600) / 60
-        if h > 0 {
-            return String(format: "%dh %02dm", h, m)
-        }
-        return String(localized: "\(max(1, m))m")
+        // The decomposition and wording live in `DurationDisplay.elapsed`,
+        // which `WorkoutDetailView` now shares — the two used to hold
+        // byte-identical copies of this arithmetic and its `String(format:)`.
+        return DurationDisplay.elapsed(
+            Int(end.timeIntervalSince(w.date)))
     }
 }
 
