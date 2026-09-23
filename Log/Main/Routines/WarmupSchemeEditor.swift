@@ -122,7 +122,7 @@ struct WarmupSchemeEditor: View {
                 pendingDeleteOffsets = nil
             }
         } message: {
-            Text("This warmup step will be removed from this slot.")
+            Text("This warmup step will be removed from this exercise.")
         }
     }
 

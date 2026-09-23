@@ -846,7 +846,7 @@ struct ExerciseDetailView: View {
     /// Read-only summary of which routines reference this exercise. Shown
     /// regardless of `isLocked` (it never mutates anything). Counts unique
     /// routines; a routine that uses the exercise in more than one slot gets
-    /// a "· N slots" suffix. Caps the visible rows at `maxRoutineRows` with a
+    /// a "· N times" suffix. Caps the visible rows at `maxRoutineRows` with a
     /// trailing "+N more" row.
     ///
     /// Build 10 C1: a routine that references this exercise only as a prepared

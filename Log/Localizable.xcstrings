@@ -247,6 +247,46 @@
         }
       }
     },
+    "%lld routine" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "루틴 %lld개"
+          }
+        }
+      }
+    },
+    "%lld routines" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "루틴 %lld개"
+          }
+        }
+      }
+    },
+    "%lld exercise reference" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 참조 %lld개"
+          }
+        }
+      }
+    },
+    "%lld exercise references" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 참조 %lld개"
+          }
+        }
+      }
+    },
     "%lld rep%@" : {
       "localizations" : {
         "en" : {
@@ -337,12 +377,12 @@
         }
       }
     },
-    "%lld slots" : {
+    "%lld times" : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "슬롯 %lld개"
+            "value" : "%lld회"
           }
         }
       }
@@ -553,13 +593,13 @@
         }
       }
     },
-    "A round runs one set of each exercise that still has sets remaining; shorter exercises drop out of the later rounds. Rest after round fires between completed rounds. Rest before next block fires after the final round, replacing round rest." : {
+    "A round runs one set of each exercise that still has sets remaining; shorter exercises drop out of the later rounds. Rest after round fires between completed rounds. Rest before next exercise fires after the final round, replacing round rest." : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "한 라운드는 세트가 남아 있는 각 운동을 한 세트씩 진행합니다. 세트가 적은 운동은 이후 라운드에서 빠집니다. 라운드 후 휴식은 완료된 라운드 사이에 적용되고, 다음 블록 전 휴식은 마지막 라운드 후에 라운드 휴식을 대신해 적용됩니다."
+            "value" : "한 라운드는 세트가 남아 있는 각 운동을 한 세트씩 진행합니다. 세트가 적은 운동은 이후 라운드에서 빠집니다. 라운드 후 휴식은 완료된 라운드 사이에 적용되고, 다음 운동 전 휴식은 마지막 라운드 후에 라운드 휴식을 대신해 적용됩니다."
           }
         }
       }
@@ -576,24 +616,24 @@
         }
       }
     },
-    "A superset must keep at least 2 exercises. The same exercise can appear more than once — each slot logs independently." : {
+    "A superset must keep at least 2 exercises. The same exercise can appear more than once — each one logs independently." : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "슈퍼세트에는 운동이 최소 2개 있어야 합니다. 같은 운동이 여러 번 들어갈 수 있으며, 각 슬롯은 독립적으로 기록됩니다."
+            "value" : "슈퍼세트에는 운동이 최소 2개 있어야 합니다. 같은 운동이 여러 번 들어갈 수 있으며, 각각 독립적으로 기록됩니다."
           }
         }
       }
     },
-    "A superset must keep at least 2 exercises. To remove this superset entirely, delete the block from the routine's Blocks list." : {
+    "A superset must keep at least 2 exercises. To remove this superset entirely, delete it from the routine's exercise list." : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "슈퍼세트에는 운동이 최소 2개 있어야 합니다. 이 슈퍼세트를 완전히 없애려면 루틴의 블록 목록에서 해당 블록을 삭제하세요."
+            "value" : "슈퍼세트에는 운동이 최소 2개 있어야 합니다. 이 슈퍼세트를 완전히 없애려면 루틴의 운동 목록에서 삭제하세요."
           }
         }
       }
@@ -937,13 +977,13 @@
         }
       }
     },
-    "Applies to new slots and the intensity field in active workouts." : {
+    "Applies to new exercises and the intensity field in active workouts." : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "새 슬롯과 진행 중인 운동의 강도 항목에 적용됩니다."
+            "value" : "새로 추가하는 운동과 진행 중인 운동의 강도 항목에 적용됩니다."
           }
         }
       }
@@ -1145,50 +1185,28 @@
         }
       }
     },
-    "Block" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "블록"
-          }
-        }
-      }
-    },
-    "Block %lld of %lld" : {
+    "Exercise %lld of %lld" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Block %1$lld of %2$lld"
+            "value" : "Exercise %1$lld of %2$lld"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "블록 %lld/%lld"
+            "value" : "운동 %lld/%lld"
           }
         }
       }
     },
-    "Block Preview" : {
-      "extractionState" : "stale",
+    "Superset %lld of %lld" : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "블록 미리보기"
-          }
-        }
-      }
-    },
-    "Blocks" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "블록"
+            "value" : "슈퍼세트 %lld/%lld"
           }
         }
       }
@@ -1669,12 +1687,80 @@
         }
       }
     },
-    "Delete Block" : {
+    "Delete “%@”? This will remove it from %@, delete %@, and unlink %@. This cannot be undone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete “%1$@”? This will remove it from %2$@, delete %3$@, and unlink %4$@. This cannot be undone."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”을(를) 삭제하면 %2$@에서 제거되고, %3$@가 삭제되며, %4$@의 연결이 해제됩니다. 되돌릴 수 없습니다."
+          }
+        }
+      }
+    },
+    "Delete “%@”? This will remove %@ (%@) and all of their exercise references. This cannot be undone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete “%1$@”? This will remove %2$@ (%3$@) and all of their exercise references. This cannot be undone."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”을(를) 삭제하면 %2$@(%3$@)와 해당 운동 참조가 모두 삭제됩니다. 되돌릴 수 없습니다."
+          }
+        }
+      }
+    },
+    "Delete “%@”? This will remove %@ and all of their exercise references. This cannot be undone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete “%1$@”? This will remove %2$@ and all of their exercise references. This cannot be undone."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”을(를) 삭제하면 %2$@와 해당 운동 참조가 모두 삭제됩니다. 되돌릴 수 없습니다."
+          }
+        }
+      }
+    },
+    "“%@” will be removed from this superset. Its prescription, warmup, and technique plans will be deleted." : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "블록 삭제"
+            "value" : "“%@”이(가) 이 슈퍼세트에서 제거됩니다. 해당 운동의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
+          }
+        }
+      }
+    },
+    "1 exercise will be removed from this superset. Its prescription, warmup, and technique plans will be deleted." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 1개가 이 슈퍼세트에서 제거됩니다. 해당 운동의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
+          }
+        }
+      }
+    },
+    "%lld exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 %lld개가 이 슈퍼세트에서 제거됩니다. 해당 운동들의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
           }
         }
       }
@@ -2305,16 +2391,6 @@
         }
       }
     },
-    "Exercise slots" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "운동 슬롯"
-          }
-        }
-      }
-    },
     "Exercise unavailable" : {
       "comment" : "Alternative Exercises Phase F1: shown on a prepared alternative whose exercise was deleted from the library",
       "extractionState" : "manual",
@@ -2468,13 +2544,13 @@
         }
       }
     },
-    "Finish + Update slot prescription" : {
+    "Finish + Update exercise plan" : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "완료 + 슬롯 목표 업데이트"
+            "value" : "완료 + 운동 플랜 업데이트"
           }
         }
       }
@@ -2696,6 +2772,116 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "루틴 가져오기"
+          }
+        }
+      }
+    },
+    "Imported “%@”." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”을(를) 가져왔습니다."
+          }
+        }
+      }
+    },
+    "1 exercise." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 1개."
+          }
+        }
+      }
+    },
+    "%lld exercises." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 %lld개."
+          }
+        }
+      }
+    },
+    "Created 1 new exercise." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새 운동 1개를 만들었습니다."
+          }
+        }
+      }
+    },
+    "Created %lld new exercises." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새 운동 %lld개를 만들었습니다."
+          }
+        }
+      }
+    },
+    "Linked 1 existing exercise." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기존 운동 1개를 연결했습니다."
+          }
+        }
+      }
+    },
+    "Linked %lld existing exercises." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기존 운동 %lld개를 연결했습니다."
+          }
+        }
+      }
+    },
+    "Skipped 1 exercise with no name." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이름이 없는 운동 1개를 건너뛰었습니다."
+          }
+        }
+      }
+    },
+    "Skipped %lld exercises with no name." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이름이 없는 운동 %lld개를 건너뛰었습니다."
+          }
+        }
+      }
+    },
+    "1 exercise has no name and will be skipped." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이름이 없는 운동 1개는 건너뜁니다."
+          }
+        }
+      }
+    },
+    "%lld exercises have no name and will be skipped." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이름이 없는 운동 %lld개는 건너뜁니다."
           }
         }
       }
@@ -3103,12 +3289,12 @@
         }
       }
     },
-    "New Slot Defaults" : {
+    "New Exercise Defaults" : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "새 슬롯 기본값"
+            "value" : "새 운동 기본값"
           }
         }
       }
@@ -4147,13 +4333,13 @@
         }
       }
     },
-    "Reset plan for this slot" : {
+    "Reset plan for this exercise" : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 슬롯의 플랜 초기화"
+            "value" : "이 운동의 플랜 초기화"
           }
         }
       }
@@ -4197,17 +4383,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이후 휴식 (선택)"
-          }
-        }
-      }
-    },
-    "Rest after block" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "블록 후 휴식"
           }
         }
       }
@@ -4256,6 +4431,17 @@
         }
       }
     },
+    "Rest before next exercise" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다음 운동 전 휴식"
+          }
+        }
+      }
+    },
     "Rest after round: %llds" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4274,28 +4460,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "라운드 후 휴식: 없음"
-          }
-        }
-      }
-    },
-    "Rest before next block: %llds" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "다음 블록 전 휴식: %llds"
-          }
-        }
-      }
-    },
-    "Rest before next block: none" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "다음 블록 전 휴식: 없음"
           }
         }
       }
@@ -4569,14 +4733,14 @@
         }
       }
     },
-    "Same as the slot's exercise — not offered in workouts" : {
+    "Same as this exercise — not offered in workouts" : {
       "comment" : "Alternative Exercises: routine-editor row marker for a legacy alternative that names the slot's own exercise. Shown, not hidden, so the user can find and delete it.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 슬롯의 운동과 동일 — 운동 중에는 표시되지 않음"
+            "value" : "이 운동과 동일 — 운동 중에는 표시되지 않음"
           }
         }
       }
@@ -4734,12 +4898,12 @@
         }
       }
     },
-    "Session plan for this slot" : {
+    "Session plan for this exercise" : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 슬롯의 세션 플랜"
+            "value" : "이 운동의 세션 플랜"
           }
         }
       }
@@ -4990,12 +5154,12 @@
         }
       }
     },
-    "Slot notes" : {
+    "Plan notes" : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "슬롯 메모"
+            "value" : "플랜 메모"
           }
         }
       }
@@ -5289,12 +5453,12 @@
         }
       }
     },
-    "Switching exercises will remove %lld logged sets from this block." : {
+    "Switching exercises will remove %lld logged sets from this superset." : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "운동을 변경하면 이 블록에 기록된 세트 %lld개가 삭제됩니다."
+            "value" : "운동을 변경하면 이 슈퍼세트에 기록된 세트 %lld개가 삭제됩니다."
           }
         }
       }
@@ -5309,12 +5473,12 @@
         }
       }
     },
-    "Switching exercises will remove 1 logged set from this block." : {
+    "Switching exercises will remove 1 logged set from this superset." : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "운동을 변경하면 이 블록에 기록된 세트 1개가 삭제됩니다."
+            "value" : "운동을 변경하면 이 슈퍼세트에 기록된 세트 1개가 삭제됩니다."
           }
         }
       }
@@ -5337,20 +5501,20 @@
         }
       }
     },
-    "Switching to %@ will remove %lld logged sets from this block." : {
+    "Switching to %@ will remove %lld logged sets from this superset." : {
       "comment" : "Destructive switch confirmation for a superset, naming the incoming exercise. Two placeholders, so both languages are positional.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Switching to %1$@ will remove %2$lld logged sets from this block."
+            "value" : "Switching to %1$@ will remove %2$lld logged sets from this superset."
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@(으)로 변경하면 이 블록에 기록된 세트 %2$lld개가 삭제됩니다."
+            "value" : "%1$@(으)로 변경하면 이 슈퍼세트에 기록된 세트 %2$lld개가 삭제됩니다."
           }
         }
       }
@@ -5367,14 +5531,14 @@
         }
       }
     },
-    "Switching to %@ will remove 1 logged set from this block." : {
+    "Switching to %@ will remove 1 logged set from this superset." : {
       "comment" : "Destructive switch confirmation for a superset, naming the incoming exercise.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@(으)로 변경하면 이 블록에 기록된 세트 1개가 삭제됩니다."
+            "value" : "%@(으)로 변경하면 이 슈퍼세트에 기록된 세트 1개가 삭제됩니다."
           }
         }
       }
@@ -5511,14 +5675,14 @@
         }
       }
     },
-    "The slot's own exercise cannot be an alternative." : {
+    "An exercise cannot be its own alternative." : {
       "comment" : "Alternative Exercises: routine-editor list footer explaining why the slot's own exercise is missing from the Add Alternative picker.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "슬롯의 기본 운동은 대체 운동으로 추가할 수 없습니다."
+            "value" : "운동은 자기 자신을 대체 운동으로 추가할 수 없습니다."
           }
         }
       }
@@ -5555,14 +5719,14 @@
         }
       }
     },
-    "This is already the slot's exercise, so it is never offered during workouts. Delete it from the list to clear it." : {
+    "This is the same exercise, so it is never offered during workouts. Delete it from the list to clear it." : {
       "comment" : "Alternative Exercises: detail-editor footer for a legacy alternative that names the slot's own exercise. Authoring one is refused now, so this only ever describes existing data.",
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이미 이 슬롯에 사용 중인 운동이라 운동 중에는 표시되지 않습니다. 목록에서 삭제해 정리하세요."
+            "value" : "이미 같은 운동이라 운동 중에는 표시되지 않습니다. 목록에서 삭제해 정리하세요."
           }
         }
       }
@@ -5589,23 +5753,23 @@
         }
       }
     },
-    "This technique will be removed from this slot. Its configuration will be lost." : {
+    "This technique will be removed from this exercise. Its configuration will be lost." : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 운동 기법이 이 슬롯에서 제거됩니다. 설정 내용은 사라집니다."
+            "value" : "이 운동 기법이 해당 운동에서 제거됩니다. 설정 내용은 사라집니다."
           }
         }
       }
     },
-    "This warmup step will be removed from this slot." : {
+    "This warmup step will be removed from this exercise." : {
       "extractionState" : "manual",
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 워밍업 단계가 이 슬롯에서 제거됩니다."
+            "value" : "이 워밍업 단계가 해당 운동에서 제거됩니다."
           }
         }
       }

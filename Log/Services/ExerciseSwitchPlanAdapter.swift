@@ -49,7 +49,8 @@ enum ExerciseSwitchPlanAdapter {
 
     // MARK: - Inputs
 
-    /// Which button the user tapped in the "Session plan for this slot" dialog.
+    /// Which button the user tapped in the "Session plan for this exercise"
+    /// dialog.
     enum Choice: Equatable {
         case keepCurrentPlan
         case resetPlan
@@ -473,7 +474,7 @@ enum ExerciseSwitchPlanAdapter {
         )
     }
 
-    /// "Reset plan for this slot" — rebuild from the default/reset source,
+    /// "Reset plan for this exercise" — rebuild from the default/reset source,
     /// adapted to the new exercise's tracking type.
     private static func resetPlan(
         current: SessionPlan?,

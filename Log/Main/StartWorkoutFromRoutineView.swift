@@ -770,7 +770,7 @@ struct StartWorkoutFromRoutineView: View {
             }
         } header: {
             DSSectionHeader(
-                title: "Blocks",
+                title: "Exercises",
                 systemImage: "square.grid.2x2"
             )
         }

@@ -102,7 +102,7 @@ struct RoutineBlockDetailView: View {
         // `.interactively` matches the note-heavy routine-editor lists.
         .scrollDismissesKeyboard(.interactively)
         // Audit M11 — the exercise, not the kind. This screen used to be
-        // titled "Block", so one tap after a row that said "Bench Press" the
+        // titled by its kind, so one tap after a row that said "Bench Press" the
         // name was gone. Names are resolved the same way the routine editor's
         // own row title resolves them, so the two cannot disagree; an
         // all-deleted block falls back to the kind word.
@@ -267,6 +267,10 @@ struct SupersetDetailNoRest: View {
     /// `pendingDeleteOffsets`. Single-row swipe (the common case) shows
     /// the exercise name; multi-row edit-mode batch delete falls back to
     /// a count-based message.
+    ///
+    /// Resolves the offsets to names here — it needs the `ModelContext` to do
+    /// that — and leaves the wording to `SupersetMemberRemovalCopy`, which is
+    /// pure and therefore testable.
     private func deletionMessage(for offsets: IndexSet?) -> String {
         guard let offsets, !offsets.isEmpty else { return "" }
         let sorted = block.exercises.sorted { $0.order < $1.order }
@@ -274,11 +278,10 @@ struct SupersetDetailNoRest: View {
             guard idx < sorted.count else { return nil }
             return sorted[idx].safeExercise(in: ctx)?.name
         }
-        if offsets.count == 1, let n = names.first {
-            return "\u{201C}\(n)\u{201D} will be removed from this superset. The slot's prescription, warmup, and technique plans will be deleted."
-        }
-        let n = max(offsets.count, names.count)
-        return "\(n) exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted."
+        return SupersetMemberRemovalCopy.message(
+            removalCount: max(offsets.count, names.count),
+            firstName: offsets.count == 1 ? names.first : nil
+        )
     }
 
     /// A superset must keep at least 2 exercises (the min-two invariant
@@ -333,7 +336,7 @@ struct SupersetDetailNoRest: View {
                 )
                 .disabled(isRoutineLocked)
                 DurationFieldRow(
-                    title: "Rest before next block",
+                    title: "Rest before next exercise",
                     seconds: Binding(
                         get: { block.restAfterSeconds },
                         set: { block.restAfterSeconds = $0 }
@@ -523,7 +526,7 @@ struct SupersetDetailNoRest: View {
         ) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("A superset must keep at least 2 exercises. To remove this superset entirely, delete the block from the routine's Blocks list.")
+            Text("A superset must keep at least 2 exercises. To remove this superset entirely, delete it from the routine's exercise list.")
         }
         .alert(
             "Remove Exercise from Superset?",

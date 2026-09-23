@@ -10,12 +10,101 @@ import Foundation
 // Bool.
 
 // ======================================================
+// MARK: - Active-workout progress label
+// ======================================================
+
+/// The "where am I in this routine" line under the routine name during a
+/// workout.
+///
+/// It used to read "Block 3 of 5", naming the model's grouping type at the one
+/// moment the user is least interested in the data model. The replacement can
+/// not simply be "Exercise 3 of 5": a `RoutineBlock` is *either* a single
+/// exercise *or* a superset, and calling a superset an exercise is wrong on
+/// the screen where the user is looking at two exercise names joined by `+`.
+///
+/// So the noun follows the block, and only the noun does. The **denominator is
+/// unchanged** — still the routine's total block count — because it is a
+/// position within the routine's ordered items, not a count of supersets. A
+/// superset at position 3 of 5 therefore reads "Superset 3 of 5", where the 5
+/// counts every item, supersets included. Naming the numerator's kind while
+/// the denominator counts all kinds is the same shape as "Track 3 of 12" on an
+/// album that mixes songs and interludes: the noun describes *this* one.
+///
+/// Pure display copy — it reads nothing, decides no ordering, and the caller
+/// passes the same index and total it passed before.
+enum BlockProgressLabel {
+
+    /// - Parameters:
+    ///   - position: 1-based position of the current block in the routine.
+    ///   - total: number of blocks in the routine (the unchanged denominator).
+    ///   - isSuperset: the current block's own `isSuperset`, never inferred
+    ///     from its exercise count — a superset that has been reduced to one
+    ///     member is still a superset and still says so.
+    static func text(position: Int, total: Int, isSuperset: Bool) -> String {
+        isSuperset
+            ? String(localized: "Superset \(position) of \(total)")
+            : String(localized: "Exercise \(position) of \(total)")
+    }
+}
+
+// ======================================================
+// MARK: - Superset member removal (deletion confirmation)
+// ======================================================
+
+/// Body copy for the "remove this exercise from the superset" confirmation on
+/// a superset's Details screen.
+///
+/// Pulled out of `BlockDetailViews.deletionMessage` so the wording is
+/// unit-testable without a UI harness — the same reason `BlockDetailTitle` and
+/// `SupersetHelp` live here — and so it goes through `String(localized:)`. The
+/// view built this sentence by raw interpolation and handed it to
+/// `Text(_: String)`, which is the **verbatim** initializer, so every Korean
+/// build showed this warning in English at the moment sets, warm-ups and
+/// technique plans were about to be destroyed.
+///
+/// Decides nothing about the deletion itself: the caller still resolves which
+/// offsets map to which names, and `removeExercise(at:)` still enforces the
+/// min-two invariant.
+enum SupersetMemberRemovalCopy {
+
+    /// - Parameters:
+    ///   - removalCount: how many members the confirmation covers.
+    ///   - firstName: the single member's resolved exercise name, when there
+    ///     is exactly one and it still resolves. `nil` for a batch delete or a
+    ///     member whose exercise has been deleted.
+    ///
+    /// The unnamed single-member case previously fell through to the batch
+    /// sentence and rendered "1 exercises will be removed"; it now takes the
+    /// singular, which is also what makes each branch translatable as a whole
+    /// sentence instead of a stem plus a runtime "s".
+    static func message(removalCount: Int, firstName: String?) -> String {
+        let name = firstName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if removalCount == 1, let name, !name.isEmpty {
+            return String(
+                localized:
+                    "\u{201C}\(name)\u{201D} will be removed from this superset. Its prescription, warmup, and technique plans will be deleted."
+            )
+        }
+        if removalCount == 1 {
+            return String(
+                localized:
+                    "1 exercise will be removed from this superset. Its prescription, warmup, and technique plans will be deleted."
+            )
+        }
+        return String(
+            localized:
+                "\(removalCount) exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted."
+        )
+    }
+}
+
+// ======================================================
 // MARK: - Block detail title (audit M11)
 // ======================================================
 
 /// The navigation title for a routine block's Details screen.
 ///
-/// Both detail screens were titled by their *kind* — "Block" and "Superset" —
+/// Both detail screens were titled by their *kind* — "Exercise" and "Superset" —
 /// so opening Details for Bench Press landed on a screen that had lost the word
 /// "Bench Press" entirely, one tap after the row that named it. The kind is the
 /// one thing the user already knows; the exercise is what they came for.
@@ -41,7 +130,7 @@ enum BlockDetailTitle {
         }
         guard !named.isEmpty else {
             return isSuperset
-                ? String(localized: "Superset") : String(localized: "Block")
+                ? String(localized: "Superset") : String(localized: "Exercise")
         }
         return named.joined(separator: " + ")
     }
@@ -81,7 +170,7 @@ enum BlockDetailMemberHeader {
             !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         // Exactly one name means the title already says it. Zero named
-        // exercises means the title fell back to the kind word ("Block"), so a
+        // exercises means the title fell back to the kind word ("Exercise"), so a
         // header is not a repeat of anything and is kept.
         return named.count != 1
     }
@@ -121,7 +210,7 @@ enum SupersetHelp {
     static let timingMessage =
         "A round runs one set of each exercise that still has sets remaining; "
         + "shorter exercises drop out of the later rounds. Rest after round "
-        + "fires between completed rounds. Rest before next block fires after "
+        + "fires between completed rounds. Rest before next exercise fires after "
         + "the final round, replacing round rest."
 
     static let bulkSetsTitle = "Set All Exercises"
@@ -145,7 +234,7 @@ enum SupersetHelp {
     /// and logs independently.
     static let membershipMessage =
         "A superset must keep at least 2 exercises. The same exercise can "
-        + "appear more than once — each slot logs independently."
+        + "appear more than once — each one logs independently."
 
     /// Every title/message pair, so a test can assert the set rather than
     /// three separately and notice one being dropped.

@@ -124,24 +124,50 @@ struct RoutineJSONImportButton: View {
     /// Result-alert body for a completed import. Internal + static so it stays a
     /// pure value-in / value-out function (no view state).
     static func resultMessage(_ r: RoutineTransfer.ImportReport) -> String {
-        var lines = ["Imported “\(r.importedRoutineName)”."]
+        var lines = [
+            String(localized: "Imported “\(r.importedRoutineName)”.")
+        ]
         lines.append(
-            "\(r.blockCount) \(plural("block", r.blockCount)), "
-                + "\(r.slotCount) \(plural("exercise slot", r.slotCount)).")
+            r.slotCount == 1
+                ? String(localized: "1 exercise.")
+                : String(localized: "\(r.slotCount) exercises."))
         if !r.createdExerciseNames.isEmpty {
             let n = r.createdExerciseNames.count
-            lines.append("Created \(n) new \(plural("exercise", n)).")
+            lines.append(
+                n == 1
+                    ? String(localized: "Created 1 new exercise.")
+                    : String(localized: "Created \(n) new exercises."))
         }
         if !r.matchedExerciseNames.isEmpty {
             let n = r.matchedExerciseNames.count
-            lines.append("Linked \(n) existing \(plural("exercise", n)).")
+            lines.append(
+                n == 1
+                    ? String(localized: "Linked 1 existing exercise.")
+                    : String(localized: "Linked \(n) existing exercises."))
         }
         if r.skippedSlotCount > 0 {
+            let n = r.skippedSlotCount
             lines.append(
-                "Skipped \(r.skippedSlotCount) \(plural("slot", r.skippedSlotCount)) "
-                    + "with no exercise.")
+                n == 1
+                    ? String(localized: "Skipped 1 exercise with no name.")
+                    : String(localized: "Skipped \(n) exercises with no name."))
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Preview footer for entries the import will drop because the exported
+    /// slot carried no exercise name.
+    ///
+    /// Singular / plural branches routed through `String(localized:)` rather
+    /// than one `+`-concatenated literal: concatenation binds `Text`'s verbatim
+    /// initializer, which is why this sentence and the counts above shipped
+    /// English-only in every Korean build.
+    static func skippedPreviewMessage(_ count: Int) -> String {
+        count == 1
+            ? String(localized: "1 exercise has no name and will be skipped.")
+            : String(
+                localized: "\(count) exercises have no name and will be skipped."
+            )
     }
 
     /// Friendly copy for the decode / validation / read failure paths.
@@ -160,10 +186,6 @@ struct RoutineJSONImportButton: View {
         return "Couldn’t read this file."
     }
 
-    private static func plural(_ noun: String, _ count: Int) -> String {
-        count == 1 ? noun : noun + "s"
-    }
-
     // MARK: - Local value types
 
     private struct PreviewData: Identifiable {
@@ -179,10 +201,11 @@ struct RoutineJSONImportButton: View {
     }
 }
 
-/// Read-only preview of a decoded routine JSON: the routine name, block / slot
-/// counts, the existing exercises that will be linked, the new exercises that
-/// will be created, and any slots that will be skipped. Confirms/cancels via
-/// injected closures so the host owns the actual SwiftData write.
+/// Read-only preview of a decoded routine JSON: the routine name, how many
+/// exercises it holds, the existing exercises that will be linked, the new
+/// exercises that will be created, and any entries that will be skipped.
+/// Confirms/cancels via injected closures so the host owns the actual
+/// SwiftData write.
 struct RoutineImportPreviewView: View {
     let preview: RoutineTransfer.ImportPreview
     let onConfirm: () -> Void
@@ -193,8 +216,7 @@ struct RoutineImportPreviewView: View {
             List {
                 Section {
                     LabeledContent("Routine", value: preview.sourceRoutineName)
-                    LabeledContent("Blocks", value: "\(preview.blockCount)")
-                    LabeledContent("Exercise slots", value: "\(preview.slotCount)")
+                    LabeledContent("Exercises", value: "\(preview.slotCount)")
                 } footer: {
                     Text("A new routine will be created. Nothing existing is "
                         + "overwritten or deleted.")
@@ -214,8 +236,9 @@ struct RoutineImportPreviewView: View {
 
                 if preview.skippedSlotCount > 0 {
                     Section {
-                        Text("\(preview.skippedSlotCount) slot(s) have no exercise "
-                            + "and will be skipped.")
+                        Text(
+                            RoutineJSONImportButton.skippedPreviewMessage(
+                                preview.skippedSlotCount))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

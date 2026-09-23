@@ -2222,7 +2222,11 @@ struct ActiveWorkoutView: View {
                         .font(.dsBody.weight(.semibold))
 
                     Text(
-                        "Block \(currentBlockIndex + 1) of \(plan.blocks.count)"
+                        BlockProgressLabel.text(
+                            position: currentBlockIndex + 1,
+                            total: plan.blocks.count,
+                            isSuperset: block.isSuperset
+                        )
                     )
                     .font(.dsBodySecondary)
                     .foregroundStyle(.secondary)
@@ -2917,14 +2921,14 @@ struct ActiveWorkoutView: View {
                 }
             }
             .confirmationDialog(
-                "Session plan for this slot",
+                "Session plan for this exercise",
                 isPresented: $showSwapPlanChoice,
                 titleVisibility: .visible
             ) {
                 Button("Keep current plan") {
                     requestPendingSwap(.keepCurrentPlan)
                 }
-                Button("Reset plan for this slot") {
+                Button("Reset plan for this exercise") {
                     requestPendingSwap(.resetPlan)
                 }
                 Button("Cancel", role: .cancel) {
@@ -3156,7 +3160,7 @@ struct ActiveWorkoutView: View {
         if sp.rpe != original.rpe { return true }
         // Cardio Slice 6 patch: the target distance became editable in the
         // active Edit Plan sheet, so an edit that touches only it must still
-        // count as dirty — otherwise "Update slot prescription" would not be
+        // count as dirty — otherwise "Update exercise plan" would not be
         // offered and the change would silently stay session-only.
         if sp.targetDistanceMeters != original.targetDistanceMeters {
             return true
@@ -3203,7 +3207,7 @@ struct ActiveWorkoutView: View {
 
     /// Write dirty SessionPlan fields back to the corresponding
     /// RoutineExercise.prescription + templateNotes.
-    /// Only called when the user explicitly chooses "Update slot prescription".
+    /// Only called when the user explicitly chooses "Update exercise plan".
     private func applySessionPlansToSlotPrescriptions() {
         for block in plan.blocks {
             for ex in block.exercises {
