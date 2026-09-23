@@ -129,7 +129,7 @@ struct SlotAlternativesEditor: View {
                     // Says why the picker is one row shorter than the library.
                     // Without it the slot's own exercise simply is not there,
                     // which reads as a missing exercise rather than a rule.
-                    Text("The slot's own exercise cannot be an alternative.")
+                    Text("An exercise cannot be its own alternative.")
                 }
             }
         }
@@ -260,7 +260,7 @@ private struct AlternativeRowLabel: View {
             .truncationMode(.tail)
 
             if isSlotsOwnExercise {
-                Text("Same as the slot's exercise — not offered in workouts")
+                Text("Same as this exercise — not offered in workouts")
                     .font(.dsCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -349,7 +349,7 @@ struct SlotAlternativeDetailEditor: View {
                     // is the user's, and this screen plus swipe-to-delete one
                     // level up is how they clear it.
                     Text(
-                        "This is already the slot's exercise, so it is never offered during workouts. Delete it from the list to clear it."
+                        "This is the same exercise, so it is never offered during workouts. Delete it from the list to clear it."
                     )
                 }
             }

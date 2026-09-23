@@ -510,8 +510,8 @@ final class KoreanLocalizationTests: XCTestCase {
         "Switch and Remove Sets",
         "Switching exercises will remove 1 logged set for this exercise.",
         "Switching exercises will remove %lld logged sets for this exercise.",
-        "Switching exercises will remove 1 logged set from this block.",
-        "Switching exercises will remove %lld logged sets from this block.",
+        "Switching exercises will remove 1 logged set from this superset.",
+        "Switching exercises will remove %lld logged sets from this superset.",
     ]
 
     func testSwitchConfirmationStringsLocalizeToKorean() throws {
@@ -557,17 +557,17 @@ final class KoreanLocalizationTests: XCTestCase {
         "Alternatives appear when you switch this exercise during a workout.",
         "Off",
         "Enabled",
-        // Build 10 — the slot's own exercise can no longer be added as an
+        // Build 10 — an exercise can no longer be added as its own
         // alternative. Two of these describe the rule; the third is the marker
         // on a row authored before it existed, which is kept and shown rather
         // than deleted, so a Korean user can see why it will never come up.
-        "The slot's own exercise cannot be an alternative.",
-        "Same as the slot's exercise — not offered in workouts",
-        "This is already the slot's exercise, so it is never offered during workouts. Delete it from the list to clear it.",
+        "An exercise cannot be its own alternative.",
+        "Same as this exercise — not offered in workouts",
+        "This is the same exercise, so it is never offered during workouts. Delete it from the list to clear it.",
     ]
 
     /// The pre-Build-10 wording is gone, not merely superseded: it said the
-    /// alternative *was* the slot's exercise and stopped there, which read as a
+    /// alternative *was* the same exercise and stopped there, which read as a
     /// note rather than as "this will never be offered".
     func testTheSupersededSameAsSlotWordingIsNoLongerInTheCatalog() throws {
         let ko = try XCTUnwrap(localizationBundle("ko"))
@@ -758,7 +758,7 @@ final class KoreanLocalizationTests: XCTestCase {
     private static let alternativeUsageKeys = [
         "%lld alternative",
         "%lld alternatives",
-        "%lld slots",
+        "%lld times",
         "Used as %lld alternative",
         "Used as %lld alternatives",
         "It is also used as %lld prepared alternative, which will be removed.",
@@ -1344,7 +1344,7 @@ final class KoreanLocalizationTests: XCTestCase {
 
         let singularKeys = [
             "Switching to %@ will remove 1 logged set for this exercise.",
-            "Switching to %@ will remove 1 logged set from this block.",
+            "Switching to %@ will remove 1 logged set from this superset.",
         ]
         for key in singularKeys {
             let value = localized(key, in: ko)
@@ -1359,7 +1359,7 @@ final class KoreanLocalizationTests: XCTestCase {
 
         let pluralKeys = [
             "Switching to %@ will remove %lld logged sets for this exercise.",
-            "Switching to %@ will remove %lld logged sets from this block.",
+            "Switching to %@ will remove %lld logged sets from this superset.",
         ]
         for key in pluralKeys {
             for (bundle, language) in [(ko, "ko"), (en, "en")] {
@@ -1379,8 +1379,8 @@ final class KoreanLocalizationTests: XCTestCase {
         for key in [
             "Switching exercises will remove 1 logged set for this exercise.",
             "Switching exercises will remove %lld logged sets for this exercise.",
-            "Switching exercises will remove 1 logged set from this block.",
-            "Switching exercises will remove %lld logged sets from this block.",
+            "Switching exercises will remove 1 logged set from this superset.",
+            "Switching exercises will remove %lld logged sets from this superset.",
         ] {
             XCTAssertNotEqual(
                 localized(key, in: ko), key, "\(key) is untranslated")
@@ -1391,7 +1391,7 @@ final class KoreanLocalizationTests: XCTestCase {
     /// when every exercise is gone.
     func testBlockDetailFallbackTitlesLocalize() throws {
         let ko = try XCTUnwrap(localizationBundle("ko"))
-        XCTAssertEqual(localized("Block", in: ko), "블록")
+        XCTAssertEqual(localized("Exercise", in: ko), "운동")
         XCTAssertEqual(localized("Superset", in: ko), "슈퍼세트")
     }
 
@@ -1406,5 +1406,288 @@ final class KoreanLocalizationTests: XCTestCase {
         XCTAssertNotEqual(
             ActiveWorkoutNavCopy.backKey, "Back",
             "The navigation button must not share the body part's key")
+    }
+
+    // ======================================================
+    // MARK: - Training-plan terminology (Block / Slot removal)
+    // ======================================================
+
+    /// The user-facing replacements for the internal "block" / "slot" nouns.
+    ///
+    /// Two of these were never in the catalog at all before this slice, so a
+    /// Korean build rendered them in English:
+    ///
+    ///  - `Rest before next exercise` is handed to `DurationFieldRow` as a
+    ///    `String` and lifted with `LocalizedStringKey(title)`, which Xcode's
+    ///    extractor cannot see — the old "Rest before next block" wording had
+    ///    no entry;
+    ///  - the routine-import counters were `+`-concatenated literals bound to
+    ///    `Text`'s verbatim initializer.
+    ///
+    /// The rest are renames that had to carry their Korean across rather than
+    /// silently fall back once the English key changed.
+    private static let planTerminologyKeys = [
+        "Exercise %lld of %lld",
+        "New Exercise Defaults",
+        "Plan notes",
+        "Session plan for this exercise",
+        "Reset plan for this exercise",
+        "Finish + Update exercise plan",
+        "Rest before next exercise",
+        "%lld times",
+        "Applies to new exercises and the intensity field in active workouts.",
+        "This warmup step will be removed from this exercise.",
+        "This technique will be removed from this exercise. Its configuration will be lost.",
+        "Imported \u{201C}%@\u{201D}.",
+        "1 exercise.",
+        "%lld exercises.",
+        "Skipped 1 exercise with no name.",
+        "Skipped %lld exercises with no name.",
+        "1 exercise has no name and will be skipped.",
+        "%lld exercises have no name and will be skipped.",
+    ]
+
+    func testPlanTerminologyStringsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.planTerminologyKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(value, key, "\(key) is untranslated")
+        }
+    }
+
+    /// The model's nouns are gone from the catalog, not merely unused by the
+    /// views: leaving them translated is how a reintroduced literal silently
+    /// picks the old wording back up in one language only.
+    func testRetiredBlockAndSlotKeysAreNoLongerInTheCatalog() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in [
+            "Block",
+            "Blocks",
+            "Block %lld of %lld",
+            "Block Preview",
+            "Delete Block",
+            "Exercise slots",
+            "New Slot Defaults",
+            "Slot notes",
+            "Session plan for this slot",
+            "Reset plan for this slot",
+            "Finish + Update slot prescription",
+            "Applies to new slots and the intensity field in active workouts.",
+            "%lld slots",
+            "Rest after block",
+            "The slot's own exercise cannot be an alternative.",
+            "This warmup step will be removed from this slot.",
+        ] {
+            XCTAssertEqual(
+                localized(key, in: ko), key,
+                "a retired key must fall back to its own text, not stay "
+                    + "translated")
+        }
+    }
+
+    /// Korean keeps the two-placeholder progress line positional. The English
+    /// source reads "Exercise 3 of 5"; Korean puts the pair in one "3/5"
+    /// fraction, so the numbers must stay addressable by index.
+    func testExerciseProgressLineKeepsBothPlaceholders() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in ["Exercise %lld of %lld", "Superset %lld of %lld"] {
+            let value = localized(key, in: ko)
+            XCTAssertEqual(
+                value.components(separatedBy: "%lld").count - 1, 2,
+                "both counts must survive translation: \(value)")
+        }
+    }
+
+    /// The progress line names the block's kind, so both nouns need Korean —
+    /// and they must not collapse to the same string, which would make a
+    /// superset indistinguishable from a single exercise for a Korean user.
+    func testBothProgressLabelKindsTranslateAndStayDistinct() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let exercise = localized("Exercise %lld of %lld", in: ko)
+        let superset = localized("Superset %lld of %lld", in: ko)
+        XCTAssertEqual(exercise, "\u{C6B4}\u{B3D9} %lld/%lld")
+        XCTAssertEqual(superset, "\u{C288}\u{D37C}\u{C138}\u{D2B8} %lld/%lld")
+        XCTAssertNotEqual(exercise, superset)
+    }
+
+    // ======================================================
+    // MARK: - Destructive confirmations (previously English-only)
+    // ======================================================
+
+    /// Both destructive messages built their English by interpolation and were
+    /// handed to `Text(_: String)` / returned raw, so neither had a catalog key
+    /// and a Korean user met them in English at the moment work was about to be
+    /// destroyed. These are the keys that fixed that.
+    private static let destructiveConfirmationKeys = [
+        // The exercise delete confirmation: one sentence plus the six count
+        // phrases it interpolates. `%lld superset` / `%lld supersets` are the
+        // Saved Routines subtitle's existing keys, reused.
+        "Delete \u{201C}%@\u{201D}? This will remove it from %@, delete %@, and unlink %@. This cannot be undone.",
+        "%lld routine",
+        "%lld routines",
+        "%lld superset",
+        "%lld supersets",
+        "%lld exercise reference",
+        "%lld exercise references",
+        // The routine delete confirmation, in both its shapes.
+        "Delete \u{201C}%@\u{201D}? This will remove %@ (%@) and all of their exercise references. This cannot be undone.",
+        "Delete \u{201C}%@\u{201D}? This will remove %@ and all of their exercise references. This cannot be undone.",
+        "%lld exercise",
+        "%lld exercises",
+        // Removing a member from a superset.
+        "\u{201C}%@\u{201D} will be removed from this superset. Its prescription, warmup, and technique plans will be deleted.",
+        "1 exercise will be removed from this superset. Its prescription, warmup, and technique plans will be deleted.",
+        "%lld exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted.",
+    ]
+
+    func testDestructiveConfirmationsLocalizeToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.destructiveConfirmationKeys {
+            let value = localized(key, in: ko)
+            XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
+            XCTAssertNotEqual(value, key, "\(key) is untranslated")
+        }
+    }
+
+    /// No mixed-language output: once the format specifiers are stripped, a
+    /// Korean value must contain no Latin letters. This is the check that
+    /// would have caught the original bug, where the whole sentence was
+    /// English inside a Korean build.
+    func testDestructiveConfirmationsContainNoEnglishText() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in Self.destructiveConfirmationKeys {
+            let stripped = Self.strippingFormatSpecifiers(localized(key, in: ko))
+            XCTAssertNil(
+                stripped.rangeOfCharacter(
+                    from: CharacterSet(charactersIn: "a"..."z")
+                        .union(CharacterSet(charactersIn: "A"..."Z"))),
+                "Korean value still carries English text: \(stripped)")
+        }
+    }
+
+    /// The composed sentence, assembled the way `ExerciseDeletionImpact`
+    /// assembles it: the noun phrases are substituted into the Korean frame,
+    /// so this pins that the particles still attach to a counted noun
+    /// ("\u{B8E8}\u{D2F4} 2\u{AC1C}\u{C5D0}\u{C11C}") rather than to a bare number.
+    func testKoreanDeleteConfirmationReadsNaturallyWhenComposed() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let frame = localized(
+            "Delete \u{201C}%@\u{201D}? This will remove it from %@, delete %@, and unlink %@. This cannot be undone.",
+            in: ko)
+        let routines = localized("%lld routines", in: ko)
+            .replacingOccurrences(of: "%lld", with: "2")
+        let supersets = localized("%lld superset", in: ko)
+            .replacingOccurrences(of: "%lld", with: "1")
+        let references = localized("%lld exercise references", in: ko)
+            .replacingOccurrences(of: "%lld", with: "3")
+
+        let composed = String(
+            format: frame, "\u{BCA4}\u{CE58}", routines, supersets, references)
+
+        XCTAssertTrue(
+            composed.contains(routines), "the routine phrase survived: \(composed)")
+        XCTAssertTrue(
+            composed.contains(supersets), "the superset phrase survived: \(composed)")
+        XCTAssertTrue(
+            composed.contains(references),
+            "the reference phrase survived: \(composed)")
+        XCTAssertNil(
+            Self.strippingFormatSpecifiers(composed).rangeOfCharacter(
+                from: CharacterSet(charactersIn: "a"..."z")
+                    .union(CharacterSet(charactersIn: "A"..."Z"))),
+            "composed Korean sentence must not mix in English: \(composed)")
+    }
+
+    /// The decisive check that the hand-written catalog keys match the keys
+    /// **Swift actually generates** for these interpolated literals.
+    ///
+    /// Every other test here looks a key up as a `String`, which proves only
+    /// that the catalog contains it. It cannot catch the failure that matters:
+    /// a key whose shape disagrees with what `String(localized:)` derives from
+    /// the source literal, which misses at runtime and silently renders English
+    /// inside a Korean build — the exact bug these two messages had.
+    ///
+    /// So these re-declare the production literals and resolve them through
+    /// `bundle: ko`, letting the compiler derive the key. The duplication is
+    /// deliberate and safe: if a literal here drifts from its production
+    /// counterpart, the English-output assertions in `RoutineDisplayCopyTests`
+    /// fail on the production side.
+    func testInterpolatedDestructiveLiteralsResolveThroughTheirGeneratedKeys()
+        throws
+    {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+
+        let routines = "\u{B8E8}\u{D2F4} 2\u{AC1C}"
+        let supersets = "\u{C288}\u{D37C}\u{C138}\u{D2B8} 1\u{AC1C}"
+        let references = "\u{C6B4}\u{B3D9} \u{CC38}\u{C870} 3\u{AC1C}"
+        let name = "\u{BCA4}\u{CE58}"
+
+        let deleteMessage = String(
+            localized:
+                "Delete \u{201C}\(name)\u{201D}? This will remove it from \(routines), delete \(supersets), and unlink \(references). This cannot be undone.",
+            bundle: ko)
+        XCTAssertTrue(
+            deleteMessage.contains("\u{C0AD}\u{C81C}"),
+            "the delete confirmation fell back to English: \(deleteMessage)")
+        XCTAssertFalse(
+            deleteMessage.contains("This cannot be undone"),
+            "the delete confirmation fell back to English: \(deleteMessage)")
+
+        let namedRemoval = String(
+            localized:
+                "\u{201C}\(name)\u{201D} will be removed from this superset. Its prescription, warmup, and technique plans will be deleted.",
+            bundle: ko)
+        XCTAssertFalse(
+            namedRemoval.contains("will be removed"),
+            "the named removal warning fell back to English: \(namedRemoval)")
+
+        let count = 3
+        let batchRemoval = String(
+            localized:
+                "\(count) exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted.",
+            bundle: ko)
+        XCTAssertFalse(
+            batchRemoval.contains("will be removed"),
+            "the batch removal warning fell back to English: \(batchRemoval)")
+
+        let exercises = "\u{C6B4}\u{B3D9} 8\u{AC1C}"
+        let routineDelete = String(
+            localized:
+                "Delete \u{201C}\(name)\u{201D}? This will remove \(exercises) (\(supersets)) and all of their exercise references. This cannot be undone.",
+            bundle: ko)
+        XCTAssertFalse(
+            routineDelete.contains("This will remove"),
+            "the routine delete confirmation fell back to English: "
+                + routineDelete)
+
+        let routineDeleteNoSuperset = String(
+            localized:
+                "Delete \u{201C}\(name)\u{201D}? This will remove \(exercises) and all of their exercise references. This cannot be undone.",
+            bundle: ko)
+        XCTAssertFalse(
+            routineDeleteNoSuperset.contains("This will remove"),
+            "the superset-free routine delete confirmation fell back to "
+                + "English: \(routineDeleteNoSuperset)")
+
+        let position = 3
+        let total = 5
+        XCTAssertEqual(
+            String(localized: "Superset \(position) of \(total)", bundle: ko),
+            "\u{C288}\u{D37C}\u{C138}\u{D2B8} 3/5")
+        XCTAssertEqual(
+            String(localized: "Exercise \(position) of \(total)", bundle: ko),
+            "\u{C6B4}\u{B3D9} 3/5")
+    }
+
+    /// Removes `%@`, `%lld` and their positional forms so the remainder can be
+    /// scanned for stray English.
+    private static func strippingFormatSpecifiers(_ value: String) -> String {
+        var out = value
+        for pattern in ["%\\d+\\$@", "%\\d+\\$lld", "%@", "%lld"] {
+            out = out.replacingOccurrences(
+                of: pattern, with: " ", options: .regularExpression)
+        }
+        return out
     }
 }

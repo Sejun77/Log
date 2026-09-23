@@ -750,7 +750,7 @@ func finishOptionLabelKey(
     case .applySwaps:
         return "Finish + Update routine template"
     case .applySlotPrescription:
-        return "Finish + Update slot prescription"
+        return "Finish + Update exercise plan"
     case .applyAll:
         return "Finish + Apply all"
     }

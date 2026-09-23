@@ -129,7 +129,7 @@ struct TechniquePlanEditor: View {
             }
         } message: {
             Text(
-                "This technique will be removed from this slot. Its configuration will be lost."
+                "This technique will be removed from this exercise. Its configuration will be lost."
             )
         }
     }

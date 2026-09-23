@@ -405,11 +405,8 @@ struct RoutinesView: View {
     }
 
     private func routineImpactMessage(_ r: Routine) -> String {
-        let blocks = r.blocks.count
-        let supersetBlocks = r.blocks.filter { $0.isSuperset }.count
-        return """
-            Delete “\(r.name)”? This will remove \(blocks) block\(blocks == 1 ? "" : "s") (\(supersetBlocks) superset), and all of their exercise references. This cannot be undone.
-            """
+        RoutineSummary(routine: r)
+            .deleteConfirmationMessage(routineName: r.name)
     }
 
     private func addRoutine() {

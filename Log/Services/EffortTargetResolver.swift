@@ -429,7 +429,7 @@ enum AutoregulationHelp {
     /// The pre-existing Settings explanation — kept verbatim so it resolves to
     /// the string-catalog key it already had, with its existing Korean.
     static let autoregScopeMessage =
-        "Applies to new slots and the intensity field in active workouts."
+        "Applies to new exercises and the intensity field in active workouts."
 
     static func title(for metric: EffortMetric) -> String {
         switch metric {

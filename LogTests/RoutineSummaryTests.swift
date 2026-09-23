@@ -220,4 +220,61 @@ final class RoutineSummaryTests: SwiftDataTestHarness {
         XCTAssertEqual(map[push.id]?.subtitle, "1 exercise")
         XCTAssertEqual(map[pull.id]?.subtitle, "Empty routine")
     }
+
+    // ==================================================
+    // MARK: - Delete confirmation copy
+    // ==================================================
+
+    /// The confirmation counts what the subtitle counts. It used to report the
+    /// routine's block count, which named the data model and could disagree
+    /// with the row the user had just read.
+    func test_deleteConfirmationCountsExercisesNotBlocks() {
+        let summary = RoutineSummary(exerciseCount: 8, supersetCount: 2)
+        let message = summary.deleteConfirmationMessage(routineName: "Push A")
+
+        XCTAssertEqual(
+            message,
+            "Delete “Push A”? This will remove 8 exercises "
+                + "(2 supersets) and all of their exercise references. "
+                + "This cannot be undone.")
+        XCTAssertFalse(message.lowercased().contains("block"))
+        XCTAssertEqual(summary.subtitle, "8 exercises · 2 supersets")
+    }
+
+    /// Both counts pluralize independently.
+    func test_deleteConfirmationSingulars() {
+        XCTAssertEqual(
+            RoutineSummary(exerciseCount: 1, supersetCount: 1)
+                .deleteConfirmationMessage(routineName: "Solo"),
+            "Delete “Solo”? This will remove 1 exercise "
+                + "(1 superset) and all of their exercise references. "
+                + "This cannot be undone.")
+    }
+
+    /// A routine with no supersets drops the parenthetical entirely rather
+    /// than reporting "(0 superset)", which the old sentence always did and
+    /// which was ungrammatical as well as uninformative.
+    func test_deleteConfirmationOmitsTheSupersetClauseAtZero() {
+        let message = RoutineSummary(exerciseCount: 5, supersetCount: 0)
+            .deleteConfirmationMessage(routineName: "Push A")
+
+        XCTAssertEqual(
+            message,
+            "Delete “Push A”? This will remove 5 exercises "
+                + "and all of their exercise references. "
+                + "This cannot be undone.")
+        XCTAssertFalse(message.contains("superset"))
+        XCTAssertFalse(message.contains("("))
+    }
+
+    /// An empty routine is still deletable, and the sentence must stay
+    /// grammatical at zero.
+    func test_deleteConfirmationHandlesAnEmptyRoutine() {
+        XCTAssertEqual(
+            RoutineSummary(exerciseCount: 0, supersetCount: 0)
+                .deleteConfirmationMessage(routineName: "Empty"),
+            "Delete “Empty”? This will remove 0 exercises "
+                + "and all of their exercise references. "
+                + "This cannot be undone.")
+    }
 }

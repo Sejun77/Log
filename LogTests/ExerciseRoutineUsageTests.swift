@@ -106,7 +106,7 @@ final class ExerciseRoutineUsageTests: SwiftDataTestHarness {
         let usage = ExerciseRoutineUsage(routines: [r], exerciseID: target.id)
 
         XCTAssertEqual(usage.entries.first?.slotCount, 2)
-        XCTAssertEqual(usage.entries.first?.slotSuffix, "· 2 slots")
+        XCTAssertEqual(usage.entries.first?.slotSuffix, "· 2 times")
     }
 
     func testSameExerciseInMultipleRoutinesCountsMultipleRoutines() {
@@ -359,7 +359,7 @@ final class ExerciseAlternativeUsageTests: SwiftDataTestHarness {
         XCTAssertEqual(usage.entries.first?.slotCount, 2)
         XCTAssertEqual(usage.entries.first?.alternativeCount, 2)
         XCTAssertEqual(
-            usage.entries.first?.slotSuffix, "· 2 slots · 2 alternatives")
+            usage.entries.first?.slotSuffix, "· 2 times · 2 alternatives")
     }
 
     /// A single alternative is always named, unlike a single slot: it is not

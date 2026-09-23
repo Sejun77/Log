@@ -39,7 +39,8 @@ struct ExerciseSwitchDeletionImpact: Equatable {
     var requiresConfirmation: Bool { totalLoggedSets > 0 }
 
     /// True when the removal reaches beyond the switched slot, which changes the
-    /// wording from "for this exercise" to "from this block".
+    /// wording from "for this exercise" to "from this superset" — the cascade
+    /// only ever fires inside a superset, so that is what the user is told.
     var includesPartnerSets: Bool { partnerLoggedSets > 0 }
 }
 
@@ -143,12 +144,12 @@ enum ExerciseSwitchConfirmationCopy {
                 if count == 1 {
                     return String(
                         localized:
-                            "Switching to \(name) will remove 1 logged set from this block."
+                            "Switching to \(name) will remove 1 logged set from this superset."
                     )
                 }
                 return String(
                     localized:
-                        "Switching to \(name) will remove \(count) logged sets from this block."
+                        "Switching to \(name) will remove \(count) logged sets from this superset."
                 )
             }
             if count == 1 {
@@ -167,12 +168,12 @@ enum ExerciseSwitchConfirmationCopy {
             if count == 1 {
                 return String(
                     localized:
-                        "Switching exercises will remove 1 logged set from this block."
+                        "Switching exercises will remove 1 logged set from this superset."
                 )
             }
             return String(
                 localized:
-                    "Switching exercises will remove \(count) logged sets from this block."
+                    "Switching exercises will remove \(count) logged sets from this superset."
             )
         }
 

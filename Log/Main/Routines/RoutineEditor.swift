@@ -166,7 +166,7 @@ struct RoutineEditor: View {
             Text(blockedBlocks.joined(separator: "\n"))
         }
         .alert(
-            "Delete Block",
+            "Delete",
             isPresented: Binding(
                 get: { deletePrompt != nil },
                 set: { if !$0 { deletePrompt = nil } }
@@ -289,7 +289,7 @@ struct RoutineEditor: View {
 
     @ViewBuilder
     private func emptyBlocksSection() -> some View {
-        Section("Blocks") {
+        Section("Exercises") {
             Text("Add an exercise or a superset.")
                 .foregroundStyle(.secondary)
         }
@@ -306,7 +306,7 @@ struct RoutineEditor: View {
             for: sortedBlocks, effortMetric: effortMetric,
             displayUnit: AppSettings.distanceUnit(isMetric: distanceIsMetric)
         )
-        return Section("Blocks") {
+        return Section("Exercises") {
             ForEach(sortedBlocks, id: \.id) { block in
                 blockRowWithActions(
                     for: block, summary: summaries[block.slotID]

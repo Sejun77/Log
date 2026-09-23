@@ -213,7 +213,7 @@ final class ActiveWorkoutFinishConfirmTests: XCTestCase {
                 "Finish + Update routine template")
             XCTAssertEqual(
                 finishOptionLabelKey(.applySlotPrescription, isSoleOption: sole),
-                "Finish + Update slot prescription")
+                "Finish + Update exercise plan")
             XCTAssertEqual(
                 finishOptionLabelKey(.applyAll, isSoleOption: sole),
                 "Finish + Apply all")
