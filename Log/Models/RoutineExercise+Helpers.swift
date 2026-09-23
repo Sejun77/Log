@@ -131,18 +131,30 @@ extension Routine {
     /// Extracted from the former `RoutineEditor.routineIsStartable` so the
     /// exact logic that runs in `body` can be exercised directly in tests.
     func isStartable(in ctx: ModelContext) -> Bool {
-        // Live slots as committed to the store. A slot cascade-deleted when
-        // its `Exercise` was removed can linger as an invalidated instance in
-        // a block's cached `exercises` array; reading such an instance's
-        // relationships fatally traps. We therefore intersect against the live
-        // set before touching any relationship. The fetch is predicate-free
-        // (no fragile key-path predicate) and runs once per call, and
-        // `persistentModelID` is safe to read even on an invalidated instance.
-        let liveSlotIDs: Set<PersistentIdentifier> = Set(
+        isStartable(liveSlotIDs: Routine.liveSlotIDs(in: ctx), in: ctx)
+    }
+
+    /// Live slots as committed to the store. A slot cascade-deleted when its
+    /// `Exercise` was removed can linger as an invalidated instance in a
+    /// block's cached `exercises` array; reading such an instance's
+    /// relationships fatally traps. `isStartable` therefore intersects against
+    /// this set before touching any relationship. The fetch is predicate-free
+    /// (no fragile key-path predicate), and `persistentModelID` is safe to
+    /// read even on an invalidated instance.
+    static func liveSlotIDs(in ctx: ModelContext) -> Set<PersistentIdentifier> {
+        Set(
             ((try? ctx.fetch(FetchDescriptor<RoutineExercise>())) ?? [])
                 .map(\.persistentModelID)
         )
+    }
 
+    /// Same rule as `isStartable(in:)` against a caller-supplied live-slot set,
+    /// so a list can evaluate many routines with one fetch
+    /// (`RoutineQuickStart.startableRoutineIDs`).
+    func isStartable(
+        liveSlotIDs: Set<PersistentIdentifier>,
+        in ctx: ModelContext
+    ) -> Bool {
         var hasAnyContent = false
 
         for block in blocks {
