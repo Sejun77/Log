@@ -17,6 +17,11 @@ struct RoutinesView: View {
     /// Value-based navigation target. A row tap sets this *after* clearing the
     /// add-field focus, so cleanup commits before the push — see the row Button.
     @State private var selectedRoutineID: UUID? = nil
+    /// Target of a row's trailing Start button. Pushes the same
+    /// `StartWorkoutFromRoutineView` the editor's toolbar Start pushes — see
+    /// `RoutineQuickStart` for when the button is shown.
+    @State private var startRoutineID: UUID? = nil
+    @State private var showUserGuide = false
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
     @State private var showLockedRoutineAlert = false
@@ -59,6 +64,19 @@ struct RoutinesView: View {
             .background(DSColor.bg.ignoresSafeArea())
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
+                // Second route to the User Guide (Settings → Help is the
+                // first). Routines is the landing tab and where the guide's
+                // "Completing a Workout" steps begin. Icon-only in the bar;
+                // the Label title is the accessibility label.
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        focusNewRoutine = false
+                        showUserGuide = true
+                    } label: {
+                        Label("User Guide", systemImage: "questionmark.circle")
+                    }
+                    .accessibilityIdentifier("routinesUserGuideButton")
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     EditButton()
                 }
@@ -133,6 +151,14 @@ struct RoutinesView: View {
                 if let routine = routines.first(where: { $0.id == id }) {
                     RoutineEditor(routine: routine)
                 }
+            }
+            .navigationDestination(item: $startRoutineID) { id in
+                if let routine = routines.first(where: { $0.id == id }) {
+                    StartWorkoutFromRoutineView(routine: routine)
+                }
+            }
+            .navigationDestination(isPresented: $showUserGuide) {
+                UserGuideView()
             }
             // Belt-and-suspenders for the tab-switch path (which does fire
             // onDisappear): drop add-field focus so a focused field doesn't
@@ -222,6 +248,13 @@ struct RoutinesView: View {
         // `routine.blocks` in its own `body` — same once-per-render discipline
         // as History's `RoutineLabelResolver`.
         let summaries = RoutineSummary.map(for: routines)
+        // Same once-per-render discipline for the Start button's gate: one
+        // live-slot fetch for the whole list, skipped entirely while a workout
+        // is active (every row hides Start then).
+        let hasActiveWorkout = activeGuard.activePlan != nil
+        let startableIDs: Set<UUID> =
+            hasActiveWorkout
+            ? [] : RoutineQuickStart.startableRoutineIDs(for: routines, in: ctx)
         return Section {
             if routines.isEmpty {
                 // Native empty state rather than a bare sentence: on a fresh
@@ -264,6 +297,16 @@ struct RoutinesView: View {
                                 .truncationMode(.tail)
                             }
                             Spacer(minLength: 12)
+                            if RoutineQuickStart.showsStartButton(
+                                routineID: r.id,
+                                startableIDs: startableIDs,
+                                hasActiveWorkout: hasActiveWorkout
+                            ) {
+                                RoutineRowStartButton {
+                                    focusNewRoutine = false
+                                    startRoutineID = r.id
+                                }
+                            }
                             if activeGuard.isRoutineLocked(r.id) {
                                 LockBadge()
                             }
@@ -531,6 +574,32 @@ struct BlockRow: View {
         #if DEBUG
             .probe("BlockRow.Row")
         #endif
+    }
+}
+
+/// The Saved Routines row's trailing Start button. A separate view so it reads
+/// `editMode` from *inside* the List — `RoutinesView` sits above its own
+/// `NavigationStack`, so its environment never sees the toolbar `EditButton`
+/// toggle. Hidden while the list is being edited so reorder/delete rows stay
+/// uncluttered; `.transient` (swipe) is deliberately not treated as editing.
+private struct RoutineRowStartButton: View {
+    let action: () -> Void
+    @Environment(\.editMode) private var editMode
+
+    var body: some View {
+        if editMode?.wrappedValue != .active {
+            // Nested in the row's label, but a bordered button claims its own
+            // taps, so the rest of the row still opens the editor.
+            Button(action: action) {
+                Label("Start", systemImage: "play.fill")
+                    .font(.dsBodySecondary.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
+            .accessibilityLabel(Text("Start Workout"))
+            .accessibilityIdentifier("startWorkoutFromRoutineRow")
+        }
     }
 }
 
