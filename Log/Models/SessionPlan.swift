@@ -74,6 +74,23 @@ struct SessionPlan: Codable, Equatable {
     /// so alternatives survive Save & Exit and a cold resume.
     var alternativesSnapshot: [SlotAlternative]? = nil
 
+    /// **Provenance**, not exercise identity: the `SlotAlternative.id` of the
+    /// prepared alternative whose plan this slot is running, or nil.
+    ///
+    /// Set only by the prepared-alternative action, and overwritten on every
+    /// switch — so a later generic switch (Keep / Reset through "Choose
+    /// another exercise…") clears it, and an exercise picked generically is
+    /// never treated as prepared just because it also appears in
+    /// `alternatives`. Update Routine reads it to decide whether the promoted
+    /// exercise takes its prepared plan or the plan its switch produced.
+    ///
+    /// Optional, so synthesized `Codable` reads it with `decodeIfPresent`: a
+    /// plan persisted by an earlier build restores with nil (a generic
+    /// switch, which demotes the original losslessly either way). Persisted
+    /// with the rest of the plan through `AppState.sessionPlansJSON`, so it
+    /// survives Save & Exit and a cold resume.
+    var appliedAlternativeID: UUID? = nil
+
     /// The frozen alternatives, with one representation of "none".
     ///
     /// A nil column, a missing key (an older saved session) and an empty list
@@ -213,7 +230,7 @@ struct SessionPlan: Codable, Equatable {
         self.restSecondsAfterExercise = snapshot.restSecondsAfterExercise
         // Drop tempo carried by a duration-based snapshot at the ingest point,
         // so stale saved tempo can never re-enter the live session plan (and so
-        // `isSessionPlanDirty` doesn't report a phantom edit against it).
+        // `sessionPlanHasEdits` doesn't report a phantom edit against it).
         self.tempo = snapshot.usesDuration ? nil : snapshot.tempo
         self.rir = snapshot.rir
         self.rpe = snapshot.rpe

@@ -106,6 +106,18 @@ struct AlternativePrescriptionPayload: Codable, Equatable {
     /// which explains *why/when* to use the alternative; this one is the
     /// prescription note that lands on the session plan.
     var slotNotes: String? = nil
+    /// The warm-up scheme's name. Nil means "the default name" — which is what
+    /// every alternative authored in the editor has, because the editor never
+    /// names a scheme. Carried so a routine slot's warm-up survives being
+    /// demoted to an alternative and promoted back (Update Routine) with the
+    /// name a duplicated or imported routine gave it.
+    var warmupSchemeName: String? = nil
+    /// Legacy per-set overrides (`RoutineExercise.setTemplates`), which win
+    /// over the prescription when present. Nil means none — again what every
+    /// editor-authored alternative has. Carried for the same reason as
+    /// `warmupSchemeName`: a slot that still holds overrides must get them
+    /// back after an A → B → A swap through Update Routine.
+    var setTemplates: [SetTemplatePayload]? = nil
 
     /// Blank strings collapse to nil and an empty cardio plan collapses to nil.
     ///
@@ -137,6 +149,8 @@ struct AlternativePrescriptionPayload: Codable, Equatable {
         // hand-edited document from smuggling one onto a session plan.
         copy.customRIRTargets = Self.normalizedTargets(customRIRTargets)
         copy.customRPETargets = Self.normalizedTargets(customRPETargets)
+        // One representation of "no overrides", matching the custom lists.
+        if copy.setTemplates?.isEmpty == true { copy.setTemplates = nil }
         return copy
     }
 }
@@ -151,6 +165,7 @@ extension AlternativePrescriptionPayload {
         case durationMinSeconds, durationMaxSeconds, usesDuration
         case targetDistanceMeters, targetDistanceUnitRaw
         case warmupSteps, techniques, cardioSegments, slotNotes
+        case warmupSchemeName, setTemplates
     }
 
     /// Every field is optional at the wire level: a payload written by an older
@@ -201,7 +216,17 @@ extension AlternativePrescriptionPayload {
                 TechniquePlanSnapshot.self, in: c, forKey: .techniques),
             cardioSegments: try? c.decodeIfPresent(
                 CardioSegmentPlan.self, forKey: .cardioSegments),
-            slotNotes: try? c.decodeIfPresent(String.self, forKey: .slotNotes)
+            slotNotes: try? c.decodeIfPresent(String.self, forKey: .slotNotes),
+            // Both absent from every payload written before Update Routine
+            // became a swap — those decode as nil, which is exactly what they
+            // meant (the editor never named a scheme or wrote an override).
+            warmupSchemeName: try? c.decodeIfPresent(
+                String.self, forKey: .warmupSchemeName),
+            setTemplates: {
+                let rows = SlotAlternatives.lenientArray(
+                    SetTemplatePayload.self, in: c, forKey: .setTemplates)
+                return rows.isEmpty ? nil : rows
+            }()
         )
         self = normalized()
     }
@@ -248,7 +273,26 @@ extension AlternativePrescriptionPayload {
             try c.encode(cardioSegments, forKey: .cardioSegments)
         }
         try c.encodeIfPresent(slotNotes, forKey: .slotNotes)
+        try c.encodeIfPresent(warmupSchemeName, forKey: .warmupSchemeName)
+        if let setTemplates, !setTemplates.isEmpty {
+            try c.encode(setTemplates, forKey: .setTemplates)
+        }
     }
+}
+
+/// One legacy per-set override (`SetTemplate`), in payload form.
+///
+/// All six stored `SetTemplate` fields, verbatim. `kindRaw` stays a raw string
+/// rather than a `SetKind` so a kind this build does not know survives the
+/// round trip instead of collapsing to `.working`. Synthesized `Codable`; the
+/// payload decodes the array leniently, so one malformed row costs itself.
+struct SetTemplatePayload: Codable, Equatable {
+    var order: Int
+    var kindRaw: String
+    var targetReps: Int
+    var targetWeight: Double? = nil
+    var restSecondsAfter: Int? = nil
+    var durationSeconds: Int? = nil
 }
 
 // ======================================================

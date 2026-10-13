@@ -54,31 +54,6 @@ struct ActiveWorkoutView: View {
         var id: Int { index }
     }
 
-    /// The plan a pending switch will apply. Mirrors
-    /// `ExerciseSwitchPlanAdapter.Choice`, but holds the whole
-    /// `SlotAlternative` rather than only its prescription, because the view
-    /// also needs the alternative's exercise reference to resolve the switch
-    /// target.
-    private enum PendingSwapPlan: Equatable {
-        case keepCurrentPlan
-        case resetPlan
-        case useAlternative(SlotAlternative)
-
-        /// True only for the explicit "start over" choice, which is the one
-        /// that may auto-open the Edit Plan sheet. A prepared alternative
-        /// arrives with a full plan, so it never should.
-        var isReset: Bool { self == .resetPlan }
-
-        var adapterChoice: ExerciseSwitchPlanAdapter.Choice {
-            switch self {
-            case .keepCurrentPlan: return .keepCurrentPlan
-            case .resetPlan: return .resetPlan
-            case .useAlternative(let alternative):
-                return .useAlternative(alternative.prescription)
-            }
-        }
-    }
-
     @State private var exerciseToSwapIndex: Int? = nil
     @State private var swapPickerItem: SwapPickerItem? = nil
     @State private var pendingSwapNewExercise: Exercise? = nil
@@ -110,15 +85,18 @@ struct ActiveWorkoutView: View {
     @State private var currentExerciseIndex = 0
     @State private var showEndConfirm = false
     @State private var showFinishConfirm = false
-    /// The finish variant chosen in the finish-confirmation dialog, recorded
-    /// by the dialog button and consumed exactly once on the next main-actor
-    /// turn (see the `.onChange` next to the dialog). Running `finishWorkout`
-    /// directly inside the dialog button action made its final `dismiss()`
-    /// (navigation pop) race the dialog's own dismissal transaction — when a
-    /// same-frame re-render landed (e.g. the per-second rest-timer toolbar
-    /// tick), the pop was intermittently dropped and the first confirm tap
-    /// appeared to do nothing.
-    @State private var pendingFinishOption: FinishDialogOption? = nil
+    /// The finish request chosen in the finish confirmation or the Save
+    /// Routine Changes sheet, recorded by the button and consumed exactly
+    /// once on the next main-actor turn (see the `.onChange` next to the
+    /// dialog). Running `finishWorkout` directly inside the dialog button
+    /// action made its final `dismiss()` (navigation pop) race the dialog's
+    /// own dismissal transaction — when a same-frame re-render landed (e.g.
+    /// the per-second rest-timer toolbar tick), the pop was intermittently
+    /// dropped and the first confirm tap appeared to do nothing.
+    @State private var pendingFinish: FinishRequest? = nil
+    /// The Save Routine Changes sheet, when presented. Rebuilt — every row
+    /// selected — each time Finish is reached with routine changes pending.
+    @State private var routineChangesSheet: RoutineChangesPresentation? = nil
     @State private var sessionPlans: [UUID: SessionPlan] = [:]
     @State private var showEditPlanSheet = false
     @State private var showExerciseNotesSheet = false
@@ -2667,48 +2645,13 @@ struct ActiveWorkoutView: View {
                     "Save keeps all logged sets. Discard deletes the workout permanently."
                 )
             }
-            .confirmationDialog(
-                finishConfirmTitle,
-                isPresented: $showFinishConfirm,
-                titleVisibility: .visible
-            ) {
-                // Options (order + routing) come from the pure
-                // `finishDialogOptions` helper, pinned by
-                // ActiveWorkoutFinishConfirmTests. Buttons only RECORD the
-                // choice — the finish itself runs after the dialog's
-                // dismissal transaction commits (see .onChange below), so
-                // one confirm tap reliably finishes.
-                let options = finishDialogOptions(
-                    hasSwapsPending: hasSwapsPending,
-                    hasSessionPlanPending: hasSessionPlanPending)
-                ForEach(options, id: \.self) { option in
-                    // Label wording depends on the company the option keeps —
-                    // see `finishOptionLabelKey`. Routing does not.
-                    Button(
-                        finishOptionLabel(
-                            option, isSoleOption: options.count == 1)
-                    ) {
-                        pendingFinishOption = option
-                    }
-                }
-
-                Button("Cancel", role: .cancel) {}
-            }
-            .onChange(of: pendingFinishOption) { _, option in
-                guard option != nil else { return }
-                // Next main-actor turn: the dialog teardown has committed by
-                // the time this runs, so the navigation pop inside
-                // `unlockAndDismiss()` no longer races it. Consuming via
-                // `consumePendingFinish` nils the slot first — the finish
-                // pipeline can only ever run once per confirmation.
-                Task { @MainActor in
-                    guard let chosen = consumePendingFinish(&pendingFinishOption)
-                    else { return }
-                    finishWorkout(
-                        applySwaps: chosen.applySwaps,
-                        applySlotPrescription: chosen.applySlotPrescription)
-                }
-            }
+            .modifier(
+                FinishConfirmationFlow(
+                    routineName: plan.routineName,
+                    showFinishConfirm: $showFinishConfirm,
+                    routineChangesSheet: $routineChangesSheet,
+                    pendingFinish: $pendingFinish,
+                    finish: finishWorkout))
             .onAppear {
                 Task {
                     await AppNotificationService.requestAuthorizationIfNeeded()
@@ -3080,122 +3023,36 @@ struct ActiveWorkoutView: View {
         case .confirmFinish:
             // Always confirm before finishing. Reaching the last step must
             // never finish the workout outright — otherwise spam-tapping Next
-            // near the end finishes accidentally. The confirmation dialog
-            // (showFinishConfirm) offers Finish + Cancel in every case, and
-            // adds the "apply pending changes" options when relevant.
+            // near the end finishes accidentally. With routine changes
+            // pending, the Save Routine Changes sheet is the confirmation;
+            // otherwise the plain Finish / Cancel dialog.
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            showFinishConfirm = true
+            let rows = routineChangeRows(
+                requests: routineTemplateRequests(
+                    exercises: plan.blocks.flatMap(\.exercises),
+                    sessionPlans: sessionPlans),
+                exercises: plan.blocks.flatMap(\.exercises),
+                originalName: { fetchExercise(by: $0)?.name })
+            if rows.isEmpty {
+                showFinishConfirm = true
+            } else {
+                routineChangesSheet = RoutineChangesPresentation(rows: rows)
+            }
         }
     }
 
     // MARK: - Finish helpers
 
-    /// Title for the finish confirmation dialog. Reads "Apply changes?" only
-    /// when there are pending swaps / session-plan edits to apply; otherwise a
-    /// plain "Finish workout?" (the dialog then shows just Finish + Cancel).
-    private var finishConfirmTitle: LocalizedStringKey {
-        (hasSwapsPending || hasSessionPlanPending)
-            ? "Apply changes?"
-            : "Finish this workout?"
-    }
-
-    /// User-facing label for one finish-dialog option.
-    ///
-    /// The key selection is the pure `finishOptionLabelKey`, so the
-    /// "plain finish alone reads simply *Finish*" rule is testable without a
-    /// view; this wrapper only lifts the key into a `LocalizedStringKey` so
-    /// `ActiveWorkoutHelpers` stays SwiftUI-free. Every key is pre-existing and
-    /// already translated.
-    private func finishOptionLabel(
-        _ option: FinishDialogOption,
-        isSoleOption: Bool
-    ) -> LocalizedStringKey {
-        LocalizedStringKey(
-            finishOptionLabelKey(option, isSoleOption: isSoleOption))
-    }
-
-    private var hasSwapsPending: Bool {
-        plan.blocks.flatMap(\.exercises).contains {
-            $0.originalExerciseID != $0.currentExerciseID
-        }
-    }
-
-    /// True if the SessionPlan for this slot differs from the original snapshot.
-    private func isSessionPlanDirty(
-        for slotID: UUID,
-        in exercise: PlanExercise
-    ) -> Bool {
-        guard let sp = sessionPlans[slotID] else { return false }
-
-        // Build the "original" SessionPlan from the snapshot
-        let original: SessionPlan
-        if let snap = exercise.prescriptionSnapshot {
-            original = SessionPlan(
-                from: snap, notes: exercise.templateNotesSnapshot)
-        } else {
-            var p = SessionPlan()
-            p.slotNotes = exercise.templateNotesSnapshot
-            original = p
-        }
-
-        // Normalize empty strings to nil for text fields
-        func norm(_ s: String?) -> String? {
-            guard let s, !s.isEmpty else { return nil }
-            return s
-        }
-
-        if sp.sets != original.sets { return true }
-        if sp.repMin != original.repMin { return true }
-        if sp.repMax != original.repMax { return true }
-        if sp.restSecondsBetweenSets != original.restSecondsBetweenSets {
-            return true
-        }
-        if sp.restSecondsAfterExercise != original.restSecondsAfterExercise {
-            return true
-        }
-        if sp.durationMinSeconds != original.durationMinSeconds { return true }
-        if sp.durationMaxSeconds != original.durationMaxSeconds { return true }
-        if sp.usesDuration != original.usesDuration { return true }
-        if sp.rir != original.rir { return true }
-        if sp.rpe != original.rpe { return true }
-        // Cardio Slice 6 patch: the target distance became editable in the
-        // active Edit Plan sheet, so an edit that touches only it must still
-        // count as dirty — otherwise "Update exercise plan" would not be
-        // offered and the change would silently stay session-only.
-        if sp.targetDistanceMeters != original.targetDistanceMeters {
-            return true
-        }
-        if sp.targetDistanceUnitRaw != original.targetDistanceUnitRaw {
-            return true
-        }
-        if norm(sp.tempo) != norm(original.tempo) { return true }
-        if norm(sp.slotNotes) != norm(original.slotNotes) { return true }
-
-        return false
-    }
-
-    private var hasSessionPlanPending: Bool {
-        for block in plan.blocks {
-            for ex in block.exercises {
-                if isSessionPlanDirty(
-                    for: ex.routineSlotID, in: ex)
-                { return true }
-            }
-        }
-        return false
-    }
-
-    private func finishWorkout(
-        applySwaps: Bool,
-        applySlotPrescription: Bool = false
-    ) {
+    private func finishWorkout(_ request: FinishRequest) {
         // Same ordering rule as Save & Exit: the draft must reach
         // `Workout.notes` before the workout is marked complete and saved, or
         // the last thing typed before Finish is not in the History record this
         // call produces.
         commitSessionNotes()
-        if applySwaps { applyExerciseSwapsToRoutine() }
-        if applySlotPrescription { applySessionPlansToSlotPrescriptions() }
+        let changes = request.selectedChanges
+        if !changes.isEmpty {
+            saveRoutineChanges(changes)
+        }
 
         // Mark the workout as completed and clear AppState in one call.
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
@@ -3205,54 +3062,26 @@ struct ActiveWorkoutView: View {
         unlockAndDismiss()
     }
 
-    /// Write dirty SessionPlan fields back to the corresponding
-    /// RoutineExercise.prescription + templateNotes.
-    /// Only called when the user explicitly chooses "Update exercise plan".
-    private func applySessionPlansToSlotPrescriptions() {
-        for block in plan.blocks {
-            for ex in block.exercises {
-                let slotID = ex.routineSlotID
-                guard isSessionPlanDirty(for: slotID, in: ex) else { continue }
-                guard let sp = sessionPlans[slotID] else { continue }
-
-                // Fetch the RoutineExercise by slotID
-                let descriptor = FetchDescriptor<RoutineExercise>(
-                    predicate: #Predicate { $0.slotID == slotID }
-                )
-                guard let re = try? ctx.fetch(descriptor).first else {
-                    continue
-                }
-
-                // Ensure prescription exists
-                if re.prescription == nil {
-                    let p = SlotPrescription()
-                    ctx.insert(p)
-                    re.prescription = p
-                }
-                guard let rx = re.prescription else { continue }
-
-                // Copy SessionPlan fields → SlotPrescription
-                rx.sets = sp.sets
-                rx.repMin = sp.repMin
-                rx.repMax = sp.repMax
-                rx.restSecondsBetweenSets = sp.restSecondsBetweenSets
-                rx.restSecondsAfterExercise = sp.restSecondsAfterExercise
-                rx.durationMinSeconds = sp.durationMinSeconds
-                rx.durationMaxSeconds = sp.durationMaxSeconds
-                rx.usesDuration = sp.usesDuration
-                rx.rir = sp.rir
-                rx.rpe = sp.rpe
-                // Written as a pair so the routine's two columns can never
-                // disagree about whether a target exists, matching
-                // `SlotPrescription.applyTargetDistance`.
-                rx.targetDistanceMeters = sp.targetDistanceMeters
-                rx.targetDistanceUnitRaw = sp.targetDistanceUnitRaw
-                rx.tempo = sp.tempo?.isEmpty == true ? nil : sp.tempo
-
-                // Copy slotNotes → templateNotes
-                re.templateNotes =
-                    sp.slotNotes?.isEmpty == true ? nil : sp.slotNotes
-            }
+    /// Write exactly the routine changes selected in the Save Routine Changes
+    /// sheet.
+    ///
+    /// The whole mutation — promotion/demotion of switched exercises, plan-only
+    /// saves into alternatives, and plan edits — is `RoutineTemplateUpdate`;
+    /// this only assembles each slot's session state. Called only from Save
+    /// Selected Changes, never on a plain finish.
+    private func saveRoutineChanges(
+        _ changes: Set<RoutineTemplateUpdate.PendingChange>
+    ) {
+        let requests = routineTemplateRequests(
+            exercises: plan.blocks.flatMap(\.exercises),
+            sessionPlans: sessionPlans)
+        do {
+            try RoutineTemplateUpdate.apply(requests, selected: changes, in: ctx)
+        } catch {
+            // Nothing is mutated before the resolve phase succeeds, so a
+            // failure here leaves the routine as it was; the workout itself
+            // still finishes and is saved below.
+            print("[RoutineTemplateUpdate] apply failed:", error)
         }
     }
 
@@ -3436,7 +3265,9 @@ struct ActiveWorkoutView: View {
             newMode: newMode,
             resetSource: .appDefaults(for: newMode)
         )
-        applySwitchOutcome(outcome, slotID: slotID, newExercise: newEx)
+        applySwitchOutcome(
+            outcome, slotID: slotID, newExercise: newEx,
+            appliedAlternativeID: pendingPlan.appliedAlternativeID)
 
         swapExercise(
             planExercise: planEx, with: newEx,
@@ -3519,11 +3350,12 @@ struct ActiveWorkoutView: View {
     ///    workout restores exactly this plan.
     ///
     /// The routine template is never touched — apply-back stays gated behind
-    /// the explicit finish option (`applySessionPlansToSlotPrescriptions`).
+    /// the explicit finish option (`RoutineTemplateUpdate`).
     private func applySwitchOutcome(
         _ outcome: ExerciseSwitchPlanAdapter.Outcome,
         slotID: UUID,
-        newExercise: Exercise
+        newExercise: Exercise,
+        appliedAlternativeID: UUID?
     ) {
         // Alternative Exercises Phase E — the adapter builds a fresh
         // `SessionPlan` for the switched-in exercise, but a slot's prepared
@@ -3533,52 +3365,26 @@ struct ActiveWorkoutView: View {
         // wholesale replacement so the frozen list survives a switch. No
         // visible effect yet — nothing reads them until Phase F — but without
         // this line the freeze would silently die on the first switch.
-        var applied = outcome.sessionPlan
-        applied.alternatives = sessionPlans[slotID]?.alternatives ?? []
-        sessionPlans[slotID] = applied
+        //
+        // The same step records the switch's provenance — the prepared
+        // alternative's id, or nil for a generic switch — so Update Routine
+        // knows whether to promote with the prepared plan. See
+        // `sessionPlanAfterSwitch`.
+        sessionPlans[slotID] = sessionPlanAfterSwitch(
+            adapted: outcome.sessionPlan,
+            previous: sessionPlans[slotID],
+            appliedAlternativeID: appliedAlternativeID)
 
         // Phase 6.C1 follow-up — slot identity is `routineSlotID`, not
         // `PlanExercise.id` (which is `Exercise.id` and collides when a
         // superset has duplicate Exercise slots; see findSlotIndex).
         if let (bi, ei) = findSlotIndex(in: plan, routineSlotID: slotID) {
-            plan.blocks[bi].exercises[ei].prescriptionSnapshot =
-                ExerciseSwitchPlanAdapter.adaptedSnapshot(
-                    from: outcome,
-                    base: plan.blocks[bi].exercises[ei].prescriptionSnapshot,
-                    equipment: newExercise.equipmentType,
-                    setupNotes: newExercise.setupDefaults
-                )
-            plan.blocks[bi].exercises[ei].templateNotesSnapshot =
-                outcome.sessionPlan.slotNotes
-
-            // Warm-ups survive a same-tracking-type switch as authored; a
-            // tracking-type change or a reset clears them. A prepared
-            // alternative answers a third question — **replace** them with the
-            // ones it carries (Phase F1) — including with an empty list, which
-            // is what an alternative authored without a warm-up means.
-            if let replacement = outcome.replacementWarmupSteps {
-                plan.blocks[bi].exercises[ei].warmupStepsSnapshot = replacement
-            } else if !outcome.keepWarmupSteps {
-                plan.blocks[bi].exercises[ei].warmupStepsSnapshot = []
-            }
-
-            // Same three-way rule for techniques, and the retention filter runs
-            // on all of them: a prepared alternative cannot introduce a
-            // combination the routine editor would have rejected on the
-            // switched-in exercise (a Drop Set onto a bodyweight movement, a
-            // rep-count technique onto a duration target).
-            let techniqueSource =
-                outcome.replacementTechniques
-                ?? (outcome.keepTechniques
-                    ? plan.blocks[bi].exercises[ei].techniquePlansSnapshot
-                    : [])
-            plan.blocks[bi].exercises[ei].techniquePlansSnapshot =
-                ExerciseSwitchPlanAdapter.retainedTechniques(
-                    from: techniqueSource,
-                    isBodyweight: isBodyweightEquipment(
-                        newExercise.equipmentType),
-                    usesDuration: newExercise.isTimeBased
-                )
+            applySwitchSnapshots(
+                to: &plan.blocks[bi].exercises[ei],
+                outcome: outcome,
+                equipment: newExercise.equipmentType,
+                setupNotes: newExercise.setupDefaults,
+                usesDuration: newExercise.isTimeBased)
         }
 
         persistSessionPlans()
@@ -3901,40 +3707,6 @@ struct ActiveWorkoutView: View {
                 store.clear(slotKey: legacyKey)
             }
         }
-    }
-
-    private func applyExerciseSwapsToRoutine() {
-        for block in plan.blocks {
-            for planEx in block.exercises {
-                if planEx.originalExerciseID == planEx.currentExerciseID {
-                    continue
-                }
-
-                // RoutineExercise fetch
-                let routineID = planEx.routineExerciseID
-                let reDescriptor = FetchDescriptor<RoutineExercise>(
-                    predicate: #Predicate { $0.id == routineID }
-                )
-                guard let re = try? ctx.fetch(reDescriptor).first else {
-                    continue
-                }
-
-                // Exercise fetch: MUST bind planEx.currentExerciseID FIRST
-                let targetID = planEx.currentExerciseID
-
-                let newExDescriptor = FetchDescriptor<Exercise>(
-                    predicate: #Predicate { $0.id == targetID }
-                )
-
-                guard let newEx = try? ctx.fetch(newExDescriptor).first else {
-                    continue
-                }
-
-                re.exercise = newEx
-            }
-        }
-
-        try? ctx.save()
     }
 
     private func prev() {
@@ -4918,61 +4690,14 @@ struct ActiveWorkoutView: View {
         on item: WorkoutItem,
         from planEx: PlanExercise
     ) {
-        item.routineSlotID = planEx.routineSlotID
-        item.templateNotesSnapshot = planEx.templateNotesSnapshot
-        item.exerciseNameSnapshot = planEx.name
-        if let payload = planEx.prescriptionSnapshot {
-            let snapshot = payload.toModel()
-            // Switch Exercise consistency: the `prescriptionSnapshot` payload
-            // captured at session start still describes the ORIGINAL exercise's
-            // equipment/setup (the keep-plan swap path preserves it verbatim),
-            // while `item.exercise` / `exerciseNameSnapshot` already point at
-            // the swapped-in exercise. History reads Equipment & Setup solely
-            // from this frozen snapshot, so without this it would show the
-            // switched exercise's NAME alongside the original's equipment/setup.
-            // Freeze the swapped-in exercise's LIVE equipment/setup here —
-            // mirroring the `resolvedSwappedValue` contract the live Active
-            // Workout display uses — so finished History is internally
-            // consistent. Frozen at snapshot time: later library edits never
-            // mutate it (snapshot-immutability invariant preserved for the
-            // non-swapped case, which keeps the snapshot values).
-            let isSwapped =
-                planEx.currentExerciseID != planEx.originalExerciseID
-            let liveExercise =
-                isSwapped ? fetchExercise(by: planEx.currentExerciseID) : nil
-            let resolved = resolvedSnapshotEquipmentSetup(
-                isSwapped: isSwapped && liveExercise != nil,
-                liveEquipment: liveExercise?.equipmentType,
-                liveSetup: liveExercise?.setupDefaults,
-                snapshotEquipment: snapshot.equipment,
-                snapshotSetup: snapshot.setupNotes
-            )
-            snapshot.equipment = resolved.equipment
-            snapshot.setupNotes = resolved.setupNotes
-            ctx.insert(snapshot)
-            item.plannedPrescriptionSnapshot = snapshot
-        }
-        // Persist warmup steps so they survive a cold restart when the routine
-        // may be unavailable (fallback resume path via planFromWorkoutItems).
-        if !planEx.warmupStepsSnapshot.isEmpty {
-            item.warmupStepsSnapshotData = try? JSONEncoder().encode(
-                planEx.warmupStepsSnapshot
-            )
-        }
-        // Persist technique plans for the same cold-restart reason.
-        if !planEx.techniquePlansSnapshot.isEmpty {
-            item.techniquePlansSnapshotData = try? JSONEncoder().encode(
-                planEx.techniquePlansSnapshot
-            )
-        }
-        // Phase 6.C1 — copy source-block snapshot for future History
-        // superset grouping. Nil values (e.g. swap-target PlanExercise
-        // built without block context in some edge case) propagate
-        // through unchanged and the future display treats them as flat.
-        item.sourceBlockSlotID = planEx.sourceBlockSlotID
-        item.sourceBlockIsSuperset = planEx.sourceBlockIsSuperset
-        item.sourceBlockOrder = planEx.sourceBlockOrder
-        item.sourceExerciseOrderInBlock = planEx.sourceExerciseOrderInBlock
+        // The writer is shared with tests so the cold-resume path is exercised
+        // against exactly what a live switch freezes.
+        let isSwapped = planEx.currentExerciseID != planEx.originalExerciseID
+        WorkoutItemSnapshotWriter.populate(
+            item, from: planEx,
+            liveSwappedExercise:
+                isSwapped ? fetchExercise(by: planEx.currentExerciseID) : nil,
+            in: ctx)
     }
 
     /// 0-based index of the final round in a superset block.
