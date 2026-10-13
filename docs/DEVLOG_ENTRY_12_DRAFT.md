@@ -1,15 +1,16 @@
 # Entry #12 — Beta Feedback, Cardio System & TestFlight Preparation
 
-> **DRAFT — not final.** A few fixes/features are still planned before the
-> TestFlight upload. Numbers, scope, and build status in this entry are accurate
-> as of the last verified run and will be updated before publishing. See
-> **Final Pre-TestFlight Polish** near the end for what is still open.
+> **DRAFT — not final.** Entry #12 is still open. Build 10 is the build testers
+> have; everything in the *After Build 10* sections is merged to `main` but has
+> not been distributed yet, and two bugs are still open (see **Next Steps**).
+> Numbers, scope, and build status are accurate as of the last verified run and
+> will be updated before publishing.
 >
 > _Numbering note:_ the repo already uses `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md` for
 > the beta feedback log. If the public devlog numbering is separate, this stays
 > #12; otherwise renumber before publishing.
 
-**Date Range:** 2026-06-24 → 2026-08-12 _(end date to be updated if more work lands before upload)_
+**Date Range:** 2026-06-24 → ongoing _(latest work recorded here merged 2026-10-13)_
 
 Entry #11 ended with the app working for **my** workouts — the full loop, start to
 History, validated on a real device. This entry is about a different question:
@@ -24,9 +25,10 @@ use it in Korean. Cardio — the one genuinely large new feature — came at the
 and only after a smaller version of it had been in testers' hands long enough to
 show what it actually needed.
 
-The phase ends with the test suite repaired and passing, a manual regression
-done, and **build 9 uploaded to TestFlight**. Build 10 work has since started;
-its first fix is recorded at the end of this entry.
+The cardio phase ended with the test suite repaired and passing, a manual
+regression done, and **build 9 uploaded to TestFlight**. Build 10 followed and
+reached testers on 2026-09-21; the sections after it record what those testers
+— and my own use of the app — turned up next, and what changed in response.
 
 ---
 
@@ -192,7 +194,9 @@ terminology. That was fair.
 
 ## 7. Testing & Validation
 
-_Counts are from the latest verification run, after the Build 10 C15 slice._
+_Counts are from the verification run after the Build 10 C15 slice — the last
+one before Build 10 was uploaded. Later validation is recorded with the work it
+covers, in the After Build 10 sections._
 
 - **The UI test target was restored.** `LogUITests` had gone missing from the
   project and the scheme pointed at stale references, so the full scheme couldn't
@@ -209,8 +213,8 @@ _Counts are from the latest verification run, after the Build 10 C15 slice._
   switching, cardio Details, the Cardio Plan checklist through Save & Exit and
   Resume, History, the charts, and timer behavior across backgrounding and
   reopening.
-- **Build 9 uploaded to TestFlight.** Build 10 work has started — see *Build 10*
-  below.
+- **Build 9 uploaded to TestFlight.** Build 10 followed and was uploaded on
+  2026-09-21 — see the *Build 10* sections below.
 
 The cardio work landed additively — new fields are optional and start empty — so
 existing workouts, routines, and history weren't rewritten and no data migration
@@ -248,10 +252,41 @@ Done:
 - Added a confirmation before switching exercises when the switch would remove
   already logged sets.
 
-TODO:
+_(This checklist was written during the pre-TestFlight preparation in August,
+before the builds that later went to testers; the fixes above were all merged
+before Build 9 was uploaded. Everything after it is in the Build 9, Build 10
+and After Build 10 sections below.)_
 
-- Add remaining fixes completed before upload
-- Update final test count if it changes
+---
+
+## Build 9 — Planning for the Day the Plan Changes
+
+Alternative Exercises were first packaged in Build 8, which was prepared but
+never recorded as uploaded; Build 9 was the build that put them — and a
+redesigned set of effort targets — in testers' hands. Between them, they gave a
+routine a way to describe more than one kind of day.
+
+**Alternative Exercises** let a routine exercise carry prepared replacements —
+the machine press for when the bench is taken — each with its own complete
+plan: sets, reps or duration, rest, effort, tempo, warm-ups, techniques, cardio
+targets and notes. They are authored in the routine editor, frozen into the
+workout when it starts, and offered mid-session under Switch Exercise →
+Prepared Alternatives, where applying one switches the exercise *and* its plan
+rather than stretching the old exercise's plan over the new one. Duplication and
+routine transfer carry them along. It was built on top of the exercise-switch
+work earlier in this entry, and it is the feature everything in *Update
+Routine, Taken Apart* later grew out of: once a routine holds two exercises with
+two plans, saving a switch back to the routine has to decide what happens to
+both.
+
+The effort targets grew in the same build. Automatic **Progression** stopped
+landing on half steps by default — RIR 2 → 0 over four sets is now 2, 2, 1, 0 —
+and a new **Custom Per Set** mode lets a user type the exact target for every
+set, half steps included, carried through the workout, Save & Exit, alternatives,
+duplication and transfer. The details are in the feedback log; what matters for
+this story is that Build 9 made the routine a richer plan, and the rest of the
+entry is largely about other people meeting that plan — and about the app
+keeping it intact.
 
 ---
 
@@ -850,6 +885,31 @@ do: restore first, edit as text, never round-trip the JSON. 27 lines added,
 
 ---
 
+## After Build 10 — Typing Without the Lag
+
+The first thing that landed after the Build 10 upload was a typing problem:
+text entry lagged, most noticeably in Session Notes.
+
+The cause was the kind a large view invites. Every keystroke wrote to state that
+the whole active workout screen — and the global active-workout guard —
+observed, so each letter re-evaluated far more of the screen than the field it
+was typed into. Session Notes and an exercise's name now edit a local draft, and
+Session Notes hands its value back at real boundaries: losing focus, Save &
+Exit, Finish, and app lifecycle transitions. The same change fixed a long
+Session Notes field leaving a band of blank space under itself.
+
+What did *not* get fixed is worth a line, because it took longer than the fix.
+Placing the caret inside a word, or double-tapping to select one, was
+unreliable too. That was chased down to a debug root with nothing of Log left in
+it, and then out of the app entirely: a fresh SwiftUI app and a plain UIKit app
+on the same iPhone and iPad behave the same way. It reproduced independently
+outside Log, and no Log-specific fix was identified — which is not the same as
+knowing whose bug it is, and I am not claiming that. The investigation is written
+up in `docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md` so that nobody — me
+included — starts it again from the active workout screen.
+
+---
+
 ## After Build 10 — What People Couldn't Find
 
 Build 10 went out and the feedback that came back was not about features. Nobody
@@ -956,7 +1016,8 @@ to remove. It waits until it can be done whole.
 
 ## After Build 10 — What Testing Turned Up Next
 
-Testing the fixes surfaced two bugs that are still open. A lock meant to protect
+Testing the fixes surfaced two bugs that were still open at the time — both
+fixed since, below. A lock meant to protect
 the active workout reaches too far: an exercise that appears both in the routine
 you are training and in some unrelated routine can freeze blocks in the unrelated
 one. And the History calendar lets you deselect a highlighted date, which is a
@@ -984,24 +1045,193 @@ use the app, and it is still answering that.
 
 ---
 
+## After Build 10 — Two Bugs With Long Reaches
+
+Both of the bugs above were small to fix and worth recording for the same
+reason: each was a rule applied at the wrong scope.
+
+**The lock.** While a workout runs, the app freezes the routine blocks the
+session is executing, so the plan cannot change underneath it. It decided which
+blocks those were by exercise identity alone — so if Push A and Push B both used
+Bench Press, training Push A froze Bench Press in Push B too. A block's lock now
+goes through the routine that owns it first: the routine being trained keeps its
+protection, unrelated routines that merely share an exercise stay editable, and
+the exercise library's own rule — you cannot delete an exercise the active
+workout is using — stays global, because that one really is about the exercise.
+Shared exercises and supersets are both covered by regression tests.
+
+**The calendar.** History's calendar highlights the days you trained, and it was
+built on a date *picker*, so tapping a highlighted day deselected it — a control
+gesture on something that is a record. It is display-only now: the highlighted
+days come from workout history and nothing else, tapping cannot add or remove
+one, and month navigation and the system calendar's look are unchanged.
+
+---
+
+## After Build 10 — Block and Slot Leave the Interface
+
+Nobody had complained about **Block** or **Slot** by name. But the terminology
+feedback was the same problem one level down: the app asking people to think in
+its own vocabulary. Block and Slot are the model's words — a routine is stored
+as blocks of slots — and they had leaked into screens a user reads.
+
+The user-facing copy now uses the words the User Guide had been using all
+along: exercise, routine, superset, set. "New Slot Defaults" became **New
+Exercise Defaults**; workout progress says *Exercise* or *Superset* depending on
+which it is; the destructive confirmations were reworded and localized along the
+way; English and Korean were kept in step. The model itself did not change —
+`RoutineBlock` and `SlotPrescription` are still called that in the code, which
+is where those words belong. This was a copy change, not a rename.
+
+---
+
+## After Build 10 — Start Where the Routine Is
+
+The root-page intros told people what the Routines page was for. They did not
+shorten the walk to the thing it is mostly for. Starting a saved routine meant
+opening the routine's editor, finding Start in its toolbar, and confirming on the
+Start Workout screen — a path that makes sense to someone who built the routine
+and is a scavenger hunt to someone who has not.
+
+Each routine that can be started now has a labelled **Start** on its row.
+Tapping the row itself still opens the editor, as before. Start goes through the
+same Start Workout screen and the same validation as the editor's button — this
+is a second door into the existing path, not a second way to start a workout.
+It disappears while a workout is already running, where **Resume** is the
+action that matters, and while the list is in Edit mode.
+
+The same slice put a **User Guide** button in the Routines toolbar. Settings →
+Help → User Guide still works; this one just does not require a first-time user
+to scroll through Settings to find it. It is a shortcut to help, not an
+onboarding flow — there is still no first-launch tutorial.
+
+---
+
+## After Build 10 — Update Routine, Taken Apart
+
+The largest change since Build 10 started as one bad outcome in real use.
+
+A routine exercise A had its own plan, and B was prepared as its alternative
+with a plan of its own. Mid-workout, A was switched to B. At Finish, the routine
+was updated — and the update did exactly one thing: it pointed the routine at B.
+A's plan stayed where it was, now describing a different exercise. B's prepared
+plan stayed in the alternatives list, stranded under an exercise that was now
+the primary. Plans mixed, and with another round of switching, A-specific
+prescription details could be lost altogether.
+
+The fix treats "update the routine with this switch" as what it actually is: a
+swap of which exercise is primary, applied to the whole plan each one carries.
+For a prepared alternative, the switched-to exercise becomes primary with its
+prepared plan, and the original exercise takes its place in the alternatives
+list, in the same position and enabled state, with its complete plan. For a
+switch made through the generic picker, the new exercise keeps the plan its
+*Keep* or *Reset* choice produced, and the original is added as an alternative.
+Either way the exercise that is now primary is never also listed as its own
+alternative. Switch back and save again, and you are where you started.
+
+"Where you started" has a precise meaning here, and getting it was most of the
+work. An exercise's plan is much more than sets and reps: rest, duration and
+distance, tempo, RIR/RPE, effort mode and progression, custom per-set targets,
+the warm-up scheme's name and steps, techniques including older fields the
+current editor doesn't write, cardio segments, plan notes, and the older per-set templates with
+their target weights. An audit of what an alternative could store found three
+of those missing, so a round trip would have quietly dropped them. They were
+added as optional fields to the JSON the app already stores — **no SwiftData
+schema change and no migration**, and payloads written by earlier builds still
+read. The one thing that does not round-trip is relationship metadata: an
+alternative's "why/when" note and its internal id describe its relationship to
+the primary, and that relationship is exactly what changed.
+
+The other half was knowing *how* an exercise had been chosen. Picking B from
+Prepared Alternatives and picking it from the full exercise list look identical by the end of a workout, and they should save differently.
+The workout now records which prepared alternative it applied, at the moment it
+is applied — and a later generic switch clears that, rather than the app
+guessing from which exercises happen to match. That record survives Save & Exit
+and a cold resume.
+
+### The finish dialog had run out of buttons
+
+Fixing the write exposed the question in front of it. The finish dialog offered
+a matrix of fixed modes — *Update routine template*, *Update exercise plan*,
+*Apply all* — and they had been designed when a workout could carry one kind of
+change. A workout can now carry a replacement, edits to the switched-to
+exercise, and edits to several other exercises, all at once. In one combination
+"Update exercise plan" would have written nothing at all; in another it wrote
+some of the edits and not others. The fix for that was briefly a contextual
+label. The real fix was to stop asking the user to pick a mode.
+
+Finishing with pending routine changes now opens **Save Routine Changes**, a
+sheet listing the actual changes:
+
+- Bench Press → Incline DB Press
+- Incline DB Press plan changes
+- Cable Row plan changes
+
+Every row starts checked — they are changes the user made on purpose — and each
+can be unchecked on its own. **Save Selected Changes** saves exactly the checked
+rows and finishes; it is disabled with nothing checked rather than quietly
+meaning something else. **Finish This Workout Only** records the workout and
+leaves the routine alone. **Cancel**, or swiping the sheet away, goes back to the
+workout without finishing anything. And with nothing pending there is no sheet:
+the plain Finish confirmation appears, as before.
+
+The decision that made the sheet honest is that a replacement and the
+switched-to exercise's plan changes are **independent**. You can save the plan
+you worked out for Incline DB Press without making it the routine's primary
+exercise: if it was a prepared alternative, that alternative's plan is updated
+in place; if it came from the generic picker, it is added as a new alternative
+carrying that plan. You can save the replacement without the mid-workout edits,
+in which case it is promoted with the plan it started from. Or both, and it is
+promoted with the edited plan. Four combinations, all meaningful, none of which
+the old buttons could express.
+
+For VoiceOver, each row exposes its label, an explicit **Selected / Not
+selected** value, and button semantics. An earlier version also carried the
+system's selected trait, which would have announced a checked row's state
+twice; that duplicate was removed before merge.
+
+Validation before merge: the full suite passed — **2,728 unit tests and 2 UI
+smoke tests, 0 failures** — Debug and Release built, and the sheet's interaction
+was checked by hand. None of this is in Build 10.
+
+---
+
+## Still Open
+
+Two bugs are known and not fixed.
+
+**A fixed warm-up weight is lost on a cold resume.** Found during the Update
+Routine work. If a routine's warm-up step has a fixed target weight — 3 reps at
+60 kg — and you start a workout, leave that exercise as it is, Save & Exit, kill
+the app and resume, the step comes back without its weight. The cause is known:
+the cold-resume path rebuilds an unswitched exercise's warm-up steps from the
+routine and does not carry the weight across. A warm resume, without killing the
+app, is fine. It is the next fix, on its own.
+
+**The active workout's bottom panel can float.** In real use, the panel holding
+Back and Next sat partway up the screen instead of at the bottom. Moving to
+another tab and back did not fix it, nor did Save & Exit and Resume; fully
+closing and reopening the app did. The cause is not known yet, and I am not
+going to guess at it here. It needs investigating before it can be fixed.
+
+---
+
 ## Next Steps
 
-- Fix the two open bugs: the active-workout lock reaching into unrelated
-  routines, and the deselectable History calendar dates.
-- Review the **Block** / **Slot** wording, and the discoverability of Start
-  Workout and the User Guide.
-- Re-run the full test suite and the release build before the next upload.
-- Upload a TestFlight build containing the discoverability, terminology and
-  Korean work. Build 10 is what testers have, and none of it is in Build 10.
+- Fix the cold-resume warm-up weight loss, as its own isolated change.
+- Investigate the floating bottom panel until it has an actual cause.
+- Upload a new TestFlight build containing everything in the *After Build 10*
+  sections. Build 10 is what testers have, and none of it is in Build 10.
 - Put that build in front of the friends-and-family group during real training,
-  and find out whether the changes landed — this is a re-test of specific
-  changes, not an open feedback round.
+  and find out whether the changes landed — a re-test of specific changes, not an
+  open feedback round. The Save Routine Changes sheet is the one most worth
+  watching someone meet for the first time.
 - Decide whether a first-launch tutorial is still needed **after** that re-test,
   not before it.
 - Localize Calculus Analytics as one whole feature, entry point included, when
   it comes up.
 - Fix confusing UI and translation problems **before** adding major new features —
-  the point of this build is to learn what other people don't understand, and
+  the point of this round is to learn what other people don't understand, and
   piling on more surface area first would defeat it.
 
 The through-line of this entry is that "ready for other people" was mostly not a

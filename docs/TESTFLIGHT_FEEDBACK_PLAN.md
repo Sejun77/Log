@@ -12,7 +12,7 @@ TestFlight on 2026-09-21, and initial peer/family feedback has been collected
 **Currently distributed build:** **Build 10**. Build 8 was prepared and archived
 with the cardio system and Alternative Exercises; Build 9 added the redesigned
 RIR/RPE effort targets, including **Custom Per Set**; Build 10 followed with the
-C1–C14 audit series — Alternative Exercises deletion and persistence fixes, a
+C1–C15 audit series — Alternative Exercises deletion and persistence fixes, a
 Korean terminology pass, active-workout layout and density polish, a User Guide
 language default, effort-target clarity, and planned effort targets in History —
 and is what testers have in their hands today. It contains none of the
@@ -20,13 +20,26 @@ post-Build-10 work listed below.
 
 **Merged to `main` after Build 10, not yet distributed:**
 
+- typing-performance fix (local text drafts; Session Notes layout)
 - root-page discoverability and the History restructure
 - training term help (RIR / RPE / e1RM, consolidated technique descriptions)
 - Korean localization consistency
+- active-workout lock scope (unrelated routines sharing an exercise stay
+  editable)
+- display-only History calendar
+- Block / Slot terminology replaced with ordinary training language
+- a **Start** action on routine rows, and a **User Guide** entry in the Routines
+  toolbar
+- reversible **Update Routine** after an exercise switch, chosen through the new
+  **Save Routine Changes** sheet
 
-These came out of the Build 10 feedback below. They are implemented and merged,
-but **no tester has seen them** — Build 10 does not contain them. The next
-validation cycle needs a build that does.
+Most of these came out of the Build 10 feedback below; the rest came from
+follow-up testing and real use. They are implemented and merged, but **no
+tester has seen them** — Build 10 does not contain them. The next validation
+cycle needs a newer build that does; it has no build number yet.
+
+**Still open:** a fixed warm-up weight lost on cold resume, and the active
+workout's bottom panel occasionally floating mid-screen.
 
 ---
 
@@ -410,7 +423,9 @@ apply, and the Korean bottom bar says **이전** instead of **등**.
 - [ ] Finish a workout where you changed nothing, and confirm the button says
       just **Finish** / **완료**
 - [ ] Finish a workout where you switched an exercise or edited the plan, and
-      confirm the longer "Finish + …" options still appear
+      confirm the longer "Finish + …" options still appear *(Build 10 only —
+      the next build replaces these options with the Save Routine Changes
+      sheet; see Next Validation Cycle)*
 - [ ] Open **History** for a workout that had an effort target, and confirm
       **Planned effort** fits on one line
 - [ ] In Korean, confirm the bottom bar reads **이전** and **다음**
@@ -723,6 +738,14 @@ Fill this in as feedback arrives.
 | 2026-09-21 | Peer/family tester | Friends & Family Beta | P2 | Root pages felt too similar to tell apart at a glance. Testers still like the simple, plain design and were not asking for a colourful redesign — the problem was hierarchy and page identity. Implemented after Build 10 through page intros and a clearer History structure; a section-header typography experiment was reverted. | implemented, pending distribution/re-test |
 | 2026-09-21 | Peer/family tester | Friends & Family Beta | P1 | Advanced terminology was not self-explanatory — RIR specifically, and also RPE, e1RM and the technique names. Implemented after Build 10: point-of-use explanations behind the existing info glyph, and one shared set of technique descriptions. | implemented, pending distribution/re-test |
 | 2026-09-22 | Developer manual review | — (not tester-reported) | P1 | Korean pass found mixed Korean/English technique names and previews, bare `s`/`m`/`h` time units, English cardio "Segments", an English "In Progress" pill, and warm-up preview/layout problems. Implemented after Build 10; centralized time formatting now gives EN `s`/`m`/`h` and KO `초`/`분`/`시간`. | implemented, pending distribution/re-test |
+| 2026-09-21 | Not recorded | Real-use follow-up | P2 | Typing lagged in text fields, most noticeably Session Notes; long notes left blank space. Implemented after Build 10 with local text drafts. Caret placement / word selection inside a word was also unreliable, it reproduced independently outside Log, and no Log-specific fix was identified (`docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md`). | implemented, pending distribution/re-test |
+| 2026-09-22 | Developer validation | — (not tester-reported) | P1 | Starting a workout locked blocks in an unrelated routine that shared an exercise. Implemented after Build 10: block locks follow the owning routine. | implemented, pending distribution/re-test |
+| 2026-09-22 | Developer validation | — (not tester-reported) | P2 | History calendar highlights could be tapped and deselected. Implemented after Build 10: the calendar is display-only. | implemented, pending distribution/re-test |
+| Build 10 round | Peer/family tester | Friends & Family Beta | P2 | Starting a saved routine was too buried, and the User Guide was only under Settings. Implemented after Build 10: a Start action on routine rows and a User Guide entry in the Routines toolbar. | implemented, pending distribution/re-test |
+| Build 10 round | Follow-up to terminology feedback | — | P2 | Internal words Block and Slot appeared in the UI. Implemented after Build 10: replaced with ordinary training language. | implemented, pending distribution/re-test |
+| Post-Build-10 | Not recorded | Real-use follow-up | P1 | After switching A → B (a prepared alternative) and choosing Update Routine, the routine pointed at B but kept A's plan, and B's prepared plan was stranded. Implemented 2026-10-13: a reversible promotion, chosen through the new Save Routine Changes sheet. | implemented, pending distribution/re-test |
+| Post-Build-10 | Not recorded | Real-use follow-up | P1 | The active workout's Back / Next panel floated mid-screen; only a full app restart fixed it. Root cause unknown. | investigating |
+| Post-Build-10 | Developer validation | — (not tester-reported) | P1 | A fixed warm-up weight is lost after Save & Exit → kill → resume on an unswitched exercise. Root cause known; next isolated fix. | new |
 | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] |
 
 Status values: `new`, `investigating`, `fixed`,
@@ -748,6 +771,10 @@ Testers should know this going in:
 - UI polish may continue during and after this beta.
 - Broader distribution is deferred until this small beta is useful and settled.
 - Korean translations are new and may need refinement.
+- Placing the text cursor inside a word, or double-tap word selection, can be
+  unreliable on iOS / iPadOS 26.6.2. It reproduced independently outside Log
+  and no Log-specific fix was identified
+  (`docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md`).
 - Cardio ~~is supported as duration-based logging only~~ **now has dedicated
   fields** (see below); the "details go in notes" limitation above applied to the
   first beta build only.
@@ -812,31 +839,52 @@ you figure out what to do, and did the core flow work?
 
 ## Next Validation Cycle
 
-The three UX slices merged on 2026-09-22 (root-page discoverability, training
-term help, Korean localization consistency) all came from feedback in the list
-above, and **none of them has been in front of a peer yet** — they landed after
-Build 10 and are not in it. This cycle therefore needs a **new TestFlight build
-containing them**; re-running the checklist on Build 10 would test the app the
-feedback was about. The round exists to answer whether the changes worked, not
-to gather new feature requests.
+Everything merged after Build 10 — listed at the top of this plan — came from
+the feedback above, from follow-up testing, or from real use, and **none of it
+has been in front of a peer yet**. This cycle therefore needs a **new
+TestFlight build containing it**; re-running the checklist on Build 10 would
+test the app the feedback was about. The round exists to answer whether the
+changes worked, not to gather new feature requests.
 
 What this round specifically needs to find out:
 
-- [ ] Can a new user tell **what each root page does**, without being told?
-- [ ] Is **starting a workout** discoverable — does a first-time user find their
-      way from a routine to an active session?
-- [ ] Is the **RIR / RPE help** enough? Does the info glyph get noticed, and does
-      the definition answer the question once tapped?
-- [ ] Is the **revised History structure** understandable — Recent Workouts
-      first, then Calendar and Progression, with View All Workouts for the rest?
+- [ ] Can a new user tell **what each root page is for**, without being told?
+- [ ] Can they **start a routine directly from Routines**, using the row's
+      Start action?
+- [ ] Can they **find the User Guide** — from the Routines toolbar or from
+      Settings?
+- [ ] Do the **RIR / RPE and other help explanations** make sense once tapped,
+      and does the info glyph get noticed?
+- [ ] Does the **Exercise / Superset** wording feel understandable, with no
+      Block or Slot left anywhere?
+- [ ] Is **History** understandable — Recent Workouts first, then Calendar and
+      Progression — and does the calendar behave as a display, not a control?
 - [ ] Does the **Korean UI stay consistent** in ordinary use — no English words
       surfacing inside Korean screens, and time reading as 초 / 분 / 시간?
-- [ ] Is the **Block / Slot** terminology understandable, or does it read as
-      developer vocabulary?
-- [ ] After all of the above, **is a first-launch tutorial still needed?** This
-      is the question the round is really for. The tutorial is deliberately not
-      built yet, so that it is designed for whatever confusion survives these
-      changes rather than the confusion they already removed.
+- [ ] Can the user understand the **Save Routine Changes** sheet without
+      explanation? Specifically, do they read correctly:
+  - [ ] an exercise **replacement** row (`Bench Press → Incline DB Press`)
+  - [ ] an exercise **plan-change** row (`Cable Row plan changes`)
+  - [ ] **Finish This Workout Only**
+  - [ ] **Save Selected Changes**
+- [ ] After all of the above, **does the user still feel a first-launch
+      tutorial is necessary?** The tutorial is deliberately not built yet, so
+      that it is designed for whatever confusion survives these changes rather
+      than the confusion they already removed.
+
+Targeted regression checks for the same build:
+
+- [ ] With a workout running from one routine, open a **different routine that
+      shares an exercise** and confirm it is still editable — while the routine
+      being trained stays protected.
+- [ ] **Replacement / alternative round trip:** prepare B as an alternative to
+      A, switch A → B mid-workout, save the replacement, then in a later workout
+      switch back B → A and save again. Confirm both exercises' plans are
+      exactly as they were — sets, reps, rest, effort, warm-ups, techniques and
+      notes.
+- [ ] **Save & Exit / Resume**, including after fully closing the app, in a
+      workout with a switched exercise and edited plans; then finish and confirm
+      the Save Routine Changes sheet still lists the right rows.
 
 ---
 
@@ -849,8 +897,9 @@ of feedback was collected, triaged and recorded in
 
 What comes next:
 
-1. Fix the two open bugs (active-workout lock scope, History calendar
-   deselection) — see Planned Fixes From Feedback in the entry document.
+1. Fix the cold-resume warm-up weight loss as its own isolated change, and
+   investigate the floating bottom panel — see Planned Fixes From Feedback in
+   the entry document.
 2. Prepare and upload the next TestFlight build. It must contain the
    post-Build-10 work listed at the top of this plan; Build 10 does not.
 3. Re-invite the same small group and run the **Next Validation Cycle**

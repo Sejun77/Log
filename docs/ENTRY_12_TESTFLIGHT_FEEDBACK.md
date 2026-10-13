@@ -25,10 +25,14 @@ distributed to the Friends & Family group; initial peer feedback has been
 collected and is recorded in the Feedback Log below. Testing is **not**
 complete.
 
-Three feedback-driven slices — root-page discoverability, training term help and
-Korean localization consistency — have since been implemented and merged to
-`main`. They are **not in Build 10**, so no tester has seen them yet; they await
-the next distributed build and a peer re-test.
+Since Build 10, a series of changes has been implemented and merged to `main`:
+root-page discoverability, training term help, Korean localization consistency,
+the Block/Slot terminology cleanup, Start Workout and User Guide
+discoverability, a typing-performance fix, the active-workout lock-scope and
+History-calendar fixes, and a reversible **Update Routine** with the new **Save
+Routine Changes** sheet. None of it is **in Build 10**, so no tester has seen
+it yet; it awaits the next distributed build and a peer re-test. Two bugs are
+still open (see *Planned Fixes From Feedback*).
 
 Three kinds of item are kept distinct throughout this document:
 
@@ -93,9 +97,14 @@ Set RIR/RPE effort targets, the improved automatic RIR/RPE progression, the
 destructive confirmation before removing logged sets, and the updated
 guide/tester docs.
 
-**Not in any distributed build yet:** the post-Build-10 work — root-page
-discoverability and the History restructure, training term help, and Korean
-localization consistency. It is merged to `main` and awaits the next upload.
+**Not in any distributed build yet:** the post-Build-10 work — the
+typing-performance fix, root-page discoverability and the History restructure,
+training term help, Korean localization consistency, the active-workout
+lock-scope fix, the display-only History calendar, the Block/Slot terminology
+cleanup, the routine-row Start action and the Routines User Guide entry, and the
+reversible Update Routine with its Save Routine Changes sheet. It is merged to
+`main` and awaits the next upload. No build number has been assigned to that
+upload yet.
 
 **Build 10 shipped, and is the build testers are using.** It opened with a
 safety/UX fix to Alternative Exercises deletion handling (C1), followed by a Korean terminology and naming
@@ -105,8 +114,9 @@ effort-target clarity pass (C6), planned effort targets in History (C7), the
 Calculus showcase hidden from Release (C8), a stability / data-integrity fix to
 prepared Alternative Exercises (C9), a manual-test polish bundle (C10), a
 nested-editor persistence fix (C11), the remaining low-risk UI polish bundle
-(C12), a real-device warm-up refresh fix (C13) and a UI density cleanup (C14)
-— see the Build 10 entries under *Fixes Made* below. C1–C8 were UX polish or visibility improvements, not Build 9
+(C12), a real-device warm-up refresh fix (C13), a UI density cleanup (C14) and
+an Alternative Exercise authoring-validation fix (C15) — see the Build 10
+entries under *Fixes Made* below. C1–C8 were UX polish or visibility improvements, not Build 9
 blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
 orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
 the crash needs a prepared alternative's *first* warm-up step to trigger, so it
@@ -334,6 +344,62 @@ Severity:
 - **Feedback:** A manual pass through the app in Korean found mixed Korean/English output in several places: technique **names** as well as their previews, time units rendered as bare `s` / `m` / `h`, the cardio **Segments** vocabulary, the History **In Progress** pill, and warm-up previews. The warm-up editor also showed a large blank band between the navigation title and the first row.
 - **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Recorded here to keep the log complete; these were found during follow-up testing, not raised by a tester.
 
+### 2026-09-21 — Typing performance (post-Build-10)
+
+- **Group:** Real-use follow-up — the original reporter is not recorded
+- **Severity:** P2
+- **Feedback:** Typing lagged in text fields on the active-workout path, most noticeably Session Notes; a long Session Notes entry also left a band of blank space under the field. Separately, placing the caret inside a word and double-tap word selection were unreliable.
+- **Status:** Lag and layout: *implemented, pending distribution/re-test* — merged to `main` after the Build 10 upload, so testers have not seen it. Caret / word selection: reproduced independently outside Log — in stock SwiftUI and UIKit harnesses on iPhone and iPad (iOS/iPadOS 26.6.2) — and no Log-specific fix was identified, so no Log change was made. No Apple / TextKit bug was established. See `docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md`.
+
+### 2026-09-22 — Follow-up testing: active-workout lock scope
+
+- **Group:** Developer validation — **not tester-reported**
+- **Severity:** P1
+- **Feedback:** Starting a workout from one routine locked blocks in an unrelated routine whenever both routines used the same exercise. The lock was decided by exercise identity alone instead of by the routine being trained.
+- **Status:** Implemented, pending distribution/re-test — merged after Build 10.
+
+### 2026-09-22 — Follow-up testing: History calendar
+
+- **Group:** Developer validation — **not tester-reported**
+- **Severity:** P2
+- **Feedback:** A highlighted workout day in the History calendar could be tapped and deselected, although the highlight is a record of workout days rather than a selection.
+- **Status:** Implemented, pending distribution/re-test — merged after Build 10.
+
+### Build 10 round — Start Workout and User Guide discoverability
+
+- **Group:** Friends & Family Beta
+- **Severity:** P2
+- **Feedback:** Starting a saved routine was too buried — routine list → routine editor → Start → Start Workout. The User Guide lived only under Settings → Help, where a first-time user may never look. (Recorded at the time under *Remaining peer-feedback work*; the exact date is not recorded.)
+- **Status:** Implemented, pending distribution/re-test — merged after Build 10.
+
+### Build 10 round — Block / Slot terminology (follow-up)
+
+- **Group:** Follow-up to the peer terminology feedback — Block and Slot were not named by a tester
+- **Severity:** P2
+- **Feedback:** Internal model words — **Block** and **Slot** — appeared in user-facing UI.
+- **Status:** Implemented, pending distribution/re-test — merged after Build 10.
+
+### Post-Build-10 — Update Routine after switching to an alternative
+
+- **Group:** Real-use follow-up — the date and reporter are not recorded
+- **Severity:** P1 (could mix plans and eventually lose exercise-specific prescription data)
+- **Feedback:** A routine exercise A had prepared alternative B. After switching A → B mid-workout and choosing Update Routine at Finish, the routine pointed at B but kept A's plan on it, while B's prepared plan stayed stranded in the alternatives list.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` on 2026-10-13. The finish-time choice was also redesigned as the **Save Routine Changes** sheet (see *Fixes Made*).
+
+### Post-Build-10 — Active-workout bottom panel floating
+
+- **Group:** Real-use follow-up — the reporter is not recorded
+- **Severity:** P1
+- **Feedback:** During an active workout, the bottom panel holding Back / Next sat partway up the screen instead of at the bottom. Switching tabs and returning did not fix it, nor did Save & Exit → Resume; fully closing and reopening the app did.
+- **Status:** **Open.** Root cause unknown; needs investigation.
+
+### Post-Build-10 — Cold resume loses a fixed warm-up weight
+
+- **Group:** Developer validation — **not tester-reported**, found during the Update Routine work
+- **Severity:** P1
+- **Feedback:** A routine warm-up step with a fixed target weight (e.g. 3 reps @ 60 kg) comes back without its weight after Save & Exit, killing the app and resuming, when that exercise was not switched. A warm resume is fine.
+- **Status:** **Open.** Root cause known: the cold-resume rebuild of an unswitched exercise's warm-up steps does not carry the fixed weight. Planned as the next isolated fix.
+
 ### TBD — Peer/family tester
 
 - **Group:** Friends & Family Beta
@@ -350,7 +416,7 @@ Peer/family testing has started, and the entries above reflect issues found thro
 These fixes came from Friends & Family Beta feedback, TestFlight crash reports, developer reproduction, and manual validation.
 
 Everything up to and including the Build 10 entries shipped in a build testers
-have used. The last four bullets are marked *Implemented, pending
+have used. The bullets after them are marked *Implemented, pending
 distribution/re-test* — they were merged to `main` after Build 10 was uploaded,
 so they are not in the build anyone is testing.
 
@@ -787,40 +853,118 @@ Current validation status:
   Korean pass through the affected screens is **still pending**. None of the
   three is in Build 10, so none has been validated by a tester — they need a
   new TestFlight build before the re-test cycle can run.
-- Latest test suite result: **full scheme passes: 2,546 tests, 0 failures** —
-  2,544 unit tests plus 2 UI tests (Build 10 C15 run). Debug build succeeds and
-  Release build succeeds. Manual UI verification of the Build 10 C15 fix is
-  still pending.
+- **Typing performance.** *(Implemented, pending distribution/re-test — merged
+  after Build 10.)* Text editing no longer fans out a state change to the whole
+  active-workout screen and the global active-workout guard on every keystroke:
+  Session Notes and an exercise's name edit a local draft, and Session Notes is
+  committed at focus loss, Save & Exit, Finish and lifecycle transitions. A long
+  Session Notes field no longer leaves trailing blank space. The separate
+  caret / word-selection behavior was reproduced independently outside Log, and
+  no Log-specific fix was identified
+  (`docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md`).
+- **Active-workout lock scope.** *(Implemented, pending distribution/re-test —
+  merged after Build 10.)* A routine block's in-use state now goes through its
+  owning routine first: the routine being trained keeps its protection, and
+  unrelated routines that share an exercise stay editable. Exercise-library
+  deletion protection for exercises in the active workout remains global.
+  Regression-tested, including shared exercises and supersets.
+- **History calendar.** *(Implemented, pending distribution/re-test — merged
+  after Build 10.)* The workout calendar is display-only: highlighted days are
+  derived from workout history, tapping cannot add or remove a highlight, and
+  month navigation and the system calendar appearance are unchanged.
+- **Block / Slot terminology.** *(Implemented, pending distribution/re-test —
+  merged after Build 10.)* User-facing Block and Slot wording was replaced with
+  ordinary training language, matching the User Guide's existing
+  Exercise / Routine / Superset / Set vocabulary: "New Slot Defaults" became
+  **New Exercise Defaults**, workout progress distinguishes Exercise from
+  Superset, and destructive confirmation copy was cleaned up and localized.
+  English and Korean were kept in parity. Internal types (`RoutineBlock`,
+  `SlotPrescription`) are unchanged — this is a copy change, not a model rename.
+- **Start Workout and User Guide discoverability.** *(Implemented, pending
+  distribution/re-test — merged after Build 10.)* Each startable routine row now
+  has a labelled **Start** action; tapping the row itself still opens the editor.
+  Start routes through the existing Start Workout screen and validation — no
+  second workout-start path. It is hidden while a workout is active (Resume
+  remains the action) and while the Routines list is in Edit mode. A **User
+  Guide** entry was added to the Routines toolbar alongside the existing
+  Settings → Help → User Guide path. This is not onboarding; there is still no
+  first-launch tutorial.
+- **Reversible Update Routine.** *(Implemented, pending distribution/re-test —
+  merged 2026-10-13.)* Saving an exercise switch to the routine is now a
+  promotion/demotion rather than a relationship change. Prepared alternative:
+  the switched-to exercise becomes primary with its prepared plan, and the
+  original takes its place in the alternatives list with its complete plan and
+  the same position and enabled state. Generic switch: the switched-to exercise
+  keeps its Keep/Reset plan and the original is added as an enabled alternative.
+  The primary is never also listed as its own alternative. Exercise-specific
+  plan data round-trips A → B → A for everything the app can store — sets, reps,
+  rest, duration and distance, tempo, RIR/RPE, effort mode and progression,
+  custom per-set targets, warm-up scheme name and steps, techniques (including
+  previously omitted rep and duration fields), cardio segments, plan notes, and
+  legacy per-set templates with target weight. Relationship-only metadata (an
+  alternative's why/when note and its id) does not round-trip. Whether a switch
+  used a prepared alternative is recorded explicitly at switch time and survives
+  Save & Exit and cold resume. New data went into optional fields of the
+  existing JSON payloads: **no SwiftData schema migration**, and older payloads
+  still decode.
+- **Save Routine Changes sheet.** *(Implemented, pending distribution/re-test —
+  merged 2026-10-13.)* Replaces the finish dialog's fixed-mode buttons (*Update
+  routine template*, *Update exercise plan*, *Apply all*). With routine changes
+  pending, Finish opens a sheet listing each change as its own row — e.g.
+  `Bench Press → Incline DB Press`, `Incline DB Press plan changes`,
+  `Cable Row plan changes` — all selected to start. **Save Selected Changes**
+  applies exactly the selected rows, then finishes; it is disabled with nothing
+  selected. **Finish This Workout Only** records the workout and leaves the
+  routine unchanged. **Cancel** or swiping the sheet away returns to the workout
+  without finishing. With no pending changes, the plain Finish confirmation
+  appears and there is no sheet. A replacement and the switched-to exercise's
+  plan changes are independent: plan-only updates a prepared alternative in
+  place, or creates the switched-to exercise as a new alternative after a
+  generic switch; replacement-only promotes it with its base prepared / Keep /
+  Reset plan, without the later workout edits; both promotes it with the edited
+  plan. Rows expose their label, an explicit Selected / Not selected
+  accessibility value and button semantics; a duplicate system selected trait
+  was removed.
+- Validation for the post-Build-10 slices: each passed its Debug build, full
+  test suite and Release build before merge. For the final Update Routine / Save
+  Routine Changes work: **2,728 unit tests and 2 UI smoke tests, 0 failures**;
+  Debug and Release builds succeeded; manual interaction testing of the sheet was
+  completed. None of it is in Build 10, so none has been validated by a tester.
+- Test suite result at the Build 10 upload: **full scheme passes: 2,546 tests, 0
+  failures** — 2,544 unit tests plus 2 UI tests (Build 10 C15 run). Debug build
+  succeeds and Release build succeeds. Manual UI verification of the Build 10
+  C15 fix is still pending.
 
 ---
 
 ## Planned Fixes From Feedback
 
-**Open bugs** — found during follow-up testing, not yet fixed:
+**Open bugs** — not yet fixed:
 
-- **Active-workout lock scope.** When an exercise appears both in the active
-  workout's source routine and in a *different, unrelated* routine, blocks in
-  that unrelated routine can incorrectly become frozen/locked. The lock is
-  scoped more widely than the session it belongs to. **Open.**
-- **History calendar interaction.** Highlighted workout dates can be
-  interactively deselected, even though deselecting them means nothing — the
-  highlight describes history, so it should not behave like a selection control.
-  **Open.**
+- **Cold-resume fixed warm-up weight loss.** A warm-up step with a fixed target
+  weight loses that weight after Save & Exit → kill → resume, on an exercise that
+  was not switched. Root cause known (the cold-resume rebuild of unswitched
+  warm-up steps omits the weight); warm resume is unaffected. Planned as the
+  next isolated fix. **Open.**
+- **Active-workout bottom panel floating.** The Back / Next panel can sit
+  partway up the screen; only a full app restart restored it. Root cause
+  **unknown** — needs investigation. **Open.**
 
-**Remaining peer-feedback work** — identified, not yet started:
+**Fixed since the last update** (implemented, pending distribution/re-test):
+the active-workout lock scope and the History calendar deselection, both listed
+here as open bugs previously.
 
-- User-facing **Block** / **Slot** terminology needs review; both are internal
-  words that reached the interface.
-- **Start Workout** discoverability still needs review.
-- **User Guide** discoverability still needs review — it is under
-  Settings → Help, which a new user may never open.
-- A **first-launch orientation / tutorial** is planned for later, deliberately
-  after the UI improvements above rather than before them.
-- A **peer re-test should happen before onboarding is finalized**, on a build
-  that actually contains the three slices — they are not in Build 10, so no
-  tester has used them. Until that build ships and someone tries it, it is not
-  known whether a tutorial is still needed once the page intros, the History
-  restructure and the terminology help are in front of real users.
+**Remaining peer-feedback work:**
+
+- Block / Slot terminology, Start Workout discoverability and User Guide
+  discoverability have been addressed — implemented, pending
+  distribution/re-test.
+- A **first-launch orientation / tutorial** is still deferred, on purpose. The
+  plan is to ship and re-test the accumulated discoverability changes, see what
+  a new user still fails to understand, and only then decide whether a
+  tutorial is needed and what it should contain.
+- A **peer re-test** is still needed, on a build that actually contains the
+  post-Build-10 work — none of it is in Build 10.
 
 The setup-notes editing request was implemented, and the cardio request is
 answered for the beta by duration-based cardio logging (see Fixes above).
@@ -929,7 +1073,8 @@ Exercises end-to-end, Custom Per Set RIR/RPE effort targets, the improved
 automatic RIR/RPE progression, the destructive confirmation before removing
 logged sets, and the updated guide/tester docs.
 
-**Build 10:** started. It opens with **C1**, a safety/UX fix to Alternative
+**Build 10 — as recorded while it was being built** (it was later uploaded on
+2026-09-21; see *Where the builds stand now* below)**:** It opens with **C1**, a safety/UX fix to Alternative
 Exercises deletion handling: exercise usage now includes prepared alternatives,
 so an exercise used only as an alternative no longer reports the misleading
 "Used in 0 routines"; the delete confirmation now warns that prepared
@@ -970,15 +1115,20 @@ Progression and the new **Custom Per Set** mode. Both were implemented and
 test-covered before the build went out.
 
 **Where the builds stand now:** Build 9 shipped, and **Build 10** followed with
-the C1–C14 audit series — Alternative Exercises deletion and persistence fixes,
+the C1–C15 audit series — Alternative Exercises deletion and persistence fixes,
 a Korean terminology pass, active-workout layout and density polish, a User
 Guide language default, effort-target clarity, and planned effort targets in
 History — and was uploaded to TestFlight on **2026-09-21**. Build 10 is the
 build testers are using.
 
-**Merged to `main` after Build 10, not yet distributed:** root-page
-discoverability and the History restructure, training term help, and Korean
-localization consistency. All three are implemented, merged and passing their
+**Merged to `main` after Build 10, not yet distributed:** the typing-performance
+fix, root-page discoverability and the History restructure, training term help,
+Korean localization consistency, the active-workout lock-scope fix, the
+display-only History calendar, the Block/Slot terminology cleanup, Start
+Workout and User Guide discoverability, and the reversible Update Routine with
+the Save Routine Changes sheet. All are implemented, merged and passed their
 Debug build, full test suite and Release build — and none of them is in Build
 10, so no tester has used them. They are *implemented, pending
 distribution/re-test*: the next tester cycle needs a build that contains them.
+**Still open:** the cold-resume warm-up weight loss and the floating bottom
+panel.
