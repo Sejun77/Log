@@ -120,7 +120,7 @@ struct EditSessionPlanSheet: View {
                     // growing, which leaves blank untypeable space under a long
                     // note and puts a second scroll view inside the Form.
                     DraftNotesField(
-                        "Slot notes",
+                        "Plan notes",
                         controller: notes,
                         lineLimit: 3...,
                         onCommit: onCommitNotes
@@ -335,7 +335,7 @@ struct EditSessionPlanSheet: View {
 /// a target exists.
 ///
 /// Editing here changes the **session** plan only. The routine's own target is
-/// untouched unless the user explicitly chooses "Update slot prescription" at
+/// untouched unless the user explicitly chooses "Update exercise plan" at
 /// finish, which is the same gate every other session-plan edit passes through.
 ///
 /// Like the routine row it has **no unit control**: the unit is

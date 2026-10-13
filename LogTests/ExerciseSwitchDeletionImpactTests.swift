@@ -262,7 +262,7 @@ final class ExerciseSwitchDeletionImpactTests: XCTestCase {
         )
         XCTAssertEqual(
             ExerciseSwitchConfirmationCopy.message(for: impact),
-            "Switching exercises will remove 3 logged sets from this block."
+            "Switching exercises will remove 3 logged sets from this superset."
         )
     }
 
@@ -273,7 +273,7 @@ final class ExerciseSwitchDeletionImpactTests: XCTestCase {
         )
         XCTAssertEqual(
             ExerciseSwitchConfirmationCopy.message(for: impact),
-            "Switching exercises will remove 1 logged set from this block."
+            "Switching exercises will remove 1 logged set from this superset."
         )
     }
 

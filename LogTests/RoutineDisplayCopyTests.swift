@@ -32,7 +32,7 @@ final class RoutineDisplayCopyTests: XCTestCase {
     func test_blockWithNoResolvableExercisesKeepsTheKindWord() {
         XCTAssertEqual(
             BlockDetailTitle.title(exerciseNames: [], isSuperset: false),
-            "Block")
+            "Exercise")
         XCTAssertEqual(
             BlockDetailTitle.title(exerciseNames: [], isSuperset: true),
             "Superset")
@@ -46,7 +46,7 @@ final class RoutineDisplayCopyTests: XCTestCase {
         XCTAssertEqual(
             BlockDetailTitle.title(
                 exerciseNames: ["  "], isSuperset: false),
-            "Block")
+            "Exercise")
     }
 
     // ==================================================
@@ -162,12 +162,12 @@ final class RoutineDisplayCopyTests: XCTestCase {
             ExerciseSwitchConfirmationCopy.message(
                 for: impact(slot: 1, partner: 0).withPartner(1),
                 incomingExerciseName: "Machine Press"),
-            "Switching to Machine Press will remove 2 logged sets from this block.")
+            "Switching to Machine Press will remove 2 logged sets from this superset.")
         XCTAssertEqual(
             ExerciseSwitchConfirmationCopy.message(
                 for: impact(slot: 0, partner: 1),
                 incomingExerciseName: "Machine Press"),
-            "Switching to Machine Press will remove 1 logged set from this block.")
+            "Switching to Machine Press will remove 1 logged set from this superset.")
     }
 
     /// An unresolvable or deleted exercise falls back to the original wording
@@ -240,7 +240,7 @@ final class RoutineDisplayCopyTests: XCTestCase {
                 exerciseNames: ["Bench Press", "Row"], isSuperset: false))
     }
 
-    /// An all-deleted block fell back to the kind word ("Block") for its
+    /// An all-deleted block fell back to the kind word ("Exercise") for its
     /// title, so a header would not be duplicating anything.
     func test_blockWithNoNamedExercisesKeepsHeaders() {
         XCTAssertTrue(
@@ -284,13 +284,13 @@ final class RoutineDisplayCopyTests: XCTestCase {
     func test_supersetMessagesAreTheExactRetiredFooterStrings() {
         XCTAssertEqual(
             SupersetHelp.timingMessage,
-            "A round runs one set of each exercise that still has sets remaining; shorter exercises drop out of the later rounds. Rest after round fires between completed rounds. Rest before next block fires after the final round, replacing round rest.")
+            "A round runs one set of each exercise that still has sets remaining; shorter exercises drop out of the later rounds. Rest after round fires between completed rounds. Rest before next exercise fires after the final round, replacing round rest.")
         XCTAssertEqual(
             SupersetHelp.bulkSetsMessage,
             "Optional shortcut. Choose a count, then tap Apply to set every exercise in this superset to that many sets at once. Adjusting the stepper alone changes nothing — each exercise still keeps its own set count (edit it in that exercise's section below), so they can differ.")
         XCTAssertEqual(
             SupersetHelp.membershipMessage,
-            "A superset must keep at least 2 exercises. The same exercise can appear more than once — each slot logs independently.")
+            "A superset must keep at least 2 exercises. The same exercise can appear more than once — each one logs independently.")
     }
 
     /// The titles are the section headers the glyphs sit in, so the alert is
@@ -305,7 +305,7 @@ final class RoutineDisplayCopyTests: XCTestCase {
     /// fired at the moment the floor is hit, not a description of the screen.
     /// It must therefore not be one of the three.
     func test_theMinimumExerciseAlertIsNotAnInfoButton() {
-        let alert = "A superset must keep at least 2 exercises. To remove this superset entirely, delete the block from the routine's Blocks list."
+        let alert = "A superset must keep at least 2 exercises. To remove this superset entirely, delete it from the routine's exercise list."
         XCTAssertFalse(SupersetHelp.all.contains { $0.message == alert })
     }
 
@@ -376,6 +376,144 @@ final class RoutineDisplayCopyTests: XCTestCase {
         XCTAssertNotEqual(
             CardioChecklistHelp.message,
             "Ticking segments only marks your place in this workout. The ticks are not saved as results and are cleared when the workout ends — your cardio is still logged once, from the duration and details below.")
+    }
+
+    // ==================================================
+    // MARK: - Active-workout progress label
+    // ==================================================
+
+    /// The noun follows the block's own kind. "Exercise 3 of 5" on a superset
+    /// was the inaccuracy this replaced: the line directly beneath it shows
+    /// two names joined by "+".
+    func test_progressLabelNamesTheBlockKind() {
+        XCTAssertEqual(
+            BlockProgressLabel.text(position: 3, total: 5, isSuperset: false),
+            "Exercise 3 of 5")
+        XCTAssertEqual(
+            BlockProgressLabel.text(position: 3, total: 5, isSuperset: true),
+            "Superset 3 of 5")
+    }
+
+    /// The denominator is the routine's total block count in both cases — it
+    /// is a position among all items, never a count of supersets. Changing the
+    /// noun must not change what the 5 means.
+    func test_progressLabelDenominatorIsTheSameForBothKinds() {
+        for position in 1...4 {
+            let single = BlockProgressLabel.text(
+                position: position, total: 4, isSuperset: false)
+            let superset = BlockProgressLabel.text(
+                position: position, total: 4, isSuperset: true)
+            XCTAssertTrue(
+                single.hasSuffix("\(position) of 4"),
+                "single-exercise label lost the position/total pair: \(single)")
+            XCTAssertTrue(
+                superset.hasSuffix("\(position) of 4"),
+                "superset label lost the position/total pair: \(superset)")
+        }
+    }
+
+    /// The kind comes from the block's flag, never from how many exercises it
+    /// currently holds — a superset reduced to one member is still a superset.
+    func test_progressLabelReadsTheFlagNotTheMemberCount() {
+        XCTAssertEqual(
+            BlockProgressLabel.text(position: 1, total: 1, isSuperset: true),
+            "Superset 1 of 1")
+    }
+
+    // ==================================================
+    // MARK: - Superset member removal confirmation
+    // ==================================================
+
+    func test_supersetRemovalNamesTheSingleMember() {
+        XCTAssertEqual(
+            SupersetMemberRemovalCopy.message(
+                removalCount: 1, firstName: "Incline DB Press"),
+            "\u{201C}Incline DB Press\u{201D} will be removed from this superset. "
+                + "Its prescription, warmup, and technique plans will be deleted.")
+    }
+
+    /// A single member whose exercise has been deleted has no name to show.
+    /// It used to fall through to the batch sentence and render
+    /// "1 exercises will be removed"; it now takes a singular of its own.
+    func test_supersetRemovalOfOneUnnamedMemberReadsSingular() {
+        let message = SupersetMemberRemovalCopy.message(
+            removalCount: 1, firstName: nil)
+        XCTAssertEqual(
+            message,
+            "1 exercise will be removed from this superset. "
+                + "Its prescription, warmup, and technique plans will be deleted.")
+        XCTAssertFalse(message.contains("1 exercises"))
+    }
+
+    /// A blank or whitespace-only name is not a name — same singular.
+    func test_supersetRemovalTreatsABlankNameAsUnnamed() {
+        XCTAssertEqual(
+            SupersetMemberRemovalCopy.message(
+                removalCount: 1, firstName: "   "),
+            SupersetMemberRemovalCopy.message(
+                removalCount: 1, firstName: nil))
+    }
+
+    func test_supersetRemovalOfSeveralMembersReadsPlural() {
+        XCTAssertEqual(
+            SupersetMemberRemovalCopy.message(
+                removalCount: 3, firstName: nil),
+            "3 exercises will be removed from this superset. "
+                + "Their prescriptions, warmups, and technique plans will be "
+                + "deleted.")
+    }
+
+    // ==================================================
+    // MARK: - Exercise delete confirmation — English plurals
+    // ==================================================
+
+    /// Each of the three counts pluralizes on its own. The sentence is
+    /// assembled from localized noun phrases now, so this pins that the
+    /// English still reads exactly as it did when a runtime "s" built it.
+    func test_deleteConfirmationSingularsAndPlurals() {
+        let singular = ExerciseDeletionImpact(
+            routineCount: 1, supersetBlockCount: 1,
+            normalReferenceCount: 1, alternativeCount: 0)
+        XCTAssertEqual(
+            singular.message(exerciseName: "Bench Press"),
+            "Delete \u{201C}Bench Press\u{201D}? This will remove it from 1 routine, "
+                + "delete 1 superset, and unlink 1 exercise reference. "
+                + "This cannot be undone.")
+
+        let plural = ExerciseDeletionImpact(
+            routineCount: 3, supersetBlockCount: 2,
+            normalReferenceCount: 4, alternativeCount: 0)
+        XCTAssertEqual(
+            plural.message(exerciseName: "Bench Press"),
+            "Delete \u{201C}Bench Press\u{201D}? This will remove it from 3 routines, "
+                + "delete 2 supersets, and unlink 4 exercise references. "
+                + "This cannot be undone.")
+    }
+
+    /// Zero is plural in English, which is the case the old runtime suffix
+    /// happened to get right and a naive `count > 1` check would break.
+    func test_deleteConfirmationTreatsZeroAsPlural() {
+        let impact = ExerciseDeletionImpact(
+            routineCount: 1, supersetBlockCount: 0,
+            normalReferenceCount: 1, alternativeCount: 0)
+        XCTAssertTrue(
+            impact.message(exerciseName: "Bench Press")
+                .contains("delete 0 supersets,"),
+            impact.message(exerciseName: "Bench Press"))
+    }
+
+    /// The alternatives sentence still appends to the direct-usage head — the
+    /// localization change must not drop the second paragraph.
+    func test_deleteConfirmationStillAppendsTheAlternativesSentence() {
+        let impact = ExerciseDeletionImpact(
+            routineCount: 2, supersetBlockCount: 1,
+            normalReferenceCount: 1, alternativeCount: 2)
+        let message = impact.message(exerciseName: "Fly")
+        XCTAssertTrue(message.contains("2 routines"))
+        XCTAssertTrue(
+            message.hasSuffix(
+                "It is also used as 2 prepared alternatives, which will be "
+                    + "removed."))
     }
 }
 

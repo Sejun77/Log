@@ -17,7 +17,8 @@ import XCTest
 ///      memory must not flow back into the routine's
 ///      `SlotPrescription` / `templateNotes`. The only path that
 ///      mutates them is the explicit "Update slot prescription" apply
-///      action (`ActiveWorkoutView.applySessionPlansToSlotPrescriptions`).
+///      action (`RoutineTemplateUpdate.apply`, called from the finish
+///      dialog — covered directly by `RoutineTemplateUpdateTests`).
 ///
 /// **Testable surface chosen**: `WorkoutResumeService.rebuildPlan(for:in:)`
 /// is the pure `@MainActor static` entry point whose primary path
@@ -565,35 +566,11 @@ final class SessionSnapshotInvariantTests: SwiftDataTestHarness {
 
     // MARK: - 6) Positive-control apply-back test — INTENTIONALLY SKIPPED
 
-    /// `ActiveWorkoutView.applySessionPlansToSlotPrescriptions()` is
-    /// `private` and lives inside the SwiftUI View struct. It reads
-    /// `self.plan` + `self.sessionPlans` + `self.ctx` and writes
-    /// onto the matching `RoutineExercise.prescription`. Testing it
-    /// directly would require either:
-    ///
-    ///   (a) bumping the method (and `isSessionPlanDirty(for:in:)`,
-    ///       `sessionPlans`, `plan`) from `private` to
-    ///       module-internal — a meaningful widening of the View's
-    ///       access surface for a one-test gain; or
-    ///
-    ///   (b) extracting the apply-back into a `@MainActor` service
-    ///       (mirroring `WorkoutLifecycleService`'s 7.7 / 8-B
-    ///       extraction). That's appropriate Phase 11 / Phase 12
-    ///       follow-up work but is out of scope for this stabilization
-    ///       slice (test-only change requested).
-    ///
-    /// The audit explicitly authorized skipping this positive control
-    /// when the path is view-coupled, "rather than adding risky
-    /// production access." The negative-control suite above
-    /// (`testEditingSessionPlan_*` / `testEditingOneSessionPlan_*` /
-    /// `testRebuildAfterSessionPlanEdit_*`) is sufficient to prove
-    /// the no-silent-mutation invariant; the apply-back path
-    /// remains exercised by the existing manual finish-dialog
-    /// regression and by the `ApplySessionPlansToSlotPrescriptions`
-    /// behavior already audited inline at
-    /// `ActiveWorkoutView.swift:1801`. Documented here so a future
-    /// reader sees the explicit decision rather than an unexplained
-    /// gap.
+    /// The apply-back used to be a `private` method inside
+    /// `ActiveWorkoutView`, which is why this positive control was skipped.
+    /// It has since been extracted into `RoutineTemplateUpdate`, and
+    /// `RoutineTemplateUpdateTests` now covers it directly (plain finish,
+    /// plan edits, promotion). Kept as a pointer for readers of this suite.
     func testApplyBack_PositiveControl_SKIPPED_documentedRationale() {
         // No-op; the rationale above is the test artifact.
     }

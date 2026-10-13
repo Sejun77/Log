@@ -66,7 +66,7 @@ struct ExerciseRoutineUsage {
         var slotSuffix: String? {
             var parts: [String] = []
             if slotCount > 1 {
-                parts.append(String(localized: "\(slotCount) slots"))
+                parts.append(String(localized: "\(slotCount) times"))
             }
             if alternativeCount == 1 {
                 parts.append(String(localized: "\(alternativeCount) alternative"))

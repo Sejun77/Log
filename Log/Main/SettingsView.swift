@@ -206,7 +206,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var defaultsSection: some View {
-        Section("New Slot Defaults") {
+        Section("New Exercise Defaults") {
             Stepper("Sets: \(defaultSets)", value: $defaultSets, in: 1...10)
 
             Stepper("Rep min: \(defaultRepMin)", value: $defaultRepMin, in: 1...30)

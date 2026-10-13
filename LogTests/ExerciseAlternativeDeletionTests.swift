@@ -116,7 +116,7 @@ final class ExerciseAlternativeDeletionTests: SwiftDataTestHarness {
         XCTAssertEqual(
             message,
             "Delete “Bench Press”? This will remove it from 1 routine, "
-                + "delete 0 superset blocks, and unlink 1 exercise reference. "
+                + "delete 0 supersets, and unlink 1 exercise reference. "
                 + "This cannot be undone.")
         XCTAssertFalse(message.contains("alternative"))
     }

@@ -166,7 +166,7 @@ struct SlotPrescriptionSection: View {
                 }
             }
 
-            TextField("Slot notes", text: slotNotesBinding, axis: .vertical)
+            TextField("Plan notes", text: slotNotesBinding, axis: .vertical)
                 .lineLimit(1...4)
                 .focused($slotNotesFocused)
                 .toolbar {

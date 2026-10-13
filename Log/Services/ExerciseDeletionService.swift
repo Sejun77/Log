@@ -126,22 +126,45 @@ struct ExerciseDeletionImpact: Equatable {
     /// Three shapes, so the message never claims more than it knows:
     ///
     ///  - **Unused** → the bare "cannot be undone" line.
-    ///  - **Direct usage** → the pre-C1 sentence, word for word. It is the one
-    ///    branch this slice deliberately leaves alone: its counts and phrasing
-    ///    are unchanged, so nothing about deleting a normally-used exercise
-    ///    reads differently than it did in Build 9.
+    ///  - **Direct usage** → the pre-C1 sentence. Its counts and its meaning
+    ///    are unchanged; what changed is that it is now assembled from
+    ///    `String(localized:)` pieces instead of appending a runtime `"s"` to
+    ///    three English stems. That trick cannot be translated at all — a
+    ///    Korean build rendered this entire warning in English — and it is
+    ///    why the sentence had no catalog key to translate in the first place.
     ///  - **Alternatives present** → a second sentence appended to whichever of
     ///    the two heads applies. It is its own sentence rather than another
     ///    clause because alternatives are a different kind of loss from a
     ///    removed slot, and burying them mid-list is how they went unnoticed in
     ///    the first place.
+    ///
+    /// The three counts are localized as **whole noun phrases** ("2 routines",
+    /// "1 superset") and interpolated into the sentence, rather than the
+    /// sentence being written out once per singular/plural combination: three
+    /// independent counts would need eight near-identical keys, and a
+    /// translator would have to keep all eight in step. Two of the six phrases
+    /// (`%lld superset` / `%lld supersets`) are the keys the Saved Routines
+    /// subtitle already uses, so the same count reads the same way in both
+    /// places.
     func message(exerciseName: String) -> String {
         let head: String
         if hasDirectUsage {
-            // Preserved verbatim from the pre-C1 inline implementation.
-            head = """
-                Delete “\(exerciseName)”? This will remove it from \(routineCount) routine\(routineCount == 1 ? "" : "s"), delete \(supersetBlockCount) superset block\(supersetBlockCount == 1 ? "" : "s"), and unlink \(normalReferenceCount) exercise reference\(normalReferenceCount == 1 ? "" : "s"). This cannot be undone.
-                """
+            let routines =
+                routineCount == 1
+                ? String(localized: "\(routineCount) routine")
+                : String(localized: "\(routineCount) routines")
+            let supersets =
+                supersetBlockCount == 1
+                ? String(localized: "\(supersetBlockCount) superset")
+                : String(localized: "\(supersetBlockCount) supersets")
+            let references =
+                normalReferenceCount == 1
+                ? String(localized: "\(normalReferenceCount) exercise reference")
+                : String(localized: "\(normalReferenceCount) exercise references")
+            head = String(
+                localized:
+                    "Delete “\(exerciseName)”? This will remove it from \(routines), delete \(supersets), and unlink \(references). This cannot be undone."
+            )
         } else {
             head = String(
                 localized: "Delete “\(exerciseName)”? This cannot be undone.")

@@ -572,17 +572,26 @@ final class ActiveEditPlanCardioTests: SwiftDataTestHarness {
     }
 
     /// And the apply-back path must actually carry it onto the routine slot —
-    /// mirrors `applySessionPlansToSlotPrescriptions`.
+    /// through the real write path, `SlotPlanBundle.overlaying` + `apply`
+    /// (what `RoutineTemplateUpdate` runs for "Update exercise plan").
     func testApplyBackCarriesTheTargetOntoTheRoutineSlot() throws {
         let rx = SlotPrescription(usesDuration: true)
         rx.sets = 1
         context.insert(rx)
+        let slot = RoutineExercise(
+            exercise: Exercise(name: "Treadmill"), order: 0, setTemplates: [])
+        context.insert(slot)
+        slot.prescription = rx
 
-        var plan = cardioPlan(distanceMeters: nil, unitRaw: nil)
+        let baseline = cardioPlan(distanceMeters: nil, unitRaw: nil)
+        var plan = baseline
         commitTargetDistance(&plan, text: "5", unit: km)
 
-        rx.targetDistanceMeters = plan.targetDistanceMeters
-        rx.targetDistanceUnitRaw = plan.targetDistanceUnitRaw
+        SlotPlanBundle.apply(
+            SlotPlanBundle.overlaying(
+                plan, over: baseline,
+                onto: SlotPlanBundle.capture(from: slot)),
+            to: slot, in: context)
         try context.save()
 
         XCTAssertEqual(

@@ -162,7 +162,10 @@ struct HistoryView: View {
     @Query private var routines: [Routine]
 
     @State private var selectedExerciseID: UUID?
-    @State private var selectedDays: Set<DateComponents> = []
+    /// Days the calendar highlights, derived from `workouts` and never from
+    /// user input. Precomputed into state rather than recomputed in `body`,
+    /// which is why it is stored at all.
+    @State private var workoutDays: Set<DateComponents> = []
     @State private var metric: ProgressMetric = .e1rm  // default progression = e1RM
     @State private var chartStartDate: Date =
         Calendar.current.date(
@@ -220,17 +223,6 @@ struct HistoryView: View {
             includesBodyweight: ex.includesBodyweightInLoad,
             hasUserBodyweight: AppSettings.userBodyweight != nil,
             isCardio: ex.isCardio
-        )
-    }
-
-    private func workoutDayComponents() -> Set<DateComponents> {
-        Set(
-            workouts.map {
-                Calendar.current.dateComponents(
-                    [.year, .month, .day],
-                    from: $0.date
-                )
-            }
         )
     }
 
@@ -343,13 +335,17 @@ struct HistoryView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
             } else {
-                MultiDatePicker(
-                    "Workout Days",
-                    selection: $selectedDays
-                )
-                .onChange(of: workouts, initial: true) { _, _ in
-                    selectedDays = workoutDayComponents()
-                }
+                // Display-only: `WorkoutDaysCalendar` takes the derived
+                // days by value, so a tap can't edit the record the way the
+                // old `MultiDatePicker(selection:)` binding could. See that
+                // type for why a read-only `MultiDatePicker` isn't available.
+                WorkoutDaysCalendar(days: workoutDays)
+                    .onChange(of: workouts, initial: true) { _, _ in
+                        workoutDays = workoutDayComponents(
+                            for: workouts.map(\.date)
+                        )
+                    }
+                    .accessibilityLabel("Workout Days")
             }
         } header: {
             DSSectionHeader(title: "Calendar", systemImage: "calendar")

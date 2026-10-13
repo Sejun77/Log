@@ -63,6 +63,47 @@ struct RoutineSummary: Equatable {
         return "\(exercises) · \(supersets)"
     }
 
+    /// Body copy for the "delete this routine" confirmation.
+    ///
+    /// Counts the same two things the subtitle above it counts, with the same
+    /// localized noun phrases, so the sentence cannot contradict the row the
+    /// user just tapped. It used to report the routine's **block** count
+    /// ("remove 4 blocks (1 superset)"), which named the model's grouping
+    /// type and disagreed with the subtitle's exercise count on the same
+    /// screen.
+    ///
+    /// Two shapes rather than one: a routine with no supersets said
+    /// "(0 superset)", a parenthetical that was both ungrammatical and about
+    /// nothing. The parenthetical now appears only when there is a superset to
+    /// name.
+    ///
+    /// Built from `String(localized:)` throughout. The previous sentence was a
+    /// raw multi-line literal that appended `"s"` at runtime, so it had no
+    /// catalog key and a Korean user met this destructive confirmation in
+    /// English.
+    func deleteConfirmationMessage(routineName: String) -> String {
+        let exercises =
+            exerciseCount == 1
+            ? String(localized: "\(exerciseCount) exercise")
+            : String(localized: "\(exerciseCount) exercises")
+
+        guard supersetCount > 0 else {
+            return String(
+                localized:
+                    "Delete “\(routineName)”? This will remove \(exercises) and all of their exercise references. This cannot be undone."
+            )
+        }
+
+        let supersets =
+            supersetCount == 1
+            ? String(localized: "\(supersetCount) superset")
+            : String(localized: "\(supersetCount) supersets")
+        return String(
+            localized:
+                "Delete “\(routineName)”? This will remove \(exercises) (\(supersets)) and all of their exercise references. This cannot be undone."
+        )
+    }
+
     /// Precompute one summary per routine, keyed by `routine.id`, so the
     /// Routines list can build the map once per render and avoid re-scanning
     /// `routine.blocks` inside each row's `body`.

@@ -512,63 +512,39 @@ func workoutNextAction(
     }
 }
 
-// MARK: - Finish-confirmation dialog options + single-fire consumption
+// MARK: - Finish request + single-fire consumption
 
-/// One finish variant offered by the active workout's finish-confirmation
-/// dialog. Each case carries the apply-back flags `finishWorkout` needs; the
-/// user-facing label stays in `ActiveWorkoutView` so this file remains
-/// SwiftUI-free.
-enum FinishDialogOption: CaseIterable, Hashable {
-    /// Plain finish — never applies anything back to the routine.
+/// How the user chose to finish. Recorded by a button (the plain finish
+/// confirmation or the Save Routine Changes sheet) and consumed exactly once.
+enum FinishRequest: Equatable {
+    /// Finish and record the workout; the routine is not touched.
     case finishOnly
-    /// Finish and write mid-workout exercise swaps back to the template.
-    case applySwaps
-    /// Finish and write dirty session-plan edits back to slot prescriptions.
-    case applySlotPrescription
-    /// Combined option, offered only when both categories are pending.
-    case applyAll
+    /// Save exactly these routine changes, then finish. Never empty — the
+    /// sheet disables Save Selected Changes with nothing selected.
+    case saveSelected(Set<RoutineTemplateUpdate.PendingChange>)
 
-    var applySwaps: Bool {
-        self == .applySwaps || self == .applyAll
+    /// The routine changes this request writes — empty for `.finishOnly`.
+    var selectedChanges: Set<RoutineTemplateUpdate.PendingChange> {
+        switch self {
+        case .finishOnly: return []
+        case .saveSelected(let changes): return changes
+        }
     }
-    var applySlotPrescription: Bool {
-        self == .applySlotPrescription || self == .applyAll
-    }
-}
-
-/// The ordered finish options the confirmation dialog offers for the current
-/// pending state. `finishOnly` is always first (and Cancel is appended by the
-/// dialog itself), preserving the finish-safety contract: reaching the last
-/// step only ever *presents* this dialog, and a plain no-apply finish is
-/// always available. Exercise.notes / setup notes are intentionally NOT a
-/// pending category — both are edited write-through via their sheets, so
-/// there is nothing to apply at finish. Pure.
-func finishDialogOptions(
-    hasSwapsPending: Bool,
-    hasSessionPlanPending: Bool
-) -> [FinishDialogOption] {
-    var options: [FinishDialogOption] = [.finishOnly]
-    if hasSwapsPending { options.append(.applySwaps) }
-    if hasSessionPlanPending { options.append(.applySlotPrescription) }
-    if hasSwapsPending && hasSessionPlanPending { options.append(.applyAll) }
-    return options
 }
 
 /// Consumes the pending finish request exactly once: returns the stored
-/// option and clears the slot; a second consume returns nil.
+/// request and clears the slot; a second consume returns nil.
 ///
 /// This is the single-fire mechanism behind the finish-confirmation
-/// reliability fix: the dialog buttons only *record* their option, and the
-/// actual `finishWorkout` runs on the next main-actor turn — after the
-/// dialog's dismissal transaction has committed, so the navigation pop in
-/// `unlockAndDismiss()` no longer races the dialog teardown. Consuming
-/// through this helper guarantees a duplicate tap or a duplicate change
-/// notification can never run the finish pipeline twice, while leaving the
-/// slot re-armable if the view ever survives (the user can simply confirm
-/// again). Pure.
-func consumePendingFinish(
-    _ slot: inout FinishDialogOption?
-) -> FinishDialogOption? {
+/// reliability fix: buttons only *record* the request, and the actual
+/// `finishWorkout` runs after the presenting dialog or sheet has been torn
+/// down, so the navigation pop in `unlockAndDismiss()` no longer races it.
+/// Consuming through this helper guarantees a duplicate tap or a duplicate
+/// change notification can never run the finish pipeline twice, while leaving
+/// the slot re-armable if the view ever survives (the user can simply confirm
+/// again). Cancel — or swiping the sheet away — records nothing, so nothing
+/// consumes. Pure.
+func consumePendingFinish(_ slot: inout FinishRequest?) -> FinishRequest? {
     defer { slot = nil }
     return slot
 }
@@ -720,42 +696,6 @@ func restClearDecision(
     return remainingLoggedSetsInSlot.isEmpty ? .clear : .keep
 }
 
-// MARK: - Finish-dialog label selection (manual-test polish)
-
-/// Localization key for one finish-dialog option's label.
-///
-/// `.finishOnly` is the only option whose wording depends on its company. When
-/// it is alone — no pending swaps, no dirty session plan — the dialog offers
-/// exactly one action plus Cancel, and disambiguating it as "Finish (this
-/// workout only)" / "완료 (이번 운동만)" answers a question nobody asked: there
-/// is no *other* workout, and nothing else the button could apply. It reads as
-/// a warning about a choice the user was never given. Alone it is simply
-/// "Finish" / "완료".
-///
-/// As soon as an apply option is on screen the qualifier earns its place again
-/// — "Finish" next to "Finish + Update routine template" would leave the plain
-/// option's meaning implicit — so every multi-option dialog keeps the wording
-/// it shipped with.
-///
-/// Only the label changes. `FinishDialogOption` still carries the same
-/// apply-back flags, `finishDialogOptions` still returns the same options in
-/// the same order, and finishing does exactly what it did. Pure.
-func finishOptionLabelKey(
-    _ option: FinishDialogOption,
-    isSoleOption: Bool
-) -> String {
-    switch option {
-    case .finishOnly:
-        return isSoleOption ? "Finish" : "Finish (this workout only)"
-    case .applySwaps:
-        return "Finish + Update routine template"
-    case .applySlotPrescription:
-        return "Finish + Update slot prescription"
-    case .applyAll:
-        return "Finish + Apply all"
-    }
-}
-
 // MARK: - Active-workout navigation copy (manual-test polish)
 
 /// Copy for the active workout's bottom Back / Next bar.
@@ -782,5 +722,183 @@ enum ActiveWorkoutNavCopy {
             backKey,
             comment: "Active workout bottom bar: go to the previous exercise. "
                 + "NOT the body part 'Back' (등) — Korean is 이전.")
+    }
+}
+
+// MARK: - Pending exercise switch (plan choice + provenance)
+
+/// The plan a pending switch will apply. Mirrors
+/// `ExerciseSwitchPlanAdapter.Choice`, but holds the whole `SlotAlternative`
+/// rather than only its prescription, because the view also needs the
+/// alternative's exercise reference to resolve the switch target — and its
+/// `id`, which is the switch's provenance.
+///
+/// Moved out of `ActiveWorkoutView` (where it was a private nested type) so the
+/// provenance rule is testable without a view.
+enum PendingSwapPlan: Equatable {
+    case keepCurrentPlan
+    case resetPlan
+    case useAlternative(SlotAlternative)
+
+    /// True only for the explicit "start over" choice, which is the one
+    /// that may auto-open the Edit Plan sheet. A prepared alternative
+    /// arrives with a full plan, so it never should.
+    var isReset: Bool { self == .resetPlan }
+
+    var adapterChoice: ExerciseSwitchPlanAdapter.Choice {
+        switch self {
+        case .keepCurrentPlan: return .keepCurrentPlan
+        case .resetPlan: return .resetPlan
+        case .useAlternative(let alternative):
+            return .useAlternative(alternative.prescription)
+        }
+    }
+
+    /// The `SessionPlan.appliedAlternativeID` this switch records.
+    ///
+    /// Non-nil **only** for the prepared-alternative action. "Choose another
+    /// exercise…" always arrives as Keep or Reset — even when the exercise
+    /// picked there also happens to be a prepared alternative — so a generic
+    /// switch records nil, and is never mistaken for a prepared one.
+    var appliedAlternativeID: UUID? {
+        if case .useAlternative(let alternative) = self { return alternative.id }
+        return nil
+    }
+}
+
+/// The slot's session plan after a switch. Pure.
+///
+/// - `adapted` is `ExerciseSwitchPlanAdapter`'s fresh plan for the
+///   switched-in exercise.
+/// - The slot's frozen alternatives are carried over from `previous`: they
+///   belong to the **slot**, not to the exercise currently in it (Phase E).
+/// - Provenance is **overwritten**, never inherited. `adapted` can carry the
+///   previous plan's fields (Keep current plan copies it), so without this a
+///   prepared B followed by a generic switch to C would leave B's id behind and
+///   Update Routine would promote C with B's prepared plan.
+func sessionPlanAfterSwitch(
+    adapted: SessionPlan,
+    previous: SessionPlan?,
+    appliedAlternativeID: UUID?
+) -> SessionPlan {
+    var plan = adapted
+    plan.alternatives = previous?.alternatives ?? []
+    plan.appliedAlternativeID = appliedAlternativeID
+    return plan
+}
+
+/// Rewrite a switched slot's plan snapshots from the adapter's outcome. Pure.
+///
+/// Lifted verbatim out of `ActiveWorkoutView.applySwitchOutcome` so the
+/// switch-time plan — which Update Routine later promotes for a generic switch
+/// (`SlotPlanBundle.switchTimePlan`) — is produced by the same code in tests as
+/// in the app.
+///
+///  * the prescription snapshot (tier 2) is **rewritten** from the outcome
+///    rather than left stale (keep) or nil'd (reset), so every
+///    `SessionPlanResolver` read agrees with the session plan;
+///  * the plan note follows the adapter's rule;
+///  * warm-ups survive a same-tracking-type switch as authored; a tracking-type
+///    change or a reset clears them. A prepared alternative answers a third
+///    question — **replace** them with the ones it carries (Phase F1) —
+///    including with an empty list, which is what an alternative authored
+///    without a warm-up means;
+///  * the same three-way rule for techniques, and the retention filter runs on
+///    all of them: a prepared alternative cannot introduce a combination the
+///    routine editor would have rejected on the switched-in exercise (a Drop
+///    Set onto a bodyweight movement, a rep-count technique onto a duration
+///    target).
+///
+/// - Parameters: the switched-in exercise's equipment, setup notes and
+///   whether it is duration-based.
+func applySwitchSnapshots(
+    to exercise: inout PlanExercise,
+    outcome: ExerciseSwitchPlanAdapter.Outcome,
+    equipment: String?,
+    setupNotes: String?,
+    usesDuration: Bool
+) {
+    exercise.prescriptionSnapshot = ExerciseSwitchPlanAdapter.adaptedSnapshot(
+        from: outcome,
+        base: exercise.prescriptionSnapshot,
+        equipment: equipment,
+        setupNotes: setupNotes)
+    exercise.templateNotesSnapshot = outcome.sessionPlan.slotNotes
+
+    if let replacement = outcome.replacementWarmupSteps {
+        exercise.warmupStepsSnapshot = replacement
+    } else if !outcome.keepWarmupSteps {
+        exercise.warmupStepsSnapshot = []
+    }
+
+    let techniqueSource =
+        outcome.replacementTechniques
+        ?? (outcome.keepTechniques ? exercise.techniquePlansSnapshot : [])
+    exercise.techniquePlansSnapshot = ExerciseSwitchPlanAdapter.retainedTechniques(
+        from: techniqueSource,
+        isBodyweight: isBodyweightEquipment(equipment),
+        usesDuration: usesDuration)
+}
+
+// MARK: - Finish-dialog pending state
+
+/// True if the slot's session plan differs from the plan the session started
+/// it with (`SlotPlanBundle.sessionBaseline` — the frozen snapshot, or the
+/// switch-time snapshot after a switch). Pure.
+///
+/// Lifted verbatim out of the view's former `isSessionPlanDirty`: the same
+/// fields, the same empty-string normalization for tempo and notes, and nil
+/// (no session plan) is not an edit.
+func sessionPlanHasEdits(_ session: SessionPlan?, for exercise: PlanExercise) -> Bool {
+    guard let sp = session else { return false }
+    let original = SlotPlanBundle.sessionBaseline(of: exercise)
+
+    func norm(_ s: String?) -> String? {
+        guard let s, !s.isEmpty else { return nil }
+        return s
+    }
+
+    if sp.sets != original.sets { return true }
+    if sp.repMin != original.repMin { return true }
+    if sp.repMax != original.repMax { return true }
+    if sp.restSecondsBetweenSets != original.restSecondsBetweenSets {
+        return true
+    }
+    if sp.restSecondsAfterExercise != original.restSecondsAfterExercise {
+        return true
+    }
+    if sp.durationMinSeconds != original.durationMinSeconds { return true }
+    if sp.durationMaxSeconds != original.durationMaxSeconds { return true }
+    if sp.usesDuration != original.usesDuration { return true }
+    if sp.rir != original.rir { return true }
+    if sp.rpe != original.rpe { return true }
+    // Cardio Slice 6 patch: the target distance became editable in the
+    // active Edit Plan sheet, so an edit that touches only it must still
+    // count as dirty — otherwise its plan-changes row would not be
+    // offered and the change would silently stay session-only.
+    if sp.targetDistanceMeters != original.targetDistanceMeters {
+        return true
+    }
+    if sp.targetDistanceUnitRaw != original.targetDistanceUnitRaw {
+        return true
+    }
+    if norm(sp.tempo) != norm(original.tempo) { return true }
+    if norm(sp.slotNotes) != norm(original.slotNotes) { return true }
+
+    return false
+}
+
+/// Every slot's finish-time state for `RoutineTemplateUpdate`, in workout
+/// order. Pure; edit detection is `sessionPlanHasEdits`.
+func routineTemplateRequests(
+    exercises: [PlanExercise],
+    sessionPlans: [UUID: SessionPlan]
+) -> [RoutineTemplateUpdate.SlotRequest] {
+    exercises.map { exercise in
+        RoutineTemplateUpdate.SlotRequest(
+            planExercise: exercise,
+            sessionPlan: sessionPlans[exercise.routineSlotID],
+            hasPlanEdits: sessionPlanHasEdits(
+                sessionPlans[exercise.routineSlotID], for: exercise))
     }
 }

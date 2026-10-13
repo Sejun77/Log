@@ -93,10 +93,10 @@ final class RoutineJSONImportFormattingTests: XCTestCase {
 
         let msg = RoutineJSONImportButton.resultMessage(r)
         XCTAssertTrue(msg.contains("Imported “Push A”."))
-        XCTAssertTrue(msg.contains("2 blocks, 3 exercise slots."))
+        XCTAssertTrue(msg.contains("3 exercises."))
         XCTAssertTrue(msg.contains("Created 2 new exercises."))
         XCTAssertTrue(msg.contains("Linked 1 existing exercise."))   // singular
-        XCTAssertTrue(msg.contains("Skipped 1 slot with no exercise."))
+        XCTAssertTrue(msg.contains("Skipped 1 exercise with no name."))
     }
 
     func testResultMessageMinimalSingulars() {
@@ -105,7 +105,7 @@ final class RoutineJSONImportFormattingTests: XCTestCase {
         r.blockCount = 1
         r.slotCount = 1
         let msg = RoutineJSONImportButton.resultMessage(r)
-        XCTAssertTrue(msg.contains("1 block, 1 exercise slot."))
+        XCTAssertTrue(msg.contains("1 exercise."))
         XCTAssertFalse(msg.contains("Created"))
         XCTAssertFalse(msg.contains("Linked"))
         XCTAssertFalse(msg.contains("Skipped"))
@@ -130,5 +130,33 @@ final class RoutineJSONImportFormattingTests: XCTestCase {
         XCTAssertTrue(captured is DecodingError)
         let msg = RoutineJSONImportButton.errorMessage(captured!)
         XCTAssertTrue(msg.contains("valid routine JSON"))
+    }
+
+    // MARK: - skippedPreviewMessage()
+
+    /// The preview footer counts the same thing the result alert does, so the
+    /// two must agree on what an entry with no exercise name is called.
+    func testSkippedPreviewMessageSingularAndPlural() {
+        XCTAssertEqual(
+            RoutineJSONImportButton.skippedPreviewMessage(1),
+            "1 exercise has no name and will be skipped.")
+        XCTAssertEqual(
+            RoutineJSONImportButton.skippedPreviewMessage(3),
+            "3 exercises have no name and will be skipped.")
+    }
+
+    /// The import copy counts exercises, never the internal block grouping —
+    /// a two-superset routine and a six-single-exercise routine both import
+    /// "6 exercises."
+    func testResultMessageCountsExercisesNotBlocks() {
+        var r = RoutineTransfer.ImportReport()
+        r.importedRoutineName = "Push A"
+        r.blockCount = 2
+        r.slotCount = 6
+
+        let msg = RoutineJSONImportButton.resultMessage(r)
+        XCTAssertTrue(msg.contains("6 exercises."))
+        XCTAssertFalse(msg.lowercased().contains("block"))
+        XCTAssertFalse(msg.lowercased().contains("slot"))
     }
 }
