@@ -59,6 +59,17 @@ struct TechniquePlanSnapshot: Codable, Equatable {
     var dropsetEffortRaw: String?
     var dropsetEffortReps: Int?
 
+    // `TechniquePlan`'s rep-range / duration fields. The in-app technique
+    // editor never authors them, but duplication and transfer import carry
+    // them, so a slot can hold them — and a snapshot that dropped them made
+    // a slot → alternative → slot round trip lossy. Optional with nil defaults
+    // and declared last: synthesized `Codable` reads them with
+    // `decodeIfPresent`, so every snapshot encoded before they existed decodes
+    // unchanged, and the memberwise initializer keeps every existing call site.
+    var repMin: Int? = nil
+    var repMax: Int? = nil
+    var durationSeconds: Int? = nil
+
     var appliesTo: TechniqueAppliesTo {
         TechniqueAppliesTo.from(raw: appliesToRaw ?? "lastWorkingSet", setNumber: appliesToSetNumber)
     }
@@ -143,6 +154,49 @@ struct TechniquePlanSnapshot: Codable, Equatable {
             }
         }
         return label
+    }
+}
+
+extension WarmupStepSnapshot {
+    /// `WarmupStep` → snapshot, every stored field.
+    init(from step: WarmupStep) {
+        self.init(
+            order: step.order,
+            kind: step.kind,
+            reps: step.reps,
+            percentOfWorking: step.percentOfWorking,
+            note: step.note,
+            restSecondsAfter: step.restSecondsAfter,
+            weight: step.weight)
+    }
+}
+
+extension TechniquePlanSnapshot {
+    /// The one `TechniquePlan` → snapshot mapping. Every producer — the
+    /// session freeze, the resume rebuild, the alternative draft and the
+    /// slot plan bundle — goes through here, so a field added to the model
+    /// cannot be captured by one of them and silently dropped by another.
+    init(from plan: TechniquePlan) {
+        self.init(
+            order: plan.order,
+            type: plan.type,
+            dropPercent: plan.dropPercent,
+            dropCount: plan.dropCount,
+            rounds: plan.rounds,
+            restSeconds: plan.restSeconds,
+            partialRangeNote: plan.partialRangeNote,
+            partialRangeRaw: plan.partialRangeRaw,
+            note: plan.note,
+            reps: plan.reps,
+            appliesToRaw: plan.appliesToRaw,
+            appliesToSetNumber: plan.appliesToSetNumber,
+            appliesToSetIndicesRaw: plan.appliesToSetIndicesRaw.isEmpty
+                ? nil : plan.appliesToSetIndicesRaw,
+            dropsetEffortRaw: plan.dropsetEffortRaw,
+            dropsetEffortReps: plan.dropsetEffortReps,
+            repMin: plan.repMin,
+            repMax: plan.repMax,
+            durationSeconds: plan.durationSeconds)
     }
 }
 
@@ -578,25 +632,7 @@ struct StartWorkoutFromRoutineView: View {
                                 usesDuration: ex.isTimeBased
                             )
                             .sorted { $0.order < $1.order }
-                            .map { tp in
-                                TechniquePlanSnapshot(
-                                    order: tp.order,
-                                    type: tp.type,
-                                    dropPercent: tp.dropPercent,
-                                    dropCount: tp.dropCount,
-                                    rounds: tp.rounds,
-                                    restSeconds: tp.restSeconds,
-                                    partialRangeNote: tp.partialRangeNote,
-                                    partialRangeRaw: tp.partialRangeRaw,
-                                    note: tp.note,
-                                    reps: tp.reps,
-                                    appliesToRaw: tp.appliesToRaw,
-                                    appliesToSetNumber: tp.appliesToSetNumber,
-                                    appliesToSetIndicesRaw: tp.appliesToSetIndicesRaw.isEmpty ? nil : tp.appliesToSetIndicesRaw,
-                                    dropsetEffortRaw: tp.dropsetEffortRaw,
-                                    dropsetEffortReps: tp.dropsetEffortReps
-                                )
-                            }
+                            .map(TechniquePlanSnapshot.init(from:))
 
                         let warmupStepsSnapshot: [WarmupStepSnapshot] =
                             (re.prescription?.warmupScheme?.steps ?? [])

@@ -4,6 +4,101 @@
     "" : {
 
     },
+    "%@ plan changes" : {
+      "comment" : "Save Routine Changes row: the plan edits made to this exercise during the workout. The placeholder is the exercise name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 플랜 변경사항"
+          }
+        }
+      }
+    },
+    "%@ → %@" : {
+      "comment" : "Save Routine Changes row: the routine's exercise (first) is replaced by the exercise used in this workout (second).",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ → %@"
+          }
+        }
+      }
+    },
+    "Choose which changes to save to “%@”. Your workout will be recorded either way." : {
+      "comment" : "Save Routine Changes sheet: explains the checklist. The placeholder is the routine's name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”에 저장할 변경사항을 선택하세요. 어떤 항목을 선택해도 운동 기록은 저장됩니다."
+          }
+        }
+      }
+    },
+    "Finish This Workout Only" : {
+      "comment" : "Save Routine Changes sheet: finish and record the workout without saving any routine change.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동만 완료"
+          }
+        }
+      }
+    },
+    "Not selected" : {
+      "comment" : "Accessibility value of an unchecked row in a multi-selection list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택 안 됨"
+          }
+        }
+      }
+    },
+    "Save Routine Changes" : {
+      "comment" : "Active workout finish: title of the sheet for choosing which routine changes to save.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "루틴 변경사항 저장"
+          }
+        }
+      }
+    },
+    "Save Selected Changes" : {
+      "comment" : "Save Routine Changes sheet: save the checked routine changes, then finish the workout.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택한 변경사항 저장"
+          }
+        }
+      }
+    },
+    "Selected" : {
+      "comment" : "Accessibility value of a checked row in a multi-selection list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택됨"
+          }
+        }
+      }
+    },
     "—" : {
 
     },
@@ -995,16 +1090,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "세트에 적용"
-          }
-        }
-      }
-    },
-    "Apply changes?" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "변경 사항을 적용할까요?"
           }
         }
       }
@@ -2507,50 +2592,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "완료"
-          }
-        }
-      }
-    },
-    "Finish (this workout only)" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "완료 (이번 운동만)"
-          }
-        }
-      }
-    },
-    "Finish + Apply all" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "완료 + 전체 적용"
-          }
-        }
-      }
-    },
-    "Finish + Update routine template" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "완료 + 루틴 템플릿 업데이트"
-          }
-        }
-      }
-    },
-    "Finish + Update exercise plan" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "완료 + 운동 플랜 업데이트"
           }
         }
       }

@@ -11,9 +11,9 @@ import XCTest
 /// only *presents* the finish confirmation dialog) and NEVER finishes the
 /// workout outright — so spam-tapping Next near the end cannot skip the
 /// confirmation. `finishWorkout(...)` is invoked solely from the confirmation
-/// dialog's buttons, so a `.confirmFinish` that requires a user tap is exactly
-/// the "finish requires confirmation / cancel keeps the workout / confirm
-/// finishes" behavior.
+/// dialog's or the Save Routine Changes sheet's buttons, so a `.confirmFinish`
+/// that requires a user tap is exactly the "finish requires confirmation /
+/// cancel keeps the workout / confirm finishes" behavior.
 final class ActiveWorkoutFinishConfirmTests: XCTestCase {
 
     // MARK: - Advancing within a block
@@ -93,67 +93,20 @@ final class ActiveWorkoutFinishConfirmTests: XCTestCase {
         XCTAssertEqual(action, .confirmFinish)
     }
 
-    // MARK: - Dialog option routing (pending-change confirmation)
+    // MARK: - Finish requests (plain confirmation + Save Routine Changes)
 
-    // The dialog's buttons are generated from `finishDialogOptions`; these
-    // tests pin which options appear for each pending state and which
-    // apply-back flags each option carries into `finishWorkout`.
+    // The plain dialog's Finish and the sheet's Finish This Workout Only both
+    // record `.finishOnly`; Save Selected Changes records `.saveSelected`.
+    // Cancel (and swiping the sheet away) records nothing.
 
-    func test_noPendingChanges_offersPlainFinishOnly() {
-        XCTAssertEqual(
-            finishDialogOptions(
-                hasSwapsPending: false, hasSessionPlanPending: false),
-            [.finishOnly]
-        )
-    }
-
-    func test_pendingSwaps_addsUpdateTemplateOption() {
-        XCTAssertEqual(
-            finishDialogOptions(
-                hasSwapsPending: true, hasSessionPlanPending: false),
-            [.finishOnly, .applySwaps]
-        )
-    }
-
-    func test_pendingSessionPlan_addsSlotPrescriptionOption() {
-        XCTAssertEqual(
-            finishDialogOptions(
-                hasSwapsPending: false, hasSessionPlanPending: true),
-            [.finishOnly, .applySlotPrescription]
-        )
-    }
-
-    func test_bothPending_addsApplyAllAndKeepsPlainFinishFirst() {
-        let options = finishDialogOptions(
-            hasSwapsPending: true, hasSessionPlanPending: true)
-        XCTAssertEqual(
-            options,
-            [.finishOnly, .applySwaps, .applySlotPrescription, .applyAll]
-        )
-        XCTAssertEqual(
-            options.first, .finishOnly,
-            "A plain no-apply finish must always be the first option"
-        )
-    }
-
-    func test_optionFlags_routeToExpectedFinishArguments() {
-        XCTAssertFalse(FinishDialogOption.finishOnly.applySwaps)
-        XCTAssertFalse(FinishDialogOption.finishOnly.applySlotPrescription)
-
-        XCTAssertTrue(FinishDialogOption.applySwaps.applySwaps)
-        XCTAssertFalse(FinishDialogOption.applySwaps.applySlotPrescription)
-
-        XCTAssertFalse(FinishDialogOption.applySlotPrescription.applySwaps)
-        XCTAssertTrue(FinishDialogOption.applySlotPrescription.applySlotPrescription)
-
-        XCTAssertTrue(FinishDialogOption.applyAll.applySwaps)
-        XCTAssertTrue(FinishDialogOption.applyAll.applySlotPrescription)
+    func test_finishOnly_writesNoRoutineChanges() {
+        XCTAssertEqual(FinishRequest.finishOnly.selectedChanges, [])
     }
 
     // MARK: - Single-fire consumption (one confirm tap → one finish)
 
     func test_consumePendingFinish_returnsChoiceOnceThenNil() {
-        var slot: FinishDialogOption? = .finishOnly
+        var slot: FinishRequest? = .finishOnly
 
         XCTAssertEqual(
             consumePendingFinish(&slot), .finishOnly,
@@ -167,82 +120,20 @@ final class ActiveWorkoutFinishConfirmTests: XCTestCase {
         )
     }
 
-    func test_cancelRecordsNothing_soNothingConsumes() {
-        // Cancel leaves the slot nil — the consume that follows any dialog
-        // dismissal then yields nil and the workout stays active.
-        var slot: FinishDialogOption? = nil
+    func test_cancelRecordsNothing_soNothingFinishesOrSaves() {
+        // Cancel — the dialog's, the sheet's, or a swipe-down — leaves the
+        // slot nil; the consume that follows any dismissal then yields nil,
+        // so the workout stays active and the routine is not written.
+        var slot: FinishRequest? = nil
         XCTAssertNil(consumePendingFinish(&slot))
-    }
-
-    // MARK: - Label selection (manual-test polish)
-
-    /// With nothing pending the dialog offers one action plus Cancel, and
-    /// "(this workout only)" answers a question the user was never asked —
-    /// there is no other workout and nothing else the button could apply.
-    func test_soleFinishOption_readsSimplyFinish() {
-        let options = finishDialogOptions(
-            hasSwapsPending: false, hasSessionPlanPending: false)
-        XCTAssertEqual(options, [.finishOnly])
-        XCTAssertEqual(
-            finishOptionLabelKey(.finishOnly, isSoleOption: options.count == 1),
-            "Finish")
-    }
-
-    /// As soon as an apply option shares the dialog, the qualifier earns its
-    /// place back: a bare "Finish" beside "Finish + Update routine template"
-    /// would leave the plain option's meaning implicit.
-    func test_finishKeepsQualifierWhenApplyOptionsExist() {
-        for (swaps, plan) in [(true, false), (false, true), (true, true)] {
-            let options = finishDialogOptions(
-                hasSwapsPending: swaps, hasSessionPlanPending: plan)
-            XCTAssertGreaterThan(options.count, 1)
-            XCTAssertEqual(
-                finishOptionLabelKey(
-                    .finishOnly, isSoleOption: options.count == 1),
-                "Finish (this workout only)",
-                "swaps: \(swaps), plan: \(plan)")
-        }
-    }
-
-    /// The apply options are worded the same either way — only `.finishOnly`
-    /// depends on its company.
-    func test_applyOptionLabelsAreUnconditional() {
-        for sole in [true, false] {
-            XCTAssertEqual(
-                finishOptionLabelKey(.applySwaps, isSoleOption: sole),
-                "Finish + Update routine template")
-            XCTAssertEqual(
-                finishOptionLabelKey(.applySlotPrescription, isSoleOption: sole),
-                "Finish + Update exercise plan")
-            XCTAssertEqual(
-                finishOptionLabelKey(.applyAll, isSoleOption: sole),
-                "Finish + Apply all")
-        }
-    }
-
-    /// Wording is the *only* thing that changes: the options offered, their
-    /// order, and the apply-back flags each one routes to are untouched.
-    func test_labelSelectionDoesNotChangeRoutingOrOptionSet() {
-        let sole = finishDialogOptions(
-            hasSwapsPending: false, hasSessionPlanPending: false)
-        XCTAssertEqual(sole, [.finishOnly])
-        XCTAssertFalse(sole[0].applySwaps)
-        XCTAssertFalse(sole[0].applySlotPrescription)
-
-        let both = finishDialogOptions(
-            hasSwapsPending: true, hasSessionPlanPending: true)
-        XCTAssertEqual(
-            both, [.finishOnly, .applySwaps, .applySlotPrescription, .applyAll])
-        XCTAssertFalse(both[0].applySwaps)
-        XCTAssertFalse(both[0].applySlotPrescription)
     }
 
     func test_reconfirmAfterSurvivingView_isReArmable() {
         // If the view ever survives a finish attempt, a NEW confirmation can
         // record and consume again — the single-fire guard is per-request,
         // not a permanent latch that would strand the user.
-        var slot: FinishDialogOption? = .applyAll
-        XCTAssertEqual(consumePendingFinish(&slot), .applyAll)
+        var slot: FinishRequest? = .saveSelected([])
+        XCTAssertEqual(consumePendingFinish(&slot), .saveSelected([]))
 
         slot = .finishOnly  // user confirms again
         XCTAssertEqual(consumePendingFinish(&slot), .finishOnly)

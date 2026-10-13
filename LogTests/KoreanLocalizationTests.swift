@@ -1432,7 +1432,6 @@ final class KoreanLocalizationTests: XCTestCase {
         "Plan notes",
         "Session plan for this exercise",
         "Reset plan for this exercise",
-        "Finish + Update exercise plan",
         "Rest before next exercise",
         "%lld times",
         "Applies to new exercises and the intensity field in active workouts.",
@@ -1453,6 +1452,46 @@ final class KoreanLocalizationTests: XCTestCase {
             let value = localized(key, in: ko)
             XCTAssertFalse(value.isEmpty, "\(key) localized to empty string")
             XCTAssertNotEqual(value, key, "\(key) is untranslated")
+        }
+    }
+
+    /// The Save Routine Changes sheet's copy, exactly.
+    func testSaveRoutineChangesSheetLocalizesToKorean() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        let expected = [
+            "Save Routine Changes": "루틴 변경사항 저장",
+            "Choose which changes to save to \u{201C}%@\u{201D}. Your workout will be recorded either way.":
+                "\u{201C}%@\u{201D}에 저장할 변경사항을 선택하세요. 어떤 항목을 선택해도 운동 기록은 저장됩니다.",
+            "%@ → %@": "%@ → %@",
+            "%@ plan changes": "%@ 플랜 변경사항",
+            "Finish This Workout Only": "이 운동만 완료",
+            "Save Selected Changes": "선택한 변경사항 저장",
+            "Cancel": "취소",
+            "Selected": "선택됨",
+            "Not selected": "선택 안 됨",
+        ]
+        for (key, value) in expected {
+            XCTAssertEqual(localized(key, in: ko), value, key)
+        }
+        // The row formats fill in real exercise names.
+        XCTAssertEqual(
+            String(format: localized("%@ plan changes", in: ko), "Cable Row"),
+            "Cable Row 플랜 변경사항")
+    }
+
+    /// The old finish dialog's option matrix is gone from the catalog, so a
+    /// reintroduced literal cannot quietly pick its wording back up.
+    func testRetiredFinishDialogKeysAreNoLongerInTheCatalog() throws {
+        let ko = try XCTUnwrap(localizationBundle("ko"))
+        for key in [
+            "Apply changes?",
+            "Finish (this workout only)",
+            "Finish + Update routine template",
+            "Finish + Update exercise plan",
+            "Finish + Update other exercise plans",
+            "Finish + Apply all",
+        ] {
+            XCTAssertEqual(localized(key, in: ko), key)
         }
     }
 

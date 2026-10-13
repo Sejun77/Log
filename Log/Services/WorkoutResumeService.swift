@@ -236,25 +236,7 @@ enum WorkoutResumeService {
                                 usesDuration: ex.isTimeBased
                             )
                             .sorted { $0.order < $1.order }
-                            .map { tp in
-                                TechniquePlanSnapshot(
-                                    order: tp.order,
-                                    type: tp.type,
-                                    dropPercent: tp.dropPercent,
-                                    dropCount: tp.dropCount,
-                                    rounds: tp.rounds,
-                                    restSeconds: tp.restSeconds,
-                                    partialRangeNote: tp.partialRangeNote,
-                                    partialRangeRaw: tp.partialRangeRaw,
-                                    note: tp.note,
-                                    reps: tp.reps,
-                                    appliesToRaw: tp.appliesToRaw,
-                                    appliesToSetNumber: tp.appliesToSetNumber,
-                                    appliesToSetIndicesRaw: tp.appliesToSetIndicesRaw.isEmpty ? nil : tp.appliesToSetIndicesRaw,
-                                    dropsetEffortRaw: tp.dropsetEffortRaw,
-                                    dropsetEffortReps: tp.dropsetEffortReps
-                                )
-                            }
+                            .map(TechniquePlanSnapshot.init(from:))
 
                         let techniquePlansSnapshot: [TechniquePlanSnapshot] =
                             swappedExerciseForTemplates != nil

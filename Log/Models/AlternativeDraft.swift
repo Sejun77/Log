@@ -114,160 +114,32 @@ final class AlternativeDraftStore {
 
     /// Write a stored payload onto the scratch slot.
     ///
-    /// Field-for-field and lossless in the direction that matters: everything
-    /// `AlternativePrescriptionPayload` carries has a home on the scratch slot,
-    /// so what the user sees in the editor is exactly what was stored.
+    /// Lossless: this is `SlotPlanBundle.apply`, the same bundle → slot
+    /// conversion Update Routine uses to promote an alternative, so everything
+    /// `AlternativePrescriptionPayload` carries — including a demoted primary's
+    /// per-set overrides and warm-up scheme name — has a home on the scratch
+    /// slot, and what the user sees in the editor is exactly what was stored.
+    /// Children are created in the scratch slot's own context.
     private func hydrate(from payload: AlternativePrescriptionPayload) {
-        let p = prescription
-        p.sets = payload.sets
-        p.repMin = payload.repMin
-        p.repMax = payload.repMax
-        p.restSecondsBetweenSets = payload.restSecondsBetweenSets
-        p.restSecondsAfterExercise = payload.restSecondsAfterExercise
-        p.rir = payload.rir
-        p.rpe = payload.rpe
-        p.tempo = payload.tempo
-        p.effortModeRaw = payload.effortModeRaw
-        p.rirStart = payload.rirStart
-        p.rirEnd = payload.rirEnd
-        p.rpeStart = payload.rpeStart
-        p.rpeEnd = payload.rpeEnd
-        // Encoded through the codec on both sides, so the payload's array form
-        // and the slot's comma-separated column stay one value.
-        p.customRIRTargetsRaw = EffortTargetList.encode(
-            payload.customRIRTargets ?? [])
-        p.customRPETargetsRaw = EffortTargetList.encode(
-            payload.customRPETargets ?? [])
-        p.durationMinSeconds = payload.durationMinSeconds
-        p.durationMaxSeconds = payload.durationMaxSeconds
-        p.usesDuration = payload.usesDuration
-        p.targetDistanceMeters = payload.targetDistanceMeters
-        p.targetDistanceUnitRaw = payload.targetDistanceUnitRaw
-        // Through the tolerant accessor, so a plan this build would normalize
-        // is normalized once, here, rather than on every render.
-        p.setStructuredCardioPlan(payload.cardioSegments)
-        slot.templateNotes = payload.slotNotes
-
-        if !payload.warmupSteps.isEmpty {
-            let scheme = WarmupScheme(name: "Warmup")
-            context.insert(scheme)
-            let steps = payload.warmupSteps
-                .sorted { $0.order < $1.order }
-                .enumerated()
-                .map { index, snapshot -> WarmupStep in
-                    let step = WarmupStep(
-                        order: index,
-                        kind: snapshot.kind,
-                        reps: snapshot.reps,
-                        percentOfWorking: snapshot.percentOfWorking,
-                        restSecondsAfter: snapshot.restSecondsAfter,
-                        note: snapshot.note,
-                        weight: snapshot.weight)
-                    context.insert(step)
-                    return step
-                }
-            scheme.steps = steps
-            p.warmupScheme = scheme
-        }
-
-        p.techniquePlans = payload.techniques
-            .sorted { $0.order < $1.order }
-            .enumerated()
-            .map { index, snapshot -> TechniquePlan in
-                let plan = TechniquePlan(
-                    order: index,
-                    type: snapshot.type,
-                    reps: snapshot.reps,
-                    restSeconds: snapshot.restSeconds,
-                    rounds: snapshot.rounds,
-                    dropPercent: snapshot.dropPercent,
-                    dropCount: snapshot.dropCount,
-                    partialRangeNote: snapshot.partialRangeNote,
-                    partialRangeRaw: snapshot.partialRangeRaw,
-                    note: snapshot.note,
-                    appliesToRaw: snapshot.appliesToRaw ?? "lastWorkingSet",
-                    appliesToSetNumber: snapshot.appliesToSetNumber,
-                    appliesToSetIndicesRaw: snapshot.appliesToSetIndicesRaw ?? "",
-                    dropsetEffortRaw: snapshot.dropsetEffortRaw,
-                    dropsetEffortReps: snapshot.dropsetEffortReps)
-                context.insert(plan)
-                return plan
-            }
+        SlotPlanBundle.apply(payload, to: slot, in: context)
     }
 
     // MARK: - Draft → payload
 
     /// Read the edited slot back out as a payload.
     ///
-    /// The inverse of `hydrate`, and the **only** way edits leave the draft.
-    /// Lossy in exactly one documented place: `TechniquePlanSnapshot` has no
-    /// `repMin` / `repMax` / `durationSeconds`, so a technique's rep-range
-    /// fields do not survive — the same fields the session freeze already drops
-    /// when it snapshots a routine's own techniques, so an alternative carries
-    /// precisely what a slot carries into a workout.
+    /// The inverse of `hydrate`, and the **only** way edits leave the draft:
+    /// `SlotPlanBundle.capture`, the canonical slot → bundle conversion, so a
+    /// field the bundle carries cannot be dropped by editing an alternative.
+    ///
+    /// One deliberate difference from a routine-slot capture: `tempo` is read
+    /// through `effectiveTempo`, so a duration-based draft never writes a stale
+    /// tempo back into the payload — the editor's own capture rule, the same
+    /// one `PrescriptionSnapshotPayload.init(from:exercise:)` uses.
     func payload() -> AlternativePrescriptionPayload {
-        let p = prescription
-        return AlternativePrescriptionPayload(
-            sets: p.sets,
-            repMin: p.repMin,
-            repMax: p.repMax,
-            restSecondsBetweenSets: p.restSecondsBetweenSets,
-            restSecondsAfterExercise: p.restSecondsAfterExercise,
-            rir: p.rir,
-            rpe: p.rpe,
-            // `effectiveTempo`, not `tempo`: a duration-based draft must not
-            // write a stale tempo back into the payload. Same capture rule
-            // `PrescriptionSnapshotPayload.init(from:exercise:)` uses.
-            tempo: p.effectiveTempo,
-            effortModeRaw: p.effortModeRaw,
-            rirStart: p.rirStart,
-            rirEnd: p.rirEnd,
-            rpeStart: p.rpeStart,
-            rpeEnd: p.rpeEnd,
-            customRIRTargets: p.customRIRTargets.isEmpty
-                ? nil : p.customRIRTargets,
-            customRPETargets: p.customRPETargets.isEmpty
-                ? nil : p.customRPETargets,
-            durationMinSeconds: p.durationMinSeconds,
-            durationMaxSeconds: p.durationMaxSeconds,
-            usesDuration: p.usesDuration,
-            targetDistanceMeters: p.targetDistanceMeters,
-            targetDistanceUnitRaw: p.targetDistanceUnitRaw,
-            warmupSteps: (p.warmupScheme?.steps ?? [])
-                .sorted { $0.order < $1.order }
-                .map {
-                    WarmupStepSnapshot(
-                        order: $0.order,
-                        kind: $0.kind,
-                        reps: $0.reps,
-                        percentOfWorking: $0.percentOfWorking,
-                        note: $0.note,
-                        restSecondsAfter: $0.restSecondsAfter,
-                        weight: $0.weight)
-                },
-            techniques: p.techniquePlans
-                .sorted { $0.order < $1.order }
-                .map {
-                    TechniquePlanSnapshot(
-                        order: $0.order,
-                        type: $0.type,
-                        dropPercent: $0.dropPercent,
-                        dropCount: $0.dropCount,
-                        rounds: $0.rounds,
-                        restSeconds: $0.restSeconds,
-                        partialRangeNote: $0.partialRangeNote,
-                        partialRangeRaw: $0.partialRangeRaw,
-                        note: $0.note,
-                        reps: $0.reps,
-                        appliesToRaw: $0.appliesToRaw,
-                        appliesToSetNumber: $0.appliesToSetNumber,
-                        appliesToSetIndicesRaw: $0.appliesToSetIndicesRaw.isEmpty
-                            ? nil : $0.appliesToSetIndicesRaw,
-                        dropsetEffortRaw: $0.dropsetEffortRaw,
-                        dropsetEffortReps: $0.dropsetEffortReps)
-                },
-            cardioSegments: p.structuredCardioPlan,
-            slotNotes: slot.templateNotes)
+        var bundle = SlotPlanBundle.capture(from: slot)
+        bundle.tempo = prescription.effectiveTempo
+        return bundle.normalized()
     }
 
     // MARK: - Seeding a new alternative
