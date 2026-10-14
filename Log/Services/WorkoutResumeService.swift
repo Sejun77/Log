@@ -214,16 +214,7 @@ enum WorkoutResumeService {
                                 } ?? [])
                             : (re.prescription?.warmupScheme?.steps ?? [])
                             .sorted { $0.order < $1.order }
-                            .map { step in
-                                WarmupStepSnapshot(
-                                    order: step.order,
-                                    kind: step.kind,
-                                    reps: step.reps,
-                                    percentOfWorking: step.percentOfWorking,
-                                    note: step.note,
-                                    restSecondsAfter: step.restSecondsAfter
-                                )
-                            }
+                            .map(WarmupStepSnapshot.init(from:))
 
                         // Mirrors `makePlan`: techniques the slot's exercise
                         // can't support (e.g. a Tempo Override on a duration
