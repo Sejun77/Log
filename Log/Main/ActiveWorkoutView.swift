@@ -79,6 +79,7 @@ struct ActiveWorkoutView: View {
 
     @Environment(\.modelContext) private var ctx
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.returnToRoutinesRoot) private var returnToRoutinesRoot
 
     @State private var workout: Workout?
     @State private var currentBlockIndex = 0
@@ -1526,7 +1527,7 @@ struct ActiveWorkoutView: View {
         clearPersistedRestState()
     }
 
-    private func unlockAndDismiss() {
+    private func unlockAndDismiss(_ exit: WorkoutExit) {
         // Clear persisted drop-weight drafts before workout ID becomes inaccessible
         dropWeightDraftStore?.clearAll()
         // Clear persisted parent working-set drafts as well
@@ -1548,9 +1549,24 @@ struct ActiveWorkoutView: View {
         // WorkoutLifecycleService.{finish,discard} at the call sites that
         // lead here. Save & Exit deliberately does NOT call this helper.
 
-        // Clear session locks and dismiss screen
+        // Clear session locks, then leave to the Routines root.
         activeGuard.endSession()
-        dismiss()
+        leave(exit)
+    }
+
+    /// Navigation after the active workout is left — past Start Workout and
+    /// the routine editor, in one state change on the Routines stack. Save &
+    /// Exit calls this directly (it does not unlock); every other exit goes
+    /// through `unlockAndDismiss`.
+    private func leave(_ exit: WorkoutExit) {
+        switch workoutExitNavigation(for: exit) {
+        case .returnToRoutinesRoot:
+            if let returnToRoutinesRoot {
+                returnToRoutinesRoot()
+            } else {
+                dismiss()
+            }
+        }
     }
 
     /// Marks the persisted AppState singleton `.active` for cold-restart resume.
@@ -2631,14 +2647,14 @@ struct ActiveWorkoutView: View {
                     // in-memory `ActiveGuard` banner and the cold-restart
                     // `RootTabView.checkForActiveSession` flow.
                     WorkoutLifecycleService.saveAndExit(in: ctx)
-                    dismiss()
+                    leave(.savedAndExited)
                 }
                 Button("Discard Workout", role: .destructive) {
                     let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
                     WorkoutLifecycleService.discard(
                         workout: workout, appState: appState, in: ctx
                     )
-                    unlockAndDismiss()
+                    unlockAndDismiss(.discarded)
                 }
             } message: {
                 Text(
@@ -2995,14 +3011,14 @@ struct ActiveWorkoutView: View {
                     Text("Some items were removed from the routine.")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    Button("Exit Workout") { unlockAndDismiss() }
+                    Button("Exit Workout") { unlockAndDismiss(.discarded) }
                         .buttonStyle(.borderedProminent)
                 }
                 .padding()
                 .navigationBarBackButtonHidden(true)
             #else
                 // In production, just exit cleanly if we ever hit this (should be unreachable).
-                Color.clear.onAppear { unlockAndDismiss() }
+                Color.clear.onAppear { unlockAndDismiss(.discarded) }
             #endif
         }
     }
@@ -3059,7 +3075,7 @@ struct ActiveWorkoutView: View {
         WorkoutLifecycleService.finish(
             workout: workout, appState: appState, in: ctx
         )
-        unlockAndDismiss()
+        unlockAndDismiss(.finished(request))
     }
 
     /// Write exactly the routine changes selected in the Save Routine Changes

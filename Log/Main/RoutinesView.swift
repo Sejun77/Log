@@ -14,14 +14,14 @@ struct RoutinesView: View {
     @State private var dupAlert = false
     @State private var dup = ""
     @FocusState private var focusNewRoutine: Bool
-    /// Value-based navigation target. A row tap sets this *after* clearing the
-    /// add-field focus, so cleanup commits before the push — see the row Button.
-    @State private var selectedRoutineID: UUID? = nil
-    /// Target of a row's trailing Start button. Pushes the same
+    /// Every stack destination. `nav.selectedRoutineID` is value-based: a row
+    /// tap sets it *after* clearing the add-field focus, so cleanup commits
+    /// before the push — see the row Button. `nav.startRoutineID` is the
+    /// target of a row's trailing Start button, pushing the same
     /// `StartWorkoutFromRoutineView` the editor's toolbar Start pushes — see
-    /// `RoutineQuickStart` for when the button is shown.
-    @State private var startRoutineID: UUID? = nil
-    @State private var showUserGuide = false
+    /// `RoutineQuickStart` for when the button is shown. Leaving a workout
+    /// resets it all via the `returnToRoutinesRoot` environment action.
+    @State private var nav = RoutinesNavigationState()
 
     @ObservedObject private var activeGuard = ActiveWorkoutGuard.shared
     @State private var showLockedRoutineAlert = false
@@ -30,8 +30,6 @@ struct RoutinesView: View {
     @State private var showDeleteRoutineAlert = false
     @State private var pendingDeleteRoutine: Routine? = nil
     @State private var routineDeleteMessage = "This will delete the routine."
-
-    @State private var navigateToActiveWorkout = false
 
     // Routine JSON export (Slice E). The `fileExporter` + its state live at the
     // view level (one exporter, parameterized per tapped row) rather than
@@ -71,7 +69,7 @@ struct RoutinesView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         focusNewRoutine = false
-                        showUserGuide = true
+                        nav.showUserGuide = true
                     } label: {
                         Label("User Guide", systemImage: "questionmark.circle")
                     }
@@ -130,14 +128,14 @@ struct RoutinesView: View {
             } message: {
                 Text(exportErrorMessage ?? "")
             }
-            .navigationDestination(isPresented: $navigateToActiveWorkout) {
+            .navigationDestination(isPresented: $nav.showActiveWorkout) {
                 if let plan = activeGuard.activePlan {
                     ActiveWorkoutView(plan: plan)
                 }
             }
             .onChange(of: resumeNavigationTrigger) { _, trigger in
                 if trigger, activeGuard.activePlan != nil {
-                    navigateToActiveWorkout = true
+                    nav.showActiveWorkout = true
                     resumeNavigationTrigger = false
                 }
             }
@@ -147,17 +145,17 @@ struct RoutinesView: View {
             // proved insufficient — it doesn't reliably fire on a NavigationStack
             // push, so the keyboard was restored on pop. Looking the routine up
             // by id keeps navigation tolerant of a row deleted out from under it.
-            .navigationDestination(item: $selectedRoutineID) { id in
+            .navigationDestination(item: $nav.selectedRoutineID) { id in
                 if let routine = routines.first(where: { $0.id == id }) {
                     RoutineEditor(routine: routine)
                 }
             }
-            .navigationDestination(item: $startRoutineID) { id in
+            .navigationDestination(item: $nav.startRoutineID) { id in
                 if let routine = routines.first(where: { $0.id == id }) {
                     StartWorkoutFromRoutineView(routine: routine)
                 }
             }
-            .navigationDestination(isPresented: $showUserGuide) {
+            .navigationDestination(isPresented: $nav.showUserGuide) {
                 UserGuideView()
             }
             // Belt-and-suspenders for the tab-switch path (which does fire
@@ -165,6 +163,9 @@ struct RoutinesView: View {
             // linger on revisit. The typed `newName` draft is preserved.
             .onDisappear { focusNewRoutine = false }
         }
+        // Leaving a workout pops the whole stack — however deep the active
+        // workout was pushed — in one state change.
+        .environment(\.returnToRoutinesRoot) { nav.returnToRoot() }
     }
 
     // MARK: - Sections
@@ -174,7 +175,7 @@ struct RoutinesView: View {
             if let plan = activeGuard.activePlan {
                 Section {
                     Button {
-                        navigateToActiveWorkout = true
+                        nav.showActiveWorkout = true
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "play.circle.fill")
@@ -281,7 +282,7 @@ struct RoutinesView: View {
                     // Chevron added manually to keep the disclosure look.
                     Button {
                         focusNewRoutine = false
-                        selectedRoutineID = r.id
+                        nav.selectedRoutineID = r.id
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -304,7 +305,7 @@ struct RoutinesView: View {
                             ) {
                                 RoutineRowStartButton {
                                     focusNewRoutine = false
-                                    startRoutineID = r.id
+                                    nav.startRoutineID = r.id
                                 }
                             }
                             if activeGuard.isRoutineLocked(r.id) {
