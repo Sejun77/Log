@@ -32,14 +32,16 @@ post-Build-10 work listed below.
   toolbar
 - reversible **Update Routine** after an exercise switch, chosen through the new
   **Save Routine Changes** sheet
+- a fixed warm-up weight now survives Save & Exit → kill → Resume (cold resume
+  of an unswitched exercise)
 
 Most of these came out of the Build 10 feedback below; the rest came from
 follow-up testing and real use. They are implemented and merged, but **no
 tester has seen them** — Build 10 does not contain them. The next validation
 cycle needs a newer build that does; it has no build number yet.
 
-**Still open:** a fixed warm-up weight lost on cold resume, and the active
-workout's bottom panel occasionally floating mid-screen.
+**Still open:** the active workout's bottom panel floating mid-screen —
+investigated, not reproducible on simulators, no production change.
 
 ---
 
@@ -744,12 +746,17 @@ Fill this in as feedback arrives.
 | Build 10 round | Peer/family tester | Friends & Family Beta | P2 | Starting a saved routine was too buried, and the User Guide was only under Settings. Implemented after Build 10: a Start action on routine rows and a User Guide entry in the Routines toolbar. | implemented, pending distribution/re-test |
 | Build 10 round | Follow-up to terminology feedback | — | P2 | Internal words Block and Slot appeared in the UI. Implemented after Build 10: replaced with ordinary training language. | implemented, pending distribution/re-test |
 | Post-Build-10 | Not recorded | Real-use follow-up | P1 | After switching A → B (a prepared alternative) and choosing Update Routine, the routine pointed at B but kept A's plan, and B's prepared plan was stranded. Implemented 2026-10-13: a reversible promotion, chosen through the new Save Routine Changes sheet. | implemented, pending distribution/re-test |
-| Post-Build-10 | Not recorded | Real-use follow-up | P1 | The active workout's Back / Next panel floated mid-screen; only a full app restart fixed it. Root cause unknown. | investigating |
-| Post-Build-10 | Developer validation | — (not tester-reported) | P1 | A fixed warm-up weight is lost after Save & Exit → kill → resume on an unswitched exercise. Root cause known; next isolated fix. | new |
+| Post-Build-10 | Not recorded | Real-use follow-up | P1 | The active workout's Back / Next panel floated mid-screen; only a full app restart fixed it. Investigated on iPhone and iPad Pro simulators, including the on-screen keyboard; not reproduced, and no faulty code path found, so no production change. One remaining hypothesis is a stale system keyboard/safe-area inset in the surviving hosting/navigation hierarchy, but none of the simulator scenarios reproduced it. | open — investigated, not reproducible |
+| Post-Build-10 | Developer validation | — (not tester-reported) | P1 | A fixed warm-up weight was lost after Save & Exit → kill → resume on an unswitched exercise. Implemented 2026-10-14: the cold-resume path now uses the canonical warm-up conversion, so the weight is kept. | implemented, pending distribution/re-test |
 | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] |
 
 Status values: `new`, `investigating`, `fixed`,
-`implemented, pending distribution/re-test`, `deferred`, `won't fix`.
+`implemented, pending distribution/re-test`,
+`open — investigated, not reproducible`, `deferred`, `won't fix`.
+
+`open — investigated, not reproducible` means the report is taken as real, but
+the investigation found no reproducible failure and no faulty code path, so no
+change was made. It stays open in case it recurs.
 
 `implemented, pending distribution/re-test` means the change is written, merged
 to `main`, and has passed its Debug build, full test suite and Release build —
@@ -885,6 +892,14 @@ Targeted regression checks for the same build:
 - [ ] **Save & Exit / Resume**, including after fully closing the app, in a
       workout with a switched exercise and edited plans; then finish and confirm
       the Save Routine Changes sheet still lists the right rows.
+- [ ] **Warm-up plans after relaunch:** in a routine whose warm-up step has a
+      fixed weight (e.g. 3 reps @ 60 kg), start a workout, leave that exercise
+      unswitched, Save & Exit, fully close the app, Resume — the step still shows
+      its reps **and** its weight.
+- [ ] **Active-workout controls and layout in normal use:** the Back / Next
+      panel stays docked at the bottom through ordinary training. If it ever
+      floats, capture the screen state (screenshot, what was on screen just
+      before, device and iOS version) **before** relaunching the app.
 
 ---
 
@@ -897,11 +912,14 @@ of feedback was collected, triaged and recorded in
 
 What comes next:
 
-1. Fix the cold-resume warm-up weight loss as its own isolated change, and
-   investigate the floating bottom panel — see Planned Fixes From Feedback in
-   the entry document.
-2. Prepare and upload the next TestFlight build. It must contain the
-   post-Build-10 work listed at the top of this plan; Build 10 does not.
+1. Prepare and upload the next TestFlight build. It must contain the
+   post-Build-10 work listed at the top of this plan — including the
+   cold-resume warm-up weight fix; Build 10 does not. The floating bottom
+   panel stays open with no code change to include (see Planned Fixes From
+   Feedback in the entry document).
+2. If the floating panel recurs, capture its state before relaunching;
+   temporary debug-only diagnostics are a contingency for then, not planned
+   work.
 3. Re-invite the same small group and run the **Next Validation Cycle**
    checklist above, which is a re-test of specific changes rather than an open
    feedback round.

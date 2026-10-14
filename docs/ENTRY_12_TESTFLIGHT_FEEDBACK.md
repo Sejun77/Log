@@ -29,10 +29,11 @@ Since Build 10, a series of changes has been implemented and merged to `main`:
 root-page discoverability, training term help, Korean localization consistency,
 the Block/Slot terminology cleanup, Start Workout and User Guide
 discoverability, a typing-performance fix, the active-workout lock-scope and
-History-calendar fixes, and a reversible **Update Routine** with the new **Save
-Routine Changes** sheet. None of it is **in Build 10**, so no tester has seen
-it yet; it awaits the next distributed build and a peer re-test. Two bugs are
-still open (see *Planned Fixes From Feedback*).
+History-calendar fixes, a reversible **Update Routine** with the new **Save
+Routine Changes** sheet, and the cold-resume warm-up weight fix. None of it is
+**in Build 10**, so no tester has seen it yet; it awaits the next distributed
+build and a peer re-test. One bug is still open — the floating bottom panel,
+investigated but not reproducible (see *Planned Fixes From Feedback*).
 
 Three kinds of item are kept distinct throughout this document:
 
@@ -391,14 +392,14 @@ Severity:
 - **Group:** Real-use follow-up — the reporter is not recorded
 - **Severity:** P1
 - **Feedback:** During an active workout, the bottom panel holding Back / Next sat partway up the screen instead of at the bottom. Switching tabs and returning did not fix it, nor did Save & Exit → Resume; fully closing and reopening the app did.
-- **Status:** **Open.** Root cause unknown; needs investigation.
+- **Status:** **Open — investigated, not reproducible.** No production code was changed. The layout hierarchy, safe-area inset placement, keyboard/focus state, navigation/lifecycle state, Save & Exit / Resume and app-owned layout state were audited; the active workout view's own `@State` is discarded on Save & Exit → Resume, so view-local state cannot explain a problem that survived it, and no app-owned cached layout or keyboard geometry exists. iPhone and iPad Pro simulator runs, including the on-screen keyboard, did not reproduce it (see *Planned Fixes From Feedback*). One remaining hypothesis is a stale system keyboard/safe-area inset in the surviving hosting/navigation hierarchy, but none of the simulator scenarios reproduced it.
 
 ### Post-Build-10 — Cold resume loses a fixed warm-up weight
 
 - **Group:** Developer validation — **not tester-reported**, found during the Update Routine work
 - **Severity:** P1
 - **Feedback:** A routine warm-up step with a fixed target weight (e.g. 3 reps @ 60 kg) comes back without its weight after Save & Exit, killing the app and resuming, when that exercise was not switched. A warm resume is fine.
-- **Status:** **Open.** Root cause known: the cold-resume rebuild of an unswitched exercise's warm-up steps does not carry the fixed weight. Planned as the next isolated fix.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` on 2026-10-14. The cold-resume rebuild of an unswitched exercise's warm-up steps omitted the weight; it now uses the canonical warm-up conversion (see *Fixes Made*).
 
 ### TBD — Peer/family tester
 
@@ -925,11 +926,27 @@ Current validation status:
   plan. Rows expose their label, an explicit Selected / Not selected
   accessibility value and button semantics; a duplicate system selected trait
   was removed.
+- **Cold-resume fixed warm-up weight.** *(Implemented, pending
+  distribution/re-test — merged 2026-10-14. Developer-found, not
+  tester-reported.)* A routine warm-up step with a fixed weight (e.g. 3 reps @
+  60 kg) on an exercise that was not switched came back without its weight after
+  Save & Exit → kill → Resume. Root cause: `WorkoutResumeService`'s cold-resume
+  path for an unswitched exercise rebuilt warm-up steps field by field and
+  omitted `weight`; the other resume paths already preserved it. Fix: that
+  manual reconstruction was replaced with the canonical
+  `WarmupStepSnapshot.init(from:)` conversion. No schema migration, no JSON
+  format change, no change to resume precedence or routing. Two regression
+  tests run the real cold-resume path — 3 reps @ 60 kg, and a round trip of
+  every `WarmupStep` field — and both fail against the old implementation.
 - Validation for the post-Build-10 slices: each passed its Debug build, full
   test suite and Release build before merge. For the final Update Routine / Save
   Routine Changes work: **2,728 unit tests and 2 UI smoke tests, 0 failures**;
   Debug and Release builds succeeded; manual interaction testing of the sheet was
   completed. None of it is in Build 10, so none has been validated by a tester.
+- Latest validation, for the cold-resume warm-up weight fix: 139 targeted tests
+  passed, then the full suite — **2,730 unit tests and 2 UI smoke tests, 0
+  failures**; Debug and Release builds succeeded; a manual cold resume confirmed
+  the weight is kept. Not in Build 10.
 - Test suite result at the Build 10 upload: **full scheme passes: 2,546 tests, 0
   failures** — 2,544 unit tests plus 2 UI tests (Build 10 C15 run). Debug build
   succeeds and Release build succeeds. Manual UI verification of the Build 10
@@ -941,18 +958,35 @@ Current validation status:
 
 **Open bugs** — not yet fixed:
 
-- **Cold-resume fixed warm-up weight loss.** A warm-up step with a fixed target
-  weight loses that weight after Save & Exit → kill → resume, on an exercise that
-  was not switched. Root cause known (the cold-resume rebuild of unswitched
-  warm-up steps omits the weight); warm resume is unaffected. Planned as the
-  next isolated fix. **Open.**
-- **Active-workout bottom panel floating.** The Back / Next panel can sit
-  partway up the screen; only a full app restart restored it. Root cause
-  **unknown** — needs investigation. **Open.**
+- **Active-workout bottom panel floating.** **Open — investigated, not
+  reproducible.** P1. The Back / Next panel sat partway up the screen; tab
+  switching and Save & Exit → Resume did not restore it, a full app restart did.
+  The investigation audited the layout hierarchy, safe-area inset placement,
+  keyboard/focus, navigation/lifecycle, Save & Exit / Resume and app-owned
+  layout state, and tried to reproduce it on simulators:
+  - iPhone: hardware-keyboard scenarios; on-screen keyboard with
+    background/foreground, rotation, Edit Plan presentation/dismissal, Session
+    Notes, repeated keyboard show/hide mixed with Back/Next, and Save & Exit with
+    the keyboard up → Resume.
+  - iPad Pro (on-screen keyboard confirmed): show/hide, background/foreground,
+    rotation, Edit Plan, Save & Exit with the keyboard up → Resume.
+
+  None reproduced it; the panel returned to the bottom in every completed case.
+  A floating/undocked iPad keyboard was not tested, and simulator coverage does
+  not show it cannot happen. One remaining hypothesis is a stale system
+  keyboard/safe-area inset in the surviving hosting/navigation hierarchy, but
+  none of the simulator scenarios reproduced it. With no reproducible failure
+  and no faulty code path, **no production change was made**.
+
+  *If it recurs:* capture the state before relaunching. A possible next step is
+  temporary debug-only diagnostics recording the panel and List frames,
+  safe-area insets, the last keyboard event and frame, window size and
+  orientation, any presented sheet or full-screen cover, and navigation state
+  where available. Not implemented — a contingency only.
 
 **Fixed since the last update** (implemented, pending distribution/re-test):
 the active-workout lock scope and the History calendar deselection, both listed
-here as open bugs previously.
+here as open bugs previously, and the cold-resume fixed warm-up weight loss.
 
 **Remaining peer-feedback work:**
 
@@ -1125,10 +1159,10 @@ build testers are using.
 fix, root-page discoverability and the History restructure, training term help,
 Korean localization consistency, the active-workout lock-scope fix, the
 display-only History calendar, the Block/Slot terminology cleanup, Start
-Workout and User Guide discoverability, and the reversible Update Routine with
-the Save Routine Changes sheet. All are implemented, merged and passed their
-Debug build, full test suite and Release build — and none of them is in Build
-10, so no tester has used them. They are *implemented, pending
+Workout and User Guide discoverability, the reversible Update Routine with the
+Save Routine Changes sheet, and the cold-resume warm-up weight fix. All are
+implemented, merged and passed their Debug build, full test suite and Release
+build — and none of them is in Build 10, so no tester has used them. They are *implemented, pending
 distribution/re-test*: the next tester cycle needs a build that contains them.
-**Still open:** the cold-resume warm-up weight loss and the floating bottom
-panel.
+**Still open:** the floating bottom panel — investigated, not reproducible, no
+production change.

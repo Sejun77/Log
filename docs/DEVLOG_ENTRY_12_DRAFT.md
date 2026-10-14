@@ -2,7 +2,7 @@
 
 > **DRAFT — not final.** Entry #12 is still open. Build 10 is the build testers
 > have; everything in the *After Build 10* sections is merged to `main` but has
-> not been distributed yet, and two bugs are still open (see **Next Steps**).
+> not been distributed yet, and one bug is still open (see **Still Open**).
 > Numbers, scope, and build status are accurate as of the last verified run and
 > will be updated before publishing.
 >
@@ -10,7 +10,7 @@
 > the beta feedback log. If the public devlog numbering is separate, this stays
 > #12; otherwise renumber before publishing.
 
-**Date Range:** 2026-06-24 → ongoing _(latest work recorded here merged 2026-10-13)_
+**Date Range:** 2026-06-24 → ongoing _(latest work recorded here merged 2026-10-14)_
 
 Entry #11 ended with the app working for **my** workouts — the full loop, start to
 History, validated on a real device. This entry is about a different question:
@@ -1196,32 +1196,84 @@ was checked by hand. None of this is in Build 10.
 
 ---
 
+## After Build 10 — Two Late Bugs, One Fix
+
+Real use turned up two more bugs late in this stretch. Both survived Save &
+Exit and Resume, and they ended in opposite places.
+
+The first was precise. If a routine's warm-up step has a fixed target weight —
+3 reps at 60 kg — and you start a workout, leave that exercise unswitched, Save
+& Exit, kill the app and resume, the step came back with its reps but without
+its weight. The cause was a single path: on a cold resume of an unswitched
+exercise, the resume service rebuilt each warm-up step field by field and left
+the weight out. Every other resume path already used the canonical conversion,
+so the fix was to use it here too — no schema migration, no change to the stored
+JSON, no change to which resume path is chosen. Two new tests drive the real
+cold-resume path, one for 3 reps @ 60 kg and one round-tripping every warm-up
+step field, and both fail against the old code. The full suite passed — **2,730
+unit tests and 2 UI smoke tests, 0 failures** — Debug and Release built, and a
+manual cold resume kept the weight. It is not in Build 10.
+
+The second was not precise. In real use, the panel holding Back and Next sat
+partway up the screen instead of at the bottom. Moving to another tab and back
+did not fix it, nor did Save & Exit and Resume; fully closing and reopening the
+app did. It has not happened again since.
+
+Instead of patching the layout on a guess, I traced it: the active workout's
+layout hierarchy, where the panel's bottom safe-area inset is attached, keyboard
+and focus state, navigation and lifecycle state, Save & Exit and Resume, and any
+layout state the app keeps itself. One finding narrowed it: the active workout
+screen's own state is discarded on Save & Exit and rebuilt on Resume, so nothing
+stored in that screen can explain a problem that survived the round trip — and
+the app caches no layout or keyboard geometry of its own anywhere.
+
+Then I tried to make it happen. On an iPhone simulator: hardware-keyboard runs,
+then the full on-screen keyboard — background and foreground, rotation, Edit Plan
+opened and dismissed, Session Notes, repeated keyboard show/hide mixed with Back
+and Next, and Save & Exit with the keyboard up followed by Resume. On an iPad Pro
+simulator, with the on-screen keyboard confirmed: show/hide, background and
+foreground, rotation, Edit Plan, and Save & Exit → Resume. In every completed
+case the panel returned to the bottom. A floating or undocked iPad keyboard was
+not tried, and a simulator is not the device it happened on, so none of this
+shows it cannot happen.
+
+One remaining hypothesis is a stale system keyboard/safe-area inset in the
+surviving hosting/navigation hierarchy, but none of the simulator scenarios
+reproduced it. It fits the symptom — the panel is placed by a bottom safe-area
+inset, a keyboard-sized stale inset would put it about mid-screen, that
+hierarchy outlives in-app navigation and Save & Exit, and killing the app resets
+it — but it is unproven.
+
+With no reproducible failure and no faulty code path to point at, I left the
+app's behavior unchanged. A precautionary layout tweak would have looked like a
+fix without being one, and would make it harder to tell what a recurrence means.
+Not every observed bug should be "fixed" by guessing.
+
+---
+
 ## Still Open
 
-Two bugs are known and not fixed.
+One bug is known and not fixed.
 
-**A fixed warm-up weight is lost on a cold resume.** Found during the Update
-Routine work. If a routine's warm-up step has a fixed target weight — 3 reps at
-60 kg — and you start a workout, leave that exercise as it is, Save & Exit, kill
-the app and resume, the step comes back without its weight. The cause is known:
-the cold-resume path rebuilds an unswitched exercise's warm-up steps from the
-routine and does not carry the weight across. A warm resume, without killing the
-app, is fine. It is the next fix, on its own.
-
-**The active workout's bottom panel can float.** In real use, the panel holding
-Back and Next sat partway up the screen instead of at the bottom. Moving to
-another tab and back did not fix it, nor did Save & Exit and Resume; fully
-closing and reopening the app did. The cause is not known yet, and I am not
-going to guess at it here. It needs investigating before it can be fixed.
+**The active workout's bottom panel can float** — open, investigated, not
+reproducible. Seen once in real use: the Back / Next panel sat partway up the
+screen, and only fully closing and reopening the app restored it. The
+investigation above found no reproducible failure and no faulty code path, so
+no production change was made. If it happens again, the useful thing is to
+capture the screen's state before relaunching.
 
 ---
 
 ## Next Steps
 
-- Fix the cold-resume warm-up weight loss, as its own isolated change.
-- Investigate the floating bottom panel until it has an actual cause.
 - Upload a new TestFlight build containing everything in the *After Build 10*
-  sections. Build 10 is what testers have, and none of it is in Build 10.
+  sections, including the cold-resume warm-up weight fix. Build 10 is what
+  testers have, and none of it is in Build 10.
+- In that round, also re-check Save & Exit / Resume, warm-up plans after a full
+  relaunch, and the active workout's controls and layout in normal use.
+- Leave the floating bottom panel open. If it happens again, capture the state
+  before relaunching; temporary debug-only diagnostics are the next step only
+  then.
 - Put that build in front of the friends-and-family group during real training,
   and find out whether the changes landed — a re-test of specific changes, not an
   open feedback round. The Save Routine Changes sheet is the one most worth
