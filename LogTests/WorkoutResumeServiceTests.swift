@@ -600,4 +600,89 @@ final class WorkoutResumeServiceTests: SwiftDataTestHarness {
         XCTAssertNil(planEx?.sourceBlockOrder)
         XCTAssertNil(planEx?.sourceExerciseOrderInBlock)
     }
+
+    // MARK: - Warm-up steps survive a cold resume of an unswitched slot
+
+    /// Runs the real start → Save & Exit → cold-restart sequence for a routine
+    /// whose slot carries `steps`: freeze the plan with `makePlan(from:)`,
+    /// persist each slot onto a `WorkoutItem` via `WorkoutItemSnapshotWriter`
+    /// (what the active workout writes before Save & Exit), save, then rebuild
+    /// through `WorkoutResumeService.rebuildPlan` with no in-memory plan. The
+    /// slot is never switched, so the rebuild takes the routine-template path.
+    private func coldResumeWarmups(
+        steps: [WarmupStep]
+    ) -> (fresh: [WarmupStepSnapshot], resumed: [WarmupStepSnapshot]?) {
+        let ex = makeExercise(name: "Bench Press")
+        for step in steps { context.insert(step) }
+        let scheme = WarmupScheme(name: "Standard", steps: steps)
+        context.insert(scheme)
+        let p = SlotPrescription()
+        p.sets = 3
+        p.warmupScheme = scheme
+        context.insert(p)
+        let (routine, _, re) = makeRoutine(
+            name: "Push", slotExercise: ex, setTemplates: [])
+        re.prescription = p
+
+        let startPlan = StartWorkoutFromRoutineView.makePlan(from: routine)
+        let items: [WorkoutItem] = startPlan.blocks
+            .flatMap(\.exercises)
+            .map { planEx in
+                let item = WorkoutItem(exercise: ex, setLogs: [])
+                context.insert(item)
+                WorkoutItemSnapshotWriter.populate(
+                    item, from: planEx, liveSwappedExercise: nil, in: context)
+                return item
+            }
+        let w = makeWorkout(
+            routineName: routine.name, routineID: routine.id, items: items)
+        try? context.save()
+
+        let resumed = WorkoutResumeService.rebuildPlan(for: w, in: context)
+        let slot = resumed?.blocks.first?.exercises.first
+        XCTAssertEqual(slot?.currentExerciseID, slot?.originalExerciseID,
+                       "slot must stay unswitched")
+        return (
+            startPlan.blocks.first?.exercises.first?.warmupStepsSnapshot ?? [],
+            slot?.warmupStepsSnapshot
+        )
+    }
+
+    /// Regression: the unswitched cold-resume path rebuilt warm-up snapshots
+    /// field by field and omitted `weight`, so a "3 reps @ 60 kg" step came
+    /// back as "3 reps" after Save & Exit + app kill + Resume.
+    func testColdResumeUnswitchedSlotKeepsFixedWarmupWeight() {
+        let step = WarmupStep(order: 0, kind: .fixedReps, reps: 3, weight: 60)
+
+        let (fresh, resumed) = coldResumeWarmups(steps: [step])
+
+        XCTAssertEqual(fresh.first?.weight, 60)
+        XCTAssertEqual(resumed?.count, 1)
+        XCTAssertEqual(resumed?.first?.kind, .fixedReps)
+        XCTAssertEqual(resumed?.first?.reps, 3)
+        XCTAssertEqual(resumed?.first?.weight, 60)
+    }
+
+    /// Every stored `WarmupStep` field, across every kind, must come back from
+    /// a cold resume exactly as the fresh start froze it — so adding a field to
+    /// the model cannot be captured at start and dropped on resume again.
+    func testColdResumeUnswitchedSlotRoundTripsEveryWarmupField() {
+        let steps = [
+            WarmupStep(
+                order: 0, kind: .fixedReps, reps: 3,
+                restSecondsAfter: 45, note: "Pause", weight: 60),
+            WarmupStep(
+                order: 1, kind: .percentage, reps: 5,
+                percentOfWorking: 70, restSecondsAfter: 60, note: "Speed"),
+            WarmupStep(
+                order: 2, kind: .noteOnly, restSecondsAfter: 30,
+                note: "Band pull-aparts"),
+        ]
+        let expected = steps.map(WarmupStepSnapshot.init(from:))
+
+        let (fresh, resumed) = coldResumeWarmups(steps: steps)
+
+        XCTAssertEqual(fresh, expected)
+        XCTAssertEqual(resumed, expected)
+    }
 }
