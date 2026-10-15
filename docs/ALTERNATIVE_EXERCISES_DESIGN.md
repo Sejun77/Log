@@ -567,7 +567,7 @@ work does not have to carry it.
 
 | Situation | Behavior |
 |---|---|
-| Alternative's exercise was deleted | Row renders as `Machine Chest Press — Exercise unavailable`, disabled, non-tappable. Never hidden silently: the user prepared it and deserves to see why it is not offered. The frozen `exerciseName` makes this possible. |
+| Alternative's exercise was deleted | Row renders as `Machine Chest Press — Exercise unavailable`, disabled, non-tappable. Never hidden silently: the user prepared it and deserves to see why it is not offered. The frozen `exerciseName` makes this possible. **Build 10 C1 narrowed when this is reachable:** deleting an `Exercise` now prunes the matching alternatives from the routine, so the routine editor no longer shows this row at all. It remains for a session already in progress, whose frozen `SessionPlan.alternatives` still names the deleted exercise. |
 | Payload corrupt / unreadable | Whole slot reads `[]` alternatives; the sheet falls back to today's two-option flow. Costs the feature, never the session. |
 | One alternative malformed inside a valid payload | Dropped during normalization at decode; the rest are offered. |
 | Alternative == current exercise | Hidden (§8.5). |
@@ -848,8 +848,11 @@ SwiftData tests via `SwiftDataTestHarness` only where persistence is the subject
     active session is unaffected.
 13. Finish the workout. Confirm History shows the exercise actually performed,
     with the alternative's Cardio Plan under Planned where applicable.
-14. Delete an exercise used as an alternative; reopen the routine and start a
-    workout; confirm the disabled row and no crash.
+14. Delete an exercise used as an alternative. Confirm the delete warning names
+    the prepared alternatives, then reopen the routine and confirm the
+    alternative was pruned (no leftover disabled row) while the slot's other
+    alternatives survive; start a workout and confirm no crash. (Updated by
+    Build 10 C1 — this step previously expected the disabled row.)
 15. Duplicate the routine; confirm alternatives copied and independent (edit one,
     verify the other is unchanged).
 16. Export → import the routine on a clean install; confirm alternatives arrive
@@ -896,7 +899,7 @@ full regression pass.
 | 3 | How much prescription editing inside the active workout? | **None beyond today's `EditSessionPlanSheet`.** Preparation belongs to authoring. |
 | 4 | Per-slot vs reusable alternative templates | **Per-slot** for MVP. A "save as reusable" library is a clean later addition and does not change ownership. |
 | 5 | Show the original exercise in History? | **No** for MVP (§11) — it needs a `WorkoutItem` schema field. |
-| 6 | Deleted alternative exercises | Disabled row with snapshot name (§8.7). Alternative: a periodic sweep that prunes them — rejected, silent deletion of prepared work. |
+| 6 | Deleted alternative exercises | **Revised by Build 10 C1.** Originally: disabled row with snapshot name (§8.7), with a periodic sweep rejected as silent deletion of prepared work. That rejection still stands for a *silent* sweep. Deleting the `Exercise` from the library now prunes the matching alternatives from every routine slot, but only on that explicit user action and only behind a confirmation that names the prepared alternatives being removed — so nothing is silent. The disabled row is retained for the case it was really written for: an in-flight session whose frozen `SessionPlan.alternatives` names an exercise deleted mid-workout. Session plans are not pruned. |
 | 7 | Alternatives inside supersets | **Supported for free** — alternatives hang off `RoutineExercise`, and a superset member *is* one. Needs explicit test coverage for the round-order cascade on logged sets. |
 | 8 | Per-block-member alternatives | Same as 7: each member is a slot, so each gets its own. No extra design. |
 | 9 | Routine editor complexity | One navigation row per slot (§6.1). Watch total slot-section height in Phase D. |

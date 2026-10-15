@@ -1,9 +1,12 @@
 # Entry #12 — TestFlight Beta Testing, Korean Support & External Feedback
 
-> **Draft.** This entry is a template for the TestFlight beta phase. It is filled
-> in as the beta happens. Unresolved areas use `[TBD]` placeholders — no results
-> are recorded until they actually happen. Testers have **not** completed testing
-> yet.
+> **Entry #12 log, closed at its cutoff.** This log covers feedback and fixes
+> through the workout-exit navigation and semantic haptics pass (merged
+> 2026-10-15). Feedback or fixes after that are recorded for Entry #13. Closing
+> the log does **not** mean testing is complete: Build 10 is still the
+> distributed build, the post-Build-10 work has not been re-tested by anyone
+> else, and one bug is still open. Details this repository never recorded
+> (tester counts, invite dates) are marked *not recorded* rather than guessed.
 
 ---
 
@@ -20,7 +23,41 @@ Entry #12 asks a different question:
 This phase is about external feedback from a small group of friends and family
 through TestFlight. It is **not** about a public App Store release.
 
-**Status:** planned / just beginning. TestFlight testing has not started yet.
+**Status:** the Entry #12 phase is closed; testing continues. Build 10 was
+uploaded to TestFlight on 2026-09-21 and distributed to the Friends & Family
+group, and peer feedback on it was collected and is recorded in the Feedback
+Log below. Testing is **not** complete. The re-test of the post-Build-10 work
+belongs to Entry #13.
+
+Since Build 10, a series of changes has been implemented and merged to `main`:
+root-page discoverability, training term help, Korean localization consistency,
+the Block/Slot terminology cleanup, Start Workout and User Guide
+discoverability, a typing-performance fix, the active-workout lock-scope and
+History-calendar fixes, a reversible **Update Routine** with the new **Save
+Routine Changes** sheet, the cold-resume warm-up weight fix, consistent
+workout-exit navigation back to Routines, and centralized semantic haptic
+feedback. None of it is **in Build 10**, so no tester has seen it yet. It
+awaits the next distributed build and a peer re-test. One bug is still open:
+the floating bottom panel, investigated but not reproducible (see *Planned
+Fixes From Feedback*).
+
+Findings came from three sources, kept distinct in the log:
+
+- **Peer / external feedback**: what testers reported on Build 10.
+  Discoverability, terminology, help and explanation, navigation clarity, and
+  Korean wording.
+- **Real-workout / personal testing**: what my own full training sessions
+  turned up, which short peer sessions were less likely to reach. These were
+  the reversible Update Routine problem, the awkward workout-exit landing, the
+  floating panel, and how consistent haptic feedback felt.
+- **Developer audit / follow-up**: issues found by reviewing or re-testing the
+  app, never presented as tester feedback. These were the lock scope, the
+  History calendar, the cold-resume warm-up weight (surfaced during the Update
+  Routine/resume audit), implementation inconsistencies such as the Korean
+  mixed-language output, and the centralized haptic cleanup.
+
+Separately, every item says whether it is **in Build 10** or **merged after
+Build 10**, meaning implemented but not yet used by any tester.
 
 ---
 
@@ -59,20 +96,66 @@ This matters because:
 
 Committed as: `feat(i18n): add Korean beta UI support`.
 
-Open question for this phase: are any Korean translations confusing or clipped
-in real use? `[TBD]`
+Open question carried into the next round: are any Korean translations
+confusing or clipped in real use? Peer feedback and a developer Korean pass
+drove the post-Build-10 localization work, but no Korean-speaking tester has
+seen those fixes yet.
 
 ---
 
 ## TestFlight Setup
 
-- Build prepared for TestFlight: `[TBD]`
-- Build number / version tested: `[TBD]`
-- Internal vs. external testing group: `[TBD]`
-- Beta notes sent to testers: `[TBD]`
-- Date invites sent: `[TBD]`
+- Build currently distributed to testers: **Build 10 — uploaded 2026-09-21**
+- Build number / version being tested: **1.0 (10)**
+- Previous builds: Build 8 (prepared and archived), Build 9 (uploaded)
+- Internal vs. external testing group: not recorded in this repository
+- Beta notes sent to testers: not recorded in this repository
+- Date invites sent: not recorded in this repository
 
-TestFlight setup is planned; details filled in once the build is up.
+Build 9 carries the cardio system, Alternative Exercises end-to-end, Custom Per
+Set RIR/RPE effort targets, the improved automatic RIR/RPE progression, the
+destructive confirmation before removing logged sets, and the updated
+guide/tester docs.
+
+**Not in any distributed build yet:** the post-Build-10 work — the
+typing-performance fix, root-page discoverability and the History restructure,
+training term help, Korean localization consistency, the active-workout
+lock-scope fix, the display-only History calendar, the Block/Slot terminology
+cleanup, the routine-row Start action and the Routines User Guide entry, the
+reversible Update Routine with its Save Routine Changes sheet, the cold-resume
+warm-up weight fix, workout-exit navigation back to Routines, and the semantic
+haptic feedback policy. It is merged to `main` and awaits the next upload. No
+build number has been assigned to that upload yet.
+
+**Build 10 shipped, and is the build testers are using.** It opened with a
+safety/UX fix to Alternative Exercises deletion handling (C1), followed by a Korean terminology and naming
+pass (C2), an active-workout layout polish (C3) and an Alternative Exercises
+discoverability pass (C4), a User Guide language default (C5) and an
+effort-target clarity pass (C6), planned effort targets in History (C7), the
+Calculus showcase hidden from Release (C8), a stability / data-integrity fix to
+prepared Alternative Exercises (C9), a manual-test polish bundle (C10), a
+nested-editor persistence fix (C11), the remaining low-risk UI polish bundle
+(C12), a real-device warm-up refresh fix (C13), a UI density cleanup (C14) and
+an Alternative Exercise authoring-validation fix (C15) — see the Build 10
+entries under *Fixes Made* below. C1–C8 were UX polish or visibility improvements, not Build 9
+blockers. **C9 is not polish**: it fixes a reproduced crash and a silent
+orphan-row leak in Alternative Exercises authoring, and Build 9 carries both —
+the crash needs a prepared alternative's *first* warm-up step to trigger, so it
+is reachable but not on a common path. **C10 is mixed**: five findings from one
+manual pass, four of them wording and layout, one a real active-workout bug (a
+rest timer that outlived the set that started it). **C11 is data loss**: work
+authored inside a prepared alternative could vanish on the way out of the
+screen. Build 9 carries it, and so did C9 — the crash fix made the edit
+possible, not durable. **C12 closes the audit's low-risk tail**: seven wording,
+title and layout items, none of them behavioral, and the point at which the
+Build 10 UX audit has nothing left in it that is both cheap and worth doing.
+**C13 came from the phone, not the audit**: a warm-up step added to a routine
+exercise or a prepared alternative was saved correctly but sometimes not drawn
+until the editor was reopened, and the `N steps` preview never updated until the
+page was. It reproduces only on device — the simulator masks it.
+**C14 subtracts rather than adds**: four permanent explanations move behind info
+buttons, a duplicated exercise name and the C12 superset effort-count marker are
+removed outright. Nothing behaves differently, and no live warning was hidden.
 
 ---
 
@@ -80,20 +163,19 @@ TestFlight setup is planned; details filled in once the build is up.
 
 | Group              | Who                         | Focus                              | Status  |
 | ------------------ | --------------------------- | ---------------------------------- | ------- |
-| Lifting friends    | Friends who train regularly | Real workout use                   | `[TBD]` |
-| Family (Korean UI) | Family, Korean-comfortable  | Korean usability                   | `[TBD]` |
-| Casual testers     | People who don't lift much  | Understandable without gym context | `[TBD]` |
+| Lifting friends    | Friends who train regularly | Real workout use                   | Not recorded |
+| Family (Korean UI) | Family, Korean-comfortable  | Korean usability                   | Not recorded |
+| Casual testers     | People who don't lift much  | Understandable without gym context | Not recorded |
 
-Number of testers invited: `[TBD]`
-Number who installed: `[TBD]`
-Number who completed a workout: `[TBD]`
+Number of testers invited, installed, and completing a workout: not recorded in
+this repository. Feedback is logged by group, not by individual.
 
 ---
 
 ## Testing Tasks
 
 The checklist testers are asked to walk through (full version in
-`TESTFLIGHT_FEEDBACK_PLAN.md`):
+`docs/TESTFLIGHT_FEEDBACK_PLAN.md`):
 
 - Install the app through TestFlight
 - Open the app
@@ -112,6 +194,48 @@ The checklist testers are asked to walk through (full version in
 - _(optional)_ Try an uneven superset, if comfortable
 - _(optional)_ Prepare an alternative exercise on a routine exercise, then apply
   it mid-workout from Switch Exercise → Prepared Alternatives
+- _(optional)_ Set an effort target on a routine exercise — Same Target,
+  Progression, or Custom Per Set — and check the per-set targets during the
+  workout
+- _(Build 10)_ Open an exercise that is used **only** as an Alternative
+  Exercise, confirm it does not read as unused, then delete it and confirm the
+  warning mentions prepared alternatives and the alternative is gone from the
+  routine afterwards
+- _(Build 10, Korean UI)_ Open a routine block and confirm the set rows are in
+  Korean, then compare the **End** and **Finish** dialogs during a workout and
+  confirm they ask different questions
+- _(Build 10)_ Start a workout and confirm the set rows are the first thing on
+  the screen — say whether logging feels quicker to reach than it did in Build 9
+- _(Build 10)_ On a routine exercise that has prepared alternatives, check that
+  the routine row and the Start Workout screen both say how many there are
+  before you start, and that the Switch Exercise row says so during the workout
+- _(Build 10)_ Open the in-app User Guide and confirm it opens in your phone's
+  language, with a switch at the top for the other one — you should not have to
+  scroll through a guide you cannot read
+- _(Build 10)_ On a routine exercise, tap the info button under the effort mode
+  picker and say whether the four modes are explained clearly enough to choose
+  between them
+- _(Build 10)_ Finish a workout on an exercise that has an effort target, then
+  open it in History and confirm the planned effort is shown — and that it still
+  shows the old value after you change the routine's target
+- _(Build 10)_ Open Settings and confirm there is no "Showcase" or "Calculus
+  Analytics" row — and that everything else you used before is still there
+- _(Build 10)_ Add a warm-up step to a **normal** routine exercise and confirm it
+  appears immediately, without leaving the screen — then go back one level and
+  confirm the **Warmup** row's step count updated too. Repeat inside a prepared
+  alternative. Please do this on a real phone: the simulator hides this one
+- _(Build 10)_ Open a single-exercise block's Details and confirm the exercise
+  name appears once, in the title — not again as a heading underneath. Then open
+  a **superset**'s Details and confirm each member is still clearly separated by
+  its own name
+- _(Build 10)_ On the superset Details screen, tap the ⓘ next to **Timing**,
+  **Set All Exercises** and **Exercises** and say whether the explanations still
+  make sense there rather than on the screen. Then try removing an exercise from
+  a 2-exercise superset and confirm the "needs at least 2 exercises" warning
+  still appears **on screen**, not behind a button
+- _(Build 10)_ Start a cardio workout with a Cardio Plan and confirm the
+  checklist has no caption under it, and that the ⓘ in its header explains the
+  ticks are not saved as results
 
 ---
 
@@ -175,7 +299,7 @@ Severity:
 - **Group:** Friends & Family Beta
 - **Severity:** P2
 - **Feedback:** A tester requested a user guide because the app was simple, but not fully intuitive for someone unfamiliar with training apps or workout terminology.
-- **Status:** Fixed. Added `USER_GUIDE.md` and an in-app User Guide under Settings → Help → User Guide.
+- **Status:** Fixed. Added `docs/USER_GUIDE.md` and an in-app User Guide under Settings → Help → User Guide.
 
 ### 2026-07-15 — Peer/family tester usability feedback
 
@@ -212,20 +336,116 @@ Severity:
 - **Feedback:** A tester asked for cardio support, which the app had no obvious answer for.
 - **Status:** Fixed for the beta, in the same slice as the duration/rest limits above (lightweight cardio depends on usable long-duration input). Cardio can be logged as a duration-based exercise. For now, details like distance, speed, incline, resistance, or heart-rate zone can be written in notes. In Korean: 유산소 운동은 시간 기반 운동으로 기록할 수 있습니다. 현재는 거리, 속도, 경사, 저항 단계, 심박 구간 같은 세부 정보는 메모에 기록할 수 있습니다. Structured cardio metrics are deferred (see Deferred Feedback).
 
-### TBD — Peer/family tester
+### 2026-09-21 — Peer/family tester usability feedback
 
 - **Group:** Friends & Family Beta
-- **Severity:** TBD
-- **Feedback:** TBD
-- **Status:** TBD
+- **Severity:** P1
+- **Feedback:** New users were not always sure what each root page was for, or what the app expected them to do first. The overall workflow — make a routine, start a workout from it, look at history — was not obvious without being told.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Each root page now opens with a one-line statement of what the page is for, and the first-use empty states say what to do next rather than only that the list is empty.
 
-Peer/family testing has started, and the entries above reflect issues found through tester use, developer reproduction, crash reports, and manual validation.
+### 2026-09-21 — Peer/family tester usability feedback
+
+- **Group:** Friends & Family Beta
+- **Severity:** P2
+- **Feedback:** The root pages felt too similar to each other — it was hard to tell at a glance which page you were on. Testers were explicit that they still like the simple, plain design and were **not** asking for a colourful redesign; the problem was hierarchy and page identity.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Addressed through page-purpose intros and a clearer History structure rather than new colour or ornament. A section-header typography experiment was tried and reverted — the original typography is retained.
+
+### 2026-09-21 — Peer/family tester usability feedback
+
+- **Group:** Friends & Family Beta
+- **Severity:** P1
+- **Feedback:** Advanced training terminology was not self-explanatory. **RIR** was called out specifically: the app asks for a value before it ever says what the letters mean. The same applies to RPE, e1RM, and the technique names.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Point-of-use explanations were added behind the app's existing info glyph, and the technique descriptions were consolidated so every screen gives the same definition.
+
+### 2026-09-22 — Developer manual review (Korean)
+
+- **Group:** Developer validation — **not tester-reported**
+- **Severity:** P1
+- **Feedback:** A manual pass through the app in Korean found mixed Korean/English output in several places: technique **names** as well as their previews, time units rendered as bare `s` / `m` / `h`, the cardio **Segments** vocabulary, the History **In Progress** pill, and warm-up previews. The warm-up editor also showed a large blank band between the navigation title and the first row.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` after Build 10, so testers have not seen it yet. Recorded here to keep the log complete; these were found during follow-up testing, not raised by a tester.
+
+### 2026-09-21 — Typing performance (post-Build-10)
+
+- **Group:** Real-use follow-up — the original reporter is not recorded
+- **Severity:** P2
+- **Feedback:** Typing lagged in text fields on the active-workout path, most noticeably Session Notes; a long Session Notes entry also left a band of blank space under the field. Separately, placing the caret inside a word and double-tap word selection were unreliable.
+- **Status:** Lag and layout: *implemented, pending distribution/re-test* — merged to `main` after the Build 10 upload, so testers have not seen it. Caret / word selection: reproduced independently outside Log — in stock SwiftUI and UIKit harnesses on iPhone and iPad (iOS/iPadOS 26.6.2) — and no Log-specific fix was identified, so no Log change was made. No Apple / TextKit bug was established. See `docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md`.
+
+### 2026-09-22 — Follow-up testing: active-workout lock scope
+
+- **Group:** Developer validation — **not tester-reported**
+- **Severity:** P1
+- **Feedback:** Starting a workout from one routine locked blocks in an unrelated routine whenever both routines used the same exercise. The lock was decided by exercise identity alone instead of by the routine being trained.
+- **Status:** Implemented, pending distribution/re-test — merged after Build 10.
+
+### 2026-09-22 — Follow-up testing: History calendar
+
+- **Group:** Developer validation — **not tester-reported**
+- **Severity:** P2
+- **Feedback:** A highlighted workout day in the History calendar could be tapped and deselected, although the highlight is a record of workout days rather than a selection.
+- **Status:** Implemented, pending distribution/re-test — merged after Build 10.
+
+### Build 10 round — Start Workout and User Guide discoverability
+
+- **Group:** Friends & Family Beta
+- **Severity:** P2
+- **Feedback:** Starting a saved routine was too buried — routine list → routine editor → Start → Start Workout. The User Guide lived only under Settings → Help, where a first-time user may never look. (Recorded at the time under *Remaining peer-feedback work*; the exact date is not recorded.)
+- **Status:** Implemented, pending distribution/re-test — merged after Build 10.
+
+### Build 10 round — Block / Slot terminology (follow-up)
+
+- **Group:** Follow-up to the peer terminology feedback — Block and Slot were not named by a tester
+- **Severity:** P2
+- **Feedback:** Internal model words — **Block** and **Slot** — appeared in user-facing UI.
+- **Status:** Implemented, pending distribution/re-test — merged after Build 10.
+
+### Post-Build-10 — Update Routine after switching to an alternative
+
+- **Group:** Real-use follow-up — the date and reporter are not recorded
+- **Severity:** P1 (could mix plans and eventually lose exercise-specific prescription data)
+- **Feedback:** A routine exercise A had prepared alternative B. After switching A → B mid-workout and choosing Update Routine at Finish, the routine pointed at B but kept A's plan on it, while B's prepared plan stayed stranded in the alternatives list.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` on 2026-10-13. The finish-time choice was also redesigned as the **Save Routine Changes** sheet (see *Fixes Made*).
+
+### Post-Build-10 — Active-workout bottom panel floating
+
+- **Group:** Real-use follow-up — the reporter is not recorded
+- **Severity:** P1
+- **Feedback:** During an active workout, the bottom panel holding Back / Next sat partway up the screen instead of at the bottom. Switching tabs and returning did not fix it, nor did Save & Exit → Resume; fully closing and reopening the app did.
+- **Status:** **Open — investigated, not reproducible.** No production code was changed. The layout hierarchy, safe-area inset placement, keyboard/focus state, navigation/lifecycle state, Save & Exit / Resume and app-owned layout state were audited; the active workout view's own `@State` is discarded on Save & Exit → Resume, so view-local state cannot explain a problem that survived it, and no app-owned cached layout or keyboard geometry exists. iPhone and iPad Pro simulator runs, including the on-screen keyboard, did not reproduce it (see *Planned Fixes From Feedback*). One remaining hypothesis is a stale system keyboard/safe-area inset in the surviving hosting/navigation hierarchy, but none of the simulator scenarios reproduced it.
+
+### Post-Build-10 — Cold resume loses a fixed warm-up weight
+
+- **Group:** Developer validation — surfaced during the Update Routine/resume audit; **not tester-reported**.
+- **Severity:** P1
+- **Feedback:** A routine warm-up step with a fixed target weight (e.g. 3 reps @ 60 kg) comes back without its weight after Save & Exit, killing the app and resuming, when that exercise was not switched. A warm resume is fine.
+- **Status:** Implemented, pending distribution/re-test — merged to `main` on 2026-10-14. The cold-resume rebuild of an unswitched exercise's warm-up steps omitted the weight; it now uses the canonical warm-up conversion (see *Fixes Made*).
+
+### Post-Build-10 — Workout exit lands on a stale screen
+
+- **Group:** Developer real-use / UX follow-up; **not tester-reported**. The exact date is not recorded.
+- **Severity:** P2
+- **Feedback:** Leaving an active workout landed on whatever screen it was entered from. Finish, Save & Exit or Discard returned to the Start Workout screen or the routine editor behind it. Both were stale once the workout ended, and Resume, the likely next action after Save & Exit, was on the Routines page several Back taps away.
+- **Status:** Implemented, pending distribution/re-test. Merged to `main` on 2026-10-14. Every intentional exit now returns to the main Routines screen, whatever the entry path (see *Fixes Made*).
+
+### Post-Build-10 — Haptic feedback inconsistent and sometimes premature
+
+- **Group:** Real-device use + developer audit; **not tester-reported**.
+- **Severity:** P2
+- **Feedback:** On a real phone, haptics felt inconsistent. The existing success haptic fired when Finish reached confirmation, before the workout or selected routine changes had actually been saved. An audit found 18 raw feedback-generator calls across 6 files with no shared policy. The Finish haptic fired on reaching the confirmation rather than after finishing. Success and warning notification haptics were used for every set log and undo, and deletes played success. Rest completion could buzz twice, and returning to the app after a rest had already ended could buzz on restoration.
+- **Status:** Implemented, pending distribution/re-test. Merged to `main` on 2026-10-15. All haptics now go through one semantic policy (see *Fixes Made*). Automated policy behavior is covered by 21 `HapticPolicy` tests; the full suite passed (2,763 unit tests + 2 UI smoke tests) and Debug and Release builds passed. The physical feel was also manually checked on a real iPhone before merge. Testers re-test it on the next build.
+
+The entries above reflect issues found through tester use, developer reproduction, crash reports, real-workout testing and manual validation. This log closes at the Entry #12 cutoff. New feedback, including the re-test of the post-Build-10 work, is recorded for Entry #13.
 
 ---
 
 ## Fixes Made From Feedback / TestFlight Validation
 
 These fixes came from Friends & Family Beta feedback, TestFlight crash reports, developer reproduction, and manual validation.
+
+Everything up to and including the Build 10 entries shipped in a build testers
+have used. The bullets after them are marked *Implemented, pending
+distribution/re-test* — they were merged to `main` after Build 10 was uploaded,
+so they are not in the build anyone is testing.
 
 - Removed a fragile SwiftData predicate from the routine startability path after a TestFlight crash occurred when opening routines or adding the first exercise to a blank routine.
 - Removed a second fragile SwiftData predicate from the routine deletion path after deleting or removing an exercise from a routine caused another TestFlight crash.
@@ -244,6 +464,36 @@ These fixes came from Friends & Family Beta feedback, TestFlight crash reports, 
 - Added lightweight cardio support without a cardio data model. Cardio already existed as a canonical body part with the Korean translation 유산소; the built-in catalogue now seeds Walking, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine alongside the existing Treadmill Run, all duration-based. The catalogue version was bumped so existing installs pick the new names up, and the per-name dedupe means nothing is duplicated or overwritten. Distance, speed, incline, resistance / machine level, and heart-rate zone go in exercise or setup notes for now.
 - Added regression tests for routine startability, routine deletion, finish confirmation behavior, warm-up step insertion, and exercise-switch compatibility / resume consistency / draft-only prefill.
 - Added **Alternative Exercises**, built after the cardio system and on top of the exercise-switch work above. A routine exercise can now store prepared backup/replacement exercises, each carrying its own plan — sets, reps or duration, rest, effort, tempo, warm-ups, techniques, cardio target distance, Cardio Plan, and notes. The routine editor authors them; a workout started from that routine offers them mid-session under Switch Exercise → **Prepared Alternatives**, and applying one switches the exercise *and* applies the prescription prepared for it rather than adapting the replaced exercise's plan. The existing destructive confirmation still runs first when the switch would remove already-logged sets, and Cancel leaves the session untouched. Alternatives are frozen into the session at start, so editing the routine mid-workout cannot change what the active session offers, and they survive Save & Exit → Resume. Duplicating a routine copies them (with fresh alternative ids and shared exercise references), and routine transfer export/import carries them, resolving each alternative's exercise by name exactly as a slot's own exercise reference is resolved. Routine templates are still never mutated silently, and a routine that uses no alternatives sees no new screen and exports byte-identically to before.
+- **Redesigned RIR/RPE effort targets**, built after the Build 8 prep and the Alternative Exercises work above, and scoped to the **next build (Build 9)**. Automatic **Progression** no longer lands on awkward half-step targets by default: endpoints are exact, interior sets round to whole numbers in the direction the metric means "easier", and the ramp stays monotonic. RIR 2 → 0 over 4 sets now resolves to **2, 2, 1, 0**, and RPE 8 → 10 over 4 sets resolves to **8, 8, 9, 10**, instead of the half-step values the old nearest-0.5 interpolation produced. Alongside it, a third mode — **Custom Per Set** — lets a user type the exact target for every set, half steps included, such as **2, 1.5, 1, 0**; custom values are stored verbatim and are never rounded. The list is stored as a comma-separated column, fitted to the set count on both write and read (extra sets repeat the last authored target, removed sets truncate, earlier targets are never touched), and rejected whole rather than element-wise if a hand-edited document is malformed, so a bad entry can never shift a later set's target onto the wrong set. Custom targets preserve through routine editing, the active workout, Save & Exit → Resume, Alternative Exercises, routine duplication, and routine transfer export/import. Switching between modes seeds sensible values rather than discarding them, and the None / Same Target / Progression behavior that already shipped is unchanged for slots that do not opt into Custom Per Set.
+- Stopped the host app from requesting **notification authorization during XCTest-hosted runs**. The app already skipped the request under UI tests via the `--ui-testing` launch argument, but `LogTests` does not pass that argument, so the host app could raise a system permission dialog while XCTest was still establishing its connection to the runner — an occasional bootstrap flake that failed the run before any test executed. The launch gate now also checks `XCTestConfigurationFilePath` in the process environment, which XCTest sets only in a test-hosting process. Production launch behavior is unchanged: on device, TestFlight, App Store, or a normal Xcode Run the variable is absent and authorization is still requested exactly once per launch. UI test behavior is unchanged, and the in-workout authorization requests are untouched.
+
+- **Build 10 C1 — made exercise deletion account for prepared Alternative Exercises.** The first Build 10 fix, and a safety/UX one: `ExerciseRoutineUsage` counted only direct routine slots, so an exercise referenced *solely* as a prepared alternative reported the misleading **"Used in 0 routines"** on Exercise Detail — directly above a Delete button that would strand that prepared work. Deleting it removed nothing from the alternatives, leaving dangling references that resurfaced mid-workout as disabled `Exercise unavailable` rows in routines the user had no way to repair. Exercise usage now counts prepared alternatives alongside direct slots, kept as **separate** counts that are never summed (a routine referencing the exercise both ways is still counted once): Exercise Detail now reads `Used as 3 alternatives` when there is no direct usage, `Used in 2 routines · 3 alternatives` when there is both, and no longer offers the "add this exercise to a routine" empty state to an exercise several routines are relying on. The delete confirmation now names the prepared alternatives and their count. Deleting an exercise **prunes** the matching alternatives rather than leaving them dangling — the user chose to delete it from the library and the confirmation now says the prepared work goes with it — while non-matching alternatives keep their ids, their prescriptions, and a dense order, and removing a slot's last alternative clears the column to nil so "had them and lost them" persists identically to "never had any". A nil, empty, or corrupt alternatives payload matches nothing and is left byte-identical rather than rewritten. Disabled alternatives are counted and pruned like any other — they are still prepared work. No schema change, no active-workout switch behavior change, no effort-target logic change.
+
+- **Build 10 C2 — fixed Korean terminology and a raw-enum leak in the routine editor.** Display text only; nothing behaves differently. Four things the app said wrong, plus a guide error. The **End workout?** and **Finish this workout?** dialogs shared one Korean title — `운동을 종료할까요?` — so the exit path and the save-to-History path asked the identical question; they now read `운동을 중단할까요?` and `운동을 완료할까요?`, the latter matching the `완료` button inside it. Routine block detail rendered `SetTemplate.kindRaw.capitalized`, the *persisted English raw value*, so a Korean routine listed its sets as `Working` / `Warmup` / `Dropset`; both call sites now use the localized `SetKind` label the rest of the app already had, with raw values and persistence untouched. The routine editor row and the cardio plan editor's title said **Structured Cardio** while the active workout, History and the guide said **Cardio Plan** — both now say Cardio Plan / 유산소 계획 (the Alternative Exercises summary chip keeps the old key deliberately, as renaming it buys the user nothing). The Techniques row read `운동 기법        3 테크닉`, two Korean words for one thing; the count now reuses the row's own name as `운동 기법 %1$lld개`. And the Korean guide told users to tap **종료** — the *exit* button — to save a workout to History; the finish steps now say **완료**, and the only 종료 left is `저장 후 종료`, the save-for-later exit. `docs/USER_GUIDE.md` was updated on main to match, since the in-app guide mirrors it by hand. No schema, persistence, lifecycle, cardio, alternatives, transfer or History change.
+
+- **Build 10 C3 — put the Sets section first on the active workout screen.** UX polish, layout order only; nothing behaves differently. The set rows were the **ninth** section in the list, under Session Notes, the future-prefill toggle, Exercise Notes, Switch Exercise, the Plan card, Equipment & Setup, warm-ups and the cardio checklist — so logging a normal working set meant scrolling past read-once admin content on every exercise, on every phone. Sets is now first, followed by the plan-shaped sections a user reads *while* logging (Plan, Warmup, the Cardio Plan checklist), then Equipment & Setup, then the read-once half (Switch Exercise, Exercise Notes, the prefill toggle, Session Notes). The header above the list did not move. No section was removed, renamed or collapsed behind a disclosure group, and no label or accessibility identifier changed; the list's own modifiers — inset-grouped style, scroll-to-dismiss-keyboard, the bottom Back / Next-Finish safe-area bar and its keyboard withdrawal, and the keyboard dismiss accessory — are untouched. Verified as a pure permutation by diffing the multiset of non-blank lines against the parent commit: seven comment lines removed, eleven added, every code line byte-identical and merely relocated. That check caught a real defect en route — the first pass swallowed the cardio checklist's call along with the comment above it, which would have compiled clean, passed the whole suite, and silently dropped the checklist from cardio workouts. No schema, persistence, lifecycle, rest timer, switch, alternatives, effort-target, cardio-calculation, History or transfer change.
+
+- **Build 10 C4 — made prepared Alternative Exercises visible before you need them.** UX / discoverability polish, display only; nothing behaves differently. Alternative Exercises shipped complete in Build 9 and then said nothing about itself: a slot's prepared alternatives were authored deep inside the routine slot and invisible on the routine row, the Start Workout screen and the active workout, so a user could not confirm the prepared work had survived routine editing, duplication or import without starting a workout and tapping Switch Exercise. The count now appears on all three. **Routine editor rows** append it to the summary that already states the plan — `3 × 8–12 · 90s rest · RIR 2 · 2 alternatives` — via a new count on `BlockPrescriptionSummary`; superset rows are exempt, since a block-level count would not say which exercise owns it. **Start Workout** listed only exercise names and now renders that same summary type, so a plan is worded identically on the screen you author it and the screen you confirm it; the start logic is untouched. **The Switch Exercise row** shows a count when the slot has offers, taken from the exact array the sheet is built from, so the badge can never promise a row the sheet will not show — and a slot with nothing to offer shows no badge and still opens the picker directly, as before. **M13** is fixed alongside: the sheet is titled `Switch Exercise` rather than the name of the exercise being replaced, which moved into a two-line section header (`Prepared Alternatives` over `Replacing Bench Press`). The **count rule** is "what tapping Switch Exercise will offer you": disabled alternatives are excluded — the user asked for them not to be offered, so counting them would advertise something the sheet will not honor — while a deleted exercise's alternative still counts, because the sheet still shows that row, named and disabled. The authoring row inside the slot still counts every alternative, disabled included. One new localized key (`Replacing %@` → `%@ 대체 중`); the counts and both titles reuse keys the app already ships. No schema, persistence, payload-format, authoring, switch, destructive-confirmation, deletion, effort-target, cardio-calculation, History, transfer, duplication, lifecycle, set-logging or rest-timer change.
+
+- **Build 10 C5 — the in-app User Guide now opens in the device's language.** UX / onboarding polish, presentation only; neither guide's content changed. The guide rendered the full English guide, a divider, and then the full Korean guide — both, always, in that order — so a Korean tester scrolled past a guide they could not read to reach theirs, and an English tester ended every visit on a long Korean appendix. It is the first screen a new tester opens, which made it the worst place in the app for a scroll tax. It now shows **one** guide, chosen by the device language (Korean on a Korean phone, English otherwise), with a small **English / 한국어** segmented switch at the top for anyone who wants the other. The default rule is a pure `UserGuideLanguage.default(for:)` keyed on the **language, not the region** — a Korean speaker with a US region still gets Korean, a bare `ko` resolves, and every other language falls back to English, the only other guide there is; taking a `Locale` argument rather than reading `Locale.current` is what makes it unit-testable. Both guide arrays are intact and still held to matching section and item counts by the existing parity tests, which matters more now that a reader can flip between them on one screen. The selection is view state and is **not persisted**: the locale default is right on essentially every launch, and remembering an override past the session that prompted it would be a small permanent way to be wrong. The two switch titles are deliberately **not** translated — a language switcher names each language in its own language — so the only new key is the one nobody sees: `Guide language` → `가이드 언어`, the picker's VoiceOver label. `docs/USER_GUIDE.md` was not touched; this changes presentation, not content. No schema, persistence, lifecycle, set-logging, rest-timer, switch, alternatives, effort-target, cardio, History, transfer or duplication change.
+
+- **Build 10 C6 — explained the effort targets, and stopped hiding saved ones.** UX / clarity polish covering five audit findings on one feature; wording, helper text and summary formatting only. The **mode picker offered four modes and defined none of them**, so an info button under it now lists all four — None, Same Target, Progression, Custom Per Set — one sentence each, in Korean using the picker's own translations; the in-app guide and `docs/USER_GUIDE.md` had described *three* ways since before Custom Per Set shipped and now describe four, with `None` added as the first. Setting **Autoregulation to None looked like deletion**: the effort controls are hidden, reasonably, but a slot with authored targets showed nothing at all, so a read-only line now says the targets are saved and names the setting that brings them back — shown only when something is actually saved, never editable, and it writes nothing. The **in-session copy said "not available yet"** for a progression that is deliberately frozen at session start; it now says the targets are fixed for this session, and the two superseded strings were deleted from the catalog rather than left stale. A **ten-set custom list printed all ten values** into a one-line row and pushed the segments before it off the end; summaries now show four values then an ellipsis (`RIR 3/3/2/2…`), counted against the list fitted to the set count. And the editor's live preview joined per-set values with `" · "` — the separator that divides whole summary segments — so `Set targets: 2 · 1 · 0` read as three segments rather than one list; the rule is now `/` inside a value list and `" · "` between segments, matching the block subtitle and the alternative summary. All of it is display: `resolve`, the per-set labels and the stored comma-separated list are untouched, pinned by a test asserting they are byte-for-byte unchanged after a summary is taken. No schema, migrations, stored effort fields, `EffortMode` raw values, custom-target persistence, effort resolution, lifecycle, set-logging, rest-timer, switch, alternatives, deletion, cardio, History-schema, transfer or duplication change.
+
+- **Build 10 C7 — History now shows the planned effort target a workout was started with.** A History / effort-target visibility improvement, display only. Build 9 shipped Custom Per Set targets and they vanished the moment a workout ended: `PlannedPrescriptionSnapshot` had carried the frozen effort fields since the slice that added them, with **no reader**, so a user could author a per-set ramp, train it, and find no trace of it afterwards — the feature was effectively write-only. Each History item now carries a one-line **Planned effort** row, between Equipment & Setup and the Cardio Plan block and above the logged sets, laid out exactly like the Equipment row and added to both the single-exercise and superset section shapes. The value is read **only** from `item.plannedPrescriptionSnapshot`, through a new pure helper — never the live routine, the live exercise, or the routine list — so editing your programming tomorrow cannot rewrite what last week's workout says it planned; that is pinned by tests against real model rows, for a single target and for a custom list. All formatting is delegated to the same resolver the routine editor and active workout use, so `RIR 2`, `RIR 2 → 0` and `RIR 2/1.5/1/0` render identically to everywhere else and the C6 four-value elision (`RIR 3/3/2/2…`) arrived for free; both metrics work, including the paired fallback that lets a target authored in RIR read for a user now on RPE, and legacy snapshots with no explicit mode still derive a single target. Every "nothing to say" case renders **no row at all** rather than an empty one: no snapshot, mode None, missing values, a corrupt custom list, or autoregulation switched off. Cardio is not special-cased — a cardio slot's snapshot carries no effort values, so it renders nothing through the ordinary path. The label is **Planned effort / 계획 강도** and says nothing about achievement: no `SetLog` holds a logged RIR/RPE, and a test asserts the Korean never implies one. **H5(b) was deliberately not implemented** — no logged-effort field, no planned-vs-actual comparison, no `SetLog` change. No schema, migrations, `SetLog` / `WorkoutItem` / snapshot fields, stored effort values, `EffortMode` raw values, active-workout logging or effort controls, lifecycle, rest timer, switch, alternatives, deletion, cardio calculations, transfer payload or duplication change.
+
+- **Build 10 C8 — hid the Calculus showcase from Release and TestFlight builds.** Settings / TestFlight polish, visibility only. Settings offered a **Showcase → Calculus Analytics** row unconditionally: an AP Calculus AB demo that analyses in-memory sample data and touches nothing a user owns. It was written as a development exercise, and it has been sitting in the Settings screen of a build sent to people who came to log workouts — in English only, so a Korean tester met an untranslated section about coursework. It is now behind `#if DEBUG`, still available locally and absent from anything a tester installs. The gate wraps **both** the call site and the `showcaseSection` definition, which is what makes it load-bearing rather than cosmetic: gating only the call would work today and quietly stop working the first time someone re-added a reference, whereas with the definition gated too an ungated call **fails the Release build** instead of shipping. The rule itself lives in one small pure helper taking the build configuration as an argument — the only way to test it at all, since a test bundle is built in the same configuration as its host app and a Debug run can never observe Release behavior directly. Not a runtime flag: no `UserDefaults`, nothing togglable, no hidden gesture. `Localizable.xcstrings` was **not** touched — the three showcase keys have no Korean and no test requires them to, so translating a Debug-only demo would be work with no user. `AnalyticsView`, `StrengthAnalytics` and `SampleWorkoutData` are unchanged and still build and test in every configuration: this removes the way *in*, not the showcase. No schema, migrations, workout, routine, active-workout, History, cardio, Alternative Exercises, effort-target, localization, docs, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
+- **Build 10 C9 — made prepared Alternative Exercises write into their own store.** A stability and data-integrity fix, and the first Build 10 item that is not polish: manual testing reproduced a **crash**. The alternative detail editor reuses the real routine prescription editors — `PrescriptionFields`, `WarmupSchemeEditor`, `TechniquePlanEditor` — by binding them to a **scratch** slot that lives in `AlternativeDraftStore`'s own throwaway in-memory container, and injects that container's context into the section's environment. That injection does not reach the editors the section **pushes**, so both wrote into the app's context instead, against a prescription that belongs somewhere else. One mistake, two different failures. `SlotPrescription.warmupScheme` is **to-one**, and relating a to-one across containers is a SwiftData `fatalError` — adding the first warm-up step to a prepared alternative killed the app on the main thread (`EXC_BREAKPOINT` in the `warmupScheme` setter), which is exactly the reported crash. `techniquePlans` is **to-many**, and the same cross-container relate is accepted *silently* — so techniques never crashed on add; they were saved into the **user's store** as orphan rows owned by no cascade and reachable from no screen, and `ModelContext.delete` on a draft-owned plan was a no-op until the draft had saved, after which it raised `NSInvalidArgumentException`. Both editors now resolve the write context from **the model being edited** (`prescription.modelContext ?? environment`), through two small helpers — `WarmupSchemeAuthoring` and `TechniquePlanAuthoring` — which also carry the create / insert / relate sequences so those paths are testable without a UI harness. For every routine slot the resolved context *is* the environment's, so ordinary warm-up and technique editing is unchanged; for a scratch slot it is the draft container, so nothing an alternative editor creates can reach the user's database. **No orphan sweep was added:** any `TechniquePlan` rows a Build 9 install already leaked are inert — unreachable from any screen, with no effect on payloads, workouts or History — and cleaning them up can be decided separately. No schema, migrations, `SlotAlternative` payload format, public Alternative Exercises behavior, routine-editor behavior outside the context fix, active-workout, switch, effort-target, cardio, History, transfer/import/export payload, duplication, localization, docs, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
+- **Build 10 C10 — the manual-test polish bundle.** Five findings from one pass through the app on device, fixed together: four are wording or layout, one is a real bug. **The rest timer outlived the set that started it.** Three undo paths had drifted apart — the reps/weight row stopped the rest *unconditionally* (so going back to correct an older set killed the countdown running after a newer one), while the duration / cardio row and the warm-up row never stopped it *at all*, under a comment claiming the first behavior. Unlog the set that began the rest and the countdown, its scheduled notification and its Live Activity all kept running for a set that no longer existed. The timer had no way to know better: it is slot-scoped, and `AppState` persists only `activeRestSlotID`, never which set triggered it. Rest starts now record their origin set, and all five start sites — working reps/weight, duration/cardio, warm-up, and the two dropset paths, where a drop's rest belongs to its **parent** working set — carry it. One pure rule decides the rest: clear only when the unlogged set *is* the origin; after a cold resume, where the rehydrated rest knows only its slot, clear only when that slot has no logged sets left at all. Clearing goes through the existing path, so the notification and Live Activity state go with it. Rest *start* behavior and every duration calculation are untouched. **Warm-up now sits above Sets.** C3 moved the set rows from ninth to first; a warm-up is performed *before* the first working set, so listing it after the rows it precedes asked the user to scroll up to do the thing they do first. The order is now Plan, Equipment & Setup, Warmup, Cardio Plan checklist, Sets — everything above the set rows plan-shaped and short — with the whole admin half (Switch Exercise, Exercise Notes, the prefill toggle, Session Notes) still below, Session Notes last. Verified as a pure permutation: zero code lines added or removed against the parent commit, comments only. **History's planned-effort row wrapped onto two lines.** The value was never the cause — the C6 four-value elision bounds it — the label was: "Planned effort" needs about 88pt at the row's 12pt caption size and sat in an 80pt column. The column is now 100pt, shared with the Equipment row so the two stay aligned, with a one-line limit and a scale-factor backstop for large type. The copy is unchanged in both languages: `계획 강도` stays, and nothing about the row implies a measured result. **"Finish (this workout only)" appeared even when it was the only option.** With no pending swaps and no dirty session plan the dialog offers one action plus Cancel, and the qualifier answered a question the user was never asked — there is no other workout, and nothing else the button could apply. Alone it now reads **Finish / 완료**; as soon as an apply option shares the dialog the qualifier earns its place back and every multi-option dialog keeps the wording it shipped with. Label selection only: the options offered, their order, the apply-back flags and what finishing does are all unchanged, and no new key was needed. **The Korean Back button said `등`.** The active workout's bottom bar rendered its Back label through the bare `Back` key — which is also the canonical **body part**, seeded on Pull-Up, Barbell Row, Lat Pulldown, Seated Cable Row and Conventional Deadlift — so the navigation control read the anatomical back, next to a correctly labelled `다음`. The button now has its own key, translating to **`이전`**, chosen over `뒤로` because it pairs with `다음` as an ordinal step through the workout. English is unchanged, and the body part's own `Back` → `등` entry is untouched — one added key, nothing repointed. No schema, migrations, model fields, Alternative Exercises payload format, scratch-editor architecture, exercise-deletion behavior, exercise-switch behavior, effort-target resolution, cardio calculations, History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
+- **Build 10 C11 — prepared-alternative edits now survive leaving the screen, and a warm-up row is tappable across its whole card.** A stability / persistence fix, found by manual testing straight after C9 — and a genuine data-loss bug rather than polish. **The commit was inferred rather than called.** `SlotAlternativeDetailEditor` edits a **scratch** slot in `AlternativeDraftStore`'s own in-memory container and writes the result back into the `SlotAlternative` payload; that write-back happened because the editor read `store.payload()` inside its `body` and let `.onChange` notice the value had moved. But the warm-up and technique editors are **pushed on top of that view**, so a step added in one mutates the scratch graph while the view owning the commit is off-screen. Its body re-evaluates only if the user comes back through it — pop one level and the edit is saved, switch tabs or pop straight to the routine list and the body never runs again, the commit never fires, and the draft container is deallocated with the edit still inside. That is precisely the "sometimes saved, sometimes not" in the report, and `TechniqueParamEditView` — a further level down — was the most exposed of all. The commit is now a **call**: a new `AlternativeDraftCommit` holds the write-back rule, both nested editors take an `onGraphChange` hook fired after *every* mutation (add, edit, delete, reorder, and each of the parameter screen's field saves), `SlotPrescriptionSection` forwards it, and the detail editor commits the moment the graph changes. The existing value observer stays — it still covers everything edited on that screen — with an idempotent `onDisappear` commit as a backstop. The scratch-editor architecture is **kept**; only its lifecycle became explicit. Routine editing is unchanged by construction: a routine slot's prescription *is* the stored model, so its editors pass no hook and nothing is committed anywhere. **The second half is a tap target.** Editing an existing warm-up step required hitting the *text*: the row's `.buttonStyle(.plain)` opts out of the promotion a `List` gives a default-styled button — which is what keeps the row looking like a row — so the button's hit area was exactly its label, and the label hugs its content, leaving the row's insets and the padding up to the list's 44pt minimum height dead. `.contentShape(Rectangle())` was applied **outside** the button, where it shapes the cell for the list's own hit-testing and never reaches the gesture. Both modifiers now sit inside, on the label, which also spans the full row width and minimum height — no visual change, and swipe-to-delete and drag reordering are untouched. Techniques were never affected: their rows are `NavigationLink`s, which a list makes fully tappable. No schema, migrations, `SlotAlternative` payload format, public Alternative Exercises semantics, scratch-editor architecture, active-workout switch behavior, exercise-deletion behavior, effort-target logic, cardio calculations, History data model, transfer/import/export payload, routine duplication, localization, project-settings, signing, bundle ID, team, marketing-version or build-number change.
+
+- **Build 10 C12 — the remaining low-risk UI polish bundle.** Seven items from the Build 10 UX audit, cleared together because each is copy, a title or a layout constraint, and none of them changes what the app does. **The Cardio Plan checklist now says what a tick is worth** — `Checklist only — not saved as results.` / `체크리스트 전용 — 결과로 저장되지 않음`. That footer had been refused once, on the grounds that "ticks are not saved to your history" is a sentence about internals on the one screen nobody reads; the objection was to the *sentence*, and four scanned words answering "did that count as logging something?" are a different thing. The ticks remain session-scoped and still cannot reach a `SetLog`. **Start Workout says Start Workout.** The toolbar button read `Start` while the screen title and the User Guide both said `Start Workout`, so the guide's own instruction named a control that did not exist. **Effort progression labels got their own keys.** They had been composed as the generic `Start` / `End` plus a metric — and `End` is the *workout-ending* word, so a Korean user editing a ramp read `종료 RIR`, "quit RIR". Now `시작 RIR` / `마지막 RIR` (and RPE), with `시작` / `종료` left to the workout controls that own them. **Block detail screens name the exercise.** Opening Details for Bench Press landed on a screen titled "Block" — the kind word is the one thing the user already knew. Single blocks title with the exercise; supersets join their members with `+`, resolved exactly as the routine editor's own row title resolves them; an all-deleted block keeps the kind word as the only honest thing left. **The destructive switch warning names what it buys.** It counted the sets a switch would destroy without saying what the switch was *to*, so a user mid-set had to remember which row they had tapped in order to judge the trade — now `Switching to Machine Press will remove 2 logged sets…`, with the original unnamed wording kept as the fallback for an exercise that cannot be resolved. **The Cardio Plan editor states its segment total**, and says when it disagrees with the slot's target distance — two independent fields that could silently describe different sessions. Agreement is decided on the *rendered* text rather than raw meters, so a difference the user cannot see is never flagged and the cue can never contradict the two numbers beside it; nothing is adjusted, nothing is blocked, because a plan that deliberately covers part of a longer target is a real thing to author. **Superset rows hint that effort exists** — a count (`2 effort targets` / `강도 목표 2개`), never the values, which are per-slot and would make the row unreadable. Before this a superset member carrying a full custom per-set ramp looked identical in the routine list to one with no target at all; a superset with none is worded exactly as before. **And the cardio detail fields stopped being rigid**: fixed control and unit-suffix widths became a minimum/maximum range, so a long Korean label or a large Dynamic Type setting takes width from the control instead of truncating against it. At default type in English nothing moves. No schema, migrations, model fields, `SetLog` / `WorkoutItem` / `PlannedPrescriptionSnapshot` fields, `SlotAlternative` payload format, switch behavior, workout lifecycle, rest-timer behavior, exercise-deletion behavior, effort-target *resolution* (display copy only), cardio persistence or calculations (the comparison reads the existing total), History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change. Thirteen new localization keys, all translated; nothing repointed.
+
+- **Build 10 C13 — warm-up edits now render immediately, on a real phone.** A refresh / observation fix found by manual testing on device; the simulator never reproduced it. Adding a warm-up step saved it correctly but sometimes did not draw it until the editor was popped and re-pushed, and the prescription screen's `Warmup   N steps` preview did not update until the whole page was reopened. Both halves are the same defect and it is **not** device-specific — the simulator only masks it. `WarmupSchemeEditor` renders from `prescription.warmupScheme.steps`, but `steps` belongs to the `WarmupScheme`, a **grandchild** of the model the view binds, so the only warm-up mutation that invalidates the view is `prescription.warmupScheme = s` — the scheme attachment, which happens once, on the very first add. Every later add, edit, delete and move writes only to the scheme and its steps. The preview count was worse: `SlotPrescriptionSection` read it *two* models below its own `@Bindable`, so nothing the editor did could reach it at all. Neither view had a dependency on what it drew, so whether the stale value showed depended on whether something unrelated happened to re-run the body in the same frame — a sheet dismissing, a row recycling — which the simulator's cheaper layout and animation passes do often enough to hide it. That also explains the report's shape: the list was intermittent, the count never updated. The sharpest case is not intermittent at all — deleting the last step leaves the scheme attached, so the *next* "first" add attaches nothing and produces no observable change whatsoever. The fix is the workaround already used twice in this codebase (`RoutineEditor.blockSummaryRefresh`, `SupersetSetCountLabel`): a local revision token, written after every mutation, which invalidates the view unconditionally so the body re-reads the live relationship in the same frame. `WarmupSchemeEditor` owns one and funnels add / edit / delete / move through a single hook; the warm-up prescription row was pulled out as `WarmupSchemeRow` binding the `SlotPrescription` directly and owning its own token — the same shape `AlternativeExercisesRow` already had for the alternatives count, for the same reason. `WarmupSchemeAuthoring`, which had owned only `add`, now owns the real update / delete / move paths too, so one hook site covers all four and the tests exercise production code rather than copies of it; `WarmupSummary` is the single list source the editor's rows and the row's count both read, so they cannot disagree; and every mutation uses whole-array reassignment on `scheme.steps` (`delete` had mutated in place). **Normal routine slots and prepared-alternative scratch slots are both fixed by the same change**, because they are the same editor rendered against different prescriptions, and the alternative draft commit is unchanged — the row bumps its token first and then forwards to the existing `onNestedGraphChange`, so a normal routine slot refreshes without needing a commit path at all. View state only: no schema field was added to force observation, and no page is reloaded. No schema, migrations, model fields, `SlotAlternative` payload format, Alternative Exercises semantics, active-workout switching, workout lifecycle, rest-timer behavior, exercise-deletion behavior, effort-target logic, cardio calculations, History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change. **No new localization keys**: the `N steps` label stays a `LocalizedStringKey` interpolation on the existing, already-translated catalog key `%lld step%@`.
+
+- **Build 10 C14 — the UI density cleanup.** Four explanations moved behind info buttons and two pieces of low-value text removed outright; no behavior, no data, nothing hidden that needed to stay visible. **The Cardio Plan checklist lost its permanent footer.** `Checklist only — not saved as results.` sat under every render of that section, on the active workout screen, directly above the duration field and the Log button — answering once, then costing its height forever. It is now an `InfoButton` in the section header, the idiom Settings' Bodyweight/Autoregulation headers and the effort-mode picker already use, and the alert's room let the copy say **both** halves of the rule rather than only the second: the ticks are scoped to this workout *and* they are not results. Tick behavior, `CardioSegmentCheckStore` and History are untouched. **A single-exercise block's Details stopped saying the exercise name twice.** Audit M11 titled that screen with the exercise; the screen went on heading its only section with the same name, one of the two being the fix. A new pure rule (`BlockDetailMemberHeader`) drops the header only when the block has **exactly one** named exercise — supersets always keep theirs, because there the name is not a repeat of the title but the only thing separating one member's sets and prescription from the next, and a block with no resolvable names falls back to the kind word, so its header duplicates nothing. The whole `Section` is branched rather than just its header: a conditional inside a header `ViewBuilder` still yields a header view and a grouped List reserves the inset for one, so the headerless case had to be genuinely headerless or the space would not come back. **The three superset explanation footers moved behind info buttons** — Timing, Set All Exercises, and the membership rules under Exercises (whose header keeps its `(drag to reorder)` wording, an affordance hint rather than an explanation). What deliberately did **not** move is the `Superset needs at least 2 exercises` alert: it fires at the moment the constraint is hit, which is the one moment it cannot be behind a tap. Explanations go behind a glyph; live constraints and destructive warnings do not, and a test pins that this one is not among the three. **And C12's superset effort-target count marker is gone.** Audit L7 added `… · 2 effort targets` because a member with a full custom ramp looked identical in the routine list to one with no target — true about the problem, wrong about the remedy: a bare count is not actionable when the values behind it are deliberately withheld, so the row still said only "something is set", which the user had to open the block to use either way. A superset row now reads `Superset · 2 exercises · 3 sets` whatever its members carry. **Single-exercise effort summaries are unchanged** (`3 × 8–12 · RIR 2`, `… · RIR 2 → 0`), and the half that has never changed across all three revisions — that no RIR/RPE value reaches a superset row — is still asserted. **Localization was intentional-only.** The catalog arrived dirty with Xcode's DEBUG-only showcase-key pruning already in the working tree; it was restored from `HEAD` first and then edited as text rather than round-tripped through JSON, which preserves Xcode's key ordering and turns a 578-line reformat into a 48-line diff. Net: **one key added** (the fuller Cardio Plan info message, with Korean), **three removed** (the retired checklist footer and both `%lld effort target` / `%lld effort targets` marker keys), **none changed** — the three superset messages are the byte-identical strings their footers used, so each still resolves to the key it already had and keeps its existing Korean, and all three are `extractionState: manual`, so dropping the `Text(...)` literals does not strip them. No schema, migrations, model fields, `SlotAlternative` payload format, active-workout behavior or switching, workout lifecycle, rest-timer behavior, exercise-deletion behavior, effort-target *resolution* (only whether a superset row prints a clause), cardio calculations or persistence, History data model, transfer/import/export payload, routine duplication, project-settings, signing, bundle ID, team, marketing-version or build-number change.
 
 Current validation status:
 
@@ -252,6 +502,12 @@ Current validation status:
 - Finish confirmation: tested with pure navigation helper tests and manual checklist.
 - Finish confirmation reliability fix: tested with dialog option-routing and single-fire consumption tests; manual one-tap re-check on device completed.
 - Warm-up rendering fix: tested with warm-up insertion tests.
+- Prepared-alternative scratch-context fix (Build 10 C9): tested with new warm-up and technique scratch-context suites; manual device re-check still pending.
+- Manual-test polish bundle (Build 10 C10): rest-origin, finish-label and Korean navigation copy are covered by pure tests; the section reorder and the History row layout are display-only and want the device pass.
+- Nested-editor persistence fix (Build 10 C11): the commit and refresh rules are covered by a new suite whose first test asserts the data loss itself; the warm-up tap target is a hit-testing change and wants the device pass.
+- Remaining low-risk UI polish bundle (Build 10 C12): every wording, title and summary rule is pinned by pure tests, including the Korean for all thirteen new keys; the cardio field widths are a layout-pressure change and can only be settled on a device.
+- Warm-up immediate-render fix (Build 10 C13): the list source, the preview count and all four mutation paths are pinned by a new suite against the production authoring API; the refresh itself is view state, so the device pass is what confirms it — and the device is the only place the bug ever appeared.
+- UI density cleanup (Build 10 C14): the header rule, all four info-copy blocks and the removed superset marker are pinned by pure tests, including that each superset message is still the exact retired footer string and that the min-exercise alert is not among them; what the removals *look* like — the reclaimed header inset, three alerts at Korean line lengths — is display-only and wants the device pass.
 - User Guide: added to GitHub documentation and inside the app.
 - Active-workout setup notes editing: tested with display-resolution helper tests, SwiftData snapshot-propagation tests (current-session update, cancel no-op, past-History freeze, future-session pickup), and Korean localization regression coverage.
 - Exercise-switch compatibility: tested with 22 value-level adapter tests covering Keep/Reset across duration → normal, normal → duration, and same-type switches.
@@ -263,24 +519,606 @@ Current validation status:
 - User guide sync: tested so the English and Korean guides stay structurally aligned and both carry the cardio-in-notes wording that `docs/USER_GUIDE.md` uses.
 - Alternative Exercises: tested at every hop — the payload codec and its tolerance rules, slot persistence, routine-editor authoring, the session freeze (including that editing the routine mid-workout cannot change the active session), the offer rules, the switch adapter applying the prepared prescription, duplication with fresh ids, and transfer export/import round-trips including warm-ups, techniques, a Cardio Plan and older documents that predate the feature.
 - Alternative Exercises Korean coverage: tested so the authoring screen, the Prepared Alternatives sheet, the switch confirmation, and the summary flags all have Korean translations, and the English keys still render unchanged.
+- Custom / progression effort targets: tested at every hop — the per-set list
+  codec and its whole-list rejection rule, resizing against a changed set count,
+  the whole-number progression ramp (including the RIR 2 → 0 → 2, 2, 1, 0 and
+  RPE 8 → 10 → 8, 8, 9, 10 cases), mode transitions, slot persistence, the
+  active-workout targets, Save & Exit → Resume, alternative exercises carrying
+  custom targets, duplication, and transfer export/import round-trips.
+- Alternative-exercise usage and deletion (Build 10 C1): tested at both halves —
+  usage counting for direct-only, alternative-only, and both-ways references,
+  disabled alternatives still counted, the empty-state gate, and a corrupt
+  payload counting zero rather than failing the scan; then the delete
+  confirmation wording for each of the three shapes (unused, direct-only,
+  alternatives present), pruning across every routine and slot, non-matching
+  alternatives surviving with ids and prescriptions intact, dense reordering of
+  survivors, the last alternative clearing the column to nil, no dangling
+  reference left behind, a corrupt column left untouched, and the pre-existing
+  direct-slot deletion rules (superset block deleted whole, normal block slots
+  unlinked and renumbered) still holding. Korean coverage added for the new
+  usage and delete-warning strings, including placeholder retention.
 - Manual switch/restart/History re-check on device: completed.
-- Latest full test suite result: full scheme passes with **2,185 tests, 0
-  failures** — 2,183 unit tests plus 2 UI tests. Debug build succeeds and
-  Release build succeeds.
+- Manual custom-effort regression on device: **pending.**
+- Manual Build 10 C1 re-check on device: **pending** — the automated coverage
+  walks the full delete-an-alternative-only-exercise scenario, but the dialog
+  copy has not been read on a real screen at Korean string lengths.
+- Manual Build 10 C2 re-check on device: **pending** — the tests assert the
+  compiled Korean strings, but the block-detail rows, the two workout dialogs,
+  the cardio row and the Techniques row have not been seen on a Korean screen.
+- Manual Build 10 C12 re-check on device: **pending** — and the one item in it
+  that no test can reach is the reason it matters most: the cardio detail rows
+  need to be seen on a **small screen, at a large Dynamic Type setting, in
+  Korean**, which is the combination the old fixed widths clipped. The rest is a
+  read-through: the Start Workout button, `시작 RIR` / `마지막 RIR` in a
+  progression, an exercise name in the Details title, a named switch warning,
+  and a segment total that disagrees with its target. Two items from this
+  bundle were **superseded by C14** and should no longer be looked for: the
+  checklist caption is now behind an info button, and the superset row's
+  `강도 목표 2개` marker was removed.
+- Manual Build 10 C14 re-check on device: **pending**, and it is the only
+  evidence this slice can have: every rule is unit-tested, but *density* is by
+  definition a thing you look at. Confirm the Cardio Plan checklist has no
+  caption under it and its header ⓘ explains the ticks; that a single-exercise
+  Details screen shows the name once and a superset still separates its members
+  by name; that the three superset ⓘs read sensibly as alerts; that removing an
+  exercise from a 2-exercise superset still shows the warning **on screen**; and
+  that a superset row no longer carries an effort count while a single-exercise
+  row still shows its effort. Korean is the harder half — three explanations
+  that were footers are now alert bodies, which wrap differently.
+- Manual Build 10 C13 re-check on device: **pending — and this one is the
+  point.** It is the only Build 10 item whose bug has never appeared anywhere
+  but a real phone, so the simulator cannot close it. In a **normal** routine
+  exercise: add the first warm-up step and confirm it draws without leaving the
+  screen; edit it, delete it, reorder two; go back one level and confirm the
+  **Warmup** row's count moved with each. Then the case that is not
+  intermittent: delete every step, add one again, and confirm it appears. Repeat
+  the whole sequence inside a **prepared alternative**, then leave by switching
+  tabs, return, and confirm the steps are still there and still counted.
+- Manual Build 10 C11 re-check on device: **pending** — and the one whose whole
+  point is a route a test cannot take. The sequence to walk is the reported one:
+  add a warm-up step inside a prepared alternative, go **back to the routine and
+  switch tabs** rather than popping one level, return to the same alternative,
+  and confirm the step is there; then the same for a technique. The tap target
+  is the other half: tap the empty background of a warm-up row, in a normal
+  routine exercise and in a prepared alternative, and confirm the edit sheet
+  opens — then check swipe-to-delete and drag reordering still behave.
+- Manual Build 10 C10 re-check on device: **pending** — and the widest of the
+  Build 10 items, because four of its five findings are things only a screen can
+  settle: that Warmup reads naturally above Sets and the set rows are still
+  quick to reach, that the planned-effort row holds one line at normal width,
+  that the finish dialog says plainly **Finish / 완료** with nothing pending and
+  keeps the qualifier when an apply option appears, and that the Korean bottom
+  bar reads **이전 / 다음** while a body part elsewhere still reads **등**. The
+  rest-timer fix wants the full loop: log a set, watch rest start, unlog it,
+  confirm the countdown *and* its notification stop, then log again.
+- Manual Build 10 C9 re-check on device: **pending** — the automated coverage
+  proves the crash path and the leak are gone at the model layer, but the two
+  things only a device can confirm are that the added warm-up step and technique
+  appear in the alternative editor immediately, and that they are still there
+  after leaving, reopening, and applying the alternative mid-workout.
+- Manual Build 10 C8 re-check on device: **pending** — the gate is a
+  compile-time one, so what a device pass adds is the two things a build cannot
+  report: that the showcase is genuinely absent from a Release install, and that
+  **no other Settings row** disappeared with it.
+- Manual Build 10 C7 re-check on device: **pending** — the freeze behavior is
+  unit-tested against real model rows, so what wants a real screen is the
+  quieter half: that an exercise with no effort target and a cardio item both
+  stay visually clean, and that the Korean label reads as *planned* rather than
+  achieved.
+- Manual Build 10 C6 re-check on device: **pending** — two items: the info
+  button's placement under the mode picker is the one layout judgment call in
+  the slice (a Picker owns its row's tap, so the glyph could not go in its
+  label), and the autoreg-off saved-targets row is unit-tested as a rule but has
+  never been seen in the real editor.
+- Manual Build 10 C5 re-check on device: **pending** — the tests pin the
+  language rule but not the wiring of `Locale.current` into the view's state, so
+  what needs a real device is launching in each language and seeing the right
+  guide open, plus the segmented picker's look on a small screen (both titles
+  are short, so this is a check rather than a worry).
+- Manual Build 10 C4 re-check on device: **pending** — and one item comes
+  first: the routine row's subtitle is a single line in caption, so a maximal
+  cardio row (`3 × 45s · 5.0 km · 120s rest · RPE 8 → 10 · 3 alternatives`) may
+  truncate on a small phone, and truncation eats the tail — which is the new
+  count. Needs a small-device pass; swapping the full word for a compact `2 alt`
+  is a one-line change if it reads badly.
+- Manual Build 10 C3 re-check on device: **pending** — the reorder is a pure
+  view-tree permutation and builds clean either way, so what needs a real screen
+  is first-focus keyboard behavior with Sets at the top and the bottom
+  Back / Next-Finish bar on a small device.
+- Korean terminology and set-kind labels (Build 10 C2): 6 tests added to
+  `KoreanLocalizationTests` — the End and Finish dialog titles distinct and each
+  exact, English keys unchanged, set-kind row labels localized and never a
+  capitalized raw enum value, a `SetKind.allCases` guard so a new case forces
+  the key list to be updated, the Cardio Plan row name in both languages, and
+  the technique count reusing 운동 기법 with its placeholder intact — plus 2 in
+  `UserGuideContentTests` pinning the Korean finish step to 완료.
+- Active workout section order (Build 10 C3): no tests added or changed — no
+  test asserts section order, and the UI target is a launch/navigation smoke
+  test. The reorder was verified by diffing the multiset of non-blank lines
+  against the parent commit: comment lines only, every code line relocated
+  unchanged.
+- Alternative Exercises discoverability (Build 10 C4): 9 tests added to
+  `BlockPrescriptionSummaryTests` (count present and absent, singular vs
+  plural, disabled excluded, all-disabled reads as none, the count is the last
+  segment, a corrupt payload counts zero, supersets exempt, the value-in
+  initializer, and `map` for the Start Workout screen), 3 to
+  `PreparedAlternativeSwitchTests` (the badge count equals the offer count, an
+  unavailable alternative still counts, no offers means no badge) and 4 to
+  `KoreanLocalizationTests` (the new and reused keys localize, English
+  unchanged, placeholders retained with both plural forms agreeing, and the
+  sheet's title differs from its subtitle). No existing test was weakened or
+  changed: the new `alternatives:` parameter defaults to zero, so every prior
+  expectation stands as written.
+- User Guide language default (Build 10 C5): 6 tests added to
+  `UserGuideContentTests` (Korean locales default to the Korean guide, including
+  a bare `ko` and a Korean language with a non-Korean region; non-Korean locales
+  default to English; each language renders exactly one guide, with an explicit
+  check that the section count is *not* the sum of both; the selector offers
+  exactly two languages; both labels are stable) and 1 to
+  `KoreanLocalizationTests` (the picker's accessibility label in both bundles).
+  No existing test was weakened — the structural-parity tests read the guide
+  arrays directly and still hold both to matching shape.
+- Effort-target clarity (Build 10 C6): 15 tests added to
+  `EffortTargetResolverTests` (a custom summary elides after four values and not
+  at four or fewer, elision follows the set count, and — the one that matters —
+  elision changes neither the stored list nor `resolve` nor the per-set labels;
+  separators consistent; saved-target presence in every shape, absent when
+  empty, an unusable custom list not counted, presence independent of the stored
+  mode), 3 to `UserGuideContentTests` (all four modes in both languages, the
+  intro's count matches the list under it, "three ways" never returns) and 5 to
+  `KoreanLocalizationTests` (the new keys localize, English unchanged, the
+  explanation names all four modes using the picker's own Korean, the superseded
+  "not available yet" keys are gone, the saved-targets row names both halves).
+  One existing test was **updated, not weakened**: the effort key list named the
+  two superseded strings and failed on the first run; those entries now name the
+  replacement copy, and a new test pins the old keys' absence.
+- History planned effort (Build 10 C7): new `HistoryPlannedEffortTests` (20),
+  in three parts — wording over pure snapshot field values (every mode, both
+  metrics, the paired-metric fallback, legacy snapshots); the no-row cases (five
+  corrupt-list shapes, autoregulation off, modes with no values, a zero set
+  count); and **freshness over real model rows**, where editing the routine
+  after the workout must not change what History says, for both a single target
+  and a custom list, plus a check that rendering an elided summary leaves the
+  stored list byte-for-byte intact. 2 added to `KoreanLocalizationTests` (the
+  label localizes, and never implies a logged result). No existing test was
+  modified.
+- Calculus showcase gate (Build 10 C8): new `SettingsShowcaseVisibilityTests`
+  (4) — visible in Debug, hidden in Release, visibility depending on nothing but
+  its argument, and the compiled constant agreeing with the configuration the
+  suite runs in, so an inverted `#if` fails in CI rather than surfacing as a
+  showcase row on TestFlight. The showcase's own suites
+  (`StrengthAnalyticsTests`, `SampleWorkoutDataTests`) are untouched and still
+  pass: the slice removes the way *in*, not the showcase. No existing test was
+  modified.
+- Prepared-alternative scratch context (Build 10 C9): new
+  `AlternativeWarmupScratchTests` (14) and `AlternativeTechniqueScratchTests`
+  (17), both passing the **app's** context as the fallback — the wrong-store
+  context the environment used to hand the pushed editors — so each one fails
+  loudly if the resolution regresses. Between them they cover adding, editing,
+  deleting, reordering, committing, reopening and applying warm-ups and
+  techniques inside a prepared alternative, that nothing reaches the app store,
+  that the parent routine slot is never mutated, and that normal routine warm-up
+  and technique editing still writes to the app context exactly as before. Both
+  were checked against the pre-fix code: the warm-up suite crashes the runner
+  with the shipped fatal error, and 9 of the technique suite's tests fail. No
+  existing test was modified.
+- Manual-test polish bundle (Build 10 C10): new `ActiveWorkoutRestOriginTests`
+  (9) pinning the one rest-clearing rule so a fourth undo path cannot invent a
+  fourth answer — origin unlogged clears; an older set, another slot, and the
+  warm-up/working-set index split all keep; a drop is owned by its parent set;
+  and the cold-resume branch clears only on a slot with nothing logged left. 4
+  added to `ActiveWorkoutFinishConfirmTests` (sole option reads `Finish`, the
+  qualifier returns across all three multi-option shapes, apply labels are
+  unconditional, and the option set and routing are unchanged), 3 to
+  `KoreanLocalizationTests` (the navigation key is `이전` and not `등`, English
+  is still "Back", `다음` unchanged, and the body part still translates to `등`),
+  and 2 to `HistoryPlannedEffortTests` (every summary shape is one short line
+  with no embedded break; the label keeps both "planned" and "effort"). No
+  existing test was modified or weakened. The section reorder has **no** unit
+  test: the sections are heterogeneous `ViewBuilder` calls and driving them from
+  a list would restructure a view whose keyboard and safe-area behavior is
+  documented as fragile, so the evidence is the pure-permutation diff plus the
+  device pass.
+- Nested-editor persistence (Build 10 C11): new
+  `AlternativeNestedEditorCommitTests` (14). The first test is a **negative
+  control** — a nested edit that is never committed is lost when the draft store
+  is released, which is the reported data loss asserted directly, so the suite
+  fails loudly if the hook is ever removed. The rest cover the fix: warm-up and
+  technique committed through the hook, both surviving leave-and-reopen (checked
+  in the stored payload *and* in the scratch graph a reopened nested editor
+  reads), edit-and-delete across two visits, both carried into the session plan
+  by the switch adapter, the parent routine slot never mutated, siblings
+  untouched including a disabled one and a noted one, the commit targeting the
+  alternative actually being edited, a deleted alternative never resurrected by
+  a stale editor, a no-draft commit writing metadata only, the commit being
+  idempotent, and normal routine editing needing no commit at all. No existing
+  test was modified or weakened. The warm-up tap target has **no** unit test:
+  hit-testing is not reachable without a UI harness, so the row carries a stable
+  accessibility identifier for when one exists, and the evidence is the device
+  pass.
+- Remaining low-risk UI polish (Build 10 C12): new `RoutineDisplayCopyTests`
+  (17) covering the block-detail titles (including the blank-name and
+  all-deleted fallbacks), the effort labels per metric and per end, the cardio
+  target comparison across mismatch / match / a difference below display
+  precision / no target / no distances / a zero total / miles on both sides, and
+  the named switch warning in all four shapes plus its nil-name fallback. 6
+  added to `BlockPrescriptionSummaryTests` for the superset marker — value-in
+  and model paths, that it names no RIR/RPE value, that autoregulation off shows
+  nothing, and that a superset without targets is worded exactly as before. 8
+  added to `KoreanLocalizationTests`, covering every new key, both
+  placeholder-retention rules (the two-placeholder switch variants stay
+  positional in **both** languages, since Korean puts the count after the noun),
+  that `End RIR` / `End RPE` never contain `종료`, and that the generic
+  `시작` / `종료` are untouched. **One existing test was rewritten rather than
+  deleted:** `testSupersetIgnoresEffortMetric` pinned "a superset shows no
+  effort at all", which is precisely the rule L7 asked to change; it is now
+  `testSupersetMarksEffortWithoutNamingValues` and still asserts the half that
+  must not change — that no RIR/RPE value reaches the row. No other existing
+  test was modified. The cardio field widths have **no** unit test: layout
+  pressure is not reachable without a UI harness.
+- Warm-up immediate render (Build 10 C13): new
+  `WarmupImmediateRenderTests` (24), driving the production
+  `WarmupSchemeAuthoring` API and the shared `WarmupSummary` read model rather
+  than the view. They cover add / edit / delete / move all reaching the list
+  source on the very next read; the preview count moving on add and on delete;
+  the count and the list source never disagreeing; the **add-after-deleting-
+  every-step** case that produces no observable change at all; the list source
+  sorting by `order`; the same four mutations on a prepared alternative's
+  scratch slot with the commit reaching the stored payload each time;
+  leave-and-reopen still hydrating what was saved; the alternative still
+  carrying its warm-up into the session plan; the parent routine slot never
+  gaining the alternative's warm-up; siblings untouched including a disabled
+  one; and delete hygiene (rows leave the store, out-of-range offsets ignored,
+  a no-scheme delete is a no-op). `WarmupStepEditTests` was **rewritten to call
+  the production authoring API** instead of the hand-copied mirrors of the
+  editor's private methods it carried — same assertions, real code under them.
+  No existing test was weakened. One of the new tests caught a **genuine error
+  in the first cut of this fix**: it asserted that a reorder leaves
+  `scheme.steps` in display order, and the source comment claimed the array and
+  `order` agree afterwards. SwiftData promises no such thing, the array came
+  back permuted after a save, and both the test and the comment were corrected —
+  `order` is the sole record of position. The refresh itself has **no** unit
+  test, deliberately: view invalidation is not reachable without a UI harness,
+  and the device pass is the evidence.
+- UI density cleanup (Build 10 C14): 18 added to `RoutineDisplayCopyTests` —
+  the member-header rule across single / multi / superset / no-name / blank-name
+  inputs, that the dropped header is exactly the navigation title (both computed
+  from one input, so neither rule can be changed alone), that all three superset
+  explanations are still available, that each message is the **exact retired
+  footer string** (the tripwire for a reworded literal silently falling back to
+  English), that the titles match their section headers, that the min-exercise
+  alert is **not** one of the three, and that the cardio info copy states both
+  halves of the rule. In `BlockPrescriptionSummaryTests` the six L7 marker tests
+  were **replaced by their inverses rather than deleted** — no effort clause in
+  the value-in form, a superset with targets and one without producing the
+  identical row from live models, autoreg-off unchanged — plus new cases that
+  the metric is inert on a superset, that a **custom per-set ramp** (the case L7
+  existed for) shows no marker, and that single-exercise single/progression
+  summaries are untouched. 5 updated or added in `KoreanLocalizationTests`: the
+  new info message localizes and keeps both halves, the retired footer key and
+  both marker keys are **gone from the catalog**, all three superset info titles
+  and messages keep their Korean, and the membership header text still
+  localizes. Nothing was weakened — every removed assertion was replaced by its
+  inverse, and the "no RIR/RPE values in a superset row" check survives with an
+  added `contains("effort")` guard. The reclaimed vertical space itself has
+  **no** unit test: layout density is not reachable without a UI harness.
+- Fixed Alternative Exercise authoring validation (Build 10 C15): a routine
+  slot's own exercise can no longer be added as its own prepared alternative.
+  Found by manual review, not by a tester. Eligibility is one rule
+  (`SlotAlternativeEligibility`) compared by `exerciseID` and never by display
+  name, so a different exercise that happens to share a name stays valid. It is
+  applied in four places: the Add Alternative picker filters the slot's exercise
+  out, the append path refuses it defensively, the active-workout switch sheet
+  does not offer it, and the workout-facing counts (the routine row's
+  `… · N alternatives` and the Switch Exercise badge) do not count it. The
+  switch filter now reads `slotExerciseID` as well as `currentExerciseID`, which
+  is what closes the real hole: the invalid alternative used to become offerable
+  again once the user switched away from the original exercise. **Existing
+  same-as-slot alternatives are not deleted** — they stay visible in the routine
+  editor, marked `Same as the slot's exercise — not offered in workouts`, and
+  the user can remove them. Valid alternatives, disabled alternatives, routine
+  duplication, transfer/import and the `SlotAlternative` payload format are all
+  unchanged. Localization was limited to the intended changes only (2 keys
+  added, 1 reworded in place, 27 insertions / 3 deletions), with the DEBUG-only
+  Calculus/Showcase keys preserved. Tests: new `SlotAlternativeEligibilityTests`
+  (14) and 5 added to `PreparedAlternativeSwitchTests`, covering the picker
+  filter, the append guard, the same-name-different-ID case, both workout-facing
+  counts, and legacy rows surviving read, deletion and sibling edits;
+  `KoreanLocalizationTests` covers the new copy and asserts the superseded key
+  is gone.
+- **Root page discoverability and History navigation.** *(Implemented, pending
+  distribution/re-test — merged after Build 10.)* From the first-use feedback
+  above. Each root page — Routines, Exercises, History, Settings —
+  now opens with a compact one-line statement of what the page is for, rendered
+  on the standard row background rather than as a new surface, and the first-use
+  empty states say what to do next. History's information architecture changed
+  so a bounded **Recent Workouts** section appears *before* Calendar and
+  Progression, limited to 4 entries, with a **View All Workouts** destination
+  for the complete history. The existing minimal/native design style is
+  preserved: no new colour, ornament or per-page accent. A section-header
+  typography experiment was part of this work and was **reverted** — the
+  original typography is retained.
+- **Training term help at point of use.** *(Implemented, pending
+  distribution/re-test — merged after Build 10.)* From the RIR feedback above. **RIR**
+  and **RPE** definitions are available behind the app's existing info glyph
+  where the metric is chosen (Settings → Autoregulation) and where a target is
+  authored (the prescription editor's effort row). **e1RM** gained a contextual
+  explanation attached to the History progression metric selector itself, shown
+  only while e1RM is the selected metric. Technique descriptions were
+  consolidated into one shared help copy used by the Add Technique picker, the
+  technique parameter editor and the active-workout detail sheet, so the same
+  technique can no longer be described three different ways. The technique
+  conflict/disable messages were localized — they had been English sentences
+  composed around an already-translated technique name. The redundant
+  **Techniques** section header was removed; the navigation title already says
+  it.
+- **Korean localization consistency.** *(Implemented, pending
+  distribution/re-test — merged after Build 10.)* Partly from the tester
+  terminology feedback, mostly from the developer manual review above. Technique **names**
+  now come from the single canonical localized display name everywhere, instead
+  of private English tables in the technique list and the technique editor's
+  navigation title. Technique preview vocabulary (`set`/`sets`, `reps`,
+  `rounds`, `drop`, `all`) is localized through one shared vocabulary rather
+  than English fragments joined into a string. The warm-up editor's redundant
+  section and the large blank band under its navigation title were fixed — the
+  band was an empty grouped section that rendered whenever the scheme had any
+  steps — and its previews were localized. Time formatting was centralized:
+  **English uses `s` / `m` / `h`, Korean uses `초` / `분` / `시간`**, applied to
+  tempo seconds, rest, prescription and cardio durations, warm-up and technique
+  rest, workout durations, timers and the duration picker wheels. Cardio
+  **segment counts and segment-kind labels** (Warm-up / Work / Recovery /
+  Cool-down) are localized, History's **In Progress** pill is localized, and
+  **Best wt** / **Best reps** gained Korean. Standard measurement abbreviations
+  remain universal in both languages: `kg`, `lb`, `km`, `mi`, `m`, `km/h`,
+  `bpm`, `kcal`, `%`, `×`, plus `AMRAP`, `RIR`, `RPE` and `e1RM`. **Calculus
+  Analytics localization was deliberately reverted** so that feature stays
+  consistently English until it can be localized as a whole (see Deferred
+  Feedback).
+- Validation for the three slices above: Debug build, full test suite and
+  Release build passed for each before merge. Korean was verified by resolving
+  every new string through the compiled Korean bundle in tests; a full manual
+  Korean pass through the affected screens is **still pending**. None of the
+  three is in Build 10, so none has been validated by a tester — they need a
+  new TestFlight build before the re-test cycle can run.
+- **Typing performance.** *(Implemented, pending distribution/re-test — merged
+  after Build 10.)* Text editing no longer fans out a state change to the whole
+  active-workout screen and the global active-workout guard on every keystroke:
+  Session Notes and an exercise's name edit a local draft, and Session Notes is
+  committed at focus loss, Save & Exit, Finish and lifecycle transitions. A long
+  Session Notes field no longer leaves trailing blank space. The separate
+  caret / word-selection behavior was reproduced independently outside Log, and
+  no Log-specific fix was identified
+  (`docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md`).
+- **Active-workout lock scope.** *(Implemented, pending distribution/re-test —
+  merged after Build 10.)* A routine block's in-use state now goes through its
+  owning routine first: the routine being trained keeps its protection, and
+  unrelated routines that share an exercise stay editable. Exercise-library
+  deletion protection for exercises in the active workout remains global.
+  Regression-tested, including shared exercises and supersets.
+- **History calendar.** *(Implemented, pending distribution/re-test — merged
+  after Build 10.)* The workout calendar is display-only: highlighted days are
+  derived from workout history, tapping cannot add or remove a highlight, and
+  month navigation and the system calendar appearance are unchanged.
+- **Block / Slot terminology.** *(Implemented, pending distribution/re-test —
+  merged after Build 10.)* User-facing Block and Slot wording was replaced with
+  ordinary training language, matching the User Guide's existing
+  Exercise / Routine / Superset / Set vocabulary: "New Slot Defaults" became
+  **New Exercise Defaults**, workout progress distinguishes Exercise from
+  Superset, and destructive confirmation copy was cleaned up and localized.
+  English and Korean were kept in parity. Internal types (`RoutineBlock`,
+  `SlotPrescription`) are unchanged — this is a copy change, not a model rename.
+- **Start Workout and User Guide discoverability.** *(Implemented, pending
+  distribution/re-test — merged after Build 10.)* Each startable routine row now
+  has a labelled **Start** action; tapping the row itself still opens the editor.
+  Start routes through the existing Start Workout screen and validation — no
+  second workout-start path. It is hidden while a workout is active (Resume
+  remains the action) and while the Routines list is in Edit mode. A **User
+  Guide** entry was added to the Routines toolbar alongside the existing
+  Settings → Help → User Guide path. This is not onboarding; there is still no
+  first-launch tutorial.
+- **Reversible Update Routine.** *(Implemented, pending distribution/re-test —
+  merged 2026-10-13.)* Saving an exercise switch to the routine is now a
+  promotion/demotion rather than a relationship change. Prepared alternative:
+  the switched-to exercise becomes primary with its prepared plan, and the
+  original takes its place in the alternatives list with its complete plan and
+  the same position and enabled state. Generic switch: the switched-to exercise
+  keeps its Keep/Reset plan and the original is added as an enabled alternative.
+  The primary is never also listed as its own alternative. Exercise-specific
+  plan data round-trips A → B → A for everything the app can store — sets, reps,
+  rest, duration and distance, tempo, RIR/RPE, effort mode and progression,
+  custom per-set targets, warm-up scheme name and steps, techniques (including
+  previously omitted rep and duration fields), cardio segments, plan notes, and
+  legacy per-set templates with target weight. Relationship-only metadata (an
+  alternative's why/when note and its id) does not round-trip. Whether a switch
+  used a prepared alternative is recorded explicitly at switch time and survives
+  Save & Exit and cold resume. New data went into optional fields of the
+  existing JSON payloads: **no SwiftData schema migration**, and older payloads
+  still decode.
+- **Save Routine Changes sheet.** *(Implemented, pending distribution/re-test —
+  merged 2026-10-13.)* Replaces the finish dialog's fixed-mode buttons (*Update
+  routine template*, *Update exercise plan*, *Apply all*). With routine changes
+  pending, Finish opens a sheet listing each change as its own row — e.g.
+  `Bench Press → Incline DB Press`, `Incline DB Press plan changes`,
+  `Cable Row plan changes` — all selected to start. **Save Selected Changes**
+  applies exactly the selected rows, then finishes; it is disabled with nothing
+  selected. **Finish This Workout Only** records the workout and leaves the
+  routine unchanged. **Cancel** or swiping the sheet away returns to the workout
+  without finishing. With no pending changes, the plain Finish confirmation
+  appears and there is no sheet. A replacement and the switched-to exercise's
+  plan changes are independent: plan-only updates a prepared alternative in
+  place, or creates the switched-to exercise as a new alternative after a
+  generic switch; replacement-only promotes it with its base prepared / Keep /
+  Reset plan, without the later workout edits; both promotes it with the edited
+  plan. Rows expose their label, an explicit Selected / Not selected
+  accessibility value and button semantics; a duplicate system selected trait
+  was removed.
+- **Cold-resume fixed warm-up weight.** *(Implemented, pending
+  distribution/re-test — merged 2026-10-14. Developer-found, not
+  tester-reported.)* A routine warm-up step with a fixed weight (e.g. 3 reps @
+  60 kg) on an exercise that was not switched came back without its weight after
+  Save & Exit → kill → Resume. Root cause: `WorkoutResumeService`'s cold-resume
+  path for an unswitched exercise rebuilt warm-up steps field by field and
+  omitted `weight`; the other resume paths already preserved it. Fix: that
+  manual reconstruction was replaced with the canonical
+  `WarmupStepSnapshot.init(from:)` conversion. No schema migration, no JSON
+  format change, no change to resume precedence or routing. Two regression
+  tests run the real cold-resume path — 3 reps @ 60 kg, and a round trip of
+  every `WarmupStep` field — and both fail against the old implementation.
+- **Workout-exit navigation.** *(Implemented, pending distribution/re-test.
+  Merged 2026-10-14. Developer real-use / UX follow-up; not
+  tester-reported.)* Every intentional exit from the active workout now
+  returns to the main Routines screen: Finish, Finish This Workout Only, Save
+  Selected Changes, Save & Exit and Discard. It works whether the workout was
+  entered from a routine row's Start, the routine editor's Start, or Resume.
+  Cancel, in the finish dialog or the Save Routine Changes sheet, still keeps
+  the user in the workout. `RoutinesView` owns the stack's destinations, and
+  its four separate destination flags were consolidated into one navigation
+  state. Leaving a workout resets that state to the root in a single state
+  change, with no repeated `dismiss()` calls, no delays and no UIKit
+  navigation workaround. The exit-to-destination rule is a small exhaustive
+  pure function. Persistence semantics are unchanged: Save & Exit remains
+  resumable, Discard still discards, and Finish still records the workout and
+  applies the selected routine changes.
+- **Centralized semantic haptic feedback.** *(Implemented, pending
+  distribution/re-test. Merged 2026-10-15. UX polish from real-device use +
+  developer audit; not tester-reported.)* The audit found 18
+  raw feedback-generator calls across 6 files and no central abstraction. It
+  also found:
+  - the existing success haptic firing when Finish reached confirmation,
+    before the workout or selected routine changes had actually been saved
+  - notification-style success / warning feedback on every set log and undo
+  - deletes playing success
+  - rest completion able to double-buzz through both the rest-timer and
+    notification-service paths
+  - an already-finished rest buzzing on restoration when the app returned to
+    the foreground
+
+  All haptics now go through `Log/Services/AppHaptics.swift`: a semantic
+  `HapticCue`, pure outcome rules in `HapticPolicy`, and one performer,
+  `AppHaptics.play(_:)`. No raw feedback-generator calls remain elsewhere. The
+  policy is:
+  - **selection** for checkbox / checklist choices
+  - **light impact** for ordinary workout-state changes: Log / Undo, Back /
+    Next when the position changes, exercise switching, add / duplicate
+  - **medium impact** for Start Workout when a new session is created, Save &
+    Exit, and a finish whose selected routine changes failed to save
+  - **success** for a finish after the workout is recorded, a live rest
+    completion, and an import that actually added something
+  - **warning** for Discard and confirmed deletes
+  - **error** for surfaced rejection / error alerts
+
+  Deliberately silent: typing, scrolling, ordinary navigation, help / info,
+  automatic synchronization, passive restoration, and native controls that
+  already give their own feedback. The timing rules are:
+  - Finish success plays only after the workout is recorded and selected
+    routine changes were handled
+  - Log / Undo only when a set log was actually written or removed
+  - rest completion only on a live countdown reaching zero
+  - returning after a rest already ended is silent
+  - the notification service no longer adds a second haptic
+
+  The physical feel was manually checked on a real iPhone before merge:
+  ordinary workout feedback, Finish vs ordinary actions, Save & Exit /
+  Discard, selection feedback, single rest-completion feedback, and no
+  unintended feedback on resume/restoration. Tester re-testing on a new
+  TestFlight build is still to come.
+- Validation for the post-Build-10 slices: each passed its Debug build, full
+  test suite and Release build before merge. For the final Update Routine / Save
+  Routine Changes work: **2,728 unit tests and 2 UI smoke tests, 0 failures**;
+  Debug and Release builds succeeded; manual interaction testing of the sheet was
+  completed. None of it is in Build 10, so none has been validated by a tester.
+- Validation for the cold-resume warm-up weight fix (historical): 139 targeted
+  tests passed, then the full suite — **2,730 unit tests and 2 UI smoke tests, 0
+  failures**; Debug and Release builds succeeded; a manual cold resume confirmed
+  the weight is kept. Not in Build 10.
+- Validation for workout-exit navigation (historical): targeted exit,
+  navigation and lifecycle tests passed, then the full suite: **2,742 unit
+  tests and 2 UI smoke tests, 0 failures**. Debug and Release builds succeeded.
+  Not in Build 10.
+- **Latest validation, at the Entry #12 cutoff**, for semantic haptics: 21
+  `HapticPolicyTests` added, asserting action → feedback decisions rather than
+  hardware. The targeted suites passed (417 tests, 0 failures), then the full
+  suite: **2,763 unit tests and 2 UI smoke tests, 0 failures**. Debug and
+  Release builds succeeded. Physical haptic feel was also manually checked on
+  a real iPhone before merge. Not in Build 10.
+- Test suite result at the Build 10 upload: **full scheme passes: 2,546 tests, 0
+  failures** — 2,544 unit tests plus 2 UI tests (Build 10 C15 run). Debug build
+  succeeds and Release build succeeds. Manual UI verification of the Build 10
+  C15 fix is still pending.
 
 ---
 
 ## Planned Fixes From Feedback
 
-- None currently. The setup-notes editing request was implemented, and the cardio
-  request is answered for the beta by duration-based cardio logging (see Fixes
-  above). Structured cardio metrics are tracked under Deferred Feedback.
+**Open bugs** — not yet fixed:
+
+- **Active-workout bottom panel floating.** **Open — investigated, not
+  reproducible.** P1. The Back / Next panel sat partway up the screen; tab
+  switching and Save & Exit → Resume did not restore it, a full app restart did.
+  The investigation audited the layout hierarchy, safe-area inset placement,
+  keyboard/focus, navigation/lifecycle, Save & Exit / Resume and app-owned
+  layout state, and tried to reproduce it on simulators:
+  - iPhone: hardware-keyboard scenarios; on-screen keyboard with
+    background/foreground, rotation, Edit Plan presentation/dismissal, Session
+    Notes, repeated keyboard show/hide mixed with Back/Next, and Save & Exit with
+    the keyboard up → Resume.
+  - iPad Pro (on-screen keyboard confirmed): show/hide, background/foreground,
+    rotation, Edit Plan, Save & Exit with the keyboard up → Resume.
+
+  None reproduced it; the panel returned to the bottom in every completed case.
+  A floating/undocked iPad keyboard was not tested, and simulator coverage does
+  not show it cannot happen. One remaining hypothesis is a stale system
+  keyboard/safe-area inset in the surviving hosting/navigation hierarchy, but
+  none of the simulator scenarios reproduced it. With no reproducible failure
+  and no faulty code path, **no production change was made**.
+
+  *If it recurs:* capture the state before relaunching. A possible next step is
+  temporary debug-only diagnostics recording the panel and List frames,
+  safe-area insets, the last keyboard event and frame, window size and
+  orientation, any presented sheet or full-screen cover, and navigation state
+  where available. Not implemented — a contingency only.
+
+  It carries forward to Entry #13 unchanged. Any recurrence, diagnostics or
+  fix is Entry #13 work.
+
+**Fixed since the earlier updates** (implemented, pending
+distribution/re-test): the active-workout lock scope and the History calendar
+deselection, both listed here as open bugs previously, the cold-resume fixed
+warm-up weight loss, the stale workout-exit landing, and the inconsistent /
+premature haptic feedback.
+
+**Remaining peer-feedback work:**
+
+- Block / Slot terminology, Start Workout discoverability and User Guide
+  discoverability have been addressed — implemented, pending
+  distribution/re-test.
+- A **first-launch orientation / tutorial** is still deferred, on purpose. The
+  plan is to ship and re-test the accumulated discoverability changes, see what
+  a new user still fails to understand, and only then decide whether a
+  tutorial is needed and what it should contain.
+- A **peer re-test** is still needed, on a build that actually contains the
+  post-Build-10 work. None of it is in Build 10, and that re-test is Entry #13
+  work.
+
+The setup-notes editing request was implemented, and the cardio request is
+answered for the beta by duration-based cardio logging (see Fixes above).
+Structured cardio metrics are tracked under Deferred Feedback.
 
 ---
 
 ## Deferred Feedback
 
 Feedback that is real but intentionally not addressed in this phase, such as P2/P3 polish, larger redesigns, or out-of-scope ideas.
+
+- **Full Korean localization of Calculus Analytics.** The localization pass
+  reached this screen and was **deliberately reverted**. Its contents could have
+  been translated, but the Settings entry, title, card and footer that lead to
+  it would still have been English — translating only the inside would have
+  produced exactly the mixed-language inconsistency the pass existed to remove.
+  The feature stays consistently English until it can be localized as one
+  cohesive slice, entry point included. Its mathematical notation (`S(t)`,
+  `S′(t)`, `ΔS/Δt`, `Σ`, `≈`, `e1RM`) stays as-is in every language when that
+  happens.
 
 - **Structured cardio metrics.** The cardio request is answered for the beta by
   duration-based logging plus notes. Dedicated fields are deferred:
@@ -336,6 +1174,9 @@ Reflections from running the beta.
 - Beta readiness is not only about adding features; it also means preventing accidental destructive actions, such as finishing a workout unintentionally.
 - SwiftUI relationship updates can fail to render immediately if a SwiftData relationship array is mutated in place, so some relationship updates need whole-array reassignment.
 - Tester feedback can reveal documentation and usability gaps that are easy for the developer to miss.
+- Peer sessions and my own full workouts found different kinds of problems. Peers found what they could not understand: pages, terms, where to start. Full real workouts found state that drifted over a whole session: plans mixing on Update Routine, a warm-up weight lost on cold resume, an exit landing somewhere stale.
+- Feedback should be semantic, not decorative. A haptic that fires when a confirmation *appears* tells the user something succeeded before it has; tying each haptic to the outcome it reports, and keeping restoration silent, made the feedback mean something.
+- Some behavior can only be judged on a device. Haptic feel, like the earlier warm-up rendering bug, is outside what a simulator can validate, so it was checked by hand on a real iPhone before merge rather than assumed fine from tests alone.
 - Active workout state needs one clear source of truth; otherwise different resume paths can appear to restore different versions of the same workout.
 - Compatibility rules should be explicit when switching between different exercise types, because preserving everything can create invalid mixed state.
 - An input's **range** and its **control** are one decision. Raising a limit without replacing the stepper would have made 6-hour durations technically possible and practically unusable.
@@ -349,18 +1190,125 @@ Themes to continue watching as peer/family testing expands:
 - whether Korean wording holds up in real use
 - whether routine editing feels stable after the TestFlight crash fixes
 - whether setup notes and exercise notes are easy to understand during active workouts
+- whether every workout exit lands where people expect
+- whether the haptics feel right on real phones: not too frequent, nothing doubled, nothing on restore
 
 ---
 
 ## Phase Result
 
-`[TBD]`
+Entry #12 closes with the app substantially changed by testing, and with
+testing still under way.
 
-This section will be written once the beta phase has more complete feedback. It should honestly state what the feedback showed, what was fixed, and what was deferred — without claiming a public App Store release. The goal of this phase is external feedback, not distribution.
+TestFlight and real use changed the app more than any feature planned before
+them. Each source found a different class of problem:
 
-**As of now:** Friends & Family Beta testing has started. Crash, usability, documentation, active-workout consistency, and exercise-switching issues have already been fixed, and the exercise-switching fix has passed both the automated test suite and manual device validation. Beta testing is still ongoing, so the phase result stays open until more tester feedback comes in.
+- **The first builds in testers' hands** exposed crashes that never reproduced
+  in development and an irreversible Finish tap with no confirmation.
+- **Peer feedback on Build 10** exposed understanding problems rather than
+  broken flows:
+  - what each page is for
+  - what RIR means
+  - where to start a workout or find the User Guide
+  - Korean that was inconsistent in places
+- **My own use of the app** found workflow and interaction problems that
+  short sessions rarely reach:
+  - an Update Routine that mixed two exercises' plans
+  - an exit that landed on a stale screen
+  - a control panel that once floated mid-screen
+  - haptic feedback that felt inconsistent on a real phone
+- **Developer validation during the Update Routine/resume audit** surfaced a
+  deeper persistence/state problem:
+  - a warm-up weight lost on cold resume
 
-**Next build scope:** the cardio system and Alternative Exercises are both
-implemented and test-covered in the working tree, and are the headline items for
-the next TestFlight build. That build has **not** been uploaded yet — remaining
-work is the final manual regression pass on device and the build prep itself.
+Several major workflows came out clearer and safer:
+
+- root pages that state their purpose
+- training terms explained in place
+- consistent Korean
+- Start on the routine row
+- reversible exercise replacements chosen through the Save Routine Changes
+  sheet
+- resume fidelity
+- every exit landing on Routines
+- haptics that report real outcomes
+
+This is **not** a finished app and **not** a completed beta. All feedback is
+not resolved, and nothing here claims public release readiness. Almost all of
+the post-Build-10 work has never been in a tester's hands. It needs a new
+build and a re-test before the feedback behind it can be called resolved; the
+haptics were checked on a real iPhone before merge but not yet by testers. The
+floating bottom panel
+remains open, investigated but not reproducible. Continued testing and any
+further fixes move into Entry #13.
+
+**Build 8:** prepared and archived for TestFlight with the cardio system and
+Alternative Exercises as its headline items. No upload is recorded in this
+repository.
+
+**Build 9:** **uploaded to TestFlight** — the cardio system, Alternative
+Exercises end-to-end, Custom Per Set RIR/RPE effort targets, the improved
+automatic RIR/RPE progression, the destructive confirmation before removing
+logged sets, and the updated guide/tester docs.
+
+**Build 10 — as recorded while it was being built** (it was later uploaded on
+2026-09-21; see *Where the builds stand now* below)**:** It opens with **C1**, a safety/UX fix to Alternative
+Exercises deletion handling: exercise usage now includes prepared alternatives,
+so an exercise used only as an alternative no longer reports the misleading
+"Used in 0 routines"; the delete confirmation now warns that prepared
+alternatives will be removed; and deleting an exercise prunes those
+alternatives instead of leaving dangling unavailable rows behind. **C2** follows
+it with a Korean terminology pass, display text only: the End and Finish
+workout dialogs no longer share one Korean title, routine block detail stops
+showing raw English set kinds (`Working` / `Warmup` / `Dropset`) in Korean, the
+routine editor and its plan editor now call the cardio plan **Cardio Plan** like
+the rest of the app, the Techniques count stops mixing 운동 기법 and 테크닉, and
+the Korean guide now says to tap **완료** — not 종료 — to save a workout to
+History. **C3** is an active-workout layout polish: the Sets section now comes
+first on the exercise screen instead of ninth, so logging no longer sits below
+session notes, the prefill toggle, exercise notes, Switch Exercise, the Plan
+card, Equipment & Setup, warm-ups and the cardio checklist. **C4** makes
+prepared Alternative Exercises visible before a workout starts: the routine row
+and the Start Workout screen now say how many enabled alternatives a slot has,
+the active workout's Switch Exercise row carries the same count, and the switch
+sheet is titled by its action with the replaced exercise moved to a subtitle.
+**C5** makes the in-app User Guide open in the device's language — one guide
+rather than English and Korean stacked back to back — with an English / 한국어
+switch for the other. **C6** is an effort-target clarity pass: the routine
+editor now explains all four effort modes, the guide documents `None` as the
+fourth, turning autoregulation off no longer makes saved targets look deleted,
+the in-session copy states the rule instead of reading like an unfinished
+feature, and a long custom per-set summary stops at four values with an
+ellipsis. **C7** makes the effort targets visible again after a workout ends:
+History now shows the planned effort each exercise was started with, read from
+the frozen session snapshot so editing the routine later cannot rewrite it.
+**C8** takes the AP Calculus AB showcase out of Settings for Release and
+TestFlight builds, keeping it for local development. Six are UX polish, C7 is a
+visibility improvement and C8 is a TestFlight-facing cleanup. Nothing here
+blocks Build 9, which stays in testers' hands.
+
+**Build 9 — scope, as planned at the time:** the redesigned RIR/RPE effort
+targets, which landed after Build 8 was prepared: whole-step automatic
+Progression and the new **Custom Per Set** mode. Both were implemented and
+test-covered before the build went out.
+
+**Where the builds stand now:** Build 9 shipped, and **Build 10** followed with
+the C1–C15 audit series — Alternative Exercises deletion and persistence fixes,
+a Korean terminology pass, active-workout layout and density polish, a User
+Guide language default, effort-target clarity, and planned effort targets in
+History — and was uploaded to TestFlight on **2026-09-21**. Build 10 is the
+build testers are using.
+
+**Merged to `main` after Build 10, not yet distributed:** the typing-performance
+fix, root-page discoverability and the History restructure, training term help,
+Korean localization consistency, the active-workout lock-scope fix, the
+display-only History calendar, the Block/Slot terminology cleanup, Start
+Workout and User Guide discoverability, the reversible Update Routine with the
+Save Routine Changes sheet, the cold-resume warm-up weight fix, workout-exit
+navigation back to Routines, and the semantic haptic feedback policy. All are
+implemented, merged and passed their Debug build, full test suite and Release
+build. None of them is in Build 10, so no tester has used them. They are
+*implemented, pending distribution/re-test*: the next tester cycle needs a
+build that contains them, and no build number has been assigned to it yet.
+**Still open:** the floating bottom panel — investigated, not reproducible, no
+production change.

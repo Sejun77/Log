@@ -1,0 +1,1452 @@
+# Entry #12 — Beta Feedback, Cardio System & TestFlight Preparation
+
+> **Draft, scope frozen.** Entry #12 covers work through the workout-exit
+> navigation and semantic haptics pass (merged 2026-10-15) and takes nothing
+> after it — later implementation belongs to Entry #13. This is a devlog cutoff,
+> not a release: Build 10 is still the build testers have, everything in the
+> *After Build 10* sections is merged to `main` but not yet distributed, and one
+> bug is still open (see **Still Open**). The wording may still be edited before
+> publishing; the scope will not grow.
+>
+> _Numbering note:_ the repo already uses `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md` for
+> the beta feedback log. If the public devlog numbering is separate, this stays
+> #12; otherwise renumber before publishing.
+
+**Date Range:** 2026-06-24 → 2026-10-15 _(cutoff: the semantic haptics merge)_
+
+Entry #11 ended with the app working for **my** workouts — the full loop, start to
+History, validated on a real device. This entry is about a different question:
+
+> Can other people install this, use it, and understand what they're looking at?
+
+That question turned out to be less about features and more about everything
+around them. The bulk of this stretch went into fixing what early testers hit,
+making the everyday flow harder to get wrong, writing a guide for people who
+don't already know how the app works, and translating it for family who'd rather
+use it in Korean. Cardio — the one genuinely large new feature — came at the end,
+and only after a smaller version of it had been in testers' hands long enough to
+show what it actually needed.
+
+The cardio phase ended with the test suite repaired and passing, a manual
+regression done, and **build 9 uploaded to TestFlight**. Build 10 followed and
+reached testers on 2026-09-21; the sections after it record what those testers
+— and my own use of the app — turned up next, and what changed in response.
+The two sources turned out to find different things: peers found what they
+couldn't understand, and my own real workouts found what the app got wrong over
+a full session.
+
+---
+
+## 1. Beta Feedback & Stability
+
+The first weeks were driven almost entirely by what testers ran into. Two of
+these were crashes that never reproduced in normal development builds — they only
+showed up on other people's phones, which is precisely the argument for getting
+it onto other people's phones.
+
+- **Fixed a crash when opening a routine or adding the first exercise to an empty
+  routine.** This one hit testers immediately, on the most basic thing you can do
+  in the app.
+- **Fixed a second crash when deleting or removing an exercise from a routine.**
+  Routine deletion was then hardened so empty routines, empty blocks, and
+  already-deleted exercises are all handled safely.
+- **Added a confirmation before finishing a workout.** Tapping Next one time too
+  many at the end of a session used to end the workout instantly. Later, the
+  confirmation itself was made reliable so a single tap finishes the workout
+  exactly once.
+- **Added setup-notes editing during an active workout.** Setup notes were useful
+  mid-session but read-only; now they can be corrected on the spot. The correction
+  saves for future sessions and for this workout's History — previously completed
+  workouts stay frozen.
+- **Fixed warm-up sets not appearing** until you left and reopened the warm-up
+  editor.
+- **Removed unused background capabilities** and added a privacy note ahead of
+  beta distribution.
+
+Every one of these came from a tester, a crash report, or a reproduction of
+something a tester described. They're logged with severity and outcome in
+`docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
+
+---
+
+## 2. Routine & Active Workout Polish
+
+Alongside the crash fixes, the everyday flow got quieter and more predictable.
+
+- **Exercise switching mid-workout was made consistent.** Switching between a
+  time-based exercise and a normal one could previously leave a mixed plan on
+  screen — duration fields on a reps-and-weight exercise — and could silently
+  change the set count. Both "Keep Current Plan" and "Reset Plan" now produce a
+  valid plan for the new exercise, keeping what still applies and clearing what
+  doesn't.
+- **Save & Exit and Resume now restore the same workout.** The two ways back into
+  a running session used to disagree about what the plan was. There's now one
+  answer.
+- **Switching prefills the input fields** from the new exercise's own last
+  performance — but only the fields you're about to type into. It never changes
+  the workout plan.
+- **Tidied up settings that don't apply to time-based exercises,** so options
+  meant for reps-and-weight work no longer show up where they can't do anything.
+- **Warm-ups, plan edits, and rest behavior** were cleaned up as part of the same
+  pass, including a stale rest timer that could keep counting for an exercise you
+  had just replaced.
+- **Simplified labels and helper text** in several places, so screens explain
+  themselves instead of relying on tooltips.
+
+---
+
+## 3. Duration Exercises & Cardio Foundation
+
+Cardio didn't start as a cardio system. It started as a tester asking for cardio,
+and the honest first answer being: the app can almost do this already.
+
+- **Duration and rest limits were raised** — up to 6 hours for an exercise and 60
+  minutes for rest. The previous ceiling was around 10 minutes, which is fine for
+  a plank and useless for a run.
+- **The input control was replaced along with the limit.** One-tap presets plus
+  hour / minute / second wheels, instead of a stepper that moved 15 seconds at a
+  time. Raising a cap without fixing the control would have made long durations
+  technically possible and practically unusable.
+- **Cardio became loggable right away** as a time-based exercise, with the
+  built-in list seeding common cardio machines. Details like distance and incline
+  went into notes for that first beta build.
+- **Then cardio was separated from generic duration exercises.** Notes aren't
+  queryable — you can't chart weekly distance or compare two 5k runs from a text
+  field. So cardio became its own kind of exercise, with its own fields, designed
+  in `docs/CARDIO_SYSTEM_DESIGN.md` before any of it was built.
+
+The short version: the beta answer shipped in days and kept people training; the
+proper answer shipped a few weeks later, informed by the beta one.
+
+---
+
+## 4. Cardio Logging
+
+- **Dedicated cardio exercises.** An exercise can be marked Time-based, then
+  Cardio. Common ones ship built in. If you used an earlier build, the app offers
+  **once** to convert the cardio exercises you already have — declining changes
+  nothing.
+- **A Details section** for distance, duration, calories, heart rate, incline or
+  decline, resistance / machine level, and heart-rate zone. Pace and speed are
+  worked out from what you enter.
+- **Distance unit in Settings.** Pick km or mi once and the whole app follows it.
+- **History summaries.** A cardio bout shows a readable summary line rather than
+  an empty set row.
+- **Cardio progress charts.** Distance, duration, pace, calories, and average
+  heart rate, instead of the strength series that need a weight.
+- **Previous-performance prefill.** A cardio set starts from what you *chose* last
+  time (distance, incline, resistance), never from last session's *results* (heart
+  rate, zone, calories).
+- **Cardio slots in routines** can carry a target distance, and start as a single
+  effort with no rest.
+
+A cardio bout is recorded as **one aggregate Cardio Set** — one row holding the
+duration and the Details you entered. Everything downstream reads that one row.
+
+---
+
+## 5. Structured Cardio Plans
+
+The last piece lets a routine describe the *shape* of a cardio session, not just
+its length. The distinction that matters:
+
+> **Cardio Plan = what you intended. Cardio Set = what you actually did.**
+
+- A cardio routine slot can carry an ordered plan of segments — **Warm-up**,
+  **Work**, **Recovery**, **Cool-down** — each with its own optional targets. This
+  turns "30 min treadmill" into "5 easy / 20 at 1% / 5 easy."
+- **During the workout the plan appears as a checklist** next to the set entry, so
+  you can see what's next and tick segments off.
+- **Ticks survive Save & Exit and Resume.** Leave mid-session, come back, and your
+  place is still there.
+- **Ticks are never saved to History.** They're progress markers, not
+  measurements — the app shouldn't imply it observed something it didn't.
+- **History shows the planned Cardio Plan** the workout was started with, next to
+  the logged result.
+- **Routine transfer preserves plans.** Exported routines carry their segments,
+  and routine files from older builds still import.
+- **The logged result is still one Cardio Set.** Segments are not logged
+  individually.
+
+Stated plainly because it's a real limitation: since logging is aggregate, an
+interval session charts as one average pace, which understates the hard efforts.
+That's a known trade-off for this build, not an oversight.
+
+---
+
+## 6. User Guide, Korean UI & Tester Instructions
+
+A tester said the app was simple but not obvious if you don't already know gym
+terminology. That was fair.
+
+- **A user guide was written and put inside the app,** under Settings → Help →
+  User Guide, covering the basics through History, the rest timer, prefill, and
+  cardio.
+- **Korean UI support** was added so family members can test in the language
+  they're comfortable in — including body parts, Settings text, and help text.
+  Feedback is only useful if the tester understood the screen.
+- **The guide was simplified before testing.** The cardio section in particular
+  was cut back to what a tester actually needs, with internal vocabulary removed
+  and the logged row named plainly as a **Cardio Set**.
+- **Tester instructions were updated** so cardio and structured cardio are part of
+  the optional walkthrough, with known gaps listed so nobody reports a deliberate
+  deferral as a bug.
+- **Testers are asked to check** routines, logging, cardio, History, the Korean UI
+  (including any wording that reads oddly or gets cut off), any step that felt
+  confusing, and anything that looked like missing data.
+
+---
+
+## 7. Testing & Validation
+
+_Counts are from the verification run after the Build 10 C15 slice — the last
+one before Build 10 was uploaded. Later validation is recorded with the work it
+covers, in the After Build 10 sections._
+
+- **The UI test target was restored.** `LogUITests` had gone missing from the
+  project and the scheme pointed at stale references, so the full scheme couldn't
+  run end to end.
+- **A stale UI test was replaced with a launch/navigation smoke test.** The old
+  one was pinned to UI that no longer exists; the replacement checks that the app
+  launches and its main screens are reachable — the thing a UI test can actually
+  catch reliably.
+- **Full scheme passes: 2,546 tests, 0 failures** — 2,544 unit tests plus 2 UI
+  tests.
+- **Debug build succeeds.**
+- **Release build succeeds.**
+- **Manual regression completed** on device: routines, logging, exercise
+  switching, cardio Details, the Cardio Plan checklist through Save & Exit and
+  Resume, History, the charts, and timer behavior across backgrounding and
+  reopening.
+- **Build 9 uploaded to TestFlight.** Build 10 followed and was uploaded on
+  2026-09-21 — see the *Build 10* sections below.
+
+The cardio work landed additively — new fields are optional and start empty — so
+existing workouts, routines, and history weren't rewritten and no data migration
+was needed.
+
+---
+
+## 8. Deferred / Not Included Yet
+
+Deferred means decided, not forgotten.
+
+- **Repeat authoring UI for Cardio Plans.** No editor yet for `5 × (1 min hard /
+  2 min easy)`; a plan is an ordered list of segments.
+- **Segment-level actual results.** Segments are targets you tick, not things the
+  app records individually.
+- **Segment-level analytics and charts.** Nothing to chart until per-segment
+  results exist.
+- **GPS / route tracking.** Not planned.
+- **Apple Watch / HealthKit.** Not planned.
+- **Automatic cardio tracking** of any kind — no sensors, no live progression, no
+  timer driving the session. Every number is one you enter.
+- **Workout-history CSV import.** History export works; importing history is not
+  planned.
+
+---
+
+## Final Pre-TestFlight Polish
+
+Done:
+
+- Removed a stale "Rest after" preview label that could appear from legacy
+  routine data before starting a workout.
+- Fixed a background/foreground timer issue where a duration countdown could
+  reopen as a Rest overlay instead of catching up as duration.
+- Added a confirmation before switching exercises when the switch would remove
+  already logged sets.
+
+_(This checklist was written during the pre-TestFlight preparation in August,
+before the builds that later went to testers; the fixes above were all merged
+before Build 9 was uploaded. Everything after it is in the Build 9, Build 10
+and After Build 10 sections below.)_
+
+---
+
+## Build 9 — Planning for the Day the Plan Changes
+
+Alternative Exercises were first packaged in Build 8, which was prepared but
+never recorded as uploaded; Build 9 was the build that put them — and a
+redesigned set of effort targets — in testers' hands. Between them, they gave a
+routine a way to describe more than one kind of day.
+
+**Alternative Exercises** let a routine exercise carry prepared replacements —
+the machine press for when the bench is taken — each with its own complete
+plan: sets, reps or duration, rest, effort, tempo, warm-ups, techniques, cardio
+targets and notes. They are authored in the routine editor, frozen into the
+workout when it starts, and offered mid-session under Switch Exercise →
+Prepared Alternatives, where applying one switches the exercise *and* its plan
+rather than stretching the old exercise's plan over the new one. Duplication and
+routine transfer carry them along. It was built on top of the exercise-switch
+work earlier in this entry, and it is the feature everything in *Update
+Routine, Taken Apart* later grew out of: once a routine holds two exercises with
+two plans, saving a switch back to the routine has to decide what happens to
+both.
+
+The effort targets grew in the same build. Automatic **Progression** stopped
+landing on half steps by default — RIR 2 → 0 over four sets is now 2, 2, 1, 0 —
+and a new **Custom Per Set** mode lets a user type the exact target for every
+set, half steps included, carried through the workout, Save & Exit, alternatives,
+duplication and transfer. The details are in the feedback log; what matters for
+this story is that Build 9 made the routine a richer plan, and the rest of the
+entry is largely about other people meeting that plan — and about the app
+keeping it intact.
+
+---
+
+## Build 10 — First Fix
+
+Build 9 is on TestFlight. Build 10 opens not with a feature but with a
+safety/UX fix to how deleting an exercise interacts with **Alternative
+Exercises** — the thing Build 9 shipped and the thing that made this reachable.
+
+Exercise usage was only ever counted from direct routine slots. Alternatives
+live inside a slot's prescription, so an exercise used *only* as a prepared
+alternative reported **"Used in 0 routines"** — on the same screen as the Delete
+button, immediately above it. Delete it and nothing cleaned up the alternatives
+pointing at it; they resurfaced mid-workout as disabled `Exercise unavailable`
+rows, in routines with no way to repair them.
+
+- **Exercise usage now includes prepared alternatives.** Direct slots and
+  alternatives are counted separately and never summed, so a routine that uses
+  an exercise both ways is still one routine. Exercise Detail reads `Used as 3
+  alternatives` when there is no direct usage, and `Used in 2 routines · 3
+  alternatives` when there is both.
+- **The "Used in 0 routines" case is fixed**, along with the "add this exercise
+  to a routine" empty state that used to appear underneath it.
+- **The delete confirmation now warns about prepared alternatives** and names
+  the count.
+- **Deleting an exercise prunes the matching alternatives** instead of leaving
+  dangling unavailable rows. Non-matching alternatives are preserved untouched,
+  and a slot that loses its last one goes back to storing nothing at all.
+
+The pruning is a deliberate reversal of a design-doc decision, and worth being
+straight about: the original design rejected sweeping up alternatives whose
+exercise was deleted, on the grounds that silently destroying prepared work is
+worse than showing a dead row. That reasoning holds for a *silent* sweep. This
+is not one — it happens only at the moment the user deletes the exercise, and
+only after a confirmation that says the prepared alternatives go with it. The
+disabled `Exercise unavailable` row still exists for the case it was really
+written for: a workout already in progress, whose frozen session plan still
+names an exercise deleted mid-session.
+
+No schema change, no active-workout switch behavior change, no effort-target
+logic change.
+
+---
+
+## Build 10 — Saying the Right Thing in Korean
+
+The second Build 10 slice is smaller and entirely about words. Nothing in the
+app behaves differently afterwards; four things it *said* were wrong.
+
+- **End and Finish asked the same question.** Both dialogs were titled
+  `운동을 종료할까요?` in Korean — the one that exits a workout and the one that
+  completes it and saves it to History. They now read `운동을 중단할까요?` and
+  `운동을 완료할까요?`, and the finish dialog agrees with the `완료` button
+  inside it.
+- **Routine block detail leaked the database into the UI.** It rendered
+  `kindRaw.capitalized` — the persisted English raw value — so a Korean routine
+  listed its sets as `Working`, `Warmup`, `Dropset`. It now uses the localized
+  label the rest of the app already had.
+- **The cardio plan had two names.** The routine editor said *Structured
+  Cardio*; the active workout, History and the guide said *Cardio Plan*. The
+  editor row and the screen it pushes now say Cardio Plan too.
+- **The Techniques row argued with itself**, reading `운동 기법        3 테크닉`.
+  The count now reuses the row's own name.
+
+And a guide error worth its own line: the Korean guide told users to tap **종료**
+to save a workout to History. 종료 is the *exit* button. Someone following the
+guide literally would have been told to leave the workout at the exact moment
+they meant to finish it. The finish steps now say **완료**, and the only 종료
+left in the guide is `저장 후 종료` — the save-for-later exit, which is what the
+word should have been reserved for from the start.
+
+That last one is the useful reminder in this slice. The translation was not
+missing and not clipped; it was fluent, confident, and pointed at the wrong
+button. Nothing but reading the Korean UI as a Korean user would catch it, which
+is exactly what the tester round is for.
+
+---
+
+## Build 10 — Putting the Sets Where the Hands Are
+
+The third Build 10 slice moves one section and changes nothing else.
+
+The active workout screen listed nine sections, and the set rows were **ninth**.
+Above them: session notes, the future-prefill toggle, exercise notes, Switch
+Exercise, the Plan card, Equipment & Setup, warm-ups, the cardio checklist. All
+of it either read once at the start or never — and all of it between the user
+and the reps field they come back to every couple of minutes, on every exercise,
+on every phone.
+
+*(A later slice moved it once more — see “What You Do First, First” below.)*
+
+Sets is now first. Then the plan-shaped things a user reads *while* logging —
+Plan, Warmup, the Cardio Plan checklist — then Equipment & Setup, and then the
+read-once half: Switch Exercise, Exercise Notes, the prefill toggle, Session
+Notes. No section was removed, renamed, collapsed behind a disclosure, or given
+a new label; the header above the list did not move.
+
+It is worth being precise about how little this changed, because a 4,800-line
+view is exactly where a "simple reorder" quietly loses something. Comparing the
+multiset of non-blank lines against the previous commit: seven comment lines
+removed, eleven added, and every single line of code byte-identical and merely
+relocated. That check earned its keep immediately — the first pass rewrote the
+cardio checklist's comment and swallowed the call underneath it. It would have
+compiled clean, passed all 2,323 tests, and silently dropped the checklist from
+every cardio workout, because nothing in the suite asserts that a section is on
+screen. A build succeeding is not the same as the screen being right.
+
+---
+
+## Build 10 — Telling People the Alternatives Are There
+
+The fourth Build 10 slice is the one the tester round arguably needed most.
+Alternative Exercises shipped in Build 9 as a complete feature — authored per
+slot, frozen into the session, offered mid-workout, carried through duplication
+and transfer — and then said nothing about itself anywhere. You prepared a
+backup for the bench press, and the next time the app mentioned it was when you
+tapped Switch Exercise mid-set. Whether your prepared work had survived editing
+a routine, duplicating it, or importing it from a file was, in practice,
+unanswerable without starting a workout.
+
+So the count now appears where the question gets asked:
+
+- **On the routine row**, appended to the summary that already states the
+  plan — `3 × 8–12 · 90s rest · RIR 2 · 2 alternatives`.
+- **On the Start Workout screen**, which previously listed only exercise names.
+  It now renders the *same* summary type as the routine editor, so a plan is
+  worded identically on the screen you author it and the screen you confirm it.
+- **Next to Switch Exercise during a workout**, counted from the exact array
+  the sheet is built from — so the badge cannot promise a row the sheet will
+  not show.
+
+The switch sheet also got its title fixed (M13): it is called **Switch
+Exercise** now, with "Replacing Bench Press" moved into the section header. It
+used to be titled with the name of the exercise you were leaving, which reads
+as a label for what you are looking at, not for what you are doing.
+
+One rule was worth deciding carefully: a **disabled** alternative is not
+counted. It is still prepared work, still listed in the editor, still preserved
+everywhere — but the user explicitly asked for it not to be offered, and a
+count on a workout-facing row that the workout will not honor is just a lie
+told in a smaller font. A **deleted** exercise's alternative does count,
+because the sheet still shows that row — named, disabled, and explaining
+itself. The rule is that these counts mean "what tapping Switch Exercise will
+offer you", and nothing else.
+
+---
+
+## Build 10 — A Guide That Opens in Your Language
+
+The in-app User Guide rendered the English guide, a divider, and then the Korean
+guide. Both, always, in that order. A Korean tester scrolled past the whole
+English guide to reach the one they could read; an English tester finished every
+visit staring at a long Korean appendix.
+
+It now opens in the device's language — Korean on a Korean phone, English
+otherwise — with a small **English / 한국어** switch at the top for anyone who
+wants the other one. Both guide arrays are untouched: not a character of content
+changed, and the two are still held to matching section and item counts by the
+same tests as before. That parity matters more now than it did when the guides
+were stacked, because a reader can flip between them in one screen and see
+immediately if one is missing a step.
+
+Two small decisions worth writing down. The default rule keys on the *language*,
+not the region, so a Korean speaker with a US region still gets Korean — and it
+takes a `Locale` argument instead of reading `Locale.current`, which turns "a
+Korean phone opens the Korean guide" into a unit test rather than something only
+a re-launched simulator can answer. And the two switch labels are deliberately
+**not** translated: a language switcher has to name each language in its own
+language, or the Korean reader cannot find 한국어 on an English screen. The only
+string that did need translating is the one nobody sees — the picker's VoiceOver
+label.
+
+The selection is view state and is not saved. The locale default is right on
+essentially every launch, and remembering an override past the session that
+prompted it would be a small, permanent way to be wrong.
+
+---
+
+## Build 10 — Saying What the Effort Targets Do
+
+Five audit findings, one feature. Effort targets are the most conceptually
+loaded thing in the app — RIR, RPE, a progression that rounds in a particular
+direction, a per-set list — and the UI around them explained almost none of it.
+
+- **The mode picker named four modes and defined none.** There is now an info
+  button under it listing all four in a sentence each, and the guide, which had
+  described three ways since before Custom Per Set shipped, now describes four.
+  `None` was the mode a user could select and then find explained nowhere.
+- **Turning autoregulation off looked like deletion.** The effort controls are
+  hidden when autoreg is `None` — reasonably — but a slot with authored targets
+  showed nothing at all, so the targets appeared to be gone. A read-only line
+  now says they are saved and names the setting that brings them back. It
+  appears only when there is actually something saved.
+- **The in-session copy said "not available yet."** A progression is frozen at
+  session start and the rows render it; that is a decision, not a gap. It now
+  says the targets are fixed for this session.
+- **A ten-set custom list printed all ten values** into a one-line row, pushing
+  everything before it off the end. Four values, then an ellipsis.
+- **And one separator was wrong**: the editor's live preview joined per-set
+  values with the same `" · "` that separates whole summary segments, so
+  `Set targets: 2 · 1 · 0` read as three segments instead of one list.
+
+The one that took the most care was the truncation, because a display rule that
+touches a value list is one bad line away from being a data rule. The test that
+matters there is not the one checking the ellipsis renders — it is the one
+asserting that after summarizing, the stored CSV, the resolved values and every
+per-set label are byte-for-byte what they were. A summary is allowed to say
+less; it is never allowed to make the thing it summarizes smaller.
+
+---
+
+## Build 10 — The Targets Come Back Out Again
+
+Build 9 shipped Custom Per Set effort targets. You could author a per-set ramp,
+train it, finish the workout — and then it was gone. History showed the sets,
+the reps, the weight, and nothing about what you had been *aiming* for.
+
+The frozen data was there the whole time. `PlannedPrescriptionSnapshot` has
+carried the effort fields since the slice that introduced them, precisely so a
+finished workout could state what it was started with. It simply had no reader.
+That is the quiet failure mode of snapshot-everything discipline: the data is
+correct, durable and invisible.
+
+So History now has a **Planned effort** line per exercise — `RIR 2`,
+`RIR 2 → 0`, `RIR 2/1.5/1/0` — sitting with Equipment and the Cardio Plan,
+above the logged sets. Every bit of the formatting comes from the same resolver
+the routine editor and the active workout use, which meant the C6 elision rule
+arrived for free: a ten-set custom list reads `RIR 3/3/2/2…` here too, without
+this slice knowing anything about it.
+
+Two things it deliberately does **not** do. It does not read the live routine —
+edit your programming tomorrow and last week's workout still says what last
+week's workout was started with, which is the entire point of freezing a
+snapshot and is pinned by a test against real rows. And it does not claim you
+*achieved* anything. There is no logged RIR/RPE field in the app, so the label
+says "Planned effort" and stops. Naming a row "RIR" and letting the reader
+assume it was measured would be the cheapest possible lie, and it would be
+indistinguishable from the honest version until someone relied on it.
+
+---
+
+## Build 10 — Taking the Calculus Out of the Gym App
+
+Settings had a **Showcase** section offering *Calculus Analytics*: an AP
+Calculus AB demo that runs a strength/volume analysis over in-memory sample
+data. It was written as a development exercise, it touches nothing a user owns,
+and it has been sitting in the Settings screen of a build sent to people who
+came to log workouts. In English only, so a Korean tester met an untranslated
+section about coursework.
+
+It is now `#if DEBUG`. Still there on my machine, gone from anything a tester
+installs.
+
+The detail worth keeping is that the gate wraps **both** the call site and the
+`showcaseSection` definition. Gating only the call would have worked today and
+quietly stopped working the first time someone re-added a reference — the
+section would still exist, so Release would still compile. With the definition
+gated too, an ungated call in a future edit fails the Release build instead of
+shipping. A compile error is a much better failure than a screenshot from a
+tester asking why the gym app wants to teach them derivatives.
+
+The rule lives in one small pure function taking the configuration as an
+argument, which is the only way to test it at all: a test bundle is built in the
+same configuration as the app it hosts, so a Debug run can never see what a
+Release build renders. It can, however, assert both answers of a function — and
+assert that the compiled constant agrees with the configuration it is running
+in, so an inverted `#if` fails in CI rather than on someone's phone.
+
+---
+
+## Build 10 — Writing Into the Right Store
+
+The one Build 10 slice that came from a real defect rather than an audit.
+
+The Alternative Exercises editor doesn't reimplement the prescription editors —
+it binds the real ones to a **scratch** slot living in its own throwaway
+in-memory database, so nothing you type while editing an alternative can reach
+your actual data. The scratch container's context is injected into the section's
+environment. It turns out that injection does not follow the editors the section
+*pushes*, so **Warmup** and **Techniques** were writing into the app's database
+against a prescription that lives somewhere else.
+
+The same mistake produced two completely different symptoms, which is the part
+worth remembering. A prescription's warm-up scheme is a **to-one**
+relationship, and SwiftData traps outright when you relate a to-one across two
+containers — so adding the first warm-up step to a prepared alternative crashed
+the app, reproducibly, on Build 9. Techniques are a **to-many** relationship,
+and the identical mistake there is accepted *silently*: no crash, and instead a
+`TechniquePlan` row quietly saved into the user's database, owned by nothing and
+reachable from no screen. Deleting one then did nothing at all, until the draft
+had saved once, at which point it threw.
+
+The crash is the one that got reported. The silent one is the one that would
+have kept accumulating rows.
+
+Both editors now ask **the model they are editing** which store to write into,
+rather than asking the environment. For a real routine slot that is the same
+context it always was, so ordinary warm-up and technique editing is untouched;
+for a scratch slot it is the draft container, which is what the design promised
+in the first place. The create-and-relate sequences moved into two small
+helpers so the crash path is reachable from a test — both suites were run
+against the old code first, to confirm they actually catch it.
+
+Existing Build 9 orphan rows are left alone for now. They are inert, and
+sweeping them is a separate decision.
+
+---
+
+## Build 10 — What You Do First, First
+
+One pass through the app on a real phone, five things wrong, one of them a bug.
+
+The bug: **the rest timer outlived the set that started it.** Log a set, watch
+the rest start, unlog the set — and the countdown kept going, along with its
+scheduled notification and its Live Activity, for a set that no longer existed.
+
+The cause is the kind I find slightly embarrassing in hindsight. There are three
+places a set can be unlogged, and all three had drifted apart. The reps/weight
+row stopped the rest unconditionally — which is its own small bug, since going
+back to fix an older set killed the countdown you were taking after a newer one.
+The duration/cardio row and the warm-up row didn't stop it at all, under a
+comment that confidently claimed they mirrored the first.
+
+Nobody was in a position to do better, because the timer never knew which set
+started it. It is scoped to a *slot*, and the only thing persisted across a cold
+restart is the slot id. So rest starts now record the set that triggered them —
+all five of them, including both dropset paths, where a drop's rest belongs to
+its parent working set — and one rule decides the rest: clear when the unlogged
+set is the origin, and after a cold resume, where the origin is genuinely
+unknown, clear only when the slot has nothing logged left to justify it.
+
+The other four are wording and layout. **Warmup moved above Sets** — C3 put the
+set rows first, correctly, and then left the warm-up below the rows it comes
+before, so you scrolled up to do the thing you do first. **History's planned
+effort wrapped onto two lines**, because "Planned effort" doesn't fit an 80pt
+column at 12pt; the column is now 100pt and the wording is untouched, which was
+the point. **The finish dialog said "Finish (this workout only)" when it was the
+only option**, answering a question nobody asked. And **the Korean Back button
+said `등`** — the body part — because it shared a key with the muscle group,
+sitting next to a perfectly correct `다음`. It says `이전` now, and the body part
+still says `등`.
+
+That last one is the whole tester round in miniature. It was never going to show
+up in a test, and I would never have found it myself, because I don't read the
+app in Korean.
+
+---
+
+## Build 10 — Saved, Unless You Left the Wrong Way
+
+The crash fix a few slices back made it possible to add a warm-up step to a
+prepared alternative. It did not make it *stick*.
+
+Manual testing found the rest: add a warm-up or a technique inside a prepared
+alternative, go back to the routine and switch tabs, then return — and the edit
+was sometimes gone. Sometimes. Which is the word that tells you the mechanism
+before you've looked at anything.
+
+An alternative is edited through a scratch slot in its own throwaway database,
+and the result is written back into the stored payload. I had made that
+write-back a *consequence* rather than an action: the editor read the draft's
+payload inside its `body`, and an `onChange` noticed when the value moved. That
+is fine for the fields on that screen. It is not fine for the warm-up and
+technique editors, which are pushed **on top of** it — the edit happens while
+the view holding the commit is off-screen, and its body only runs again if you
+come back through it. Pop one level and the commit fires on the way past.
+Switch tabs and the scratch database is deallocated with your work inside it.
+
+So the commit stopped being an inference. There is a small `AlternativeDraftCommit`
+that holds the rule, the two nested editors call a hook after every mutation
+they make, and the detail editor writes back the moment the graph changes. The
+old observer stays for the fields it already covered, plus an `onDisappear`
+commit as a backstop — all three are idempotent, so they can't fight.
+
+The other half of the slice is smaller and more embarrassing: to edit an
+existing warm-up step you had to tap the *text*. The row is a plain-styled
+button, which is what keeps it looking like a row instead of a blue link, and
+the cost of that style is that the button's hit area is exactly its label —
+short, hugging its content, with the rest of the 44pt row inert. There was even
+a `contentShape(Rectangle())` on it already, applied one level too high, where
+it shaped the cell for the list and never reached the gesture.
+
+Both fixes are two lines each. Finding them took a person with the app in their
+hands.
+
+---
+
+## Build 10 — Clearing the Audit's Tail
+
+Seven items, none of them behavioural, done in one pass because each is a
+sentence, a title, or a constraint.
+
+Two of them are the same mistake in different places: a word that was correct in
+English and wrong in Korean because it was reused. The effort progression rows
+were labelled by composing the generic `Start` and `End` keys with a metric —
+and `End` is the word the app uses for *ending a workout*, `종료`. So a Korean
+user editing a ramp read `종료 RIR`: "quit RIR". They now have their own keys,
+`시작 RIR` and `마지막 RIR`, and the workout controls keep `종료` to themselves.
+This is the second time this build that a shared key produced a wrong Korean
+word in the right English place, which is starting to look less like bad luck
+and more like a category.
+
+The rest:
+
+The **Cardio Plan checklist** now says `Checklist only — not saved as results.`
+I had refused that footer once, and the note explaining why is still in the
+file: "ticks are not saved to your history" is a sentence about the app's
+internals, on the one screen a user is not reading. That was right about the
+sentence. It was not an argument against four words answering the question a
+tick actually raises — did that just count as logging something?
+
+**Start Workout** now says Start Workout. The button said `Start`; the screen
+title and the guide both said `Start Workout`. The guide was telling people to
+tap a control that did not exist under that name.
+
+**Details screens name the exercise.** Tapping into Bench Press landed on a
+screen titled "Block", which is the one thing the user already knew.
+
+**The switch warning names what it buys.** It told you how many logged sets a
+switch would destroy, and never what you were switching *to* — a trade you were
+asked to judge mid-set, from memory.
+
+**The Cardio Plan editor states its segment total**, and says when it disagrees
+with the target distance beside it. The two are independent fields, so a 5 km
+target and a plan totalling 3 km were both stored, both valid, and neither
+mentioned the other. It warns; it never adjusts. And it decides agreement on the
+*rendered* numbers rather than the raw meters, so it can't warn about a
+difference the user can't see.
+
+**Superset rows hint that effort exists** — a count, not the values. A member
+with a full custom per-set ramp used to look exactly like one with no target.
+
+**And the cardio fields stopped being rigid.** Fixed widths became ranges, so a
+long Korean label takes room from the control instead of truncating against it.
+That one I can't verify from here at all: it needs a small phone, a large type
+setting, and Korean, which is precisely the combination that broke it.
+
+---
+
+## Build 10 — The Step You Added, On the Screen You Added It
+
+Two builds ago the first warm-up step in a prepared alternative crashed the app.
+One build ago the step stopped disappearing when you left by the wrong route.
+This time the step saves correctly, is on the screen when you come back, and
+still isn't drawn the moment you add it.
+
+The simulator has never once reproduced it. A phone does, which is the part
+worth writing down: the bug was always there, and the simulator was hiding it.
+
+The warm-up editor renders from `prescription.warmupScheme.steps`. `steps`
+belongs to the scheme, and the scheme is a *grandchild* of the model the view
+binds — so the only warm-up mutation that invalidates that view is the one that
+writes a property of the prescription itself: attaching the scheme, which
+happens once, on the very first add. Every later add, and every edit, delete and
+move, writes to the scheme and its steps and tells the view nothing. It keeps
+drawing the array it read last. The prescription's `N steps` preview was worse
+and simpler: it read two models below its own binding, so nothing the editor did
+could ever reach it, and it was stale until the whole page was rebuilt.
+
+Neither view had a dependency on what it was drawing. Whether you saw the stale
+value came down to whether *something else* happened to re-run the body in the
+same frame — a sheet dismissing, a row recycling, a keyboard moving. The
+simulator's cheaper layout and animation passes do that often enough to paper
+over it. A phone does not. That is the whole of the device/simulator split, and
+it also explains the shape of the report: the list was intermittent, the preview
+count never updated at all.
+
+There is a sharper case hiding in it. Deleting the last step leaves the scheme
+attached, so the *next* "first" add no longer attaches anything and produces no
+observable change whatsoever. That one is not intermittent. It just doesn't
+render.
+
+The fix is the workaround this codebase already had, applied to a third place: a
+revision token in the view, written after every mutation. Writing it invalidates
+the view unconditionally, so the body re-reads the live relationship in the same
+frame. The prescription row was additionally pulled out into its own small view
+holding its own binding — the same shape `AlternativeExercisesRow` already had
+for the alternatives count, for exactly the same reason. Warm-up mutations were
+consolidated into `WarmupSchemeAuthoring`, which had owned only `add`, so a
+single hook covers all four; `WarmupSummary` became the one list source the
+editor's rows and the row's count both read, so they cannot disagree; and
+`deleteSteps` stopped mutating the relationship array in place. Both the normal
+routine slot and the alternative's scratch slot are fixed by the same change,
+because they are the same editor. The alternative's commit is untouched.
+
+Three times now — block subtitles, superset set counts, this — the same
+limitation has produced the same class of bug, and each time it has been fixed
+locally under a comment explaining that it is a workaround. That is starting to
+be worth a rule rather than a third comment.
+
+One thing I got wrong on the way: I first asserted that a reorder leaves the
+relationship array in display order, and wrote a comment in the source claiming
+the array and `order` agree afterwards. They don't. SwiftData makes no ordering
+promise for a to-many relationship, the array came back permuted after a save,
+and my own new test caught it on a later run. `order` is the only record of
+position, which is what the sorting was always for. The test and the comment now
+say so.
+
+---
+
+## Build 10 — Taking Four Explanations Off the Screen
+
+The audit had been adding sentences for eight slices. This one takes four away.
+
+Every explanation the app had written this build was correct, and each of them
+was read exactly once. After that they were furniture: a permanent footer under
+the Cardio Plan checklist on the active workout screen, three more under the
+superset editor's sections, all of them costing their height on every render
+forever, to answer a question the user had already answered for themselves.
+
+So they moved behind the info glyph the app already had. That component was
+built for precisely this — its own doc comment says passing the same literal
+that used to live in a footer preserves its string-catalog translation — and
+that turned out to be the whole of the localization story for the superset half:
+the three messages are the byte-identical strings their footers used, so each
+one still resolves to the key it already had, still finds its Korean, and the
+catalog needed no new entry at all. The one place I did write new copy is the
+checklist, where an alert has room the footer never did: `Checklist only — not
+saved as results.` could only say the second half of the rule, and the info
+message now says both — the ticks are scoped to this workout, *and* they are not
+results.
+
+What deliberately did not move is the superset's "needs at least 2 exercises"
+alert. It looks like the same kind of sentence and it is not: it fires at the
+moment the constraint is hit, which is the one moment it cannot be behind a tap.
+Explanations go behind a glyph; constraints do not.
+
+Then two removals with no replacement. The block Details screen had been titled
+`Bench Press` since the audit's M11, and had gone on heading its only section
+`Bench Press` underneath — the name twice, within one screen height, one of
+which was the fix. A superset keeps its member headers, because there the name
+is not a repeat of the title but the only thing separating one member's sets
+from the next.
+
+And the effort-target count marker from three slices ago is gone. L7's reasoning
+was that a superset member with a full custom ramp looked identical in the
+routine list to one with no target, which was true. What the fix produced was a
+row saying `2 effort targets` — a number the user cannot act on, because the
+values behind it are deliberately withheld, so the row still answered only "is
+something set?", which they had to open the block to use either way. Adding it
+was right about the problem and wrong about the remedy. The half that has never
+changed, across all three revisions now, is that no RIR/RPE value reaches a
+superset row.
+
+The tests moved with it rather than being deleted: each marker assertion became
+its own inverse, plus a new one that a superset carrying targets and a superset
+carrying none produce the identical row, and another that single-exercise effort
+summaries are untouched — which is the thing this slice had to not break.
+
+One note for whoever picks this up next. The string catalog arrives dirty on
+every branch now: Xcode prunes two DEBUG-only showcase keys during a build, and
+that churn had been sitting in the working tree before I typed anything. I
+restored it, then edited the four keys by hand as text rather than round-tripping
+the JSON, which keeps Xcode's own ordering and turns a 578-line reformat into a
+48-line diff. Worth doing every time; worth automating before it gets committed
+by accident.
+
+## Build 10 — An Alternative That Was the Same Exercise
+
+A slot for Bench Press would let you add Bench Press as its alternative.
+
+The feature had a rule for this and had chosen to state it rather than enforce
+it: the detail editor said *This is already the slot's exercise.* and left you
+to it. That was a defensible call when it was written — the switch sheet filtered
+the row out anyway, so authoring one was pointless but harmless. What made it
+not harmless is that the sheet was filtering on the *current* exercise, and the
+current exercise stops being the original one the moment you switch. Prepare a
+same-as-slot alternative, switch to something else mid-workout, and it becomes
+offerable: an alternative whose effect is to replace the exercise with itself.
+
+So the rule moved from a sentence into `SlotAlternativeEligibility`, and the
+picker stopped listing the slot's own exercise at all. The comparison is on
+`exerciseID` and not on the name, which matters more than it sounds: two rows in
+the library can legitimately be called the same thing, and one of them is a
+perfectly good alternative for the other. The write path refuses independently
+of the picker, because a filter is a courtesy and a guard is a guarantee.
+
+The part that took the longest to decide was what to do with the alternatives
+people have already prepared. Deleting them on read would have been one line and
+would have been wrong — that is someone's prepared work vanishing during a
+routine open, with no record that it ever existed. The app already had an answer
+for the neighbouring case: an alternative whose exercise was deleted stays
+visible, named, and marked. So this one does the same. It sits in the editor,
+dimmed, saying `Same as the slot's exercise — not offered in workouts`, and you
+can swipe it away when you feel like it. Duplication and import copy it forward
+untouched for the same reason.
+
+The counts had to follow. A routine row saying `2 alternatives` when one of them
+can never be offered is a lie the user only discovers mid-set, so the block
+subtitle and the Switch Exercise badge now read the same `workoutFacing` filter
+the sheet does. One rule, four call sites, no view doing its own arithmetic.
+
+The string catalog behaved this time, because I did what the last entry said to
+do: restore first, edit as text, never round-trip the JSON. 27 lines added,
+3 removed, and the DEBUG-only Calculus keys still where Xcode left them.
+
+---
+
+## After Build 10 — Typing Without the Lag
+
+The first thing that landed after the Build 10 upload was a typing problem:
+text entry lagged, most noticeably in Session Notes.
+
+The cause was the kind a large view invites. Every keystroke wrote to state that
+the whole active workout screen — and the global active-workout guard —
+observed, so each letter re-evaluated far more of the screen than the field it
+was typed into. Session Notes and an exercise's name now edit a local draft, and
+Session Notes hands its value back at real boundaries: losing focus, Save &
+Exit, Finish, and app lifecycle transitions. The same change fixed a long
+Session Notes field leaving a band of blank space under itself.
+
+What did *not* get fixed is worth a line, because it took longer than the fix.
+Placing the caret inside a word, or double-tapping to select one, was
+unreliable too. That was chased down to a debug root with nothing of Log left in
+it, and then out of the app entirely: a fresh SwiftUI app and a plain UIKit app
+on the same iPhone and iPad behave the same way. It reproduced independently
+outside Log, and no Log-specific fix was identified — which is not the same as
+knowing whose bug it is, and I am not claiming that. The investigation is written
+up in `docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md` so that nobody — me
+included — starts it again from the active workout screen.
+
+---
+
+## After Build 10 — What People Couldn't Find
+
+Build 10 went out and the feedback that came back was not about features. Nobody
+reported a broken flow. What they reported was not being sure what they were
+looking at.
+
+Three things kept coming up. People opening the app for the first time were not
+certain what each of the four root pages was for, or what the app wanted them to
+do first. The pages themselves felt too alike — and this one came with a caveat I
+was glad to get, because testers said plainly that they *liked* the plain design
+and were not asking for colour. The problem was that four quiet pages look like
+each other. Hierarchy, not decoration. And the third: the vocabulary. One tester
+named RIR specifically. The app asks you for a number before it has ever said
+what the letters stand for.
+
+That last one is the kind of feedback that is easy to wave away — it is a
+training term, and someone who lifts knows it. But the app is the thing asking
+the question, so the app is what should answer it.
+
+---
+
+## After Build 10 — Giving the Pages an Identity
+
+The fix had to survive the caveat. Making each page recognisable by giving it a
+colour or an ornament would have solved the stated problem and broken the thing
+testers actually valued.
+
+So each root page now opens with a single line saying what the page is for, on
+the same plain row background everything else uses. The navigation bar already
+names every page; what it cannot say is what the page is *for*, and that turned
+out to be the whole gap. The first-use empty states changed in the same spirit —
+they used to report that a list was empty, which the empty list had already
+established, and now they say what to do next.
+
+History got a structural change rather than a cosmetic one. The page opened on a
+calendar, which is a good way to look back and a poor way to see what you just
+did. Now a short Recent Workouts section comes first, capped at four, with a View
+All Workouts destination behind it for the whole history. Calendar and
+Progression follow. The most recent thing you did is the first thing you see.
+
+One experiment did not survive: a typography change to the section headers, tried
+and reverted. It looked like hierarchy and read like inconsistency. The original
+typography is back, which is the right outcome — the page intros were doing the
+work, and the headers were being changed because they were there.
+
+---
+
+## After Build 10 — Saying What RIR Means
+
+The terminology fix reuses a component this entry already talked about. Build 10
+moved four explanations off the screen and behind an info glyph; this puts three
+new ones behind the same glyph, in the places where the word first appears
+rather than in a glossary someone would have to go looking for.
+
+RIR and RPE are explained where the metric is chosen and where a target is
+written. e1RM is explained in the History metric selector, and only while e1RM is
+the metric selected — an explanation for a word that is not currently on screen
+is just clutter. The technique descriptions got a different treatment: they
+existed already, in three places, worded three different ways, so AMRAP said one
+thing in the routine editor and another in the middle of a workout. They are one
+set of sentences now.
+
+What made this slice larger than its copy was what the audit found underneath.
+The messages telling you *why* a technique could not be added were English
+sentences built around a technique name that was already translated, so a Korean
+user read "부분 반복 already exists on set 2." That is not a translation gap; it
+is a sentence assembled in the wrong order. Fixing it meant the messages became
+proper format strings, which is the same lesson the app keeps relearning:
+anything composed at runtime has to be composed out of translated pieces, not
+translated after the fact.
+
+---
+
+## After Build 10 — Reading the App in Korean
+
+Then I went through the app in Korean, properly, screen by screen. That pass
+found more than the terminology work had.
+
+The technique *names* were still English in two screens, because both had kept a
+private copy of the list instead of asking the one place that knows. The preview
+lines under them mixed languages for the reason above — English fragments glued
+into a string before anyone could translate them. Cardio said "Segments" in a
+Korean sentence. History said "In Progress". The warm-up editor had a band of
+empty space under its title that turned out to be an entire empty section
+rendering itself for no reason.
+
+The one that needed a decision rather than a fix was time. The app had been
+rendering durations as `30s` and `1m 30s` in both languages, on the reasoning
+that `s` and `m` are units like `kg` and `km`. Read in Korean, that reasoning is
+wrong: a weight unit is a symbol, but a duration is something you say. So time
+now localizes — `30초`, `1분 30초`, `1시간 5분` — while the measurement units stay
+exactly as they were, because `kg` really is `kg` in both languages. Every
+duration in the app goes through one formatter now, so a tempo stepper, a rest
+line, a cardio segment and a picker wheel cannot disagree about what a second is
+called.
+
+One feature was deliberately left in English. The Calculus Analytics screen could
+have been translated, but everything leading to it — its Settings entry, its
+title, its card and footer — would still have been English, and a translated
+interior behind an English door is precisely the inconsistency the pass existed
+to remove. It waits until it can be done whole.
+
+---
+
+## After Build 10 — What Testing Turned Up Next
+
+Testing the fixes surfaced two bugs that were still open at the time — both
+fixed since, below. A lock meant to protect
+the active workout reaches too far: an exercise that appears both in the routine
+you are training and in some unrelated routine can freeze blocks in the unrelated
+one. And the History calendar lets you deselect a highlighted date, which is a
+control gesture attached to something that is not a control — the highlight is a
+record of what happened.
+
+The more interesting outcome is what is *not* being built yet. A first-launch
+tutorial has been on the list since the first round of confusion. It is still on
+the list, on purpose. Three changes just went in that exist to answer the same
+question a tutorial would answer, and none of them has been in front of another
+person yet. Building the tutorial now would mean designing it for confusion that
+may already be gone.
+
+So the next round is a re-test, not a feature — and it needs a build first,
+because everything described above landed after Build 10 went out and none of it
+is in the copy anyone is using. Can someone tell what each page is
+for. Can they find how to start a workout. Is the RIR explanation enough. Does
+the new History order make sense. Does the Korean hold together. And the two
+words still leaking out of the codebase and into the interface — Block and Slot —
+which nobody has complained about yet, which is not the same as nobody being
+confused by them.
+
+At that point Entry #12 was plainly not finished. It was supposed to be about
+whether other people could use the app, and it was still answering that.
+
+---
+
+## After Build 10 — Two Bugs With Long Reaches
+
+Both of the bugs above were small to fix and worth recording for the same
+reason: each was a rule applied at the wrong scope.
+
+**The lock.** While a workout runs, the app freezes the routine blocks the
+session is executing, so the plan cannot change underneath it. It decided which
+blocks those were by exercise identity alone — so if Push A and Push B both used
+Bench Press, training Push A froze Bench Press in Push B too. A block's lock now
+goes through the routine that owns it first: the routine being trained keeps its
+protection, unrelated routines that merely share an exercise stay editable, and
+the exercise library's own rule — you cannot delete an exercise the active
+workout is using — stays global, because that one really is about the exercise.
+Shared exercises and supersets are both covered by regression tests.
+
+**The calendar.** History's calendar highlights the days you trained, and it was
+built on a date *picker*, so tapping a highlighted day deselected it — a control
+gesture on something that is a record. It is display-only now: the highlighted
+days come from workout history and nothing else, tapping cannot add or remove
+one, and month navigation and the system calendar's look are unchanged.
+
+---
+
+## After Build 10 — Block and Slot Leave the Interface
+
+Nobody had complained about **Block** or **Slot** by name. But the terminology
+feedback was the same problem one level down: the app asking people to think in
+its own vocabulary. Block and Slot are the model's words — a routine is stored
+as blocks of slots — and they had leaked into screens a user reads.
+
+The user-facing copy now uses the words the User Guide had been using all
+along: exercise, routine, superset, set. "New Slot Defaults" became **New
+Exercise Defaults**; workout progress says *Exercise* or *Superset* depending on
+which it is; the destructive confirmations were reworded and localized along the
+way; English and Korean were kept in step. The model itself did not change —
+`RoutineBlock` and `SlotPrescription` are still called that in the code, which
+is where those words belong. This was a copy change, not a rename.
+
+---
+
+## After Build 10 — Start Where the Routine Is
+
+The root-page intros told people what the Routines page was for. They did not
+shorten the walk to the thing it is mostly for. Starting a saved routine meant
+opening the routine's editor, finding Start in its toolbar, and confirming on the
+Start Workout screen — a path that makes sense to someone who built the routine
+and is a scavenger hunt to someone who has not.
+
+Each routine that can be started now has a labelled **Start** on its row.
+Tapping the row itself still opens the editor, as before. Start goes through the
+same Start Workout screen and the same validation as the editor's button — this
+is a second door into the existing path, not a second way to start a workout.
+It disappears while a workout is already running, where **Resume** is the
+action that matters, and while the list is in Edit mode.
+
+The same slice put a **User Guide** button in the Routines toolbar. Settings →
+Help → User Guide still works; this one just does not require a first-time user
+to scroll through Settings to find it. It is a shortcut to help, not an
+onboarding flow — there is still no first-launch tutorial.
+
+---
+
+## After Build 10 — Update Routine, Taken Apart
+
+The largest change since Build 10 started as one bad outcome in real use.
+
+A routine exercise A had its own plan, and B was prepared as its alternative
+with a plan of its own. Mid-workout, A was switched to B. At Finish, the routine
+was updated — and the update did exactly one thing: it pointed the routine at B.
+A's plan stayed where it was, now describing a different exercise. B's prepared
+plan stayed in the alternatives list, stranded under an exercise that was now
+the primary. Plans mixed, and with another round of switching, A-specific
+prescription details could be lost altogether.
+
+The fix treats "update the routine with this switch" as what it actually is: a
+swap of which exercise is primary, applied to the whole plan each one carries.
+For a prepared alternative, the switched-to exercise becomes primary with its
+prepared plan, and the original exercise takes its place in the alternatives
+list, in the same position and enabled state, with its complete plan. For a
+switch made through the generic picker, the new exercise keeps the plan its
+*Keep* or *Reset* choice produced, and the original is added as an alternative.
+Either way the exercise that is now primary is never also listed as its own
+alternative. Switch back and save again, and you are where you started.
+
+"Where you started" has a precise meaning here, and getting it was most of the
+work. An exercise's plan is much more than sets and reps: rest, duration and
+distance, tempo, RIR/RPE, effort mode and progression, custom per-set targets,
+the warm-up scheme's name and steps, techniques including older fields the
+current editor doesn't write, cardio segments, plan notes, and the older per-set templates with
+their target weights. An audit of what an alternative could store found three
+of those missing, so a round trip would have quietly dropped them. They were
+added as optional fields to the JSON the app already stores — **no SwiftData
+schema change and no migration**, and payloads written by earlier builds still
+read. The one thing that does not round-trip is relationship metadata: an
+alternative's "why/when" note and its internal id describe its relationship to
+the primary, and that relationship is exactly what changed.
+
+The other half was knowing *how* an exercise had been chosen. Picking B from
+Prepared Alternatives and picking it from the full exercise list look identical by the end of a workout, and they should save differently.
+The workout now records which prepared alternative it applied, at the moment it
+is applied — and a later generic switch clears that, rather than the app
+guessing from which exercises happen to match. That record survives Save & Exit
+and a cold resume.
+
+### The finish dialog had run out of buttons
+
+Fixing the write exposed the question in front of it. The finish dialog offered
+a matrix of fixed modes — *Update routine template*, *Update exercise plan*,
+*Apply all* — and they had been designed when a workout could carry one kind of
+change. A workout can now carry a replacement, edits to the switched-to
+exercise, and edits to several other exercises, all at once. In one combination
+"Update exercise plan" would have written nothing at all; in another it wrote
+some of the edits and not others. The fix for that was briefly a contextual
+label. The real fix was to stop asking the user to pick a mode.
+
+Finishing with pending routine changes now opens **Save Routine Changes**, a
+sheet listing the actual changes:
+
+- Bench Press → Incline DB Press
+- Incline DB Press plan changes
+- Cable Row plan changes
+
+Every row starts checked — they are changes the user made on purpose — and each
+can be unchecked on its own. **Save Selected Changes** saves exactly the checked
+rows and finishes; it is disabled with nothing checked rather than quietly
+meaning something else. **Finish This Workout Only** records the workout and
+leaves the routine alone. **Cancel**, or swiping the sheet away, goes back to the
+workout without finishing anything. And with nothing pending there is no sheet:
+the plain Finish confirmation appears, as before.
+
+The decision that made the sheet honest is that a replacement and the
+switched-to exercise's plan changes are **independent**. You can save the plan
+you worked out for Incline DB Press without making it the routine's primary
+exercise: if it was a prepared alternative, that alternative's plan is updated
+in place; if it came from the generic picker, it is added as a new alternative
+carrying that plan. You can save the replacement without the mid-workout edits,
+in which case it is promoted with the plan it started from. Or both, and it is
+promoted with the edited plan. Four combinations, all meaningful, none of which
+the old buttons could express.
+
+For VoiceOver, each row exposes its label, an explicit **Selected / Not
+selected** value, and button semantics. An earlier version also carried the
+system's selected trait, which would have announced a checked row's state
+twice; that duplicate was removed before merge.
+
+Validation before merge: the full suite passed — **2,728 unit tests and 2 UI
+smoke tests, 0 failures** — Debug and Release built, and the sheet's interaction
+was checked by hand. None of this is in Build 10.
+
+---
+
+## After Build 10 — Two Late Bugs, One Fix
+
+Late in this stretch, my own use of the app and follow-up validation turned up
+two more issues. Both survived Save & Exit and Resume, and they ended in
+opposite places.
+
+The first was precise, and it came from developer validation during the Update
+Routine/resume audit rather than from a failed workout. If a routine's warm-up step has a fixed target weight —
+3 reps at 60 kg — and you start a workout, leave that exercise unswitched, Save
+& Exit, kill the app and resume, the step came back with its reps but without
+its weight. The cause was a single path: on a cold resume of an unswitched
+exercise, the resume service rebuilt each warm-up step field by field and left
+the weight out. Every other resume path already used the canonical conversion,
+so the fix was to use it here too — no schema migration, no change to the stored
+JSON, no change to which resume path is chosen. Two new tests drive the real
+cold-resume path, one for 3 reps @ 60 kg and one round-tripping every warm-up
+step field, and both fail against the old code. The full suite passed — **2,730
+unit tests and 2 UI smoke tests, 0 failures** — Debug and Release built, and a
+manual cold resume kept the weight. It is not in Build 10.
+
+The second was not precise. In real use, the panel holding Back and Next sat
+partway up the screen instead of at the bottom. Moving to another tab and back
+did not fix it, nor did Save & Exit and Resume; fully closing and reopening the
+app did. It has not happened again since.
+
+Instead of patching the layout on a guess, I traced it: the active workout's
+layout hierarchy, where the panel's bottom safe-area inset is attached, keyboard
+and focus state, navigation and lifecycle state, Save & Exit and Resume, and any
+layout state the app keeps itself. One finding narrowed it: the active workout
+screen's own state is discarded on Save & Exit and rebuilt on Resume, so nothing
+stored in that screen can explain a problem that survived the round trip — and
+the app caches no layout or keyboard geometry of its own anywhere.
+
+Then I tried to make it happen. On an iPhone simulator: hardware-keyboard runs,
+then the full on-screen keyboard — background and foreground, rotation, Edit Plan
+opened and dismissed, Session Notes, repeated keyboard show/hide mixed with Back
+and Next, and Save & Exit with the keyboard up followed by Resume. On an iPad Pro
+simulator, with the on-screen keyboard confirmed: show/hide, background and
+foreground, rotation, Edit Plan, and Save & Exit → Resume. In every completed
+case the panel returned to the bottom. A floating or undocked iPad keyboard was
+not tried, and a simulator is not the device it happened on, so none of this
+shows it cannot happen.
+
+One remaining hypothesis is a stale system keyboard/safe-area inset in the
+surviving hosting/navigation hierarchy, but none of the simulator scenarios
+reproduced it. It fits the symptom — the panel is placed by a bottom safe-area
+inset, a keyboard-sized stale inset would put it about mid-screen, that
+hierarchy outlives in-app navigation and Save & Exit, and killing the app resets
+it — but it is unproven.
+
+With no reproducible failure and no faulty code path to point at, I left the
+app's behavior unchanged. A precautionary layout tweak would have looked like a
+fix without being one, and would make it harder to tell what a recurrence means.
+Not every observed bug should be "fixed" by guessing.
+
+---
+
+## After Build 10 — Every Exit Goes Home
+
+The next follow-up from my own use of the app was not a bug in the data, just
+an awkward landing. Finishing a workout dropped you back on the Start Workout
+screen, or the routine editor behind it, depending on how you came in. Both were
+stale the moment the workout ended: they described a session that no longer
+existed, and the one thing you were likely to want next, Resume after Save &
+Exit, was on the Routines page, two or three Back taps away.
+
+Every intentional exit from the active workout now returns to the main Routines
+screen: **Finish**, **Finish This Workout Only**, **Save Selected Changes**,
+**Save & Exit** and **Discard**. It doesn't matter how the workout was entered,
+whether from a routine row's Start, the routine editor's Start, or Resume.
+**Cancel**, in the finish dialog or the Save Routine Changes sheet, still keeps
+you in the workout.
+
+The implementation is smaller than the problem sounds. `RoutinesView` already
+owned every destination on its navigation stack, but as four separate flags.
+They became one navigation state, and leaving a workout resets that state to
+the root in a single change. There are no repeated dismiss calls, no delays and
+no reaching into UIKit's navigation controller. The rule of where each kind of
+exit goes is a small pure function, exhaustive on purpose, so a new kind of exit
+has to choose a destination rather than inherit one.
+
+None of the persistence changed. Save & Exit is still resumable, Discard still
+discards, and Finish still records the workout and applies whichever routine
+changes were selected. Only the landing moved.
+
+Validation at the time: targeted exit, navigation and lifecycle tests passed,
+then the full suite, **2,742 unit tests and 2 UI smoke tests, 0 failures**.
+Debug and Release built. Not in Build 10.
+
+---
+
+## After Build 10 — Haptics That Mean Something
+
+The last slice of this entry is UX polish, and it started on a real phone,
+where the haptic feedback felt inconsistent.
+
+Before changing anything I audited what was there. There were 18 raw
+feedback-generator calls across 6 files and no shared abstraction, so each view
+had picked its own intensity. The audit found:
+
+- **The finish haptic fired too early.** The existing success haptic fired
+  when Finish reached confirmation, before the workout or selected routine
+  changes had actually been saved. The new policy ties success feedback to the
+  actual completed operation.
+- **Notification-style feedback was used for ordinary actions.** Every logged
+  set played `success`, every undo played `warning`.
+- **Deletes played `success`.**
+- **Rest completion could double-buzz,** because the rest timer and the
+  notification service each played their own.
+- **Restoration could buzz.** Coming back to the app after a rest had already
+  ended played the completion haptic as if it were happening now.
+
+All haptic feedback now goes through one semantic policy in
+`Log/Services/AppHaptics.swift`. Call sites name what happened (a `HapticCue`),
+one table decides how that feels, and `AppHaptics.play(_:)` performs it.
+Outcome-dependent decisions live in `HapticPolicy` as pure functions, which is
+what makes them testable. No raw feedback-generator calls remain anywhere else.
+
+The policy, at the level that matters:
+
+- **Selection:** checkbox and checklist-style choices, such as the Save Routine
+  Changes rows.
+- **Light impact:** ordinary workout-state changes, such as logging or undoing
+  a set, Back and Next when the position actually moves, switching an
+  exercise, and adding or duplicating something.
+- **Medium impact:** Start Workout, only when a new session is actually
+  created, and Save & Exit. Also a finish where the selected routine changes
+  failed to save, which is real but not a full success.
+- **Success:** a finish after the workout is recorded, a rest that completes
+  live, and an import that actually added something.
+- **Warning:** Discard and confirmed destructive deletes.
+- **Error:** rejection and error alerts the user is already being shown.
+
+Just as deliberate is what stays silent: typing, scrolling, ordinary
+navigation, help and info buttons, automatic state synchronization, passive
+restoration, and native controls (toggles, pickers, steppers, list reordering)
+that already provide their own feedback. The app should never buzz just because
+state was restored.
+
+The timing change is the one worth remembering. The finish haptic used to play
+when the confirmation appeared. Now it plays only after the workout has been
+recorded and the selected routine changes were applied. Log and Undo only buzz
+when a set log was actually written or removed. Rest completion only buzzes
+when a live countdown reaches zero, and coming back after a rest already ended
+is silent. The notification service no longer adds a second haptic on top.
+Feedback should report what happened, not decorate a tap.
+
+Validation: 21 policy tests were added, asserting which action produces which
+feedback rather than anything about hardware. Targeted suites passed, **417
+tests, 0 failures**, then the full suite, **2,763 unit tests and 2 UI smoke
+tests, 0 failures**. Debug and Release built. That is the latest validation
+count in this entry. Tests cannot cover the part that matters most — a
+simulator has no Taptic Engine — so before merge I also checked the physical
+feel on a real iPhone: ordinary workout feedback, Finish against ordinary
+actions, Save & Exit against Discard, selection feedback, a single
+rest-completion buzz, and no unintended feedback on resume or restoration.
+Testers have not felt it yet; that re-test belongs to the next TestFlight
+build. Not in Build 10.
+
+---
+
+## Still Open
+
+One bug is known and not fixed.
+
+**The active workout's bottom panel can float.** Open, investigated, not
+reproducible. Seen once in real use: the Back / Next panel sat partway up the
+screen, and only fully closing and reopening the app restored it. The
+investigation above found no reproducible failure and no faulty code path, so
+no production change was made. It carries forward as it is. If it happens
+again, the useful thing is to capture the screen's state before relaunching,
+and that work belongs to Entry #13.
+
+---
+
+## Phase Result
+
+This entry set out to answer whether other people could use the app. The honest
+answer is that getting it into their hands changed it more than any feature
+planned before it.
+
+Getting into TestFlight exposed a different class of problem. There were
+crashes that only reproduced in someone else's Release build, and an
+irreversible tap with no confirmation in front of it. Peer feedback after
+Build 10 then exposed something quieter. Nobody reported a broken flow. What
+they reported was not knowing what a page was for, not knowing what RIR stood
+for, not finding Start Workout or the User Guide, and Korean that was fluent in
+places and wrong in others.
+
+My own use of the app found a different set of problems, the kind a short test
+session rarely reaches:
+
+- an Update Routine that mixed two exercises' plans
+- an exit that landed you somewhere stale
+- a control panel that once floated off the bottom of the screen
+- haptic feedback that felt inconsistent on a real phone
+
+Developer follow-up and validation also surfaced a deeper state problem: a
+warm-up weight lost on a cold resume, found during the Update Routine/resume
+audit.
+
+The responses add up to a noticeably different app:
+
+- pages that say what they're for
+- training terms explained where they appear
+- Korean that holds together
+- a Start button where the routine is
+- exercise replacements that can be undone, chosen through the Save Routine
+  Changes sheet
+- a resume that restores what was planned
+- every exit ending in the same place
+- haptics that report what actually happened
+
+The lesson I'd keep is that testing didn't just produce a list of bugs. It
+changed how the app handles state, navigation, feedback and user intent.
+
+What this entry does not close is just as important. The app is not finished,
+and testing is not complete. Almost everything after Build 10 has never been in
+a tester's hands; it needs a new build and a re-test before any of the
+feedback behind it can be called resolved. The floating panel is still open.
+Entry #12 ends with the app much more coherent than the build that first
+reached testers, but with the testing still in progress.
+
+---
+
+## Next Steps
+
+These move to Entry #13:
+
+1. Prepare and upload a new TestFlight build containing the post-Build-10
+   work. Build 10 is what testers have, and none of it is in Build 10.
+2. Peer and family re-test of the specific changes, during real training. The
+   Save Routine Changes sheet and the new exit landing are the two most worth
+   watching someone meet for the first time.
+3. Re-test the haptics with testers on the new build: feel, frequency, and
+   that nothing doubles up or buzzes on restore.
+4. Watch for the floating panel to recur naturally, and capture the state
+   before relaunching if it does.
+5. Decide whether first-launch onboarding is still necessary **after** that
+   re-test, not before. The discoverability changes may already have answered
+   it.
+6. Put any new fixes or features in Entry #13, rather than reopening this one.
+
+The through-line of this entry is that "ready for other people" was mostly not a
+feature problem. It was crashes that only appear on someone else's phone, a
+confirmation before an irreversible tap, a guide for someone who doesn't know
+the vocabulary, a translation, and then a long run of details that only show up
+over a whole workout. Cardio is the headline, but it isn't the reason the app
+got testable.

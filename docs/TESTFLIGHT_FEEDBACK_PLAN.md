@@ -5,12 +5,51 @@ This is a practical plan for the first small TestFlight beta of **Log**.
 It exists to make the beta easy to run: what to send testers, what to ask them
 to try, what questions to ask, and where to write down what comes back.
 
-**Status:** planned. TestFlight testing has not started yet.
+**Status:** in progress. The first round ran on Build 10, uploaded to
+TestFlight on 2026-09-21, and peer/family feedback on it has been collected
+(see the Feedback Log). The Entry #12 devlog chapter closes at the semantic
+haptics merge (2026-10-15). That does not close testing: the next round, on a
+new build, is recorded for Entry #13.
 
-**Build for this round:** Build 9, the next tester round after Build 8. Build 8
-was prepared and archived with the cardio system and Alternative Exercises;
-Build 9 adds the redesigned RIR/RPE effort targets, including **Custom Per Set**.
-Build 9 has not been uploaded — this plan is what the round runs on once it is.
+**Currently distributed build:** **Build 10**. Build 8 was prepared and archived
+with the cardio system and Alternative Exercises; Build 9 added the redesigned
+RIR/RPE effort targets, including **Custom Per Set**; Build 10 followed with the
+C1–C15 audit series — Alternative Exercises deletion and persistence fixes, a
+Korean terminology pass, active-workout layout and density polish, a User Guide
+language default, effort-target clarity, and planned effort targets in History —
+and is what testers have in their hands today. It contains none of the
+post-Build-10 work listed below.
+
+**Merged to `main` after Build 10, not yet distributed:**
+
+- typing-performance fix (local text drafts; Session Notes layout)
+- root-page discoverability and the History restructure
+- training term help (RIR / RPE / e1RM, consolidated technique descriptions)
+- Korean localization consistency
+- active-workout lock scope (unrelated routines sharing an exercise stay
+  editable)
+- display-only History calendar
+- Block / Slot terminology replaced with ordinary training language
+- a **Start** action on routine rows, and a **User Guide** entry in the Routines
+  toolbar
+- reversible **Update Routine** after an exercise switch, chosen through the new
+  **Save Routine Changes** sheet
+- a fixed warm-up weight now survives Save & Exit → kill → Resume (cold resume
+  of an unswitched exercise)
+- every intentional workout exit (Finish, Finish This Workout Only, Save
+  Selected Changes, Save & Exit, Discard) returns to the main Routines screen,
+  whatever the entry path
+- centralized semantic haptic feedback: one policy for every haptic in the
+  app, with Finish success only after the workout is actually recorded.
+  Physical feel was manually checked on a real iPhone before merge.
+
+Most of these came out of the Build 10 feedback below; the rest came from
+follow-up testing and real use. They are implemented and merged, but **no
+tester has seen them** — Build 10 does not contain them. The next validation
+cycle needs a newer build that does; it has no build number yet.
+
+**Still open:** the active workout's bottom panel floating mid-screen —
+investigated, not reproducible on simulators, no production change.
 
 ---
 
@@ -184,7 +223,483 @@ What to report:
 - Korean wording issues on the effort target labels (동일 목표 / 프로그레션 /
   세트별 지정) — confusing, clipped, or still in English
 
+### Deleting an Exercise Used as an Alternative (Build 10)
+
+New in Build 10: the Exercises tab now knows when an exercise is used as a
+prepared alternative, and says so before you delete it.
+
+- [ ] In **Exercises**, open an exercise that is used **only** as an Alternative
+      Exercise (not added to any routine directly)
+- [ ] Confirm it does **not** appear unused — it should say it is used as an
+      alternative, not "Used in 0 routines"
+- [ ] Try deleting it
+- [ ] Confirm the delete warning mentions **prepared alternatives**
+- [ ] Confirm the deletion goes through
+- [ ] Reopen the routine that had it as an alternative
+- [ ] Confirm the alternative is gone, with no leftover "Exercise unavailable"
+      row
+- [ ] Confirm any *other* alternatives on that slot are still there and unchanged
+- [ ] Confirm the routine itself still works — open it and start a workout
+
+What to report:
+
+- an exercise still reading as unused when a routine relies on it as an
+  alternative
+- a delete warning that does not mention prepared alternatives
+- other alternatives disappearing when only one should have
+- a leftover "Exercise unavailable" row after the delete
+- anything about the routine that looks broken afterwards
+- clipped or awkward Korean wording in the usage line or the delete warning
+
 ---
+
+### Korean Wording After the Build 10 Terminology Fix (Build 10)
+
+Korean UI only. Set the phone to Korean first. Nothing here changes what the app
+does — it is a read-the-screen pass on wording that was wrong in Build 9.
+
+- [ ] Open a routine block and check the set rows — they should read
+      `메인 세트` / `워밍업 세트` / `드롭 세트`, never `Working`, `Warmup` or
+      `Dropset`
+- [ ] Start a workout, tap the **End** path and read the dialog title
+      (`운동을 중단할까요?`)
+- [ ] Cancel, then tap **Finish** and read that dialog title
+      (`운동을 완료할까요?`) — the two must ask different questions
+- [ ] Open a cardio routine slot and confirm the plan row says `유산소 계획`,
+      and that the screen it opens has the same name
+- [ ] Open a slot with techniques and confirm the row does not mix 운동 기법 and
+      테크닉
+- [ ] Open the in-app Korean guide and confirm the finish step says to tap
+      **완료** to save the workout to History
+
+What to report:
+
+- any English word left in a Korean screen, especially in a set row
+- the End and Finish dialogs reading the same, or either one naming the wrong
+  action
+- 유산소 계획 and 유산소 구성 both appearing for the same thing
+- guide steps that name a button that is not on the screen
+- any of this wording clipped or wrapped badly at Korean string lengths
+
+---
+
+### Reaching the Set Rows (Build 10)
+
+Changed in Build 10: on the active workout screen the **Sets** rows now come
+first, instead of below session notes, the prefill toggle, exercise notes,
+Switch Exercise, the plan card, setup, warm-ups and the cardio checklist.
+Nothing else about logging changed — this is only about how far you scroll.
+
+- [ ] Start a normal workout and confirm the set rows are visible without
+      scrolling
+- [ ] Log a working set and confirm the rest timer behaves as it always has
+- [ ] Confirm everything you used before is still there, further down: the plan,
+      warm-ups, setup, Switch Exercise, exercise notes, the prefill toggle and
+      session notes
+- [ ] Start a cardio workout with a Cardio Plan and confirm the checklist is
+      still easy to find
+- [ ] Tap into a notes or setup field and confirm the keyboard and the bottom
+      Back / Next buttons behave normally
+
+What to report:
+
+- still having to scroll to reach the set rows, and on which phone
+- anything that used to be on this screen that you can no longer find
+- the keyboard covering a field, or the bottom Back / Next bar overlapping
+  anything
+- whether logging actually feels quicker than it did in Build 9
+
+---
+
+### Seeing Prepared Alternatives Before You Start (Build 10)
+
+New in Build 10: a routine exercise that has prepared alternatives now says so
+before the workout, instead of only when you tap Switch Exercise mid-set.
+Nothing about how alternatives work has changed — this is only about where the
+count is shown.
+
+- [ ] Prepare two alternatives on a routine exercise, and turn a third one off
+- [ ] In the routine, confirm the row says **2 alternatives** — the one you
+      turned off is deliberately not counted
+- [ ] Confirm an exercise with no alternatives says nothing extra
+- [ ] Open **Start Workout** and confirm the count is visible there too, before
+      you start
+- [ ] Start the workout and confirm the **Switch Exercise** row shows the count
+- [ ] Tap Switch Exercise and confirm the sheet is titled **Switch Exercise**,
+      with the exercise you are replacing named under the header
+- [ ] Apply a prepared alternative and confirm it behaves exactly as it did in
+      Build 9
+- [ ] On a small phone, check a long routine row (a cardio exercise with a
+      distance target, rest and an effort range) and say whether the count at
+      the end is cut off
+
+What to report:
+
+- a count that does not match the alternatives you prepared
+- the alternative you turned off being counted
+- the count cut off at the end of a routine row, and on which phone
+- the switch sheet title or subtitle reading oddly, in either language
+- anything different about applying an alternative compared with Build 9
+
+---
+
+### Warm-ups and Techniques Inside an Alternative (Build 10)
+
+Fixed in Build 10: on Build 9, adding a warm-up step to a prepared alternative
+crashed the app, and adding a technique quietly left a stray row behind. A later
+round of manual testing found more: the edit could **disappear** if you left the
+screen the wrong way, and you had to tap a warm-up row's *text* rather than the
+card to edit it. A last round found one more — the step was **saved but not
+drawn** until you reopened the editor, and the **Warmup** row's step count did
+not update until you reopened the page. All of it is fixed, and nothing about
+how alternatives work has changed — these checks only confirm the editing itself
+is now solid.
+
+**Please do this section on a real phone.** The last of those bugs never
+appeared in the simulator, only on device, which is why it survived three
+rounds.
+
+- [ ] Open a routine exercise's **Alternative Exercises** and open a prepared one
+- [ ] Add a **warm-up** step, and confirm the app does not crash
+- [ ] Confirm the step appears straight away, without leaving the screen
+- [ ] Go back one level and confirm the **Warmup** row now says `1 step`
+- [ ] Add a second step, edit one, delete one, and drag to reorder — confirm the
+      list updates each time without leaving the screen, and that the **Warmup**
+      count follows
+- [ ] Delete **every** step, then add one again, and confirm it appears — this
+      exact order is the case that used to fail outright
+- [ ] Add a **technique**, then edit it, then delete it
+- [ ] Leave the alternative editor, reopen it, and confirm what you kept is
+      still there
+
+Then the route that used to lose the work — please follow it exactly:
+
+- [ ] Add a warm-up step and a technique to a prepared alternative
+- [ ] Go **back to the main routine view**, then **switch to another tab**
+- [ ] Come back to the same routine, the same exercise, the same alternative
+- [ ] Confirm the warm-up step and the technique are both still there
+- [ ] Open the alternative's warm-up editor again and confirm the step is listed
+
+And the tap target:
+
+- [ ] In a prepared alternative's warm-up editor, tap the **empty background**
+      of an existing warm-up row — not the text — and confirm the edit sheet
+      opens
+- [ ] Do the same in a **normal** routine exercise's warm-up editor
+- [ ] Confirm swiping a warm-up row still offers Delete, and that Edit-mode
+      dragging still reorders
+
+- [ ] Start a workout from that routine and apply the prepared alternative
+- [ ] Confirm the warm-up and technique you authored are the ones the workout
+      shows
+- [ ] Log a set and confirm the rest timer still behaves normally
+- [ ] Check that a **normal** routine exercise's warm-ups and techniques still
+      work exactly as before — including the same add / edit / delete / reorder
+      and **Warmup** count checks above, which the same fix covers
+
+What to report:
+
+- any crash, and what you had just tapped
+- a warm-up step or technique that does not appear until you leave and come back
+- a **Warmup** step count on the exercise screen that disagrees with the number
+  of steps actually in the editor
+- **anything you added to an alternative that is missing after switching tabs
+  and returning** — and how you left the screen, which is the part that matters
+- a warm-up row where tapping the card does nothing but tapping the text works
+- swipe-to-delete or reordering behaving differently on a warm-up row
+- a warm-up or technique that does not carry into the workout after applying the
+  alternative
+- anything different about editing warm-ups or techniques on a normal routine
+  exercise
+
+---
+
+### The Active Workout Screen, After the Polish Pass (Build 10)
+
+Changed in Build 10, from a round of manual testing: **Warmup** now sits above
+the set rows, the rest timer stops when you unlog the set that started it, the
+finish button reads plainly **Finish / 완료** when there is nothing else to
+apply, and the Korean bottom bar says **이전** instead of **등**.
+
+- [ ] Start a workout from a routine whose first exercise has warm-up steps
+- [ ] Confirm **Warmup** appears **above** Sets, and that the set rows are still
+      quick to reach without a long scroll
+- [ ] Confirm **Session Notes** is still near the bottom
+- [ ] Log a set and confirm the rest timer starts as it always did
+- [ ] Unlog that same set, and confirm the rest timer stops
+- [ ] Log another set and confirm rest starts normally again
+- [ ] *(optional)* While resting after set 3, go back and correct set 1 —
+      the rest should **keep running**
+- [ ] Finish a workout where you changed nothing, and confirm the button says
+      just **Finish** / **완료**
+- [ ] Finish a workout where you switched an exercise or edited the plan, and
+      confirm the longer "Finish + …" options still appear *(Build 10 only —
+      the next build replaces these options with the Save Routine Changes
+      sheet; see Next Validation Cycle)*
+- [ ] Open **History** for a workout that had an effort target, and confirm
+      **Planned effort** fits on one line
+- [ ] In Korean, confirm the bottom bar reads **이전** and **다음**
+- [ ] In Korean, open an exercise whose body part is Back and confirm it still
+      reads **등**
+
+What to report:
+
+- a rest timer that keeps running after you unlog a set, or one that stops when
+  you did not expect it to
+- a rest notification that still arrives after you unlogged the set
+- Warmup or Sets in an order that feels wrong while training
+- the planned-effort row still wrapping onto two lines, and on which phone
+- **이전** or **다음** reading oddly, or **등** appearing anywhere it means
+  navigation
+- the finish button saying more or less than the situation calls for
+
+---
+
+### Wording, Titles and Tight Screens (Build 10)
+
+Changed in Build 10, from the last pass of the UX audit: several labels and
+titles now say more, and the cardio detail fields flex instead of clipping.
+Nothing behaves differently — this is a read-through, and the last two checks
+are the ones that need a small phone.
+
+- [ ] Start a cardio workout with a **Cardio Plan** and confirm the ⓘ in the
+      checklist header says the ticks are not saved as results (this moved off a
+      caption in a later Build 10 slice — see *Less On Screen* below)
+- [ ] Finish it and confirm History shows no ticks — only the logged bout
+- [ ] On the Start Workout screen, confirm the button says **Start Workout**,
+      matching the guide
+- [ ] In a routine exercise, set an effort **Progression** and confirm the two
+      rows read naturally — in Korean, **시작 RIR** and **마지막 RIR**, never
+      **종료 RIR**
+- [ ] Open **Details** for a single exercise and confirm the title is the
+      exercise name, not "Block"
+- [ ] Open Details for a **superset** and confirm the title names its exercises
+- [ ] Mid-workout, log a set then switch that exercise, and confirm the warning
+      **names the exercise you are switching to**
+- [ ] Give a cardio slot a target distance of 5 km and a Cardio Plan whose
+      segments total 3 km; confirm the editor shows the segment total and says
+      it does not match
+- [ ] Change the plan so the totals match, and confirm the mismatch line goes
+      away
+- [ ] Put an effort target on one exercise in a superset, and confirm the
+      routine row prints no RIR/RPE values. (The `2 effort targets` hint this
+      check was written for was removed again — see *Less On Screen* below.)
+
+And the two that need the right device:
+
+- [ ] On the **smallest phone you have**, open a cardio workout's **Details**
+      fields and check nothing is cut off
+- [ ] Turn Dynamic Type up (Settings → Display & Brightness → Text Size), in
+      **Korean**, and check the same fields again
+
+What to report:
+
+- any label or number cut off, and which phone and text size
+- **시작 / 마지막 / 종료** used where they do not fit the meaning
+- a Details title that is empty, wrong, or unhelpfully long
+- a switch warning naming the wrong exercise
+- a segment-total mismatch warning that appears when the two numbers shown are
+  the same, or is missing when they differ
+- a superset row that prints an RIR or RPE value (the count it used to print
+  instead was itself removed later in Build 10)
+
+---
+
+### Less On Screen (Build 10)
+
+Changed in Build 10, after everything above: four permanent explanations moved
+behind the small ⓘ button the app already uses, and two pieces of text were
+removed for good. Nothing behaves differently and nothing you need to *act* on
+was hidden — that is the thing to check.
+
+- [ ] Start a cardio workout with a **Cardio Plan** and confirm there is no
+      caption under the checklist any more
+- [ ] Tap the **ⓘ** beside the **Cardio Plan** heading and confirm it explains
+      that ticking is only your place in this workout and is not saved as a
+      result
+- [ ] Open **Details** for a single exercise and confirm its name appears once,
+      as the screen title — not repeated as a heading underneath
+- [ ] Open Details for a **superset** and confirm each member still has its own
+      name above its sets, so you can tell whose prescription you are editing
+- [ ] On that superset screen, tap the **ⓘ** beside **Timing**, **Set All
+      Exercises** and **Exercises**, and say whether each explanation still
+      makes sense as a pop-up
+
+Then the one thing that must **not** have moved:
+
+- [ ] With a superset of exactly 2 exercises, try to remove one, and confirm the
+      "needs at least 2 exercises" warning still appears **on screen** — a
+      warning behind a button would be a bug
+
+And the two removals:
+
+- [ ] Put an effort target on one or two members of a superset, and confirm the
+      routine row says only `Superset · N exercises · M sets` — no effort count,
+      no RIR/RPE values
+- [ ] Confirm a **single** exercise's routine row still shows its effort
+      summary, e.g. `3 × 8–12 · RIR 2`
+
+What to report:
+
+- an explanation you now cannot find at all
+- any warning or error that is behind an ⓘ instead of on screen
+- a superset member you can no longer tell apart from its neighbour
+- a single-exercise row that lost its effort summary
+- **in Korean**: an ⓘ pop-up that reads awkwardly, is cut off, or says something
+  different from the footer it replaced
+- anything that feels like information was taken away rather than tidied
+
+---
+
+### An Alternative That Is the Same Exercise (Build 10)
+
+Changed in Build 10, after everything above. An Alternative Exercise is meant to
+be a *replacement*, so a slot's own exercise is no longer offered as one of its
+own alternatives. Nothing you already prepared was deleted.
+
+- [ ] Open a routine slot whose exercise is **Bench Press**, open **Alternative
+      Exercises**, tap **Add Alternative**, and confirm **Bench Press is not in
+      the list** — every other exercise still is
+- [ ] Confirm the note under the list says the slot's own exercise cannot be an
+      alternative, so the missing row reads as a rule and not as a bug
+- [ ] Add a **different** exercise as an alternative and confirm it saves and
+      appears exactly as before
+- [ ] Start the workout, tap **Switch Exercise**, and confirm only the valid
+      different alternatives are offered
+
+If you have a routine from an earlier build where the same exercise *was* added
+as its own alternative, that one is worth finding:
+
+- [ ] Confirm it is still listed in the routine editor, dimmed, marked **Same as
+      the slot's exercise — not offered in workouts** — it should not have
+      disappeared
+- [ ] Confirm you can delete it, and that the other alternatives on that slot
+      are unaffected
+- [ ] Confirm it is **not** offered in the switch sheet, and is not included in
+      the alternative count on the routine row or on the Switch Exercise button
+- [ ] Switch that slot to a different exercise mid-workout, open Switch Exercise
+      again, and confirm the same-as-slot row still does not appear
+
+What to report:
+
+- an exercise missing from the Add Alternative picker that is **not** the slot's
+  own exercise
+- a prepared alternative that disappeared without you deleting it
+- a count on a routine row or the Switch Exercise button that does not match the
+  number of alternatives actually offered
+- **in Korean**: the two new notes, or the marker on an old same-as-slot row,
+  reading awkwardly or being cut off
+
+---
+
+### Opening the User Guide (Build 10)
+
+Changed in Build 10: the in-app guide opens in your phone's language instead of
+showing the English guide with the Korean one underneath it. Nothing either
+guide says has changed — only which one you land on.
+
+- [ ] Open **Settings → Help → User Guide** and confirm it opens in your
+      phone's language
+- [ ] Confirm you do **not** have to scroll through a second full guide in the
+      other language
+- [ ] Tap the other language at the top and confirm the guide switches
+- [ ] Leave the guide, reopen it, and confirm it opens in your phone's language
+      again (the switch is per visit, on purpose)
+- [ ] On a small phone, confirm the **English / 한국어** switch is not cramped
+
+What to report:
+
+- the guide opening in the wrong language for your phone
+- the switch not changing the guide, or landing you mid-page
+- a section that exists in one language but not the other
+- the switch looking cramped or clipped, and on which phone
+
+---
+
+### Effort Targets, Explained (Build 10)
+
+Changed in Build 10: the routine editor now explains what the four effort
+modes do, saved targets no longer disappear when autoregulation is off, and a
+long per-set target list no longer runs off the end of a row. How targets
+themselves work has not changed.
+
+- [ ] On a routine exercise, tap the info button under the effort mode picker
+      and read the four modes — say whether you could choose between them from
+      that alone
+- [ ] Set **Custom Per Set** with 4 targets and confirm the summary shows all
+      four
+- [ ] Add more sets so there are more than 4 targets, and confirm the summary
+      ends in `…` rather than running long
+- [ ] Confirm each set row still shows its own full target during the workout
+- [ ] In **Settings**, set Autoregulation to **None**, reopen the exercise, and
+      confirm it says the targets are saved rather than showing nothing
+- [ ] Turn RIR or RPE back on and confirm the targets are exactly as you left
+      them
+- [ ] During a workout, open **Edit Plan** on a progression or per-set exercise
+      and confirm it says the targets are fixed for this session
+- [ ] Open the User Guide's effort section and confirm it lists four modes
+
+What to report:
+
+- a mode you still cannot tell apart from the others after reading the info
+- targets that look lost after turning autoregulation off, or different after
+  turning it back on
+- a set row showing a truncated or wrong target (the summary may shorten, the
+  rows must not)
+- any effort text clipped on a routine row, and on which phone
+- awkward Korean in any of the new explanations
+
+---
+
+### Seeing Your Planned Effort in History (Build 10)
+
+New in Build 10: after a workout is finished, History shows the effort target
+that exercise was planned with. It is what you **aimed for**, not what the app
+measured — nothing records your actual RIR or RPE per set.
+
+- [ ] Set an effort target on a routine exercise, finish a workout with it, and
+      open that workout in **History**
+- [ ] Confirm a **Planned effort** line appears for that exercise
+- [ ] Now change the routine's effort target, reopen the **same old** workout,
+      and confirm History still shows the original value
+- [ ] Try it with a progression (RIR 2 → 0) and with per-set targets
+      (2, 1.5, 1, 0) and confirm both read correctly
+- [ ] With more than 4 per-set targets, confirm the line ends in `…` rather
+      than running long
+- [ ] Confirm an exercise with **no** effort target shows no planned-effort line
+      at all
+- [ ] Confirm a cardio exercise's History still reads cleanly
+- [ ] In Korean, confirm 계획 강도 reads as something you planned, not something
+      you achieved
+
+What to report:
+
+- History showing a different target than the workout was started with,
+  especially after you edit the routine
+- a planned-effort line on an exercise you never set a target for
+- wording in either language that sounds like the app recorded your actual
+  effort
+- the line cut off or crowding the rows below it, and on which phone
+
+---
+
+### Settings, After the Showcase Was Removed (Build 10)
+
+Removed in Build 10: the **Showcase / Calculus Analytics** row in Settings. It
+was a development demo that had no business in a build you installed, and it is
+gone from tester builds. Nothing else in Settings changed.
+
+- [ ] Open **Settings** and confirm there is no "Showcase" or "Calculus
+      Analytics" row
+- [ ] Confirm Units, Bodyweight, Autoregulation, Defaults, Data and Help are all
+      still present and still work
+- [ ] In Korean, confirm Settings has no leftover English-only section
+
+What to report:
+
+- a "Showcase" or "Calculus Analytics" row still appearing
+- any Settings row that used to be there and now is not
+- any remaining English text on the Korean Settings screen
 
 ## Feedback Questions
 
@@ -229,9 +744,38 @@ Fill this in as feedback arrives.
 | 2026-07-30 | Peer/family tester | Friends & Family Beta | P1 | Switching an exercise mid-workout gave an inconsistent plan between duration-based and normal exercises: switching could leave mixed duration/reps prescription state (duration fields on a reps/weight exercise), the set count was inconsistent after switching ("Keep Current Plan" changed 2 → 3), and the two resume paths restored different plans. Fixed: "Keep Current Plan" and "Reset Plan" now use one compatibility adapter so neither leaves mixed prescription state; incompatible tempo, Tempo Override, warm-ups, techniques, and prescription notes are handled safely; and all resume paths restore the same active session plan. Switching may still prefill input fields from the new exercise's previous performance, but that is draft-only and does not change the workout plan. | fixed |
 | 2026-08-02 | Peer/family tester | Friends & Family Beta | P2 | Duration and rest inputs were too limited: duration maxed out around 10 minutes, which is too low for long duration exercises or cardio, and the 15-second steppers would have taken far too many taps to reach 30+ minutes. Fixed: exercise duration now goes up to 6 hours and rest up to 60 minutes, both entered with one-tap presets plus hour/minute/second wheels instead of a stepper. Values are stored as seconds as before, and every write is clamped so negative or out-of-range values cannot be entered. | fixed |
 | 2026-08-02 | Peer/family tester | Friends & Family Beta | P2 | Asked for cardio support. Fixed in the same slice as the duration/rest limits above, because lightweight cardio depends on usable long-duration input: cardio can be logged as a duration-based exercise, and the built-in catalogue now seeds Walking, Treadmill Walk, Stationary Bike, Elliptical, Stair Climber, and Rowing Machine as duration-based exercises under the existing Cardio body part (Korean: 유산소). For now, details like distance, speed, incline, resistance, or heart-rate zone can be written in notes. Structured cardio metrics (distance, pace, calories, heart-rate zone, incline, resistance / machine level) are deferred, not forgotten. | fixed |
-| [TBD] | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] |
+| 2026-09-21 | Peer/family tester | Friends & Family Beta | P1 | Not always sure what each root page was for, or what to do first; the overall workflow was not obvious without being told. Implemented after Build 10: each root page opens with a one-line statement of its purpose, and first-use empty states say what to do next. | implemented, pending distribution/re-test |
+| 2026-09-21 | Peer/family tester | Friends & Family Beta | P2 | Root pages felt too similar to tell apart at a glance. Testers still like the simple, plain design and were not asking for a colourful redesign — the problem was hierarchy and page identity. Implemented after Build 10 through page intros and a clearer History structure; a section-header typography experiment was reverted. | implemented, pending distribution/re-test |
+| 2026-09-21 | Peer/family tester | Friends & Family Beta | P1 | Advanced terminology was not self-explanatory — RIR specifically, and also RPE, e1RM and the technique names. Implemented after Build 10: point-of-use explanations behind the existing info glyph, and one shared set of technique descriptions. | implemented, pending distribution/re-test |
+| 2026-09-22 | Developer manual review | — (not tester-reported) | P1 | Korean pass found mixed Korean/English technique names and previews, bare `s`/`m`/`h` time units, English cardio "Segments", an English "In Progress" pill, and warm-up preview/layout problems. Implemented after Build 10; centralized time formatting now gives EN `s`/`m`/`h` and KO `초`/`분`/`시간`. | implemented, pending distribution/re-test |
+| 2026-09-21 | Not recorded | Real-use follow-up | P2 | Typing lagged in text fields, most noticeably Session Notes; long notes left blank space. Implemented after Build 10 with local text drafts. Caret placement / word selection inside a word was also unreliable, it reproduced independently outside Log, and no Log-specific fix was identified (`docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md`). | implemented, pending distribution/re-test |
+| 2026-09-22 | Developer validation | — (not tester-reported) | P1 | Starting a workout locked blocks in an unrelated routine that shared an exercise. Implemented after Build 10: block locks follow the owning routine. | implemented, pending distribution/re-test |
+| 2026-09-22 | Developer validation | — (not tester-reported) | P2 | History calendar highlights could be tapped and deselected. Implemented after Build 10: the calendar is display-only. | implemented, pending distribution/re-test |
+| Build 10 round | Peer/family tester | Friends & Family Beta | P2 | Starting a saved routine was too buried, and the User Guide was only under Settings. Implemented after Build 10: a Start action on routine rows and a User Guide entry in the Routines toolbar. | implemented, pending distribution/re-test |
+| Build 10 round | Follow-up to terminology feedback | — | P2 | Internal words Block and Slot appeared in the UI. Implemented after Build 10: replaced with ordinary training language. | implemented, pending distribution/re-test |
+| Post-Build-10 | Not recorded | Real-use follow-up | P1 | After switching A → B (a prepared alternative) and choosing Update Routine, the routine pointed at B but kept A's plan, and B's prepared plan was stranded. Implemented 2026-10-13: a reversible promotion, chosen through the new Save Routine Changes sheet. | implemented, pending distribution/re-test |
+| Post-Build-10 | Not recorded | Real-use follow-up | P1 | The active workout's Back / Next panel floated mid-screen; only a full app restart fixed it. Investigated on iPhone and iPad Pro simulators, including the on-screen keyboard; not reproduced, and no faulty code path found, so no production change. One remaining hypothesis is a stale system keyboard/safe-area inset in the surviving hosting/navigation hierarchy, but none of the simulator scenarios reproduced it. | open — investigated, not reproducible |
+| Post-Build-10 | Developer validation — surfaced during the Update Routine/resume audit | — (not tester-reported) | P1 | A fixed warm-up weight was lost after Save & Exit → kill → resume on an unswitched exercise. Implemented 2026-10-14: the cold-resume path now uses the canonical warm-up conversion, so the weight is kept. | implemented, pending distribution/re-test |
+| Post-Build-10 | Developer real-use / UX follow-up | — (not tester-reported) | P2 | Leaving a workout landed on the stale Start Workout screen or routine editor, with Resume several Back taps away. Implemented 2026-10-14: every intentional exit returns to the Routines root in one state change; Cancel stays in the workout; persistence unchanged. | implemented, pending distribution/re-test |
+| Post-Build-10 | Real-device use + developer audit | — (not tester-reported) | P2 | Haptics were inconsistent and partly premature: the existing success haptic fired when Finish reached confirmation, before the workout or selected routine changes had actually been saved; ordinary actions used notification haptics, deletes played success, rest completion could double-buzz, and restoration could buzz. Implemented 2026-10-15: one semantic haptic policy (`AppHaptics`). Covered by 21 `HapticPolicy` tests; full suite 2,763 unit + 2 UI smoke tests passed; Debug and Release built; physical feel manually checked on a real iPhone before merge. | implemented, pending distribution/re-test |
 
-Status values: `new`, `investigating`, `fixed`, `deferred`, `won't fix`.
+Entry #12 feedback ends at the row above. Rows for the next build's re-test
+are recorded for Entry #13.
+
+Status values: `new`, `investigating`, `fixed`,
+`implemented, pending distribution/re-test`,
+`open — investigated, not reproducible`, `deferred`, `won't fix`.
+
+`open — investigated, not reproducible` means the report is taken as real, but
+the investigation found no reproducible failure and no faulty code path, so no
+change was made. It stays open in case it recurs.
+
+`implemented, pending distribution/re-test` means the change is written, merged
+to `main`, and has passed its Debug build, full test suite and Release build —
+but it is **not in the TestFlight build testers are using**, so no peer has seen
+it. The feedback that prompted it is not confirmed resolved until it ships in a
+build and someone else tries it. `fixed` is reserved for work that testers have
+actually had in their hands.
 
 ---
 
@@ -240,10 +784,19 @@ Status values: `new`, `investigating`, `fixed`, `deferred`, `won't fix`.
 Testers should know this going in:
 
 - Public App Store readiness is **not** claimed.
-- TestFlight feedback phase is **planned / just beginning** — not completed.
+- TestFlight feedback phase is **in progress on Build 10**: started, not
+  completed. Changes made in response to the first round of feedback are not
+  in the build you have; they need a later one.
+- Haptic feedback was reworked after Build 10. It was checked on a real
+  iPhone before merge, but not yet by testers, so its strength and frequency
+  may still change.
 - UI polish may continue during and after this beta.
 - Broader distribution is deferred until this small beta is useful and settled.
 - Korean translations are new and may need refinement.
+- Placing the text cursor inside a word, or double-tap word selection, can be
+  unreliable on iOS / iPadOS 26.6.2. It reproduced independently outside Log
+  and no Log-specific fix was identified
+  (`docs/TEXT_INPUT_INVESTIGATION_2026-09-21.md`).
 - Cardio ~~is supported as duration-based logging only~~ **now has dedicated
   fields** (see below); the "details go in notes" limitation above applied to the
   first beta build only.
@@ -306,14 +859,114 @@ you figure out what to do, and did the core flow work?
 
 ---
 
+## Next Validation Cycle
+
+Everything merged after Build 10 — listed at the top of this plan — came from
+the feedback above, from follow-up testing, or from real use, and **none of it
+has been in front of a peer yet**. This cycle therefore needs a **new
+TestFlight build containing it**; re-running the checklist on Build 10 would
+test the app the feedback was about. The round exists to answer whether the
+changes worked, not to gather new feature requests.
+
+What this round specifically needs to find out:
+
+- [ ] Can a new user tell **what each root page is for**, without being told?
+- [ ] Can they **start a routine directly from Routines**, using the row's
+      Start action?
+- [ ] Can they **find the User Guide** — from the Routines toolbar or from
+      Settings?
+- [ ] Do the **RIR / RPE and other help explanations** make sense once tapped,
+      and does the info glyph get noticed?
+- [ ] Does the **Exercise / Superset** wording feel understandable, with no
+      Block or Slot left anywhere?
+- [ ] Is **History** understandable — Recent Workouts first, then Calendar and
+      Progression — and does the calendar behave as a display, not a control?
+- [ ] Does the **Korean UI stay consistent** in ordinary use — no English words
+      surfacing inside Korean screens, and time reading as 초 / 분 / 시간?
+- [ ] Can the user understand the **Save Routine Changes** sheet without
+      explanation? Specifically, do they read correctly:
+  - [ ] an exercise **replacement** row (`Bench Press → Incline DB Press`)
+  - [ ] an exercise **plan-change** row (`Cable Row plan changes`)
+  - [ ] **Finish This Workout Only**
+  - [ ] **Save Selected Changes**
+- [ ] After all of the above, **does the user still feel a first-launch
+      tutorial is necessary?** The tutorial is deliberately not built yet, so
+      that it is designed for whatever confusion survives these changes rather
+      than the confusion they already removed.
+
+Targeted regression checks for the same build:
+
+- [ ] With a workout running from one routine, open a **different routine that
+      shares an exercise** and confirm it is still editable — while the routine
+      being trained stays protected.
+- [ ] **Replacement / alternative round trip:** prepare B as an alternative to
+      A, switch A → B mid-workout, save the replacement, then in a later workout
+      switch back B → A and save again. Confirm both exercises' plans are
+      exactly as they were — sets, reps, rest, effort, warm-ups, techniques and
+      notes.
+- [ ] **Save & Exit / Resume**, including after fully closing the app, in a
+      workout with a switched exercise and edited plans; then finish and confirm
+      the Save Routine Changes sheet still lists the right rows.
+- [ ] **Warm-up plans after relaunch:** in a routine whose warm-up step has a
+      fixed weight (e.g. 3 reps @ 60 kg), start a workout, leave that exercise
+      unswitched, Save & Exit, fully close the app, Resume — the step still shows
+      its reps **and** its weight.
+- [ ] **Active-workout controls and layout in normal use:** the Back / Next
+      panel stays docked at the bottom through ordinary training. If it ever
+      floats, capture the screen state (screenshot, what was on screen just
+      before, device and iOS version) **before** relaunching the app.
+
+Workout exits, tried from a routine row's Start, the routine editor's Start,
+and Resume:
+
+- [ ] Does every workout exit land where you expected?
+- [ ] **Save & Exit** returns to Routines, with Resume available.
+- [ ] **Discard** returns to Routines, with no Resume.
+- [ ] **Finish** returns to Routines. Try it both with and without the Save
+      Routine Changes sheet.
+- [ ] **Cancel**, in the finish dialog or the sheet, keeps you in the active
+      workout.
+
+Haptics, re-tested on a real phone with the new build (a simulator cannot
+judge feel; the developer's pre-merge iPhone check is not a tester's):
+
+- [ ] **Log Set** feedback feels appropriate: noticeable, not heavy.
+- [ ] **Back / Next** feedback is not too frequent or too strong.
+- [ ] **Finish** feels clearly stronger than ordinary actions.
+- [ ] **Save & Exit** and **Discard** feel meaningfully different.
+- [ ] The **Save Routine Changes** checkboxes give subtle feedback.
+- [ ] **Rest completion** buzzes exactly once with the app open.
+- [ ] **Error / rejection** feedback (duplicate name, item in use) feels useful
+      rather than noisy.
+- [ ] **No buzz** on opening the app, resuming a workout, or returning after a
+      rest has already ended.
+
+---
+
 ## Next Steps
 
-1. Prepare the Build 9 TestFlight build and internal notes.
-2. Invite the first small group of testers.
-3. Share tester instructions and the testing checklist.
-4. Collect feedback into the Feedback Log above.
-5. Triage feedback by severity (P0–P3).
-6. Fix clear P0/P1 issues; defer P2/P3 as appropriate.
-7. Record outcomes in `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
+Done so far: Build 10 was prepared and uploaded, the first small group was
+invited, tester instructions and the checklist were shared, and the first round
+of feedback was collected, triaged and recorded in
+`docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
 
-TestFlight testing is planned but has not started yet.
+Entry #12 closes here. What comes next is Entry #13 work:
+
+1. Prepare and upload a new TestFlight build containing the post-Build-10 work
+   listed at the top of this plan. Build 10 contains none of it, and no build
+   number has been assigned yet.
+2. Re-invite the same small peer and family group and run the **Next
+   Validation Cycle** checklist above. It is a re-test of specific changes,
+   not an open feedback round.
+3. Re-test the haptics with testers on the new build, using the haptic checks
+   above.
+4. Watch naturally for the floating bottom panel to recur. If it does, capture
+   its state before relaunching. Temporary debug-only diagnostics are a
+   contingency for then, not planned work.
+5. Decide whether first-launch onboarding is still necessary, using that
+   round's result rather than the pre-Build-10 confusion.
+6. Record new feedback, triage and fixes for Entry #13 rather than reopening
+   Entry #12.
+
+TestFlight testing is **in progress** on Build 10. The post-Build-10 changes
+await the next distributed build and a peer re-test.
