@@ -1,9 +1,12 @@
 # Entry #12 — TestFlight Beta Testing, Korean Support & External Feedback
 
-> **Draft.** This entry is filled in as the TestFlight beta happens. Unresolved
-> areas use `[TBD]` placeholders — no results are recorded until they actually
-> happen. The beta is **under way** on Build 10 and testers have **not** completed
-> testing yet, so nothing here should be read as a final result.
+> **Entry #12 log, closed at its cutoff.** This log covers feedback and fixes
+> through the workout-exit navigation and semantic haptics pass (merged
+> 2026-10-15). Feedback or fixes after that are recorded for Entry #13. Closing
+> the log does **not** mean testing is complete: Build 10 is still the
+> distributed build, the post-Build-10 work has not been re-tested by anyone
+> else, and one bug is still open. Details this repository never recorded
+> (tester counts, invite dates) are marked *not recorded* rather than guessed.
 
 ---
 
@@ -20,27 +23,41 @@ Entry #12 asks a different question:
 This phase is about external feedback from a small group of friends and family
 through TestFlight. It is **not** about a public App Store release.
 
-**Status:** in progress. Build 10 was uploaded to TestFlight on 2026-09-21 and
-distributed to the Friends & Family group; initial peer feedback has been
-collected and is recorded in the Feedback Log below. Testing is **not**
-complete.
+**Status:** the Entry #12 phase is closed; testing continues. Build 10 was
+uploaded to TestFlight on 2026-09-21 and distributed to the Friends & Family
+group, and peer feedback on it was collected and is recorded in the Feedback
+Log below. Testing is **not** complete. The re-test of the post-Build-10 work
+belongs to Entry #13.
 
 Since Build 10, a series of changes has been implemented and merged to `main`:
 root-page discoverability, training term help, Korean localization consistency,
 the Block/Slot terminology cleanup, Start Workout and User Guide
 discoverability, a typing-performance fix, the active-workout lock-scope and
 History-calendar fixes, a reversible **Update Routine** with the new **Save
-Routine Changes** sheet, and the cold-resume warm-up weight fix. None of it is
-**in Build 10**, so no tester has seen it yet; it awaits the next distributed
-build and a peer re-test. One bug is still open — the floating bottom panel,
-investigated but not reproducible (see *Planned Fixes From Feedback*).
+Routine Changes** sheet, the cold-resume warm-up weight fix, consistent
+workout-exit navigation back to Routines, and centralized semantic haptic
+feedback. None of it is **in Build 10**, so no tester has seen it yet. It
+awaits the next distributed build and a peer re-test. One bug is still open:
+the floating bottom panel, investigated but not reproducible (see *Planned
+Fixes From Feedback*).
 
-Three kinds of item are kept distinct throughout this document:
+Findings came from three sources, kept distinct in the log:
 
-- **Tester feedback on Build 10** — what people actually reported.
-- **Developer-discovered issues** — found in follow-up validation, marked as
-  such in the log rather than presented as tester feedback.
-- **Merged after Build 10** — implemented work testers have not yet used.
+- **Peer / external feedback**: what testers reported on Build 10.
+  Discoverability, terminology, help and explanation, navigation clarity, and
+  Korean wording.
+- **Real-workout / personal testing**: what my own full training sessions
+  turned up, which short peer sessions were less likely to reach. These were
+  the reversible Update Routine problem, the awkward workout-exit landing, the
+  floating panel, and how consistent haptic feedback felt.
+- **Developer audit / follow-up**: issues found by reviewing or re-testing the
+  app, never presented as tester feedback. These were the lock scope, the
+  History calendar, the cold-resume warm-up weight (surfaced during the Update
+  Routine/resume audit), implementation inconsistencies such as the Korean
+  mixed-language output, and the centralized haptic cleanup.
+
+Separately, every item says whether it is **in Build 10** or **merged after
+Build 10**, meaning implemented but not yet used by any tester.
 
 ---
 
@@ -79,8 +96,10 @@ This matters because:
 
 Committed as: `feat(i18n): add Korean beta UI support`.
 
-Open question for this phase: are any Korean translations confusing or clipped
-in real use? `[TBD]`
+Open question carried into the next round: are any Korean translations
+confusing or clipped in real use? Peer feedback and a developer Korean pass
+drove the post-Build-10 localization work, but no Korean-speaking tester has
+seen those fixes yet.
 
 ---
 
@@ -89,9 +108,9 @@ in real use? `[TBD]`
 - Build currently distributed to testers: **Build 10 — uploaded 2026-09-21**
 - Build number / version being tested: **1.0 (10)**
 - Previous builds: Build 8 (prepared and archived), Build 9 (uploaded)
-- Internal vs. external testing group: `[TBD]`
-- Beta notes sent to testers: `[TBD]`
-- Date invites sent: `[TBD]`
+- Internal vs. external testing group: not recorded in this repository
+- Beta notes sent to testers: not recorded in this repository
+- Date invites sent: not recorded in this repository
 
 Build 9 carries the cardio system, Alternative Exercises end-to-end, Custom Per
 Set RIR/RPE effort targets, the improved automatic RIR/RPE progression, the
@@ -102,10 +121,11 @@ guide/tester docs.
 typing-performance fix, root-page discoverability and the History restructure,
 training term help, Korean localization consistency, the active-workout
 lock-scope fix, the display-only History calendar, the Block/Slot terminology
-cleanup, the routine-row Start action and the Routines User Guide entry, and the
-reversible Update Routine with its Save Routine Changes sheet. It is merged to
-`main` and awaits the next upload. No build number has been assigned to that
-upload yet.
+cleanup, the routine-row Start action and the Routines User Guide entry, the
+reversible Update Routine with its Save Routine Changes sheet, the cold-resume
+warm-up weight fix, workout-exit navigation back to Routines, and the semantic
+haptic feedback policy. It is merged to `main` and awaits the next upload. No
+build number has been assigned to that upload yet.
 
 **Build 10 shipped, and is the build testers are using.** It opened with a
 safety/UX fix to Alternative Exercises deletion handling (C1), followed by a Korean terminology and naming
@@ -143,13 +163,12 @@ removed outright. Nothing behaves differently, and no live warning was hidden.
 
 | Group              | Who                         | Focus                              | Status  |
 | ------------------ | --------------------------- | ---------------------------------- | ------- |
-| Lifting friends    | Friends who train regularly | Real workout use                   | `[TBD]` |
-| Family (Korean UI) | Family, Korean-comfortable  | Korean usability                   | `[TBD]` |
-| Casual testers     | People who don't lift much  | Understandable without gym context | `[TBD]` |
+| Lifting friends    | Friends who train regularly | Real workout use                   | Not recorded |
+| Family (Korean UI) | Family, Korean-comfortable  | Korean usability                   | Not recorded |
+| Casual testers     | People who don't lift much  | Understandable without gym context | Not recorded |
 
-Number of testers invited: `[TBD]`
-Number who installed: `[TBD]`
-Number who completed a workout: `[TBD]`
+Number of testers invited, installed, and completing a workout: not recorded in
+this repository. Feedback is logged by group, not by individual.
 
 ---
 
@@ -396,19 +415,26 @@ Severity:
 
 ### Post-Build-10 — Cold resume loses a fixed warm-up weight
 
-- **Group:** Developer validation — **not tester-reported**, found during the Update Routine work
+- **Group:** Developer validation — surfaced during the Update Routine/resume audit; **not tester-reported**.
 - **Severity:** P1
 - **Feedback:** A routine warm-up step with a fixed target weight (e.g. 3 reps @ 60 kg) comes back without its weight after Save & Exit, killing the app and resuming, when that exercise was not switched. A warm resume is fine.
 - **Status:** Implemented, pending distribution/re-test — merged to `main` on 2026-10-14. The cold-resume rebuild of an unswitched exercise's warm-up steps omitted the weight; it now uses the canonical warm-up conversion (see *Fixes Made*).
 
-### TBD — Peer/family tester
+### Post-Build-10 — Workout exit lands on a stale screen
 
-- **Group:** Friends & Family Beta
-- **Severity:** TBD
-- **Feedback:** TBD
-- **Status:** TBD
+- **Group:** Developer real-use / UX follow-up; **not tester-reported**. The exact date is not recorded.
+- **Severity:** P2
+- **Feedback:** Leaving an active workout landed on whatever screen it was entered from. Finish, Save & Exit or Discard returned to the Start Workout screen or the routine editor behind it. Both were stale once the workout ended, and Resume, the likely next action after Save & Exit, was on the Routines page several Back taps away.
+- **Status:** Implemented, pending distribution/re-test. Merged to `main` on 2026-10-14. Every intentional exit now returns to the main Routines screen, whatever the entry path (see *Fixes Made*).
 
-Peer/family testing has started, and the entries above reflect issues found through tester use, developer reproduction, crash reports, and manual validation.
+### Post-Build-10 — Haptic feedback inconsistent and sometimes premature
+
+- **Group:** Real-device use + developer audit; **not tester-reported**.
+- **Severity:** P2
+- **Feedback:** On a real phone, haptics felt inconsistent. The existing success haptic fired when Finish reached confirmation, before the workout or selected routine changes had actually been saved. An audit found 18 raw feedback-generator calls across 6 files with no shared policy. The Finish haptic fired on reaching the confirmation rather than after finishing. Success and warning notification haptics were used for every set log and undo, and deletes played success. Rest completion could buzz twice, and returning to the app after a rest had already ended could buzz on restoration.
+- **Status:** Implemented, pending distribution/re-test. Merged to `main` on 2026-10-15. All haptics now go through one semantic policy (see *Fixes Made*). The physical feel has **not** been validated on a device. A simulator cannot judge it, so that belongs to the next real-device round.
+
+The entries above reflect issues found through tester use, developer reproduction, crash reports, real-workout testing and manual validation. This log closes at the Entry #12 cutoff. New feedback, including the re-test of the post-Build-10 work, is recorded for Entry #13.
 
 ---
 
@@ -938,15 +964,80 @@ Current validation status:
   format change, no change to resume precedence or routing. Two regression
   tests run the real cold-resume path — 3 reps @ 60 kg, and a round trip of
   every `WarmupStep` field — and both fail against the old implementation.
+- **Workout-exit navigation.** *(Implemented, pending distribution/re-test.
+  Merged 2026-10-14. Developer real-use / UX follow-up; not
+  tester-reported.)* Every intentional exit from the active workout now
+  returns to the main Routines screen: Finish, Finish This Workout Only, Save
+  Selected Changes, Save & Exit and Discard. It works whether the workout was
+  entered from a routine row's Start, the routine editor's Start, or Resume.
+  Cancel, in the finish dialog or the Save Routine Changes sheet, still keeps
+  the user in the workout. `RoutinesView` owns the stack's destinations, and
+  its four separate destination flags were consolidated into one navigation
+  state. Leaving a workout resets that state to the root in a single state
+  change, with no repeated `dismiss()` calls, no delays and no UIKit
+  navigation workaround. The exit-to-destination rule is a small exhaustive
+  pure function. Persistence semantics are unchanged: Save & Exit remains
+  resumable, Discard still discards, and Finish still records the workout and
+  applies the selected routine changes.
+- **Centralized semantic haptic feedback.** *(Implemented, pending
+  distribution/re-test. Merged 2026-10-15. UX polish from real-device use +
+  developer audit; not tester-reported.)* The audit found 18
+  raw feedback-generator calls across 6 files and no central abstraction. It
+  also found:
+  - the existing success haptic firing when Finish reached confirmation,
+    before the workout or selected routine changes had actually been saved
+  - notification-style success / warning feedback on every set log and undo
+  - deletes playing success
+  - rest completion able to double-buzz through both the rest-timer and
+    notification-service paths
+  - an already-finished rest buzzing on restoration when the app returned to
+    the foreground
+
+  All haptics now go through `Log/Services/AppHaptics.swift`: a semantic
+  `HapticCue`, pure outcome rules in `HapticPolicy`, and one performer,
+  `AppHaptics.play(_:)`. No raw feedback-generator calls remain elsewhere. The
+  policy is:
+  - **selection** for checkbox / checklist choices
+  - **light impact** for ordinary workout-state changes: Log / Undo, Back /
+    Next when the position changes, exercise switching, add / duplicate
+  - **medium impact** for Start Workout when a new session is created, Save &
+    Exit, and a finish whose selected routine changes failed to save
+  - **success** for a finish after the workout is recorded, a live rest
+    completion, and an import that actually added something
+  - **warning** for Discard and confirmed deletes
+  - **error** for surfaced rejection / error alerts
+
+  Deliberately silent: typing, scrolling, ordinary navigation, help / info,
+  automatic synchronization, passive restoration, and native controls that
+  already give their own feedback. The timing rules are:
+  - Finish success plays only after the workout is recorded and selected
+    routine changes were handled
+  - Log / Undo only when a set log was actually written or removed
+  - rest completion only on a live countdown reaching zero
+  - returning after a rest already ended is silent
+  - the notification service no longer adds a second haptic
+
+  The physical feel and intensity are **not** validated. The simulator cannot
+  judge them, and that belongs to the next real-device / TestFlight round.
 - Validation for the post-Build-10 slices: each passed its Debug build, full
   test suite and Release build before merge. For the final Update Routine / Save
   Routine Changes work: **2,728 unit tests and 2 UI smoke tests, 0 failures**;
   Debug and Release builds succeeded; manual interaction testing of the sheet was
   completed. None of it is in Build 10, so none has been validated by a tester.
-- Latest validation, for the cold-resume warm-up weight fix: 139 targeted tests
-  passed, then the full suite — **2,730 unit tests and 2 UI smoke tests, 0
+- Validation for the cold-resume warm-up weight fix (historical): 139 targeted
+  tests passed, then the full suite — **2,730 unit tests and 2 UI smoke tests, 0
   failures**; Debug and Release builds succeeded; a manual cold resume confirmed
   the weight is kept. Not in Build 10.
+- Validation for workout-exit navigation (historical): targeted exit,
+  navigation and lifecycle tests passed, then the full suite: **2,742 unit
+  tests and 2 UI smoke tests, 0 failures**. Debug and Release builds succeeded.
+  Not in Build 10.
+- **Latest validation, at the Entry #12 cutoff**, for semantic haptics: 21
+  `HapticPolicyTests` added, asserting action → feedback decisions rather than
+  hardware. The targeted suites passed (417 tests, 0 failures), then the full
+  suite: **2,763 unit tests and 2 UI smoke tests, 0 failures**. Debug and
+  Release builds succeeded. Haptic feel has not been checked on a device. Not
+  in Build 10.
 - Test suite result at the Build 10 upload: **full scheme passes: 2,546 tests, 0
   failures** — 2,544 unit tests plus 2 UI tests (Build 10 C15 run). Debug build
   succeeds and Release build succeeds. Manual UI verification of the Build 10
@@ -984,9 +1075,14 @@ Current validation status:
   orientation, any presented sheet or full-screen cover, and navigation state
   where available. Not implemented — a contingency only.
 
-**Fixed since the last update** (implemented, pending distribution/re-test):
-the active-workout lock scope and the History calendar deselection, both listed
-here as open bugs previously, and the cold-resume fixed warm-up weight loss.
+  It carries forward to Entry #13 unchanged. Any recurrence, diagnostics or
+  fix is Entry #13 work.
+
+**Fixed since the earlier updates** (implemented, pending
+distribution/re-test): the active-workout lock scope and the History calendar
+deselection, both listed here as open bugs previously, the cold-resume fixed
+warm-up weight loss, the stale workout-exit landing, and the inconsistent /
+premature haptic feedback.
 
 **Remaining peer-feedback work:**
 
@@ -998,7 +1094,8 @@ here as open bugs previously, and the cold-resume fixed warm-up weight loss.
   a new user still fails to understand, and only then decide whether a
   tutorial is needed and what it should contain.
 - A **peer re-test** is still needed, on a build that actually contains the
-  post-Build-10 work — none of it is in Build 10.
+  post-Build-10 work. None of it is in Build 10, and that re-test is Entry #13
+  work.
 
 The setup-notes editing request was implemented, and the cardio request is
 answered for the beta by duration-based cardio logging (see Fixes above).
@@ -1074,6 +1171,9 @@ Reflections from running the beta.
 - Beta readiness is not only about adding features; it also means preventing accidental destructive actions, such as finishing a workout unintentionally.
 - SwiftUI relationship updates can fail to render immediately if a SwiftData relationship array is mutated in place, so some relationship updates need whole-array reassignment.
 - Tester feedback can reveal documentation and usability gaps that are easy for the developer to miss.
+- Peer sessions and my own full workouts found different kinds of problems. Peers found what they could not understand: pages, terms, where to start. Full real workouts found state that drifted over a whole session: plans mixing on Update Routine, a warm-up weight lost on cold resume, an exit landing somewhere stale.
+- Feedback should be semantic, not decorative. A haptic that fires when a confirmation *appears* tells the user something succeeded before it has; tying each haptic to the outcome it reports, and keeping restoration silent, made the feedback mean something.
+- Some behavior can only be judged on a device. Haptic feel, like the earlier warm-up rendering bug, is outside what a simulator can validate, so it is recorded as unvalidated rather than assumed fine.
 - Active workout state needs one clear source of truth; otherwise different resume paths can appear to restore different versions of the same workout.
 - Compatibility rules should be explicit when switching between different exercise types, because preserving everything can create invalid mixed state.
 - An input's **range** and its **control** are one decision. Raising a limit without replacing the stepper would have made 6-hour durations technically possible and practically unusable.
@@ -1087,16 +1187,56 @@ Themes to continue watching as peer/family testing expands:
 - whether Korean wording holds up in real use
 - whether routine editing feels stable after the TestFlight crash fixes
 - whether setup notes and exercise notes are easy to understand during active workouts
+- whether every workout exit lands where people expect
+- whether the haptics feel right on real phones: not too frequent, nothing doubled, nothing on restore
 
 ---
 
 ## Phase Result
 
-`[TBD]`
+Entry #12 closes with the app substantially changed by testing, and with
+testing still under way.
 
-This section will be written once the beta phase has more complete feedback. It should honestly state what the feedback showed, what was fixed, and what was deferred — without claiming a public App Store release. The goal of this phase is external feedback, not distribution.
+TestFlight and real use changed the app more than any feature planned before
+them. Each source found a different class of problem:
 
-**As of now:** Friends & Family Beta testing has started. Crash, usability, documentation, active-workout consistency, and exercise-switching issues have already been fixed, and the exercise-switching fix has passed both the automated test suite and manual device validation. Beta testing is still ongoing, so the phase result stays open until more tester feedback comes in.
+- **The first builds in testers' hands** exposed crashes that never reproduced
+  in development and an irreversible Finish tap with no confirmation.
+- **Peer feedback on Build 10** exposed understanding problems rather than
+  broken flows:
+  - what each page is for
+  - what RIR means
+  - where to start a workout or find the User Guide
+  - Korean that was inconsistent in places
+- **My own use of the app** found workflow and interaction problems that
+  short sessions rarely reach:
+  - an Update Routine that mixed two exercises' plans
+  - an exit that landed on a stale screen
+  - a control panel that once floated mid-screen
+  - haptic feedback that felt inconsistent on a real phone
+- **Developer validation during the Update Routine/resume audit** surfaced a
+  deeper persistence/state problem:
+  - a warm-up weight lost on cold resume
+
+Several major workflows came out clearer and safer:
+
+- root pages that state their purpose
+- training terms explained in place
+- consistent Korean
+- Start on the routine row
+- reversible exercise replacements chosen through the Save Routine Changes
+  sheet
+- resume fidelity
+- every exit landing on Routines
+- haptics that report real outcomes
+
+This is **not** a finished app and **not** a completed beta. All feedback is
+not resolved, and nothing here claims public release readiness. Almost all of
+the post-Build-10 work has never been in a tester's hands. It needs a new
+build and a re-test before the feedback behind it can be called resolved, and
+the haptics have not been felt on a real device. The floating bottom panel
+remains open, investigated but not reproducible. Continued testing and any
+further fixes move into Entry #13.
 
 **Build 8:** prepared and archived for TestFlight with the cardio system and
 Alternative Exercises as its headline items. No upload is recorded in this
@@ -1160,9 +1300,11 @@ fix, root-page discoverability and the History restructure, training term help,
 Korean localization consistency, the active-workout lock-scope fix, the
 display-only History calendar, the Block/Slot terminology cleanup, Start
 Workout and User Guide discoverability, the reversible Update Routine with the
-Save Routine Changes sheet, and the cold-resume warm-up weight fix. All are
+Save Routine Changes sheet, the cold-resume warm-up weight fix, workout-exit
+navigation back to Routines, and the semantic haptic feedback policy. All are
 implemented, merged and passed their Debug build, full test suite and Release
-build — and none of them is in Build 10, so no tester has used them. They are *implemented, pending
-distribution/re-test*: the next tester cycle needs a build that contains them.
+build. None of them is in Build 10, so no tester has used them. They are
+*implemented, pending distribution/re-test*: the next tester cycle needs a
+build that contains them, and no build number has been assigned to it yet.
 **Still open:** the floating bottom panel — investigated, not reproducible, no
 production change.

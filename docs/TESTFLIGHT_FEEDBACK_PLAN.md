@@ -5,9 +5,11 @@ This is a practical plan for the first small TestFlight beta of **Log**.
 It exists to make the beta easy to run: what to send testers, what to ask them
 to try, what questions to ask, and where to write down what comes back.
 
-**Status:** in progress. The first round is running on Build 10, uploaded to
-TestFlight on 2026-09-21, and initial peer/family feedback has been collected
-(see the Feedback Log).
+**Status:** in progress. The first round ran on Build 10, uploaded to
+TestFlight on 2026-09-21, and peer/family feedback on it has been collected
+(see the Feedback Log). The Entry #12 devlog chapter closes at the semantic
+haptics merge (2026-10-15). That does not close testing: the next round, on a
+new build, is recorded for Entry #13.
 
 **Currently distributed build:** **Build 10**. Build 8 was prepared and archived
 with the cardio system and Alternative Exercises; Build 9 added the redesigned
@@ -34,6 +36,12 @@ post-Build-10 work listed below.
   **Save Routine Changes** sheet
 - a fixed warm-up weight now survives Save & Exit → kill → Resume (cold resume
   of an unswitched exercise)
+- every intentional workout exit (Finish, Finish This Workout Only, Save
+  Selected Changes, Save & Exit, Discard) returns to the main Routines screen,
+  whatever the entry path
+- centralized semantic haptic feedback: one policy for every haptic in the
+  app, with Finish success only after the workout is actually recorded.
+  Physical feel has not been checked on a device yet.
 
 Most of these came out of the Build 10 feedback below; the rest came from
 follow-up testing and real use. They are implemented and merged, but **no
@@ -747,8 +755,12 @@ Fill this in as feedback arrives.
 | Build 10 round | Follow-up to terminology feedback | — | P2 | Internal words Block and Slot appeared in the UI. Implemented after Build 10: replaced with ordinary training language. | implemented, pending distribution/re-test |
 | Post-Build-10 | Not recorded | Real-use follow-up | P1 | After switching A → B (a prepared alternative) and choosing Update Routine, the routine pointed at B but kept A's plan, and B's prepared plan was stranded. Implemented 2026-10-13: a reversible promotion, chosen through the new Save Routine Changes sheet. | implemented, pending distribution/re-test |
 | Post-Build-10 | Not recorded | Real-use follow-up | P1 | The active workout's Back / Next panel floated mid-screen; only a full app restart fixed it. Investigated on iPhone and iPad Pro simulators, including the on-screen keyboard; not reproduced, and no faulty code path found, so no production change. One remaining hypothesis is a stale system keyboard/safe-area inset in the surviving hosting/navigation hierarchy, but none of the simulator scenarios reproduced it. | open — investigated, not reproducible |
-| Post-Build-10 | Developer validation | — (not tester-reported) | P1 | A fixed warm-up weight was lost after Save & Exit → kill → resume on an unswitched exercise. Implemented 2026-10-14: the cold-resume path now uses the canonical warm-up conversion, so the weight is kept. | implemented, pending distribution/re-test |
-| [TBD] | [TBD] | [TBD] | [TBD] | [TBD] | [TBD] |
+| Post-Build-10 | Developer validation — surfaced during the Update Routine/resume audit | — (not tester-reported) | P1 | A fixed warm-up weight was lost after Save & Exit → kill → resume on an unswitched exercise. Implemented 2026-10-14: the cold-resume path now uses the canonical warm-up conversion, so the weight is kept. | implemented, pending distribution/re-test |
+| Post-Build-10 | Developer real-use / UX follow-up | — (not tester-reported) | P2 | Leaving a workout landed on the stale Start Workout screen or routine editor, with Resume several Back taps away. Implemented 2026-10-14: every intentional exit returns to the Routines root in one state change; Cancel stays in the workout; persistence unchanged. | implemented, pending distribution/re-test |
+| Post-Build-10 | Real-device use + developer audit | — (not tester-reported) | P2 | Haptics were inconsistent and partly premature: the existing success haptic fired when Finish reached confirmation, before the workout or selected routine changes had actually been saved; ordinary actions used notification haptics, deletes played success, rest completion could double-buzz, and restoration could buzz. Implemented 2026-10-15: one semantic haptic policy (`AppHaptics`). Physical feel still needs real-device validation. | implemented, pending distribution/re-test |
+
+Entry #12 feedback ends at the row above. Rows for the next build's re-test
+are recorded for Entry #13.
 
 Status values: `new`, `investigating`, `fixed`,
 `implemented, pending distribution/re-test`,
@@ -772,9 +784,11 @@ actually had in their hands.
 Testers should know this going in:
 
 - Public App Store readiness is **not** claimed.
-- TestFlight feedback phase is **in progress on Build 10** — started, not
+- TestFlight feedback phase is **in progress on Build 10**: started, not
   completed. Changes made in response to the first round of feedback are not
   in the build you have; they need a later one.
+- Haptic feedback was reworked after Build 10 and has not yet been tuned on
+  real devices, so its strength and frequency may still change.
 - UI polish may continue during and after this beta.
 - Broader distribution is deferred until this small beta is useful and settled.
 - Korean translations are new and may need refinement.
@@ -901,6 +915,30 @@ Targeted regression checks for the same build:
       floats, capture the screen state (screenshot, what was on screen just
       before, device and iOS version) **before** relaunching the app.
 
+Workout exits, tried from a routine row's Start, the routine editor's Start,
+and Resume:
+
+- [ ] Does every workout exit land where you expected?
+- [ ] **Save & Exit** returns to Routines, with Resume available.
+- [ ] **Discard** returns to Routines, with no Resume.
+- [ ] **Finish** returns to Routines. Try it both with and without the Save
+      Routine Changes sheet.
+- [ ] **Cancel**, in the finish dialog or the sheet, keeps you in the active
+      workout.
+
+Haptics, on a real phone only (a simulator cannot judge feel):
+
+- [ ] **Log Set** feedback feels appropriate: noticeable, not heavy.
+- [ ] **Back / Next** feedback is not too frequent or too strong.
+- [ ] **Finish** feels clearly stronger than ordinary actions.
+- [ ] **Save & Exit** and **Discard** feel meaningfully different.
+- [ ] The **Save Routine Changes** checkboxes give subtle feedback.
+- [ ] **Rest completion** buzzes exactly once with the app open.
+- [ ] **Error / rejection** feedback (duplicate name, item in use) feels useful
+      rather than noisy.
+- [ ] **No buzz** on opening the app, resuming a workout, or returning after a
+      rest has already ended.
+
 ---
 
 ## Next Steps
@@ -910,24 +948,22 @@ invited, tester instructions and the checklist were shared, and the first round
 of feedback was collected, triaged and recorded in
 `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
 
-What comes next:
+Entry #12 closes here. What comes next is Entry #13 work:
 
-1. Prepare and upload the next TestFlight build. It must contain the
-   post-Build-10 work listed at the top of this plan — including the
-   cold-resume warm-up weight fix; Build 10 does not. The floating bottom
-   panel stays open with no code change to include (see Planned Fixes From
-   Feedback in the entry document).
-2. If the floating panel recurs, capture its state before relaunching;
-   temporary debug-only diagnostics are a contingency for then, not planned
-   work.
-3. Re-invite the same small group and run the **Next Validation Cycle**
-   checklist above, which is a re-test of specific changes rather than an open
-   feedback round.
-4. Collect feedback into the Feedback Log above.
-5. Triage by severity (P0–P3); fix clear P0/P1 issues, defer P2/P3.
-6. Record outcomes in `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md`.
-7. Decide whether a first-launch tutorial is still needed, using that round's
-   result rather than the pre-Build-10 confusion.
+1. Prepare and upload a new TestFlight build containing the post-Build-10 work
+   listed at the top of this plan. Build 10 contains none of it, and no build
+   number has been assigned yet.
+2. Re-invite the same small peer and family group and run the **Next
+   Validation Cycle** checklist above. It is a re-test of specific changes,
+   not an open feedback round.
+3. Validate the haptics on real devices, using the haptic checks above.
+4. Watch naturally for the floating bottom panel to recur. If it does, capture
+   its state before relaunching. Temporary debug-only diagnostics are a
+   contingency for then, not planned work.
+5. Decide whether first-launch onboarding is still necessary, using that
+   round's result rather than the pre-Build-10 confusion.
+6. Record new feedback, triage and fixes for Entry #13 rather than reopening
+   Entry #12.
 
 TestFlight testing is **in progress** on Build 10. The post-Build-10 changes
 await the next distributed build and a peer re-test.

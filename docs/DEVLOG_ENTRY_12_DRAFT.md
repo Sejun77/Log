@@ -1,16 +1,18 @@
 # Entry #12 — Beta Feedback, Cardio System & TestFlight Preparation
 
-> **DRAFT — not final.** Entry #12 is still open. Build 10 is the build testers
-> have; everything in the *After Build 10* sections is merged to `main` but has
-> not been distributed yet, and one bug is still open (see **Still Open**).
-> Numbers, scope, and build status are accurate as of the last verified run and
-> will be updated before publishing.
+> **Draft, scope frozen.** Entry #12 covers work through the workout-exit
+> navigation and semantic haptics pass (merged 2026-10-15) and takes nothing
+> after it — later implementation belongs to Entry #13. This is a devlog cutoff,
+> not a release: Build 10 is still the build testers have, everything in the
+> *After Build 10* sections is merged to `main` but not yet distributed, and one
+> bug is still open (see **Still Open**). The wording may still be edited before
+> publishing; the scope will not grow.
 >
 > _Numbering note:_ the repo already uses `docs/ENTRY_12_TESTFLIGHT_FEEDBACK.md` for
 > the beta feedback log. If the public devlog numbering is separate, this stays
 > #12; otherwise renumber before publishing.
 
-**Date Range:** 2026-06-24 → ongoing _(latest work recorded here merged 2026-10-14)_
+**Date Range:** 2026-06-24 → 2026-10-15 _(cutoff: the semantic haptics merge)_
 
 Entry #11 ended with the app working for **my** workouts — the full loop, start to
 History, validated on a real device. This entry is about a different question:
@@ -29,6 +31,9 @@ The cardio phase ended with the test suite repaired and passing, a manual
 regression done, and **build 9 uploaded to TestFlight**. Build 10 followed and
 reached testers on 2026-09-21; the sections after it record what those testers
 — and my own use of the app — turned up next, and what changed in response.
+The two sources turned out to find different things: peers found what they
+couldn't understand, and my own real workouts found what the app got wrong over
+a full session.
 
 ---
 
@@ -1040,8 +1045,8 @@ words still leaking out of the codebase and into the interface — Block and Slo
 which nobody has complained about yet, which is not the same as nobody being
 confused by them.
 
-Entry #12 is not finished. It was supposed to be about whether other people could
-use the app, and it is still answering that.
+At that point Entry #12 was plainly not finished. It was supposed to be about
+whether other people could use the app, and it was still answering that.
 
 ---
 
@@ -1198,10 +1203,12 @@ was checked by hand. None of this is in Build 10.
 
 ## After Build 10 — Two Late Bugs, One Fix
 
-Real use turned up two more bugs late in this stretch. Both survived Save &
-Exit and Resume, and they ended in opposite places.
+Late in this stretch, my own use of the app and follow-up validation turned up
+two more issues. Both survived Save & Exit and Resume, and they ended in
+opposite places.
 
-The first was precise. If a routine's warm-up step has a fixed target weight —
+The first was precise, and it came from developer validation during the Update
+Routine/resume audit rather than from a failed workout. If a routine's warm-up step has a fixed target weight —
 3 reps at 60 kg — and you start a workout, leave that exercise unswitched, Save
 & Exit, kill the app and resume, the step came back with its reps but without
 its weight. The cause was a single path: on a cold resume of an unswitched
@@ -1251,43 +1258,193 @@ Not every observed bug should be "fixed" by guessing.
 
 ---
 
+## After Build 10 — Every Exit Goes Home
+
+The next follow-up from my own use of the app was not a bug in the data, just
+an awkward landing. Finishing a workout dropped you back on the Start Workout
+screen, or the routine editor behind it, depending on how you came in. Both were
+stale the moment the workout ended: they described a session that no longer
+existed, and the one thing you were likely to want next, Resume after Save &
+Exit, was on the Routines page, two or three Back taps away.
+
+Every intentional exit from the active workout now returns to the main Routines
+screen: **Finish**, **Finish This Workout Only**, **Save Selected Changes**,
+**Save & Exit** and **Discard**. It doesn't matter how the workout was entered,
+whether from a routine row's Start, the routine editor's Start, or Resume.
+**Cancel**, in the finish dialog or the Save Routine Changes sheet, still keeps
+you in the workout.
+
+The implementation is smaller than the problem sounds. `RoutinesView` already
+owned every destination on its navigation stack, but as four separate flags.
+They became one navigation state, and leaving a workout resets that state to
+the root in a single change. There are no repeated dismiss calls, no delays and
+no reaching into UIKit's navigation controller. The rule of where each kind of
+exit goes is a small pure function, exhaustive on purpose, so a new kind of exit
+has to choose a destination rather than inherit one.
+
+None of the persistence changed. Save & Exit is still resumable, Discard still
+discards, and Finish still records the workout and applies whichever routine
+changes were selected. Only the landing moved.
+
+Validation at the time: targeted exit, navigation and lifecycle tests passed,
+then the full suite, **2,742 unit tests and 2 UI smoke tests, 0 failures**.
+Debug and Release built. Not in Build 10.
+
+---
+
+## After Build 10 — Haptics That Mean Something
+
+The last slice of this entry is UX polish, and it started on a real phone,
+where the haptic feedback felt inconsistent.
+
+Before changing anything I audited what was there. There were 18 raw
+feedback-generator calls across 6 files and no shared abstraction, so each view
+had picked its own intensity. The audit found:
+
+- **The finish haptic fired too early.** The existing success haptic fired
+  when Finish reached confirmation, before the workout or selected routine
+  changes had actually been saved. The new policy ties success feedback to the
+  actual completed operation.
+- **Notification-style feedback was used for ordinary actions.** Every logged
+  set played `success`, every undo played `warning`.
+- **Deletes played `success`.**
+- **Rest completion could double-buzz,** because the rest timer and the
+  notification service each played their own.
+- **Restoration could buzz.** Coming back to the app after a rest had already
+  ended played the completion haptic as if it were happening now.
+
+All haptic feedback now goes through one semantic policy in
+`Log/Services/AppHaptics.swift`. Call sites name what happened (a `HapticCue`),
+one table decides how that feels, and `AppHaptics.play(_:)` performs it.
+Outcome-dependent decisions live in `HapticPolicy` as pure functions, which is
+what makes them testable. No raw feedback-generator calls remain anywhere else.
+
+The policy, at the level that matters:
+
+- **Selection:** checkbox and checklist-style choices, such as the Save Routine
+  Changes rows.
+- **Light impact:** ordinary workout-state changes, such as logging or undoing
+  a set, Back and Next when the position actually moves, switching an
+  exercise, and adding or duplicating something.
+- **Medium impact:** Start Workout, only when a new session is actually
+  created, and Save & Exit. Also a finish where the selected routine changes
+  failed to save, which is real but not a full success.
+- **Success:** a finish after the workout is recorded, a rest that completes
+  live, and an import that actually added something.
+- **Warning:** Discard and confirmed destructive deletes.
+- **Error:** rejection and error alerts the user is already being shown.
+
+Just as deliberate is what stays silent: typing, scrolling, ordinary
+navigation, help and info buttons, automatic state synchronization, passive
+restoration, and native controls (toggles, pickers, steppers, list reordering)
+that already provide their own feedback. The app should never buzz just because
+state was restored.
+
+The timing change is the one worth remembering. The finish haptic used to play
+when the confirmation appeared. Now it plays only after the workout has been
+recorded and the selected routine changes were applied. Log and Undo only buzz
+when a set log was actually written or removed. Rest completion only buzzes
+when a live countdown reaches zero, and coming back after a rest already ended
+is silent. The notification service no longer adds a second haptic on top.
+Feedback should report what happened, not decorate a tap.
+
+Validation: 21 policy tests were added, asserting which action produces which
+feedback rather than anything about hardware. Targeted suites passed, **417
+tests, 0 failures**, then the full suite, **2,763 unit tests and 2 UI smoke
+tests, 0 failures**. Debug and Release built. That is the latest validation
+count in this entry. What it cannot cover is the part that matters most: a
+simulator has no Taptic Engine, so whether any of this *feels* right (Log Set
+strong enough, Back and Next not too busy, Finish clearly stronger than the
+rest) is still unjudged. That belongs to the next real-device and TestFlight
+round. Not in Build 10.
+
+---
+
 ## Still Open
 
 One bug is known and not fixed.
 
-**The active workout's bottom panel can float** — open, investigated, not
+**The active workout's bottom panel can float.** Open, investigated, not
 reproducible. Seen once in real use: the Back / Next panel sat partway up the
 screen, and only fully closing and reopening the app restored it. The
 investigation above found no reproducible failure and no faulty code path, so
-no production change was made. If it happens again, the useful thing is to
-capture the screen's state before relaunching.
+no production change was made. It carries forward as it is. If it happens
+again, the useful thing is to capture the screen's state before relaunching,
+and that work belongs to Entry #13.
+
+---
+
+## Phase Result
+
+This entry set out to answer whether other people could use the app. The honest
+answer is that getting it into their hands changed it more than any feature
+planned before it.
+
+Getting into TestFlight exposed a different class of problem. There were
+crashes that only reproduced in someone else's Release build, and an
+irreversible tap with no confirmation in front of it. Peer feedback after
+Build 10 then exposed something quieter. Nobody reported a broken flow. What
+they reported was not knowing what a page was for, not knowing what RIR stood
+for, not finding Start Workout or the User Guide, and Korean that was fluent in
+places and wrong in others.
+
+My own use of the app found a different set of problems, the kind a short test
+session rarely reaches:
+
+- an Update Routine that mixed two exercises' plans
+- an exit that landed you somewhere stale
+- a control panel that once floated off the bottom of the screen
+- haptic feedback that felt inconsistent on a real phone
+
+Developer follow-up and validation also surfaced a deeper state problem: a
+warm-up weight lost on a cold resume, found during the Update Routine/resume
+audit.
+
+The responses add up to a noticeably different app:
+
+- pages that say what they're for
+- training terms explained where they appear
+- Korean that holds together
+- a Start button where the routine is
+- exercise replacements that can be undone, chosen through the Save Routine
+  Changes sheet
+- a resume that restores what was planned
+- every exit ending in the same place
+- haptics that report what actually happened
+
+The lesson I'd keep is that testing didn't just produce a list of bugs. It
+changed how the app handles state, navigation, feedback and user intent.
+
+What this entry does not close is just as important. The app is not finished,
+and testing is not complete. Almost everything after Build 10 has never been in
+a tester's hands; it needs a new build and a re-test before any of the
+feedback behind it can be called resolved. The floating panel is still open.
+Entry #12 ends with the app much more coherent than the build that first
+reached testers, but with the testing still in progress.
 
 ---
 
 ## Next Steps
 
-- Upload a new TestFlight build containing everything in the *After Build 10*
-  sections, including the cold-resume warm-up weight fix. Build 10 is what
-  testers have, and none of it is in Build 10.
-- In that round, also re-check Save & Exit / Resume, warm-up plans after a full
-  relaunch, and the active workout's controls and layout in normal use.
-- Leave the floating bottom panel open. If it happens again, capture the state
-  before relaunching; temporary debug-only diagnostics are the next step only
-  then.
-- Put that build in front of the friends-and-family group during real training,
-  and find out whether the changes landed — a re-test of specific changes, not an
-  open feedback round. The Save Routine Changes sheet is the one most worth
-  watching someone meet for the first time.
-- Decide whether a first-launch tutorial is still needed **after** that re-test,
-  not before it.
-- Localize Calculus Analytics as one whole feature, entry point included, when
-  it comes up.
-- Fix confusing UI and translation problems **before** adding major new features —
-  the point of this round is to learn what other people don't understand, and
-  piling on more surface area first would defeat it.
+These move to Entry #13:
+
+1. Prepare and upload a new TestFlight build containing the post-Build-10
+   work. Build 10 is what testers have, and none of it is in Build 10.
+2. Peer and family re-test of the specific changes, during real training. The
+   Save Routine Changes sheet and the new exit landing are the two most worth
+   watching someone meet for the first time.
+3. Validate the haptics on real devices: feel, frequency, and that nothing
+   doubles up or buzzes on restore.
+4. Watch for the floating panel to recur naturally, and capture the state
+   before relaunching if it does.
+5. Decide whether first-launch onboarding is still necessary **after** that
+   re-test, not before. The discoverability changes may already have answered
+   it.
+6. Put any new fixes or features in Entry #13, rather than reopening this one.
 
 The through-line of this entry is that "ready for other people" was mostly not a
 feature problem. It was crashes that only appear on someone else's phone, a
-confirmation before an irreversible tap, a guide for someone who doesn't know the
-vocabulary, and a translation. Cardio is the headline, but it's the last thing
-that happened, not the reason the app got testable.
+confirmation before an irreversible tap, a guide for someone who doesn't know
+the vocabulary, a translation, and then a long run of details that only show up
+over a whole workout. Cardio is the headline, but it isn't the reason the app
+got testable.
