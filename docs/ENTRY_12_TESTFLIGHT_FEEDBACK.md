@@ -432,7 +432,7 @@ Severity:
 - **Group:** Real-device use + developer audit; **not tester-reported**.
 - **Severity:** P2
 - **Feedback:** On a real phone, haptics felt inconsistent. The existing success haptic fired when Finish reached confirmation, before the workout or selected routine changes had actually been saved. An audit found 18 raw feedback-generator calls across 6 files with no shared policy. The Finish haptic fired on reaching the confirmation rather than after finishing. Success and warning notification haptics were used for every set log and undo, and deletes played success. Rest completion could buzz twice, and returning to the app after a rest had already ended could buzz on restoration.
-- **Status:** Implemented, pending distribution/re-test. Merged to `main` on 2026-10-15. All haptics now go through one semantic policy (see *Fixes Made*). The physical feel has **not** been validated on a device. A simulator cannot judge it, so that belongs to the next real-device round.
+- **Status:** Implemented, pending distribution/re-test. Merged to `main` on 2026-10-15. All haptics now go through one semantic policy (see *Fixes Made*). Automated policy behavior is covered by 21 `HapticPolicy` tests; the full suite passed (2,763 unit tests + 2 UI smoke tests) and Debug and Release builds passed. The physical feel was also manually checked on a real iPhone before merge. Testers re-test it on the next build.
 
 The entries above reflect issues found through tester use, developer reproduction, crash reports, real-workout testing and manual validation. This log closes at the Entry #12 cutoff. New feedback, including the re-test of the post-Build-10 work, is recorded for Entry #13.
 
@@ -1017,8 +1017,11 @@ Current validation status:
   - returning after a rest already ended is silent
   - the notification service no longer adds a second haptic
 
-  The physical feel and intensity are **not** validated. The simulator cannot
-  judge them, and that belongs to the next real-device / TestFlight round.
+  The physical feel was manually checked on a real iPhone before merge:
+  ordinary workout feedback, Finish vs ordinary actions, Save & Exit /
+  Discard, selection feedback, single rest-completion feedback, and no
+  unintended feedback on resume/restoration. Tester re-testing on a new
+  TestFlight build is still to come.
 - Validation for the post-Build-10 slices: each passed its Debug build, full
   test suite and Release build before merge. For the final Update Routine / Save
   Routine Changes work: **2,728 unit tests and 2 UI smoke tests, 0 failures**;
@@ -1036,8 +1039,8 @@ Current validation status:
   `HapticPolicyTests` added, asserting action → feedback decisions rather than
   hardware. The targeted suites passed (417 tests, 0 failures), then the full
   suite: **2,763 unit tests and 2 UI smoke tests, 0 failures**. Debug and
-  Release builds succeeded. Haptic feel has not been checked on a device. Not
-  in Build 10.
+  Release builds succeeded. Physical haptic feel was also manually checked on
+  a real iPhone before merge. Not in Build 10.
 - Test suite result at the Build 10 upload: **full scheme passes: 2,546 tests, 0
   failures** — 2,544 unit tests plus 2 UI tests (Build 10 C15 run). Debug build
   succeeds and Release build succeeds. Manual UI verification of the Build 10
@@ -1173,7 +1176,7 @@ Reflections from running the beta.
 - Tester feedback can reveal documentation and usability gaps that are easy for the developer to miss.
 - Peer sessions and my own full workouts found different kinds of problems. Peers found what they could not understand: pages, terms, where to start. Full real workouts found state that drifted over a whole session: plans mixing on Update Routine, a warm-up weight lost on cold resume, an exit landing somewhere stale.
 - Feedback should be semantic, not decorative. A haptic that fires when a confirmation *appears* tells the user something succeeded before it has; tying each haptic to the outcome it reports, and keeping restoration silent, made the feedback mean something.
-- Some behavior can only be judged on a device. Haptic feel, like the earlier warm-up rendering bug, is outside what a simulator can validate, so it is recorded as unvalidated rather than assumed fine.
+- Some behavior can only be judged on a device. Haptic feel, like the earlier warm-up rendering bug, is outside what a simulator can validate, so it was checked by hand on a real iPhone before merge rather than assumed fine from tests alone.
 - Active workout state needs one clear source of truth; otherwise different resume paths can appear to restore different versions of the same workout.
 - Compatibility rules should be explicit when switching between different exercise types, because preserving everything can create invalid mixed state.
 - An input's **range** and its **control** are one decision. Raising a limit without replacing the stepper would have made 6-hour durations technically possible and practically unusable.
@@ -1233,8 +1236,9 @@ Several major workflows came out clearer and safer:
 This is **not** a finished app and **not** a completed beta. All feedback is
 not resolved, and nothing here claims public release readiness. Almost all of
 the post-Build-10 work has never been in a tester's hands. It needs a new
-build and a re-test before the feedback behind it can be called resolved, and
-the haptics have not been felt on a real device. The floating bottom panel
+build and a re-test before the feedback behind it can be called resolved; the
+haptics were checked on a real iPhone before merge but not yet by testers. The
+floating bottom panel
 remains open, investigated but not reproducible. Continued testing and any
 further fixes move into Entry #13.
 

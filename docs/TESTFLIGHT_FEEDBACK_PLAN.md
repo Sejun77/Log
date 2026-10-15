@@ -41,7 +41,7 @@ post-Build-10 work listed below.
   whatever the entry path
 - centralized semantic haptic feedback: one policy for every haptic in the
   app, with Finish success only after the workout is actually recorded.
-  Physical feel has not been checked on a device yet.
+  Physical feel was manually checked on a real iPhone before merge.
 
 Most of these came out of the Build 10 feedback below; the rest came from
 follow-up testing and real use. They are implemented and merged, but **no
@@ -757,7 +757,7 @@ Fill this in as feedback arrives.
 | Post-Build-10 | Not recorded | Real-use follow-up | P1 | The active workout's Back / Next panel floated mid-screen; only a full app restart fixed it. Investigated on iPhone and iPad Pro simulators, including the on-screen keyboard; not reproduced, and no faulty code path found, so no production change. One remaining hypothesis is a stale system keyboard/safe-area inset in the surviving hosting/navigation hierarchy, but none of the simulator scenarios reproduced it. | open — investigated, not reproducible |
 | Post-Build-10 | Developer validation — surfaced during the Update Routine/resume audit | — (not tester-reported) | P1 | A fixed warm-up weight was lost after Save & Exit → kill → resume on an unswitched exercise. Implemented 2026-10-14: the cold-resume path now uses the canonical warm-up conversion, so the weight is kept. | implemented, pending distribution/re-test |
 | Post-Build-10 | Developer real-use / UX follow-up | — (not tester-reported) | P2 | Leaving a workout landed on the stale Start Workout screen or routine editor, with Resume several Back taps away. Implemented 2026-10-14: every intentional exit returns to the Routines root in one state change; Cancel stays in the workout; persistence unchanged. | implemented, pending distribution/re-test |
-| Post-Build-10 | Real-device use + developer audit | — (not tester-reported) | P2 | Haptics were inconsistent and partly premature: the existing success haptic fired when Finish reached confirmation, before the workout or selected routine changes had actually been saved; ordinary actions used notification haptics, deletes played success, rest completion could double-buzz, and restoration could buzz. Implemented 2026-10-15: one semantic haptic policy (`AppHaptics`). Physical feel still needs real-device validation. | implemented, pending distribution/re-test |
+| Post-Build-10 | Real-device use + developer audit | — (not tester-reported) | P2 | Haptics were inconsistent and partly premature: the existing success haptic fired when Finish reached confirmation, before the workout or selected routine changes had actually been saved; ordinary actions used notification haptics, deletes played success, rest completion could double-buzz, and restoration could buzz. Implemented 2026-10-15: one semantic haptic policy (`AppHaptics`). Covered by 21 `HapticPolicy` tests; full suite 2,763 unit + 2 UI smoke tests passed; Debug and Release built; physical feel manually checked on a real iPhone before merge. | implemented, pending distribution/re-test |
 
 Entry #12 feedback ends at the row above. Rows for the next build's re-test
 are recorded for Entry #13.
@@ -787,8 +787,9 @@ Testers should know this going in:
 - TestFlight feedback phase is **in progress on Build 10**: started, not
   completed. Changes made in response to the first round of feedback are not
   in the build you have; they need a later one.
-- Haptic feedback was reworked after Build 10 and has not yet been tuned on
-  real devices, so its strength and frequency may still change.
+- Haptic feedback was reworked after Build 10. It was checked on a real
+  iPhone before merge, but not yet by testers, so its strength and frequency
+  may still change.
 - UI polish may continue during and after this beta.
 - Broader distribution is deferred until this small beta is useful and settled.
 - Korean translations are new and may need refinement.
@@ -926,7 +927,8 @@ and Resume:
 - [ ] **Cancel**, in the finish dialog or the sheet, keeps you in the active
       workout.
 
-Haptics, on a real phone only (a simulator cannot judge feel):
+Haptics, re-tested on a real phone with the new build (a simulator cannot
+judge feel; the developer's pre-merge iPhone check is not a tester's):
 
 - [ ] **Log Set** feedback feels appropriate: noticeable, not heavy.
 - [ ] **Back / Next** feedback is not too frequent or too strong.
@@ -956,7 +958,8 @@ Entry #12 closes here. What comes next is Entry #13 work:
 2. Re-invite the same small peer and family group and run the **Next
    Validation Cycle** checklist above. It is a re-test of specific changes,
    not an open feedback round.
-3. Validate the haptics on real devices, using the haptic checks above.
+3. Re-test the haptics with testers on the new build, using the haptic checks
+   above.
 4. Watch naturally for the floating bottom panel to recur. If it does, capture
    its state before relaunching. Temporary debug-only diagnostics are a
    contingency for then, not planned work.

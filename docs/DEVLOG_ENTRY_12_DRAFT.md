@@ -1352,11 +1352,13 @@ Validation: 21 policy tests were added, asserting which action produces which
 feedback rather than anything about hardware. Targeted suites passed, **417
 tests, 0 failures**, then the full suite, **2,763 unit tests and 2 UI smoke
 tests, 0 failures**. Debug and Release built. That is the latest validation
-count in this entry. What it cannot cover is the part that matters most: a
-simulator has no Taptic Engine, so whether any of this *feels* right (Log Set
-strong enough, Back and Next not too busy, Finish clearly stronger than the
-rest) is still unjudged. That belongs to the next real-device and TestFlight
-round. Not in Build 10.
+count in this entry. Tests cannot cover the part that matters most — a
+simulator has no Taptic Engine — so before merge I also checked the physical
+feel on a real iPhone: ordinary workout feedback, Finish against ordinary
+actions, Save & Exit against Discard, selection feedback, a single
+rest-completion buzz, and no unintended feedback on resume or restoration.
+Testers have not felt it yet; that re-test belongs to the next TestFlight
+build. Not in Build 10.
 
 ---
 
@@ -1433,8 +1435,8 @@ These move to Entry #13:
 2. Peer and family re-test of the specific changes, during real training. The
    Save Routine Changes sheet and the new exit landing are the two most worth
    watching someone meet for the first time.
-3. Validate the haptics on real devices: feel, frequency, and that nothing
-   doubles up or buzzes on restore.
+3. Re-test the haptics with testers on the new build: feel, frequency, and
+   that nothing doubles up or buzzes on restore.
 4. Watch for the floating panel to recur naturally, and capture the state
    before relaunching if it does.
 5. Decide whether first-launch onboarding is still necessary **after** that
