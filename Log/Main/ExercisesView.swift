@@ -174,7 +174,7 @@ struct ExercisesView: View {
                     // save the open-coded version here left behind.
                     ExerciseDeletionService.delete(ex, in: ctx)
                 }
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                AppHaptics.play(.destructiveConfirmed)
                 pendingDeleteExercise = nil
             }
         } message: {
@@ -351,6 +351,7 @@ struct ExercisesView: View {
                 Button {
                     lockedName = ex.name
                     showLockedAlert = true
+                    AppHaptics.play(.actionRejected)
                 } label: {
                     Label("In use", systemImage: "lock.fill")
                 }
@@ -417,6 +418,7 @@ struct ExercisesView: View {
         if activeGuard.isLocked(ex.id) {
             lockedName = ex.name
             showLockedAlert = true
+            AppHaptics.play(.actionRejected)
             return
         }
         pendingDeleteExercise = ex
@@ -437,6 +439,7 @@ struct ExercisesView: View {
         if exists {
             dupName = trimmed
             dupAlert = true
+            AppHaptics.play(.actionRejected)
             return
         }
 
@@ -445,6 +448,7 @@ struct ExercisesView: View {
         ctx.insert(ex)
         try? ctx.save()
         newName = ""
+        AppHaptics.play(.itemCreated)
     }
 
     /// Reorder handler for the top-level All Exercises list. Persists the new

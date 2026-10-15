@@ -25,6 +25,8 @@ struct RoutineJSONImportButton: View {
     /// Alert to raise once the preview sheet finishes dismissing (result on a
     /// committed import, or a graceful failure). `nil` ⇒ Cancel ⇒ no alert.
     @State private var deferredAlert: AlertInfo?
+    /// The haptic for `deferredAlert`, played when that alert is surfaced.
+    @State private var deferredCue: HapticCue?
     @State private var alert: AlertInfo?
 
     var body: some View {
@@ -55,10 +57,12 @@ struct RoutineJSONImportButton: View {
                         deferredAlert = AlertInfo(
                             title: "Routine Imported",
                             message: Self.resultMessage(report))
+                        deferredCue = .importSucceeded
                     } catch {
                         deferredAlert = AlertInfo(
                             title: "Import Failed",
                             message: Self.errorMessage(error))
+                        deferredCue = .actionRejected
                     }
                     preview = nil
                 },
@@ -82,6 +86,8 @@ struct RoutineJSONImportButton: View {
     // MARK: - File pick → decode → preview
 
     private func handlePick(_ result: Result<[URL], Error>) {
+        // Every branch that raises `alert` here is a failure being surfaced.
+        defer { if alert != nil { AppHaptics.play(.actionRejected) } }
         switch result {
         case let .failure(error):
             alert = AlertInfo(title: "Import Failed", message: error.localizedDescription)
@@ -117,6 +123,8 @@ struct RoutineJSONImportButton: View {
         guard let pending = deferredAlert else { return }  // Cancel ⇒ nil
         deferredAlert = nil
         alert = pending
+        AppHaptics.play(deferredCue)
+        deferredCue = nil
     }
 
     // MARK: - Pure formatting helpers (testable)

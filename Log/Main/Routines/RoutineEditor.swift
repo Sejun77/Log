@@ -261,6 +261,7 @@ struct RoutineEditor: View {
         case .duplicate(let attempted):
             dupName = attempted
             showDupAlert = true
+            AppHaptics.play(.actionRejected)
             nameDraft = routine.name
         case .empty, .unchanged:
             nameDraft = routine.name
@@ -338,6 +339,7 @@ struct RoutineEditor: View {
         if blockIsInUseByActiveWorkout(block, guard: activeGuard) {
             blockedBlocks = [blockTitle(block)]
             showLockedBlockAlert = true
+            AppHaptics.play(.actionRejected)
             return
         }
         deletePrompt = DeletePrompt(
@@ -420,6 +422,7 @@ struct RoutineEditor: View {
             Button {
                 blockedBlocks = [blockTitle(block)]
                 showLockedBlockAlert = true
+                AppHaptics.play(.actionRejected)
             } label: {
                 Label("In use", systemImage: "lock.fill")
             }
@@ -690,7 +693,7 @@ struct RoutineEditor: View {
         // a deleted slot.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             RoutineBlockBuilder.deleteBlock(block, from: routine, in: ctx)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            AppHaptics.play(.destructiveConfirmed)
         }
     }
 
@@ -702,9 +705,11 @@ struct RoutineEditor: View {
     /// Exercise" button (the picker can't open while locked); the guard here is
     /// defense-in-depth.
     private func addExercisesAsBlocks(_ exercises: [Exercise]) {
-        guard !activeGuard.isRoutineLocked(routine.id) else { return }
+        guard !activeGuard.isRoutineLocked(routine.id), !exercises.isEmpty
+        else { return }
         RoutineBlockBuilder.addSingleExerciseBlocks(
             exercises, to: routine, in: ctx)
+        AppHaptics.play(.itemCreated)
     }
 
     /// Non-destructive same-routine block duplicate (Slice 3). Deep-copies the
@@ -718,7 +723,7 @@ struct RoutineEditor: View {
         withAnimation {
             RoutineBlockBuilder.duplicateBlock(block, in: routine, ctx: ctx)
         }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        AppHaptics.play(.itemCreated)
     }
 
     private func appendBlock(
@@ -751,5 +756,6 @@ struct RoutineEditor: View {
         ctx.insert(block)
         routine.blocks.append(block)
         try? ctx.save()
+        AppHaptics.play(.itemCreated)
     }
 }
