@@ -194,5 +194,6 @@ struct CardioSegmentChecklistSection: View {
         } else {
             checkedIDs.insert(id)
         }
+        AppHaptics.play(.selectionChanged)
     }
 }

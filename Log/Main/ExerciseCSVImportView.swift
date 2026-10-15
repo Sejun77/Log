@@ -67,6 +67,8 @@ struct ExerciseCSVImportButton: View {
     // MARK: - File pick → parse
 
     private func handlePick(_ result: Result<[URL], Error>) {
+        // Every branch that raises `alert` here is a failure being surfaced.
+        defer { if alert != nil { AppHaptics.play(.actionRejected) } }
         switch result {
         case let .failure(error):
             alert = AlertInfo(title: "Import Failed", message: error.localizedDescription)
@@ -110,6 +112,7 @@ struct ExerciseCSVImportButton: View {
         guard let result = pendingResult else { return }  // Cancel leaves it nil
         pendingResult = nil
         alert = AlertInfo(title: "Import Complete", message: Self.resultMessage(result))
+        AppHaptics.play(HapticPolicy.importCue(insertedCount: result.insertedCount))
     }
 
     /// Build the result-alert body from the import report. Internal + static so

@@ -175,6 +175,7 @@ struct RoutineChangesSheet: View {
         let isSelected = selection.isSelected(row.id)
         return Button {
             selection.toggle(row.id)
+            AppHaptics.play(.selectionChanged)
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")

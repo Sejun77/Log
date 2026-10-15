@@ -48,7 +48,10 @@ struct AllWorkoutsView: View {
                         toDelete = w
                         showConfirmDelete = true
                     },
-                    onBlockedDelete: { showActiveDeleteWarning = true }
+                    onBlockedDelete: {
+                        showActiveDeleteWarning = true
+                        AppHaptics.play(.actionRejected)
+                    }
                 )
             }
         }
@@ -68,6 +71,7 @@ struct AllWorkoutsView: View {
                         ctx.delete(w)
                         try? ctx.save()
                     }
+                    AppHaptics.play(.destructiveConfirmed)
                     toDelete = nil
                 }
             }
