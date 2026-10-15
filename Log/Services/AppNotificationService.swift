@@ -1,7 +1,9 @@
 import UIKit
 import UserNotifications
 
-/// Notification + haptic service
+/// Notification service. No haptics here: a foreground rest-done banner
+/// arrives as the live `RestTimer` countdown plays `.restCompleted`, so a
+/// second buzz would double it, and opening a notification is navigation.
 final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = AppNotificationService()
 
@@ -35,7 +37,6 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
     ) {
         let id = notification.request.identifier
         print("[Notification] willPresent: \(id)")
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
 
         // Show it
         completionHandler([.banner, .sound, .list])
@@ -55,7 +56,6 @@ final class AppNotificationService: NSObject, UNUserNotificationCenterDelegate {
         print(
             "[Notification] didReceive response for \(response.notification.request.identifier)"
         )
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         completionHandler()
     }
 }

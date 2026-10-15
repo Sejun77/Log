@@ -282,13 +282,16 @@ final class RestTimer: ObservableObject {
         }
 
         if remaining <= 0 {
-            finish()
+            finish(live: true)
         } else if mode == .rest {
             updateActivity()
         }
     }
 
-    private func finish() {
+    /// - Parameter live: true only when the countdown reached zero on a live
+    ///   tick. A rest found already expired on resume / foreground sync ends
+    ///   silently — restoration never buzzes.
+    private func finish(live: Bool = false) {
         isRunning = false
         remaining = 0
         endDate = nil
@@ -301,9 +304,9 @@ final class RestTimer: ObservableObject {
         if mode == .rest { updateActivityNeutral() }
 
         // Let the scheduled notification fire naturally as well.
-        if mode == .rest {
+        if mode == .rest, live {
             // haptic only for rest completion
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            AppHaptics.play(.restCompleted)
         }
         clearPersistence()
     }

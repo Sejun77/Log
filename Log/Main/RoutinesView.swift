@@ -92,9 +92,7 @@ struct RoutinesView: View {
                         ctx.delete(r)
                         try? ctx.save()
                     }
-                    UINotificationFeedbackGenerator().notificationOccurred(
-                        .success
-                    )
+                    AppHaptics.play(.destructiveConfirmed)
                     pendingDeleteRoutine = nil
                 }
             } message: {
@@ -323,6 +321,7 @@ struct RoutinesView: View {
                             Button {
                                 lockedRoutineName = r.name
                                 showLockedRoutineAlert = true
+                                AppHaptics.play(.actionRejected)
                             } label: {
                                 Label("In use", systemImage: "lock.fill")
                             }
@@ -393,6 +392,7 @@ struct RoutinesView: View {
         if activeGuard.isRoutineLocked(r.id) {
             lockedRoutineName = r.name
             showLockedRoutineAlert = true
+            AppHaptics.play(.actionRejected)
             return
         }
         pendingDeleteRoutine = r
@@ -409,7 +409,7 @@ struct RoutinesView: View {
         withAnimation {
             RoutineDuplicator.duplicate(r, among: routines, in: ctx)
         }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        AppHaptics.play(.itemCreated)
     }
 
     /// Read-only routine JSON export. Generates the transfer document on tap via
@@ -464,6 +464,7 @@ struct RoutinesView: View {
         if exists {
             dup = t
             dupAlert = true
+            AppHaptics.play(.actionRejected)
             return
         }
 
@@ -472,6 +473,7 @@ struct RoutinesView: View {
         ctx.insert(r)
         try? ctx.save()
         newName = ""
+        AppHaptics.play(.itemCreated)
     }
 
     /// Reorder handler for the top-level Saved Routines list. Persists the new

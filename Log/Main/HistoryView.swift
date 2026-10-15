@@ -303,6 +303,7 @@ struct HistoryView: View {
                             ctx.delete(w)
                             try? ctx.save()
                         }
+                        AppHaptics.play(.destructiveConfirmed)
                         toDelete = nil
                     }
                 }
@@ -550,7 +551,10 @@ struct HistoryView: View {
                             toDelete = w
                             showConfirmDelete = true
                         },
-                        onBlockedDelete: { showActiveDeleteWarning = true }
+                        onBlockedDelete: {
+                            showActiveDeleteWarning = true
+                            AppHaptics.play(.actionRejected)
+                        }
                     )
                 }
 

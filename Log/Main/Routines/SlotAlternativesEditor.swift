@@ -204,6 +204,7 @@ struct SlotAlternativesEditor: View {
                 to: prescription)
         else { return }
         try? ctx.save()
+        AppHaptics.play(.itemCreated)
         pushedAlternativeID = added.id
     }
 

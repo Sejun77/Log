@@ -1231,6 +1231,7 @@ struct ActiveWorkoutView: View {
                     onStart: { durationSeconds in
                         setTimer.start(seconds: durationSeconds, mode: .set)
                         showSetOverlay = true
+                        AppHaptics.play(.setTimerStarted)
                     },
                     onLog: { durationSeconds in
                         // 9-B2 bug-fix: if the user logs before the
@@ -1245,7 +1246,7 @@ struct ActiveWorkoutView: View {
                         // automatically when isRunning flips to false.
                         setTimer.stop()
 
-                        appendTimeSetLog(
+                        let recorded = appendTimeSetLog(
                             slotID: slotID,
                             setIndex: idx,
                             durationSeconds: durationSeconds,
@@ -1281,12 +1282,10 @@ struct ActiveWorkoutView: View {
                             clearPersistedRestState()
                         }
                         advanceForSupersetAfterLog(setIndex: idx, in: block)
-                        UINotificationFeedbackGenerator().notificationOccurred(
-                            .success
-                        )
+                        AppHaptics.play(HapticPolicy.setLogCue(logged: true, didRecord: recorded))
                     },
                     onUndo: {
-                        undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: idx)
+                        let removed = undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: idx)
                         var s = loggedByExercise[slotID, default: []]
                         s.remove(idx)
                         syncToGuardCaches()
@@ -1299,9 +1298,7 @@ struct ActiveWorkoutView: View {
                         // longer logged.
                         clearRestIfStartedBy(
                             slotID: slotID, setIndex: idx, remainingLogged: s)
-                        UINotificationFeedbackGenerator().notificationOccurred(
-                            .warning
-                        )
+                        AppHaptics.play(HapticPolicy.setLogCue(logged: false, didRecord: removed))
                     }
                 )
             )
@@ -1326,7 +1323,7 @@ struct ActiveWorkoutView: View {
                     reps: repsB,
                     weight: weightB,
                     onLog: { reps, weight in
-                        appendSetLog(
+                        let recorded = appendSetLog(
                             slotID: slotID,
                             setIndex: idx,
                             reps: reps,
@@ -1359,12 +1356,10 @@ struct ActiveWorkoutView: View {
                             clearPersistedRestState()
                         }
                         advanceForSupersetAfterLog(setIndex: idx, in: block)
-                        UINotificationFeedbackGenerator().notificationOccurred(
-                            .success
-                        )
+                        AppHaptics.play(HapticPolicy.setLogCue(logged: true, didRecord: recorded))
                     },
                     onUndo: {
-                        undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: idx)
+                        let removed = undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: idx)
                         var s = loggedByExercise[slotID, default: []]
                         s.remove(idx)
                         loggedByExercise[slotID] = s
@@ -1375,9 +1370,7 @@ struct ActiveWorkoutView: View {
                         // actually started it.
                         clearRestIfStartedBy(
                             slotID: slotID, setIndex: idx, remainingLogged: s)
-                        UINotificationFeedbackGenerator().notificationOccurred(
-                            .warning
-                        )
+                        AppHaptics.play(HapticPolicy.setLogCue(logged: false, didRecord: removed))
                     }
                 )
             )
@@ -1427,7 +1420,7 @@ struct ActiveWorkoutView: View {
 
             Button {
                 if isLogged {
-                    undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: logIndex)
+                    let removed = undoSetLog(slotID: slotID, exerciseID: exerciseID, setIndex: logIndex)
                     var s = loggedByExercise[slotID, default: []]
                     s.remove(logIndex)
                     loggedByExercise[slotID] = s
@@ -1436,9 +1429,9 @@ struct ActiveWorkoutView: View {
                     // un-ticking it must be able to stop it too.
                     clearRestIfStartedBy(
                         slotID: slotID, setIndex: logIndex, remainingLogged: s)
-                    UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                    AppHaptics.play(HapticPolicy.setLogCue(logged: false, didRecord: removed))
                 } else {
-                    appendSetLog(
+                    let recorded = appendSetLog(
                         slotID: slotID,
                         setIndex: logIndex,
                         reps: step.reps ?? 0,
@@ -1460,7 +1453,7 @@ struct ActiveWorkoutView: View {
                         )
                         showRestOverlay = true
                     }
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    AppHaptics.play(HapticPolicy.setLogCue(logged: true, didRecord: recorded))
                 }
             } label: {
                 Image(systemName: isLogged ? "checkmark.circle.fill" : "circle")
@@ -2647,6 +2640,7 @@ struct ActiveWorkoutView: View {
                     // in-memory `ActiveGuard` banner and the cold-restart
                     // `RootTabView.checkForActiveSession` flow.
                     WorkoutLifecycleService.saveAndExit(in: ctx)
+                    AppHaptics.play(.workoutSavedAndExited)
                     leave(.savedAndExited)
                 }
                 Button("Discard Workout", role: .destructive) {
@@ -2654,6 +2648,7 @@ struct ActiveWorkoutView: View {
                     WorkoutLifecycleService.discard(
                         workout: workout, appState: appState, in: ctx
                     )
+                    AppHaptics.play(.destructiveConfirmed)
                     unlockAndDismiss(.discarded)
                 }
             } message: {
@@ -2694,6 +2689,9 @@ struct ActiveWorkoutView: View {
                     try? ctx.save()
                     workout = w
                     activeGuard.activeWorkoutID = w.id
+                    // The only path that creates a session; resume and
+                    // re-appear bind the existing workout above, silently.
+                    AppHaptics.play(.workoutStarted)
                 }
 
                 // Seed the session-notes draft from the bound workout so the
@@ -3026,11 +3024,14 @@ struct ActiveWorkoutView: View {
     // MARK: - Navigation
 
     private func next() {
-        switch workoutNextAction(
+        let action = workoutNextAction(
             currentBlockIndex: currentBlockIndex,
             currentExerciseIndex: currentExerciseIndex,
-            exerciseCountsPerBlock: plan.blocks.map { $0.exercises.count }
-        ) {
+            exerciseCountsPerBlock: plan.blocks.map { $0.exercises.count })
+        // No haptic for reaching Finish: that only opens the confirmation.
+        // The finish itself is felt once it has succeeded (`finishWorkout`).
+        AppHaptics.play(HapticPolicy.cue(for: action))
+        switch action {
         case .advanceExercise(let idx):
             currentExerciseIndex = idx
         case .advanceBlock:
@@ -3042,7 +3043,6 @@ struct ActiveWorkoutView: View {
             // near the end finishes accidentally. With routine changes
             // pending, the Save Routine Changes sheet is the confirmation;
             // otherwise the plain Finish / Cancel dialog.
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
             let rows = routineChangeRows(
                 requests: routineTemplateRequests(
                     exercises: plan.blocks.flatMap(\.exercises),
@@ -3066,15 +3066,20 @@ struct ActiveWorkoutView: View {
         // call produces.
         commitSessionNotes()
         let changes = request.selectedChanges
-        if !changes.isEmpty {
-            saveRoutineChanges(changes)
-        }
+        let routineChangesSaved =
+            changes.isEmpty ? false : saveRoutineChanges(changes)
 
         // Mark the workout as completed and clear AppState in one call.
         let appState = BootstrapRoot.fetchOrCreateAppState(in: ctx)
-        WorkoutLifecycleService.finish(
+        let completedAt = WorkoutLifecycleService.finish(
             workout: workout, appState: appState, in: ctx
         )
+        // Felt only now, after the record exists — never on the Finish tap.
+        AppHaptics.play(
+            HapticPolicy.finishCue(
+                workoutRecorded: completedAt != nil,
+                routineChangesRequested: !changes.isEmpty,
+                routineChangesSaved: routineChangesSaved))
         unlockAndDismiss(.finished(request))
     }
 
@@ -3085,19 +3090,23 @@ struct ActiveWorkoutView: View {
     /// saves into alternatives, and plan edits — is `RoutineTemplateUpdate`;
     /// this only assembles each slot's session state. Called only from Save
     /// Selected Changes, never on a plain finish.
+    /// Returns whether the changes were applied.
+    @discardableResult
     private func saveRoutineChanges(
         _ changes: Set<RoutineTemplateUpdate.PendingChange>
-    ) {
+    ) -> Bool {
         let requests = routineTemplateRequests(
             exercises: plan.blocks.flatMap(\.exercises),
             sessionPlans: sessionPlans)
         do {
             try RoutineTemplateUpdate.apply(requests, selected: changes, in: ctx)
+            return true
         } catch {
             // Nothing is mutated before the resolve phase succeeds, so a
             // failure here leaves the routine as it was; the workout itself
             // still finishes and is saved below.
             print("[RoutineTemplateUpdate] apply failed:", error)
+            return false
         }
     }
 
@@ -3309,6 +3318,7 @@ struct ActiveWorkoutView: View {
 
         pendingSwapNewExercise = nil
         exerciseToSwapIndex = nil
+        AppHaptics.play(.exerciseSwitched)
     }
 
     /// Stop a rest timer that the just-committed exercise switch orphaned.
@@ -3733,19 +3743,23 @@ struct ActiveWorkoutView: View {
             let exCount =
                 plan.blocks[safe: currentBlockIndex]?.exercises.count ?? 0
             currentExerciseIndex = max(0, exCount - 1)
+        } else {
+            return
         }
+        AppHaptics.play(.workoutStepChanged)
     }
 
     // MARK: - Logging
 
+    @discardableResult
     private func appendSetLog(
         slotID: UUID,
         setIndex: Int,
         reps: Int,
         weight: Double?,
         kind: SetKind
-    ) {
-        guard let workout else { return }
+    ) -> Bool {
+        guard let workout else { return false }
 
         // Ensure we have a WorkoutItem for this *slot* — matched by
         // PlanExercise.routineSlotID (per-slot identity).
@@ -3755,7 +3769,7 @@ struct ActiveWorkoutView: View {
                     $0.routineSlotID == slotID
                 }),
                 let ex = fetchExercise(by: planEx.currentExerciseID)
-            else { return }
+            else { return false }
 
             let newItem = WorkoutItem(exercise: ex, setLogs: [])
             populateSnapshotFields(on: newItem, from: planEx)
@@ -3763,7 +3777,7 @@ struct ActiveWorkoutView: View {
             itemsByExerciseID[slotID] = newItem
         }
 
-        guard let wi = itemsByExerciseID[slotID] else { return }
+        guard let wi = itemsByExerciseID[slotID] else { return false }
 
         if let j = wi.setLogs.firstIndex(where: {
             $0.indexInExercise == setIndex && $0.subIndex == nil
@@ -3783,20 +3797,22 @@ struct ActiveWorkoutView: View {
             )
         }
         try? ctx.save()
+        return true
     }
 
     /// - Parameter cardio: optional metrics for a cardio set. Defaults to an
     ///   empty `CardioMetrics`, which **clears** every cardio column — so
     ///   re-logging a set after Undo never leaves a previous attempt's distance
     ///   or heart rate attached, and a timed hold can never acquire one.
+    @discardableResult
     private func appendTimeSetLog(
         slotID: UUID,
         setIndex: Int,
         durationSeconds: Int,
         kind: SetKind,
         cardio: CardioMetrics = CardioMetrics()
-    ) {
-        guard let workout else { return }
+    ) -> Bool {
+        guard let workout else { return false }
 
         if itemsByExerciseID[slotID] == nil {
             guard
@@ -3804,14 +3820,14 @@ struct ActiveWorkoutView: View {
                     $0.routineSlotID == slotID
                 }),
                 let ex = fetchExercise(by: planEx.currentExerciseID)
-            else { return }
+            else { return false }
             let newItem = WorkoutItem(exercise: ex, setLogs: [])
             populateSnapshotFields(on: newItem, from: planEx)
             workout.items.append(newItem)
             itemsByExerciseID[slotID] = newItem
         }
 
-        guard let wi = itemsByExerciseID[slotID] else { return }
+        guard let wi = itemsByExerciseID[slotID] else { return false }
 
         if let j = wi.setLogs.firstIndex(where: {
             $0.indexInExercise == setIndex && $0.subIndex == nil
@@ -3836,6 +3852,7 @@ struct ActiveWorkoutView: View {
             wi.setLogs.append(log)
         }
         try? ctx.save()
+        return true
     }
 
     /// `slotID` is the per-slot identity (routineSlotID) for in-memory
@@ -3844,8 +3861,9 @@ struct ActiveWorkoutView: View {
     /// is the legacy `Exercise.id` — retained so the drop-key cascade and
     /// the parent-draft clear can defensively also clear legacy on-disk
     /// entries that survived migration.
-    private func undoSetLog(slotID: UUID, exerciseID: UUID, setIndex: Int) {
-        guard let wi = itemsByExerciseID[slotID] else { return }
+    @discardableResult
+    private func undoSetLog(slotID: UUID, exerciseID: UUID, setIndex: Int) -> Bool {
+        guard let wi = itemsByExerciseID[slotID] else { return false }
         // Snapshot the parent SetLog's values into the parent draft BEFORE removing
         // it, so the now-editable field retains those values across force-quit/
         // cold-resume. Without this, a log→undo→force-quit→resume cycle would fall
@@ -3916,6 +3934,7 @@ struct ActiveWorkoutView: View {
             }
         }
         dropsLoggedByExercise[slotID]?.removeValue(forKey: setIndex)
+        return true
     }
 
     // MARK: - Drop Weight Draft Persistence (UserDefaults)
@@ -4167,27 +4186,28 @@ struct ActiveWorkoutView: View {
 
     /// Appends (or updates) a drop sub-log under `parentSetIndex`.
     /// `slotID` is the per-slot identity (routineSlotID).
+    @discardableResult
     private func appendDropLog(
         slotID: UUID,
         parentSetIndex: Int,
         subIndex: Int,
         reps: Int,
         weight: Double?
-    ) {
-        guard let workout else { return }
+    ) -> Bool {
+        guard let workout else { return false }
 
         if itemsByExerciseID[slotID] == nil {
             guard
                 let planEx = plan.blocks.flatMap(\.exercises).first(where: { $0.routineSlotID == slotID }),
                 let ex = fetchExercise(by: planEx.currentExerciseID)
-            else { return }
+            else { return false }
             let newItem = WorkoutItem(exercise: ex, setLogs: [])
             populateSnapshotFields(on: newItem, from: planEx)
             workout.items.append(newItem)
             itemsByExerciseID[slotID] = newItem
         }
 
-        guard let wi = itemsByExerciseID[slotID] else { return }
+        guard let wi = itemsByExerciseID[slotID] else { return false }
 
         if let j = wi.setLogs.firstIndex(where: {
             $0.indexInExercise == parentSetIndex && $0.subIndex == subIndex
@@ -4211,6 +4231,7 @@ struct ActiveWorkoutView: View {
         drops[parentSetIndex, default: []].insert(subIndex)
         dropsLoggedByExercise[slotID] = drops
         try? ctx.save()
+        return true
     }
 
     /// Removes a logged drop sub-log. Intentionally preserves any manual weight override
@@ -4218,8 +4239,9 @@ struct ActiveWorkoutView: View {
     /// entered value rather than reverting to auto-suggestion.
     /// The only action that clears a manual override is the "↩ suggest" button.
     /// `slotID` is the per-slot identity (routineSlotID).
-    private func undoDropLog(slotID: UUID, parentSetIndex: Int, subIndex: Int) {
-        guard let wi = itemsByExerciseID[slotID] else { return }
+    @discardableResult
+    private func undoDropLog(slotID: UUID, parentSetIndex: Int, subIndex: Int) -> Bool {
+        guard let wi = itemsByExerciseID[slotID] else { return false }
         if let j = wi.setLogs.firstIndex(where: {
             $0.indexInExercise == parentSetIndex && $0.subIndex == subIndex
         }) {
@@ -4228,7 +4250,9 @@ struct ActiveWorkoutView: View {
             drops[parentSetIndex]?.remove(subIndex)
             dropsLoggedByExercise[slotID] = drops
             try? ctx.save()
+            return true
         }
+        return false
     }
 
     /// Renders drop sub-rows under a working set row when a Dropset technique applies.
@@ -4309,7 +4333,7 @@ struct ActiveWorkoutView: View {
                         }
                     ),
                     onLog: { reps, weight in
-                        appendDropLog(
+                        let recorded = appendDropLog(
                             slotID: slotID,
                             parentSetIndex: parentSetIndex,
                             subIndex: sub,
@@ -4437,15 +4461,15 @@ struct ActiveWorkoutView: View {
                                 showRestOverlay = true
                             }
                         }
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        AppHaptics.play(HapticPolicy.setLogCue(logged: true, didRecord: recorded))
                     },
                     onUndo: {
-                        undoDropLog(
+                        let removed = undoDropLog(
                             slotID: slotID,
                             parentSetIndex: parentSetIndex,
                             subIndex: sub
                         )
-                        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                        AppHaptics.play(HapticPolicy.setLogCue(logged: false, didRecord: removed))
                     },
                     onResetWeight: canReset ? {
                         dropWeightUserEdited.remove(key)
