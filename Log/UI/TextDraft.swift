@@ -108,17 +108,23 @@ final class TextDraftController {
 ///   into a `TextDraftController` the host owns, which is a plain class, so the
 ///   host's `body` is not invalidated and no SwiftData write happens per
 ///   character.
-/// * **One vertical scrolling owner.** `lineLimit` is a `PartialRangeFrom`, so
-///   the field can only ever *grow* with its content and never starts scrolling
-///   inside itself. A `TextField(axis: .vertical)` with a closed range
-///   (`1...6`) clamps its frame while its text container keeps growing, which
-///   is what produced the untypeable blank region under long session notes. The
-///   enclosing `List`/`Form` does all the scrolling.
+/// * **One vertical scrolling owner.** The editor's own scrolling is disabled,
+///   so it can only ever *grow* with its content. The enclosing `List`/`Form`
+///   does all the scrolling, and keeps the caret line visible as new lines are
+///   added: a `TextField(axis: .vertical)` in a `List` grew without any scroll,
+///   so typing could continue behind the keyboard. A closed line range on that
+///   field also clamped its frame while its text container kept growing, which
+///   is what produced the untypeable blank region under long session notes.
 ///
 /// Focus is owned here too, so commit-on-focus-loss needs no plumbing; hosts
 /// that must commit for other reasons (navigating away, Save & Exit) call
 /// `commit` on the controller themselves.
 struct DraftNotesField: View {
+    /// `UITextView`'s default text insets, which `TextEditor` keeps. Cancelled so
+    /// the text and row height line up with the app's other text fields.
+    private static let editorInsets = EdgeInsets(
+        top: -8, leading: -5, bottom: -8, trailing: -5)
+
     private let titleKey: LocalizedStringKey
     private let controller: TextDraftController
     private let lineLimit: PartialRangeFrom<Int>
@@ -145,24 +151,41 @@ struct DraftNotesField: View {
     }
 
     var body: some View {
-        TextField(titleKey, text: $draft, axis: .vertical)
-            .lineLimit(lineLimit)
-            .textInputAutocapitalization(autocapitalization)
-            .focused($isFocused)
-            .onChange(of: draft) { _, newValue in
-                controller.stage(newValue)
+        ZStack(alignment: .topLeading) {
+            // Reserves the minimum height: `TextEditor` has no line limit.
+            Text(verbatim: " ")
+                .lineLimit(lineLimit.lowerBound, reservesSpace: true)
+                .hidden()
+
+            if draft.isEmpty {
+                Text(titleKey)
+                    .foregroundStyle(Color(uiColor: .placeholderText))
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
             }
-            .onChange(of: isFocused) { _, focused in
-                if !focused { onCommit() }
+
+            TextEditor(text: $draft)
+                .scrollDisabled(true)
+                .scrollContentBackground(.hidden)
+                .padding(Self.editorInsets)
+                .textInputAutocapitalization(autocapitalization)
+                .accessibilityLabel(Text(titleKey))
+                .focused($isFocused)
+        }
+        .onChange(of: draft) { _, newValue in
+            controller.stage(newValue)
+        }
+        .onChange(of: isFocused) { _, focused in
+            if !focused { onCommit() }
+        }
+        // Re-reads the controller rather than the model: a `List` may
+        // discard and rebuild this row's `@State` when it scrolls out of
+        // view, and the controller is what survives that. Skipped while
+        // focused so an appear callback mid-edit cannot reset the caret.
+        .onAppear {
+            if !isFocused, draft != controller.text {
+                draft = controller.text
             }
-            // Re-reads the controller rather than the model: a `List` may
-            // discard and rebuild this row's `@State` when it scrolls out of
-            // view, and the controller is what survives that. Skipped while
-            // focused so an appear callback mid-edit cannot reset the caret.
-            .onAppear {
-                if !isFocused, draft != controller.text {
-                    draft = controller.text
-                }
-            }
+        }
     }
 }

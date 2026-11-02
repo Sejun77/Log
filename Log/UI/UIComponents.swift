@@ -8,7 +8,7 @@ import SwiftUI
 /// resigns the first responder. Use it as the shared dismissal control for
 /// fields whose keyboard has no usable Return key:
 ///   • numeric pads (`.numberPad` / `.decimalPad`) — no Return key at all,
-///   • multiline fields (`axis: .vertical`) — Return inserts a newline, and
+///   • multiline fields (`DraftNotesField`) — Return inserts a newline, and
 ///   • `.searchable` fields — the system Search key does NOT deliver
 ///     `.onSubmit(of: .search)` when the query is empty (e.g. after typing
 ///     then deleting back to empty), so the Return key alone can't dismiss.
@@ -26,10 +26,19 @@ import SwiftUI
 ///     }
 /// }
 /// ```
+///
+/// The dismissal is deferred by one main-thread turn. It is not a timed delay.
+/// Resigning during the tap on this keyboard-accessory control produced repeated
+/// `List` viewport flips on a physical iPhone (iOS 27.0.1), which stranded the
+/// edited row behind the bottom panel; a minimal stock SwiftUI screen reproduced
+/// them. Deferring removed the flips in the physical-device trials. The
+/// underlying framework mechanism is not known.
 struct KeyboardDismissButton: View {
     var body: some View {
         Button {
-            dismissKeyboard()
+            DispatchQueue.main.async {
+                dismissKeyboard()
+            }
         } label: {
             Image(systemName: "checkmark").fontWeight(.semibold)
         }
