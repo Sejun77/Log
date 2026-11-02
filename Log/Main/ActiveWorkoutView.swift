@@ -123,9 +123,9 @@ struct ActiveWorkoutView: View {
     @State private var editPlanNotes = TextDraftController()
     @Environment(\.scenePhase) private var scenePhase
     /// Tracks soft-keyboard visibility (driven by keyboardWillShow/Hide). While
-    /// the keyboard is up the bottom Back/Next/Finish panel is withdrawn so it
-    /// can never overlap the keyboard accessory — deterministic on first focus,
-    /// unlike safe-area repositioning which lagged a frame on initial show.
+    /// the keyboard is up the bottom Back/Next/Finish panel is hidden but keeps
+    /// its layout, so it can never overlap the keyboard accessory and the list's
+    /// bottom geometry does not change. See `ActiveWorkoutBottomPanelPolicy`.
     @State private var keyboardVisible = false
     /// Per-set planned targets captured before opening the edit sheet.
     @State private var preEditRepStrs: [UUID: [Int: String]] = [:]
@@ -2475,12 +2475,12 @@ struct ActiveWorkoutView: View {
                         //
                         // `DraftNotesField` owns the per-keystroke state and the
                         // focus, so typing here does not re-evaluate this body.
-                        // Its open-ended `1...` line limit is also the layout
-                        // fix: the previous `lineLimit(1...6)` clamped the
-                        // field's frame at six lines while its text container
-                        // kept growing, leaving a blank, untypeable region under
-                        // long notes and two competing scroll views. The field
-                        // now only grows and the List does all the scrolling.
+                        // It also only ever grows, with its own scrolling off:
+                        // the previous `lineLimit(1...6)` clamped the field's
+                        // frame at six lines while its text container kept
+                        // growing, leaving a blank, untypeable region under long
+                        // notes and two competing scroll views. The List does
+                        // all the scrolling.
                         DraftNotesField(
                             "Notes for this session…",
                             controller: sessionNotes,
@@ -2500,48 +2500,49 @@ struct ActiveWorkoutView: View {
                 .scrollDismissesKeyboard(.immediately)
                 // Back / Next-Finish navigation, hosted as the List's bottom
                 // safe-area inset (reserves space, `.background(.bar)` keeps
-                // list rows from showing through while scrolling). It is
-                // withdrawn entirely while the keyboard is up: a fixed bottom
-                // panel + the `.keyboard` accessory raced on the *first*
-                // keyboard presentation (the accessory height wasn't counted in
-                // the initial safe-area pass), so the panel overlapped the
-                // checkmark until a second layout pass. Removing it on
-                // keyboardWillShow is deterministic on first focus — there is no
-                // panel to overlap — and it returns on keyboardWillHide. The
-                // user can't navigate mid-edit anyway (they dismiss first).
+                // list rows from showing through while scrolling). It stays in
+                // the inset at all times and is only hidden while the keyboard
+                // is up (see `ActiveWorkoutBottomPanelPolicy`). Hidden, it
+                // cannot overlap the `.keyboard` accessory on the first keyboard
+                // presentation. Kept in the layout, it stops the list's maximum
+                // offset changing around the keyboard: withdrawing it stranded
+                // a list at its bottom one panel-height short after dismissal.
                 .safeAreaInset(edge: .bottom) {
-                    if !keyboardVisible {
-                        HStack {
-                            Button {
-                                prev()
-                            } label: {
-                                // Not a bare "Back" literal: that key is the
-                                // body part, and rendered 등 here. See
-                                // `ActiveWorkoutNavCopy`.
-                                Label(
-                                    ActiveWorkoutNavCopy.backTitle,
-                                    systemImage: "chevron.left")
-                            }
-                            .disabled(
-                                currentBlockIndex == 0 && currentExerciseIndex == 0
-                            )
+                    let panel = ActiveWorkoutBottomPanelPolicy(
+                        keyboardVisible: keyboardVisible)
+                    HStack {
+                        Button {
+                            prev()
+                        } label: {
+                            // Not a bare "Back" literal: that key is the
+                            // body part, and rendered 등 here. See
+                            // `ActiveWorkoutNavCopy`.
+                            Label(
+                                ActiveWorkoutNavCopy.backTitle,
+                                systemImage: "chevron.left")
+                        }
+                        .disabled(
+                            currentBlockIndex == 0 && currentExerciseIndex == 0
+                        )
 
-                            Spacer()
+                        Spacer()
 
-                            Button {
-                                next()
-                            } label: {
-                                if isAtLast(block: block) {
-                                    Label("Finish", systemImage: "checkmark")
-                                } else {
-                                    Label("Next", systemImage: "chevron.right")
-                                }
+                        Button {
+                            next()
+                        } label: {
+                            if isAtLast(block: block) {
+                                Label("Finish", systemImage: "checkmark")
+                            } else {
+                                Label("Next", systemImage: "chevron.right")
                             }
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
-                        .background(.bar)
                     }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+                    .opacity(panel.opacity)
+                    .allowsHitTesting(panel.isHitTestable)
+                    .accessibilityHidden(panel.isAccessibilityHidden)
                 }
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {

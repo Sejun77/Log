@@ -725,6 +725,20 @@ enum ActiveWorkoutNavCopy {
     }
 }
 
+/// How the active workout's bottom Back / Next bar presents itself.
+///
+/// The bar always keeps its place in the list's bottom safe-area inset. While
+/// the keyboard is up it is hidden from sight, touch and VoiceOver, but its
+/// layout is untouched, so the list's bottom geometry stays the same when the
+/// keyboard shows and hides. Pure.
+struct ActiveWorkoutBottomPanelPolicy: Equatable {
+    let keyboardVisible: Bool
+
+    var opacity: Double { keyboardVisible ? 0 : 1 }
+    var isHitTestable: Bool { !keyboardVisible }
+    var isAccessibilityHidden: Bool { keyboardVisible }
+}
+
 // MARK: - Pending exercise switch (plan choice + provenance)
 
 /// The plan a pending switch will apply. Mirrors

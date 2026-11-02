@@ -115,10 +115,9 @@ struct EditSessionPlanSheet: View {
                 }
 
                 Section("Notes") {
-                    // Open-ended line limit, like Session Notes: a closed range
-                    // clamps the field's frame while its text container keeps
-                    // growing, which leaves blank untypeable space under a long
-                    // note and puts a second scroll view inside the Form.
+                    // Starts three lines tall and grows from there, like Session
+                    // Notes: the Form does all the scrolling, with no second
+                    // scroll view inside it.
                     DraftNotesField(
                         "Plan notes",
                         controller: notes,
@@ -130,7 +129,7 @@ struct EditSessionPlanSheet: View {
             .navigationTitle("Edit Plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // The Notes field is multiline (axis: .vertical) — Return inserts
+                // The Notes field is multiline — Return inserts
                 // a newline, so a keyboard-integrated dismiss is needed. The
                 // top-bar Close stays: it dismisses the whole sheet, not the
                 // keyboard.
