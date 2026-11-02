@@ -124,7 +124,7 @@ struct ActiveWorkoutView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Tracks soft-keyboard visibility (driven by keyboardWillShow/Hide). While
     /// the keyboard is up the bottom Back/Next/Finish panel is hidden but keeps
-    /// its layout, so it can never overlap the keyboard accessory and the list's
+    /// its layout, so `KeyboardDismissStrip` can take its place and the list's
     /// bottom geometry does not change. See `ActiveWorkoutBottomPanelPolicy`.
     @State private var keyboardVisible = false
     /// Per-set planned targets captured before opening the edit sheet.
@@ -2493,7 +2493,7 @@ struct ActiveWorkoutView: View {
                 // set-input fields (reps/weight/duration, dropset rows) use
                 // numeric keyboards with no Return key, and the session note is
                 // multiline (Return inserts a newline), so scroll was the only
-                // missing dismissal gesture — the `.keyboard` checkmark accessory
+                // missing dismissal gesture — the keyboard dismiss checkmark
                 // remains. `.immediately` (vs `.interactively`) gives a clean
                 // "scroll = dismiss" for the numeric-pad-dominated list. Session
                 // note commits on the resulting focus loss (see commitSessionNotes).
@@ -2502,11 +2502,11 @@ struct ActiveWorkoutView: View {
                 // safe-area inset (reserves space, `.background(.bar)` keeps
                 // list rows from showing through while scrolling). It stays in
                 // the inset at all times and is only hidden while the keyboard
-                // is up (see `ActiveWorkoutBottomPanelPolicy`). Hidden, it
-                // cannot overlap the `.keyboard` accessory on the first keyboard
-                // presentation. Kept in the layout, it stops the list's maximum
-                // offset changing around the keyboard: withdrawing it stranded
-                // a list at its bottom one panel-height short after dismissal.
+                // is up (see `ActiveWorkoutBottomPanelPolicy`), when its footprint
+                // carries the keyboard's dismiss checkmark instead. Kept in the
+                // layout, it stops the list's maximum offset changing around the
+                // keyboard: withdrawing it stranded a list at its bottom one
+                // panel-height short after dismissal.
                 .safeAreaInset(edge: .bottom) {
                     let panel = ActiveWorkoutBottomPanelPolicy(
                         keyboardVisible: keyboardVisible)
@@ -2543,16 +2543,15 @@ struct ActiveWorkoutView: View {
                     .opacity(panel.opacity)
                     .allowsHitTesting(panel.isHitTestable)
                     .accessibilityHidden(panel.isAccessibilityHidden)
-                }
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        // Shared dismiss accessory for every active-workout
+                    .overlay {
+                        // Shared dismiss control for every active-workout
                         // field. Required for reps / weight / duration (SetRows)
                         // and drop-set fields (DropLogRow) on .numberPad /
                         // .decimalPad, which have no Return key, and for the
                         // multiline Session Notes whose Return inserts a newline.
-                        Spacer()
-                        KeyboardDismissButton()
+                        if keyboardVisible {
+                            KeyboardDismissStrip()
+                        }
                     }
                 }
                 .onReceive(

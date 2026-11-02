@@ -70,11 +70,6 @@ struct SlotPrescriptionSection: View {
     /// scroll gesture stays intact.
     var isLocked: Bool = false
 
-    /// Drives the gated keyboard checkmark for the multiline slot-notes field.
-    /// Each rendered section has its own focus state, so when several sections
-    /// share one detail screen only the focused one shows the accessory.
-    @FocusState private var slotNotesFocused: Bool
-
     /// The slot's tracking mode, which decides which controls this section
     /// offers (see `CardioRoutineRules`).
     ///
@@ -168,20 +163,6 @@ struct SlotPrescriptionSection: View {
 
             TextField("Plan notes", text: slotNotesBinding, axis: .vertical)
                 .lineLimit(1...4)
-                .focused($slotNotesFocused)
-                .toolbar {
-                    // Slot notes is multiline (axis: .vertical) — Return inserts
-                    // a newline, so it needs a keyboard-integrated dismiss. Gated
-                    // on this field's own focus so it never shows a redundant
-                    // accessory for the rest of the prescription editor (all
-                    // Steppers) or for sibling slot sections on the same screen.
-                    ToolbarItemGroup(placement: .keyboard) {
-                        if slotNotesFocused {
-                            Spacer()
-                            KeyboardDismissButton()
-                        }
-                    }
-                }
         } header: {
             Text("Prescription")
         }
@@ -884,14 +865,6 @@ private struct TargetDistanceRow: View {
             Text(displayUnit.symbol)
                 .font(.dsBody)
                 .foregroundStyle(.secondary)
-        }
-        .toolbar {
-            // `.decimalPad` has no Return key, so the field needs a
-            // keyboard-integrated dismiss like every other decimal entry.
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                KeyboardDismissButton()
-            }
         }
         .onAppear(perform: seedFromModel)
         .onChange(of: displayUnit) { _, _ in reseedForUnitChange() }

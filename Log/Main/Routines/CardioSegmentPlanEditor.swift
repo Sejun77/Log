@@ -365,6 +365,7 @@ struct CardioSegmentEditorSheet: View {
                 }
             }
         }
+        .keyboardDismissStrip()
         .navigationTitle(LocalizedStringKey(kind.label))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -374,10 +375,6 @@ struct CardioSegmentEditorSheet: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { save() }
                     .disabled(built == nil)
-            }
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                KeyboardDismissButton()
             }
         }
     }

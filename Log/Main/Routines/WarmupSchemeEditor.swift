@@ -460,16 +460,13 @@ private struct WarmupStepEditSheet: View {
                         .lineLimit(1...3)
                 }
             }
+            // Weight (.decimalPad) has no Return key and the optional Note
+            // (axis: .vertical) inserts a newline on Return, so both need a
+            // keyboard dismiss control. The top-bar Cancel/Save below stay: they
+            // commit / discard the modal, a separate concern.
+            .keyboardDismissStrip()
             .navigationTitle(isEditing ? "Edit Warmup Step" : "Add Warmup Step")
             .toolbar {
-                // Weight (.decimalPad) has no Return key and the optional Note
-                // (axis: .vertical) inserts a newline on Return, so both need a
-                // keyboard-integrated dismiss. The top-bar Cancel/Save below stay:
-                // they commit / discard the modal, a separate concern.
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    KeyboardDismissButton()
-                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }

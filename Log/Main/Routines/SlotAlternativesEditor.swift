@@ -305,8 +305,6 @@ struct SlotAlternativeDetailEditor: View {
     @State private var note = ""
     @State private var didLoad = false
 
-    @FocusState private var noteFocused: Bool
-
     /// The edited prescription, as a value. Reading it in `body` registers
     /// observation on every scratch field the editors can change, which is what
     /// drives the commit below.
@@ -331,15 +329,6 @@ struct SlotAlternativeDetailEditor: View {
                 Toggle("Enabled", isOn: $isEnabled)
                 TextField("Note", text: $note, axis: .vertical)
                     .lineLimit(1...4)
-                    .focused($noteFocused)
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            if noteFocused {
-                                Spacer()
-                                KeyboardDismissButton()
-                            }
-                        }
-                    }
             } footer: {
                 if isSlotsOwnExercise {
                     // Legacy data only — the picker no longer offers the slot's
@@ -381,6 +370,9 @@ struct SlotAlternativeDetailEditor: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        // Every text field on this screen needs it: the multiline notes insert a
+        // newline on Return, and the target distance is a decimal pad.
+        .keyboardDismissStrip()
         .navigationTitle(exerciseName.isEmpty ? Text("Alternative Exercises") : Text(exerciseName))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: load)

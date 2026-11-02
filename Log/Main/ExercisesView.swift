@@ -105,7 +105,7 @@ struct ExercisesView: View {
         // .search)` does NOT fire on an empty submit — after type-then-delete
         // back to empty the system Search key may still look blue/enabled, but
         // it's inert and can't be greyed via standard APIs (see
-        // `dismissKeyboard()`), so the gated `.keyboard` Done button below is
+        // `dismissKeyboard()`), so the gated keyboard Done button below is
         // the reliable dismissal for that case. Matches every `.searchable`
         // surface in the app.
         .onSubmit(of: .search) { dismissKeyboard() }
@@ -127,21 +127,16 @@ struct ExercisesView: View {
                 }
                 EditButton()
             }
-            // `.keyboard` Done button for the SEARCH field only, gated on
-            // `isSearchPresented`. Unlike every other `.searchable` surface this
-            // screen also hosts the single-line "new exercise" add field, which
-            // dismisses via its own return key (.submitLabel(.done) + .onSubmit)
-            // and intentionally has no external Done button — so the accessory
-            // must not show for it. The gate scopes the button to search, where
-            // it's the reliable dismissal for an empty submit (`.onSubmit(of:
-            // .search)` doesn't fire when the field is empty after type-delete).
-            if isSearchPresented {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    KeyboardDismissButton()
-                }
-            }
         }
+        // Keyboard Done button for the SEARCH field only, gated on
+        // `isSearchPresented`. Unlike every other `.searchable` surface this
+        // screen also hosts the single-line "new exercise" add field, which
+        // dismisses via its own return key (.submitLabel(.done) + .onSubmit)
+        // and intentionally has no external Done button — so the strip must not
+        // show for it. The gate scopes the button to search, where it's the
+        // reliable dismissal for an empty submit (`.onSubmit(of: .search)`
+        // doesn't fire when the field is empty after type-delete).
+        .keyboardDismissStrip(isEnabled: isSearchPresented)
         .onAppear { backfillExerciseOrderIfNeeded() }
         // Push the detail via value-based navigation so the row's Button can
         // clear focus + search *before* the push commits (see `exerciseRow`).
@@ -617,23 +612,13 @@ struct ExerciseDetailView: View {
             .navigationTitle("Edit Exercise")
             .listStyle(.insetGrouped)
             .scrollDismissesKeyboard(.interactively)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    // Only the multiline `setupDefaults` field (`axis: .vertical`)
-                    // needs an accessory: its Return key inserts a newline and
-                    // can't dismiss the keyboard. Name and Notes are single-line
-                    // and dismiss via their own Return key (.submitLabel(.done) +
-                    // .onSubmit), so showing a checkmark for them would be a
-                    // redundant external Done control — hence the focus gate.
-                    if focusedField == "setupDefaults" {
-                        Spacer()
-                        Button { focusedField = nil } label: {
-                            Image(systemName: "checkmark").fontWeight(.semibold)
-                        }
-                        .accessibilityLabel("Done")
-                    }
-                }
-            }
+            // Only the multiline `setupDefaults` field (`axis: .vertical`) needs
+            // a dismiss control: its Return key inserts a newline and can't
+            // dismiss the keyboard. Name and Notes are single-line and dismiss
+            // via their own Return key (.submitLabel(.done) + .onSubmit), so
+            // showing a checkmark for them would be a redundant external Done
+            // control — hence the focus gate.
+            .keyboardDismissStrip(isEnabled: focusedField == "setupDefaults")
     }
 
     /// Seeds both drafts from the live model. Called on appear and when the

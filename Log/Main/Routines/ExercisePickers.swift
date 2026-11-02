@@ -35,9 +35,12 @@ struct ExercisePickerSingle: View {
             // Shared submit policy: pressing Search with non-empty text resigns
             // focus. `.onSubmit(of: .search)` does NOT fire on an empty submit
             // (e.g. after typing then deleting back to empty, even though the
-            // system Search key looks enabled), so the `.keyboard` Done button
+            // system Search key looks enabled), so the keyboard Done button
             // below is the reliable dismissal path for that case.
             .onSubmit(of: .search) { dismissKeyboard() }
+            // The search field is the only text input here, so the strip only
+            // ever shows for search — no gating needed.
+            .keyboardDismissStrip()
             .navigationTitle("Pick Exercise")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -45,12 +48,6 @@ struct ExercisePickerSingle: View {
                         onPick(nil)
                         dismiss()
                     }
-                }
-                // The search field is the only text input here, so a `.keyboard`
-                // accessory only ever shows for search — no gating needed.
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    KeyboardDismissButton()
                 }
             }
         }
@@ -126,6 +123,10 @@ struct ExerciseMultiPicker: View {
                     }
                 }
             }
+            // Search is the only text input in this Form (selection rows are
+            // buttons), so the strip only ever shows for the search field — the
+            // reliable dismissal for empty submits.
+            .keyboardDismissStrip()
             .navigationTitle("Add Exercises")
             // `.always` pins the search bar visible the moment the picker
             // opens — matches every other `.searchable` surface in the app.
@@ -147,13 +148,6 @@ struct ExerciseMultiPicker: View {
                         dismiss()
                     }
                     .disabled(selection.isEmpty)
-                }
-                // Search is the only text input in this Form (selection rows are
-                // buttons), so a `.keyboard` accessory only ever shows for the
-                // search field — the reliable dismissal for empty submits.
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    KeyboardDismissButton()
                 }
             }
         }
