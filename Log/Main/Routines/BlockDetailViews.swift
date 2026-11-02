@@ -101,6 +101,9 @@ struct RoutineBlockDetailView: View {
         // Scrolling dismisses the multiline slot-notes keyboard;
         // `.interactively` matches the note-heavy routine-editor lists.
         .scrollDismissesKeyboard(.interactively)
+        // The section's only text fields are multiline notes and a decimal pad,
+        // and neither has a usable Return key.
+        .keyboardDismissStrip()
         // Audit M11 — the exercise, not the kind. This screen used to be
         // titled by its kind, so one tap after a row that said "Bench Press" the
         // name was gone. Names are resolved the same way the routine editor's
@@ -499,6 +502,9 @@ struct SupersetDetailNoRest: View {
         // Scrolling dismisses the multiline slot-notes keyboard;
         // `.interactively` matches the note-heavy routine-editor lists.
         .scrollDismissesKeyboard(.interactively)
+        // The sections' only text fields are multiline notes and a decimal pad,
+        // and neither has a usable Return key.
+        .keyboardDismissStrip()
         .onAppear(perform: seedBulkDraftIfNeeded)
         // Same rule, joined with `+` for the members — matching the routine
         // editor's `blockTitle`. Long joins are truncated in the middle by

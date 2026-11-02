@@ -1138,17 +1138,12 @@ private struct ExercisePicker: View {
         )
         // Dismissal paths for the search keyboard: scrolling the list dismisses
         // it, pressing Search resigns focus for a non-empty query, and the
-        // `.keyboard` Done button below covers the empty submit (`.onSubmit(of:
+        // keyboard Done button below covers the empty submit (`.onSubmit(of:
         // .search)` doesn't fire when the field is empty after type-delete).
-        // Search is the only text input here, so the accessory only shows for it.
+        // Search is the only text input here, so the strip only shows for it.
         .scrollDismissesKeyboard(.immediately)
         .onSubmit(of: .search) { dismissKeyboard() }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                KeyboardDismissButton()
-            }
-        }
+        .keyboardDismissStrip()
     }
 }
 

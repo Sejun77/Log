@@ -126,17 +126,13 @@ struct EditSessionPlanSheet: View {
                     )
                 }
             }
+            // The Notes field is multiline — Return inserts a newline, so a
+            // dismiss control is needed beside the top-bar Close, which dismisses
+            // the whole sheet, not the keyboard.
+            .keyboardDismissStrip()
             .navigationTitle("Edit Plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // The Notes field is multiline — Return inserts
-                // a newline, so a keyboard-integrated dismiss is needed. The
-                // top-bar Close stays: it dismisses the whole sheet, not the
-                // keyboard.
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    KeyboardDismissButton()
-                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Close") {
                         onCommitNotes()

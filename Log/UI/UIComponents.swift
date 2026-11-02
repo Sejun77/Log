@@ -4,9 +4,9 @@ import SwiftUI
 // MARK: - Keyboard Dismiss Accessory
 // ======================================================
 
-/// A compact trailing checkmark for the `.keyboard` toolbar placement that
-/// resigns the first responder. Use it as the shared dismissal control for
-/// fields whose keyboard has no usable Return key:
+/// A trailing checkmark, shown just above the keyboard, that resigns the first
+/// responder. Use it as the shared dismissal control for fields whose keyboard
+/// has no usable Return key:
 ///   • numeric pads (`.numberPad` / `.decimalPad`) — no Return key at all,
 ///   • multiline fields (`DraftNotesField`) — Return inserts a newline, and
 ///   • `.searchable` fields — the system Search key does NOT deliver
@@ -17,22 +17,19 @@ import SwiftUI
 /// dismiss via their own Return key (`.submitLabel(.done)` + `.onSubmit`), so
 /// adding a checkmark there would be a redundant external Done control.
 ///
-/// Usage:
-/// ```
-/// .toolbar {
-///     ToolbarItemGroup(placement: .keyboard) {
-///         Spacer()
-///         KeyboardDismissButton()
-///     }
-/// }
-/// ```
+/// Screens host it with `.keyboardDismissStrip()`, not the `.keyboard` toolbar
+/// placement: on a physical iPhone (iOS 27.0.1) that placement settled in two
+/// layouts 48 pt apart, varying per focus, because the keyboard's safe area
+/// counted the accessory on some presentations and not on others. The keyboard
+/// frame reported to the app was the same in both. Without the accessory every
+/// measured focus settled in one layout. Why the safe area varied is not known.
 ///
 /// The dismissal is deferred by one main-thread turn. It is not a timed delay.
-/// Resigning during the tap on this keyboard-accessory control produced repeated
-/// `List` viewport flips on a physical iPhone (iOS 27.0.1), which stranded the
-/// edited row behind the bottom panel; a minimal stock SwiftUI screen reproduced
-/// them. Deferring removed the flips in the physical-device trials. The
-/// underlying framework mechanism is not known.
+/// Resigning during the tap on the `.keyboard` accessory produced repeated `List`
+/// viewport flips on that iPhone, which stranded the edited row behind the bottom
+/// panel; a minimal stock SwiftUI screen reproduced them. Deferring removed the
+/// flips in the physical-device trials. The underlying framework mechanism is not
+/// known.
 struct KeyboardDismissButton: View {
     var body: some View {
         Button {
@@ -40,9 +37,77 @@ struct KeyboardDismissButton: View {
                 dismissKeyboard()
             }
         } label: {
-            Image(systemName: "checkmark").fontWeight(.semibold)
+            Image(systemName: "checkmark")
+                .fontWeight(.semibold)
+                .foregroundStyle(.tint)
+                .frame(width: 34, height: 34)
+                .background(.thickMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(.separator))
+                // The standard minimum tap target, wider than the visible circle.
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .accessibilityLabel("Done")
+        .accessibilityHint("Dismisses the keyboard")
+    }
+}
+
+/// The band that carries `KeyboardDismissButton` between a screen's content and
+/// the keyboard. It has no background, on purpose: right after Return a multiline
+/// field's caret sits past the scroll view's visible bottom until the next
+/// character is typed, so an opaque band would hide it. That caret is on a new
+/// line at the leading edge, clear of the trailing button.
+struct KeyboardDismissStrip: View {
+    var body: some View {
+        KeyboardDismissButton()
+            .padding(.trailing, DSSpacing.sm)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
+/// When a screen shows its `KeyboardDismissStrip`. Pure.
+struct KeyboardDismissStripPolicy: Equatable {
+    /// False for a keyboard that dismisses through its own Return key, on screens
+    /// that host both kinds of field.
+    let isEnabled: Bool
+    let keyboardVisible: Bool
+
+    var isShown: Bool { isEnabled && keyboardVisible }
+}
+
+extension View {
+    /// Shows `KeyboardDismissStrip` above the keyboard, in this view's bottom
+    /// safe-area inset. The inset reserves the strip's height, so scrollable
+    /// content keeps its active line above the button instead of under it. Apply
+    /// it to the screen's root `List` or `Form`.
+    func keyboardDismissStrip(isEnabled: Bool = true) -> some View {
+        modifier(KeyboardDismissStripModifier(isEnabled: isEnabled))
+    }
+}
+
+private struct KeyboardDismissStripModifier: ViewModifier {
+    let isEnabled: Bool
+
+    @State private var keyboardVisible = false
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if KeyboardDismissStripPolicy(
+                    isEnabled: isEnabled, keyboardVisible: keyboardVisible
+                ).isShown {
+                    KeyboardDismissStrip()
+                }
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIResponder.keyboardWillShowNotification)
+            ) { _ in keyboardVisible = true }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIResponder.keyboardWillHideNotification)
+            ) { _ in keyboardVisible = false }
     }
 }
 
@@ -68,7 +133,7 @@ struct KeyboardDismissButton: View {
 /// `UISearchTextField`, and a custom `inputView`/`UIViewRepresentable` — are all
 /// fragile/private/out-of-scope. So the dismissal contract is split:
 ///   • non-empty submit → `.onSubmit(of: .search) { dismissKeyboard() }`, and
-///   • empty-after-delete → the compact `.keyboard` `KeyboardDismissButton`,
+///   • empty-after-delete → the compact `KeyboardDismissButton`,
 /// which calls this and resigns focus regardless of the dead Search key.
 func dismissKeyboard() {
     UIApplication.shared.sendAction(
