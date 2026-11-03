@@ -456,12 +456,11 @@ private struct WarmupStepEditSheet: View {
                 }
 
                 Section("Note (optional)") {
-                    TextField("Optional cue", text: $note, axis: .vertical)
-                        .lineLimit(1...3)
+                    GrowingTextEditor("Optional cue", text: $note)
                 }
             }
             // Weight (.decimalPad) has no Return key and the optional Note
-            // (axis: .vertical) inserts a newline on Return, so both need a
+            // inserts a newline on Return, so both need a
             // keyboard dismiss control. The top-bar Cancel/Save below stay: they
             // commit / discard the modal, a separate concern.
             .keyboardDismissStrip()
@@ -478,8 +477,7 @@ private struct WarmupStepEditSheet: View {
                         let weightVal: Double? = warmupSavedWeight(
                             kind: kind, isBodyweight: isBodyweight,
                             isCardio: isCardio, weightText: weightText)
-                        let noteVal = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                        onSave(kind, repsVal, pctVal, restVal, noteVal.isEmpty ? nil : noteVal, weightVal)
+                        onSave(kind, repsVal, pctVal, restVal, normalizedOptionalNote(note), weightVal)
                         dismiss()
                     }
                 }

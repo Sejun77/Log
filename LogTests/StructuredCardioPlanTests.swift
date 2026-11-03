@@ -89,7 +89,7 @@ final class StructuredCardioPlanTests: XCTestCase {
         XCTAssertEqual(s.inclinePercent, 1.5)
         XCTAssertEqual(s.resistanceLevel, 8)
         XCTAssertEqual(s.hrZone, .z3)
-        XCTAssertEqual(s.note, "Steady", "notes are trimmed")
+        XCTAssertEqual(s.note, "  Steady  ", "spaces on a line with content are kept")
     }
 
     func testSegmentWithNoTargetIsRejected() {

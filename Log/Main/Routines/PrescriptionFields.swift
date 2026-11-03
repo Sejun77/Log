@@ -161,23 +161,16 @@ struct SlotPrescriptionSection: View {
                 }
             }
 
-            TextField("Plan notes", text: slotNotesBinding, axis: .vertical)
-                .lineLimit(1...4)
+            SlotNotesField(re: re, onCommit: onNestedGraphChange)
+                .id(re.persistentModelID)
         } header: {
             Text("Prescription")
         }
         // Section-level disable: cascades to PrescriptionFields,
         // Warmup / Techniques navigation links, and the slot-notes
-        // TextField, leaving the parent List's scroll behavior alone.
+        // editor, leaving the parent List's scroll behavior alone.
         .disabled(isLocked)
         .onAppear(perform: ensurePrescription)
-    }
-
-    private var slotNotesBinding: Binding<String> {
-        Binding(
-            get: { re.templateNotes ?? "" },
-            set: { re.templateNotes = $0.isEmpty ? nil : $0 }
-        )
     }
 
     private func ensurePrescription() {
@@ -915,5 +908,95 @@ private struct TargetDistanceRow: View {
     private func commit() {
         prescription.applyTargetDistance(
             CardioTargetDistance(text: text, unit: displayUnit))
+    }
+}
+
+// ======================================================
+// MARK: - Plan notes
+// ======================================================
+
+/// Writes a slot's plan-notes draft to `templateNotes`.
+@MainActor
+enum SlotNotesDraftCommit {
+
+    /// Writes and saves the pending edit, normalized, if it changes what is
+    /// stored. A slot deleted while
+    /// its editor was open keeps nothing: there is no longer a row to write to.
+    ///
+    /// - Returns: whether anything was written.
+    @discardableResult
+    static func commit(
+        _ draft: TextDraftController, to re: RoutineExercise
+    ) -> Bool {
+        guard !re.isDeleted else { return false }
+        return draft.commit { text in
+            let normalized = normalizedOptionalNote(text)
+            guard re.templateNotes != normalized else { return }
+            re.templateNotes = normalized
+            try? re.modelContext?.save()
+        }
+    }
+}
+
+/// The slot's plan-notes editor. Its text stays local until focus leaves it, it
+/// disappears, or the app leaves the foreground: writing `templateNotes` on every
+/// character re-rendered this section and the routine screens beneath it, which
+/// made typing lag.
+private struct SlotNotesField: View {
+    let re: RoutineExercise
+    /// Runs after a write, so `SlotAlternativeDetailEditor` can carry the note
+    /// from its scratch slot to the stored alternative.
+    let onCommit: (() -> Void)?
+
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var controller: TextDraftController
+    @State private var draft: String
+    @FocusState private var isFocused: Bool
+
+    init(re: RoutineExercise, onCommit: (() -> Void)?) {
+        self.re = re
+        self.onCommit = onCommit
+        let stored = re.templateNotes ?? ""
+        _controller = State(initialValue: TextDraftController(stored))
+        _draft = State(initialValue: stored)
+    }
+
+    var body: some View {
+        GrowingTextEditor(
+            "Plan notes",
+            text: Binding(
+                get: { draft },
+                set: {
+                    draft = $0
+                    controller.stage($0)
+                })
+        )
+        .focused($isFocused)
+        .onChange(of: isFocused) { _, focused in
+            if !focused {
+                commit()
+                adoptStoredNotes()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { commit() }
+        }
+        .onChange(of: re.templateNotes) { _, _ in adoptStoredNotes() }
+        .onAppear(perform: adoptStoredNotes)
+        .onDisappear(perform: commit)
+    }
+
+    private func commit() {
+        if SlotNotesDraftCommit.commit(controller, to: re) { onCommit?() }
+    }
+
+    /// Picks up a change made elsewhere (Update Routine while this screen sat
+    /// beneath another), and the normalized text after a commit. Never replaces
+    /// the text while focused, so lines cannot disappear under the caret.
+    private func adoptStoredNotes() {
+        controller.seed(from: re.templateNotes ?? "")
+        if !isFocused, !controller.isDirty, draft != controller.text {
+            draft = controller.text
+        }
     }
 }

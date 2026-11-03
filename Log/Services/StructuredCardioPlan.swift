@@ -126,10 +126,10 @@ struct CardioSegment: Codable, Equatable, Identifiable {
     let resistanceLevel: Double?
     let hrZone: HRZone?
 
-    /// Free text for what the kind cannot say ("Hill repeat"). Trimmed; empty
-    /// becomes nil. **Not** a target — a segment carrying only a note is
+    /// Free text for what the kind cannot say ("Hill repeat"). Blank becomes nil.
+    /// **Not** a target — a segment carrying only a note is
     /// refused.
-    let note: String?
+    private(set) var note: String?
 
     // MARK: Construction
 
@@ -168,13 +168,7 @@ struct CardioSegment: Codable, Equatable, Identifiable {
         self.inclinePercent = incline
         self.resistanceLevel = resistance
         self.hrZone = hrZone
-        self.note = Self.normalizedNote(note)
-    }
-
-    private static func normalizedNote(_ raw: String?) -> String? {
-        guard let raw else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        self.note = note.flatMap(normalizedOptionalNote)
     }
 
     // MARK: Codable
@@ -193,6 +187,7 @@ struct CardioSegment: Codable, Equatable, Identifiable {
     /// decoding repairs.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let storedNote = try c.decodeIfPresent(String.self, forKey: .note)
         try self.init(
             id: c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID(),
             kind: c.decodeIfPresent(CardioSegmentKind.self, forKey: .kind)
@@ -206,8 +201,10 @@ struct CardioSegment: Codable, Equatable, Identifiable {
             // unknown zone drops the field instead of failing the segment.
             hrZone: HRZone.from(
                 raw: c.decodeIfPresent(String.self, forKey: .hrZone)),
-            note: c.decodeIfPresent(String.self, forKey: .note)
+            note: storedNote
         )
+        // Loading keeps the stored text; only authoring a segment normalizes it.
+        note = storedNote.flatMap(noteLoadedFromStorage)
     }
 
     /// Absent values are **omitted**, not written as null: the payload is a

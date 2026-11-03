@@ -23,8 +23,7 @@ struct ExerciseNotesEditSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Notes…", text: $draft, axis: .vertical)
-                        .lineLimit(3...10)
+                    GrowingTextEditor("Notes…", text: $draft, minLines: 3)
                         .textInputAutocapitalization(.sentences)
                 } header: {
                     Text("Exercise Notes")

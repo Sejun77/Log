@@ -352,8 +352,7 @@ struct CardioSegmentEditorSheet: View {
             }
 
             Section {
-                TextField("Note", text: $note, axis: .vertical)
-                    .lineLimit(1...3)
+                GrowingTextEditor("Note", text: $note)
             }
 
             Section {

@@ -327,9 +327,7 @@ final class StructuredCardioHistoryTests: SwiftDataTestHarness {
             CardioPlannedHistory.rows(for: plan, distanceUnit: .kilometers)
                 .first)
 
-        XCTAssertEqual(
-            row.secondaryText,
-            long.trimmingCharacters(in: .whitespacesAndNewlines))
+        XCTAssertEqual(row.secondaryText, long)
     }
 
     /// A segment with only a note-less leading target has no metadata line at

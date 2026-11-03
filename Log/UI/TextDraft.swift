@@ -96,35 +96,82 @@ final class TextDraftController {
 }
 
 // ======================================================
+// MARK: - Growing Text Editor
+// ======================================================
+
+/// A multiline editor that only ever grows with its content, with a placeholder
+/// and a minimum height. It holds no state and decides nothing about saving:
+/// whatever `text` is bound to keeps its own commit behavior.
+///
+/// **One vertical scrolling owner.** The editor's own scrolling is disabled, so
+/// the enclosing `List`/`Form` does all the scrolling, and keeps the caret line
+/// visible as new lines are added: a `TextField(axis: .vertical)` in a `List`
+/// grew without any scroll, so typing could continue behind the keyboard. A
+/// closed line range on that field also clamped its frame while its text
+/// container kept growing, which is what produced the untypeable blank region
+/// under long notes.
+///
+/// Inherits font, line spacing, capitalization, focus and disabled state from
+/// modifiers applied to it.
+struct GrowingTextEditor: View {
+    /// `UITextView`'s default text insets, which `TextEditor` keeps. Cancelled so
+    /// the text and row height line up with the app's other text fields.
+    private static let editorInsets = EdgeInsets(
+        top: -8, leading: -5, bottom: -8, trailing: -5)
+
+    private let titleKey: LocalizedStringKey
+    @Binding private var text: String
+    private let minLines: Int
+
+    init(
+        _ titleKey: LocalizedStringKey,
+        text: Binding<String>,
+        minLines: Int = 1
+    ) {
+        self.titleKey = titleKey
+        _text = text
+        self.minLines = minLines
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            // Reserves the minimum height: `TextEditor` has no line limit.
+            Text(verbatim: " ")
+                .lineLimit(minLines, reservesSpace: true)
+                .hidden()
+
+            if text.isEmpty {
+                Text(titleKey)
+                    .foregroundStyle(Color(uiColor: .placeholderText))
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
+            }
+
+            TextEditor(text: $text)
+                .scrollDisabled(true)
+                .scrollContentBackground(.hidden)
+                .padding(Self.editorInsets)
+                .accessibilityLabel(Text(titleKey))
+        }
+    }
+}
+
+// ======================================================
 // MARK: - Draft Notes Field
 // ======================================================
 
 /// A multiline notes editor whose per-keystroke state lives **here**, in a
 /// small leaf view, rather than in whatever large screen hosts it.
 ///
-/// Two deliberate properties:
-///
-/// * **Nothing outside this view changes while typing.** The draft is mirrored
-///   into a `TextDraftController` the host owns, which is a plain class, so the
-///   host's `body` is not invalidated and no SwiftData write happens per
-///   character.
-/// * **One vertical scrolling owner.** The editor's own scrolling is disabled,
-///   so it can only ever *grow* with its content. The enclosing `List`/`Form`
-///   does all the scrolling, and keeps the caret line visible as new lines are
-///   added: a `TextField(axis: .vertical)` in a `List` grew without any scroll,
-///   so typing could continue behind the keyboard. A closed line range on that
-///   field also clamped its frame while its text container kept growing, which
-///   is what produced the untypeable blank region under long session notes.
+/// Nothing outside this view changes while typing. The draft is mirrored into a
+/// `TextDraftController` the host owns, which is a plain class, so the host's
+/// `body` is not invalidated and no SwiftData write happens per character.
+/// Layout and scrolling come from `GrowingTextEditor`.
 ///
 /// Focus is owned here too, so commit-on-focus-loss needs no plumbing; hosts
 /// that must commit for other reasons (navigating away, Save & Exit) call
 /// `commit` on the controller themselves.
 struct DraftNotesField: View {
-    /// `UITextView`'s default text insets, which `TextEditor` keeps. Cancelled so
-    /// the text and row height line up with the app's other text fields.
-    private static let editorInsets = EdgeInsets(
-        top: -8, leading: -5, bottom: -8, trailing: -5)
-
     private let titleKey: LocalizedStringKey
     private let controller: TextDraftController
     private let lineLimit: PartialRangeFrom<Int>
@@ -151,32 +198,19 @@ struct DraftNotesField: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Reserves the minimum height: `TextEditor` has no line limit.
-            Text(verbatim: " ")
-                .lineLimit(lineLimit.lowerBound, reservesSpace: true)
-                .hidden()
-
-            if draft.isEmpty {
-                Text(titleKey)
-                    .foregroundStyle(Color(uiColor: .placeholderText))
-                    .accessibilityHidden(true)
-                    .allowsHitTesting(false)
-            }
-
-            TextEditor(text: $draft)
-                .scrollDisabled(true)
-                .scrollContentBackground(.hidden)
-                .padding(Self.editorInsets)
-                .textInputAutocapitalization(autocapitalization)
-                .accessibilityLabel(Text(titleKey))
-                .focused($isFocused)
-        }
+        GrowingTextEditor(
+            titleKey, text: $draft, minLines: lineLimit.lowerBound
+        )
+        .textInputAutocapitalization(autocapitalization)
+        .focused($isFocused)
         .onChange(of: draft) { _, newValue in
             controller.stage(newValue)
         }
         .onChange(of: isFocused) { _, focused in
-            if !focused { onCommit() }
+            if !focused {
+                onCommit()
+                showCommittedText()
+            }
         }
         // Re-reads the controller rather than the model: a `List` may
         // discard and rebuild this row's `@State` when it scrolls out of
@@ -187,5 +221,14 @@ struct DraftNotesField: View {
                 draft = controller.text
             }
         }
+    }
+
+    /// Shows what the commit stored, without trailing blank lines. Only on focus
+    /// loss: while typing, Returns and blank lines stay as entered.
+    private func showCommittedText() {
+        let committed = normalizedOptionalNote(draft) ?? ""
+        guard committed != draft else { return }
+        draft = committed
+        controller.stage(committed)
     }
 }

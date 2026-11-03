@@ -8,7 +8,7 @@ import SwiftUI
 /// responder. Use it as the shared dismissal control for fields whose keyboard
 /// has no usable Return key:
 ///   • numeric pads (`.numberPad` / `.decimalPad`) — no Return key at all,
-///   • multiline fields (`DraftNotesField`) — Return inserts a newline, and
+///   • multiline fields (`GrowingTextEditor`) — Return inserts a newline, and
 ///   • `.searchable` fields — the system Search key does NOT deliver
 ///     `.onSubmit(of: .search)` when the query is empty (e.g. after typing
 ///     then deleting back to empty), so the Return key alone can't dismiss.
