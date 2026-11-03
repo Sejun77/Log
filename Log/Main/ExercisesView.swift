@@ -601,7 +601,14 @@ struct ExerciseDetailView: View {
             .probe("ExerciseDetail.Form")
             .onAppear { seedDrafts() }
             .onChange(of: exercise.id) { _, _ in seedDrafts() }
-            .onChange(of: focusedField) { _, _ in commitDrafts() }
+            .onChange(of: focusedField) { _, field in
+                commitDrafts()
+                // Shows the normalized text once the field is no longer being
+                // typed in.
+                if field != "setupDefaults" {
+                    setupDraft = exercise.setupDefaults ?? ""
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { commitDrafts() }
             }
@@ -612,7 +619,7 @@ struct ExerciseDetailView: View {
             .navigationTitle("Edit Exercise")
             .listStyle(.insetGrouped)
             .scrollDismissesKeyboard(.interactively)
-            // Only the multiline `setupDefaults` field (`axis: .vertical`) needs
+            // Only the multiline `setupDefaults` field needs
             // a dismiss control: its Return key inserts a newline and can't
             // dismiss the keyboard. Name and Notes are single-line and dismiss
             // via their own Return key (.submitLabel(.done) + .onSubmit), so
@@ -641,11 +648,13 @@ struct ExerciseDetailView: View {
             exercise.name = nameDraft
         }
         let normalizedNotes = normalizedOptionalNote(notesDraft)
-        if exercise.notes != normalizedNotes {
+        // Compared normalized, so opening and leaving this screen does not
+        // rewrite a note nobody edited.
+        if normalizedOptionalNote(exercise.notes ?? "") != normalizedNotes {
             exercise.notes = normalizedNotes
         }
         let normalizedSetup = normalizedOptionalNote(setupDraft)
-        if exercise.setupDefaults != normalizedSetup {
+        if normalizedOptionalNote(exercise.setupDefaults ?? "") != normalizedSetup {
             exercise.setupDefaults = normalizedSetup
         }
     }
@@ -724,23 +733,21 @@ struct ExerciseDetailView: View {
             }
 
             Section {
-                // `axis: .vertical` makes Return insert a newline on the
-                // soft keyboard; `lineLimit(3...8)` gives the cell room to
-                // grow for typical 4–5-line setup cues before the content
-                // starts scrolling within the cell. Editing the local
+                // Return inserts a newline on the soft keyboard. The field
+                // starts three lines tall and grows with its content, with the
+                // Form doing the scrolling. Editing the local
                 // `setupDraft` (committed via `commitDrafts()` →
                 // `normalizedOptionalNote`) collapses nil / empty /
                 // whitespace-only input to nil on commit — the 10-polish-A/B
                 // display readers already trim before deciding to render, so any
                 // stored whitespace-only value would silently show nothing and
                 // never round-trip back to "set" once cleared.
-                TextField(
+                GrowingTextEditor(
                     "Setup defaults — e.g. seat height 4, cable at shoulder",
                     text: $setupDraft,
-                    axis: .vertical
+                    minLines: 3
                 )
                 .font(.dsBody)
-                .lineLimit(3...8)
                 .lineSpacing(2)
                 .textInputAutocapitalization(.sentences)
                 .focused($focusedField, equals: "setupDefaults")

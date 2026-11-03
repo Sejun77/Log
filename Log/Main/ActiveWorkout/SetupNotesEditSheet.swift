@@ -37,11 +37,11 @@ struct SetupNotesEditSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(
+                    GrowingTextEditor(
                         "Setup defaults — e.g. seat height 4, cable at shoulder",
-                        text: $draft, axis: .vertical
+                        text: $draft,
+                        minLines: 3
                     )
-                    .lineLimit(3...10)
                     .textInputAutocapitalization(.sentences)
                 } header: {
                     // "Setup" (existing key) rather than "Setup Notes": a

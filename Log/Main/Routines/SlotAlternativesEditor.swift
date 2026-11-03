@@ -285,6 +285,11 @@ private struct AlternativeRowLabel: View {
 /// payload changes, which matches the routine editor's commit-immediately
 /// pattern and means there is no unsaved state to lose on a back-swipe.
 ///
+/// The usage note is the exception: a commit re-renders every routine screen
+/// beneath this one, which made typing lag, so its text stays in `noteDraft`
+/// until focus leaves it, the screen disappears, the app leaves the foreground,
+/// or another field commits.
+///
 /// There is deliberately **no Cancel**: no other routine-editor screen has one,
 /// and adding one here would make this the only place where backing out of an
 /// edit discards it.
@@ -302,7 +307,9 @@ struct SlotAlternativeDetailEditor: View {
     @State private var exerciseName = ""
     @State private var exerciseID: UUID?
     @State private var isEnabled = true
-    @State private var note = ""
+    /// A plain class, so typing does not re-evaluate this `body`.
+    @State private var noteDraft = TextDraftController()
+    @Environment(\.scenePhase) private var scenePhase
     @State private var didLoad = false
 
     /// The edited prescription, as a value. Reading it in `body` registers
@@ -327,8 +334,10 @@ struct SlotAlternativeDetailEditor: View {
                         .foregroundStyle(.secondary)
                 }
                 Toggle("Enabled", isOn: $isEnabled)
-                TextField("Note", text: $note, axis: .vertical)
-                    .lineLimit(1...4)
+                // After `load`, which seeds the draft this row reads as it appears.
+                if didLoad {
+                    DraftNotesField("Note", controller: noteDraft) { commit() }
+                }
             } footer: {
                 if isSlotsOwnExercise {
                     // Legacy data only — the picker no longer offers the slot's
@@ -385,7 +394,9 @@ struct SlotAlternativeDetailEditor: View {
             commit(payload: payload)
         }
         .onChange(of: isEnabled) { _, _ in commit() }
-        .onChange(of: note) { _, _ in commit() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { commit() }
+        }
         // Belt to the hook's braces. Idempotent — committing the same payload
         // twice rewrites identical bytes — and it catches any edit path that
         // leaves without a value change this view happened to observe.
@@ -413,7 +424,7 @@ struct SlotAlternativeDetailEditor: View {
 
         exerciseID = alternative.exerciseID
         isEnabled = alternative.isEnabled
-        note = alternative.note ?? ""
+        noteDraft.reset(to: alternative.note ?? "")
 
         let resolved = resolveExercise(alternative.exerciseID)
         exerciseName =
@@ -464,7 +475,7 @@ struct SlotAlternativeDetailEditor: View {
             draft: store,
             alternativeID: alternativeID,
             isEnabled: isEnabled,
-            note: note,
+            note: noteDraft.text,
             payload: payload,
             into: prescription,
             context: ctx)

@@ -139,7 +139,7 @@ struct AlternativePrescriptionPayload: Codable, Equatable {
     func normalized() -> AlternativePrescriptionPayload {
         var copy = self
         copy.tempo = SlotAlternatives.trimmedOrNil(tempo)
-        copy.slotNotes = SlotAlternatives.trimmedOrNil(slotNotes)
+        copy.slotNotes = slotNotes.flatMap(noteLoadedFromStorage)
         if let plan = copy.cardioSegments, plan.isEmpty { copy.cardioSegments = nil }
         // An empty custom list is "no custom targets", which is what a nil
         // field already means — one representation, so a payload authored
@@ -322,13 +322,15 @@ struct SlotAlternative: Codable, Equatable, Identifiable {
     var note: String? = nil
     var prescription: AlternativePrescriptionPayload = .init()
 
-    /// Trims the display name and the note (blank → nil) and normalizes the
-    /// prescription. The exercise reference is never invented or altered.
+    /// Trims the display name, drops a blank note, and normalizes the
+    /// prescription. Runs on load too, so it leaves a note's text alone:
+    /// `AlternativeDraftCommit` normalizes it when it is committed. The exercise
+    /// reference is never invented or altered.
     func normalized() -> SlotAlternative {
         var copy = self
         copy.exerciseName =
             exerciseName.trimmingCharacters(in: .whitespacesAndNewlines)
-        copy.note = SlotAlternatives.trimmedOrNil(note)
+        copy.note = note.flatMap(noteLoadedFromStorage)
         copy.prescription = prescription.normalized()
         return copy
     }

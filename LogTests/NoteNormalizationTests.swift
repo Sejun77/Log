@@ -34,4 +34,28 @@ final class NoteNormalizationTests: XCTestCase {
     func testInteriorNewlinesPreserved() {
         XCTAssertEqual(normalizedOptionalNote("line 1\nline 2"), "line 1\nline 2")
     }
+
+    func testTrailingBlankLinesAreDropped() {
+        XCTAssertEqual(normalizedOptionalNote("abc\n\n\n"), "abc")
+    }
+
+    func testTrailingWhitespaceOnlyLinesAreDropped() {
+        XCTAssertEqual(normalizedOptionalNote("abc\n   \n\n"), "abc")
+    }
+
+    func testInternalBlankLinesAreKept() {
+        XCTAssertEqual(normalizedOptionalNote("abc\n\ndef"), "abc\n\ndef")
+    }
+
+    func testLeadingBlankLinesAreKept() {
+        XCTAssertEqual(normalizedOptionalNote("\n\nabc\n"), "\n\nabc")
+    }
+
+    func testSpacesOnALineWithContentAreKept() {
+        XCTAssertEqual(normalizedOptionalNote("  abc  \n\n"), "  abc  ")
+    }
+
+    func testKoreanTextIsNormalizedTheSameWay() {
+        XCTAssertEqual(normalizedOptionalNote("한글\n안\n\n"), "한글\n안")
+    }
 }

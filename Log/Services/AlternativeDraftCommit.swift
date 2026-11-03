@@ -42,7 +42,11 @@ enum AlternativeDraftCommit {
     /// deleted on another screen while this editor was open, and re-adding it
     /// from a stale editor would resurrect deleted work.
     ///
-    /// - Returns: whether the alternative was found and rewritten.
+    /// Nothing is written or saved when the alternative already holds these
+    /// values, so the editor's overlapping commit points (focus loss, a value
+    /// change, disappear) cost one write between them.
+    ///
+    /// - Returns: whether the alternative was found.
     @discardableResult
     static func commit(
         draft: AlternativeDraftStore?,
@@ -53,21 +57,27 @@ enum AlternativeDraftCommit {
         into slotPrescription: SlotPrescription,
         context: ModelContext?
     ) -> Bool {
-        var found = false
+        guard
+            let stored = slotPrescription.slotAlternatives.first(where: {
+                $0.id == alternativeID
+            })
+        else { return false }
+
+        var updated = stored
+        updated.isEnabled = isEnabled
+        // An untouched note stays as stored; only an edit is normalized.
+        updated.note = note == (stored.note ?? "") ? stored.note : normalizedOptionalNote(note)
         // `payload` wins when the caller already has one in hand (the change
         // that triggered the commit); otherwise take the draft's current state.
-        let resolved = payload ?? draft?.payload()
+        if let resolved = payload ?? draft?.payload() {
+            updated.prescription = resolved
+        }
+        guard updated.normalized() != stored else { return true }
 
         SlotAlternativeAuthoring.update(
             id: alternativeID, in: slotPrescription
-        ) {
-            found = true
-            $0.isEnabled = isEnabled
-            $0.note = note
-            if let resolved { $0.prescription = resolved }
-        }
-
-        if found { try? context?.save() }
-        return found
+        ) { $0 = updated }
+        try? context?.save()
+        return true
     }
 }

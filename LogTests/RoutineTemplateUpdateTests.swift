@@ -1323,6 +1323,19 @@ final class RoutineTemplateUpdateTests: SwiftDataTestHarness {
         XCTAssertEqual(c.f.slot.prescription?.slotAlternatives, c.alts0Before)
     }
 
+    /// Trailing blank lines are dropped when a note is committed, so a note that
+    /// differs from the baseline only by them is not a plan edit.
+    func testTrailingBlankLinesAloneAreNotAPlanEdit() throws {
+        var s = try start(fixture().routine)
+        s.planEx.templateNotesSnapshot = "abc\n\n"
+
+        s.plan.slotNotes = "abc"
+        XCTAssertFalse(sessionPlanHasEdits(s.plan, for: s.planEx))
+
+        s.plan.slotNotes = "abd"
+        XCTAssertTrue(sessionPlanHasEdits(s.plan, for: s.planEx))
+    }
+
     /// A switch alone — prepared, Keep or Reset — is never counted as a plan
     /// edit, so case C (one replacement row) holds for every switch kind.
     func testASwitchAloneIsNeverAPlanEdit() throws {

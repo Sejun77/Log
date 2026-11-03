@@ -44,14 +44,26 @@ func formatSessionElapsed(start: Date?, now: Date) -> String {
 
 // MARK: - Note normalization
 
-/// Canonical optional form for free-text note input. Trims whitespace and
-/// newlines only to decide emptiness; when non-empty, stores the **original
-/// (untrimmed)** text. This matches the pre-existing inline bindings in
-/// `ActiveWorkoutView` (session notes) and `ExerciseNotesEditSheet`, where
-/// `trimmed.isEmpty ? nil : original` cleared blank/whitespace-only notes to
-/// nil while preserving the user's exact text otherwise. Pure.
+/// Note text as read back from storage: unchanged, except that a note with no
+/// content is nil. Trailing lines stay until the note is next committed.
+func noteLoadedFromStorage(_ text: String) -> String? {
+    normalizedOptionalNote(text) == nil ? nil : text
+}
+
+/// Canonical stored form of a multiline note, applied when a note is committed
+/// and never while typing or loading. Drops trailing lines that hold only whitespace, and
+/// returns nil for a note with no content. Everything else is kept as written:
+/// leading blank lines, internal blank lines, and spaces on a line with content.
+/// Pure.
 func normalizedOptionalNote(_ text: String) -> String? {
-    text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+    guard let lastContent = text.lastIndex(where: { !$0.isWhitespace }) else {
+        return nil
+    }
+    let afterContent = text[text.index(after: lastContent)...]
+    guard let lineEnd = afterContent.firstIndex(where: \.isNewline) else {
+        return text
+    }
+    return String(text[..<lineEnd])
 }
 
 /// Writes a committed session-notes draft to `workout.notes`, normalizing
@@ -897,7 +909,12 @@ func sessionPlanHasEdits(_ session: SessionPlan?, for exercise: PlanExercise) ->
         return true
     }
     if norm(sp.tempo) != norm(original.tempo) { return true }
-    if norm(sp.slotNotes) != norm(original.slotNotes) { return true }
+    // Trailing blank lines are dropped at commit, so they are not a plan change.
+    if normalizedOptionalNote(sp.slotNotes ?? "")
+        != normalizedOptionalNote(original.slotNotes ?? "")
+    {
+        return true
+    }
 
     return false
 }
