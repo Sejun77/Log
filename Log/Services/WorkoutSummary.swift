@@ -31,6 +31,13 @@ struct WorkoutSummary: Equatable {
     /// Total non-warmup `SetLog` rows (`.working` + `.dropset`) across items.
     let setCount: Int
 
+    #if DEBUG
+    /// Number of workouts scanned by `init(workout:)`. Lets tests assert that a
+    /// screen scans only the rows it builds, a count that does not vary with
+    /// device speed the way a timing does.
+    nonisolated(unsafe) static var workoutScanCountForTesting = 0
+    #endif
+
     /// Value-in initializer — exercised by unit tests for the wording rules
     /// without needing a SwiftData model.
     init(exerciseCount: Int, setCount: Int) {
@@ -41,6 +48,9 @@ struct WorkoutSummary: Equatable {
     /// Build from a live `Workout`. Reads `workout.items` and `item.setLogs`
     /// only; never touches `item.exercise`.
     init(workout: Workout) {
+        #if DEBUG
+        Self.workoutScanCountForTesting += 1
+        #endif
         var sets = 0
         for item in workout.items {
             sets += item.setLogs.reduce(0) { count, log in

@@ -113,6 +113,14 @@ struct BootstrapRoot: View {
                 // ordering between the two is purely defensive).
                 ExerciseSeedService.seedIfNeeded(in: ctx)
 
+                #if DEBUG && targetEnvironment(simulator)
+                if UITestFixtures.isWorkoutHistoryRequested() {
+                    UITestFixtures.seedWorkoutHistory(in: ctx)
+                    backfillPhase1()
+                    backfillPhase3_1()
+                }
+                #endif
+
                 // Phase 9-A2: hydrate empty/missing SlotPrescription content
                 // from each slot's setTemplates → AppSettings defaults so
                 // legacy slots become self-sufficient (Tier 3 source was
