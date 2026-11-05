@@ -82,11 +82,12 @@ enum WorkoutRowFormat {
 /// full-history `AllWorkoutsView` so the row's appearance and behavior are
 /// defined exactly once.
 ///
-/// The precomputed `routineLabel` and `summarySubtitle` are passed **in** rather
-/// than derived here on purpose: both screens build a `RoutineLabelResolver` and
-/// a `WorkoutSummary.map` once per render and look up by id, and computing them
-/// inside this row's `body` would reintroduce the per-row rescanning that
-/// discipline exists to avoid.
+/// The `routineLabel` and `summarySubtitle` are passed **in** rather than derived
+/// here, so this row stays display-only and each host decides what to compute:
+/// both screens build one `RoutineLabelResolver` per render, the root page maps
+/// summaries over its few visible workouts, and `AllWorkoutsView` computes each
+/// summary as `List` builds that row, because a pass over the full history on
+/// every evaluation is too slow.
 ///
 /// The two alerts stay with the host screen (each already owns its own
 /// presentation state); this view only reports which one to raise.

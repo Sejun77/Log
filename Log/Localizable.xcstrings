@@ -4,101 +4,6 @@
     "" : {
 
     },
-    "%@ plan changes" : {
-      "comment" : "Save Routine Changes row: the plan edits made to this exercise during the workout. The placeholder is the exercise name.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 플랜 변경사항"
-          }
-        }
-      }
-    },
-    "%@ → %@" : {
-      "comment" : "Save Routine Changes row: the routine's exercise (first) is replaced by the exercise used in this workout (second).",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ → %@"
-          }
-        }
-      }
-    },
-    "Choose which changes to save to “%@”. Your workout will be recorded either way." : {
-      "comment" : "Save Routine Changes sheet: explains the checklist. The placeholder is the routine's name.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“%@”에 저장할 변경사항을 선택하세요. 어떤 항목을 선택해도 운동 기록은 저장됩니다."
-          }
-        }
-      }
-    },
-    "Finish This Workout Only" : {
-      "comment" : "Save Routine Changes sheet: finish and record the workout without saving any routine change.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 운동만 완료"
-          }
-        }
-      }
-    },
-    "Not selected" : {
-      "comment" : "Accessibility value of an unchecked row in a multi-selection list.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "선택 안 됨"
-          }
-        }
-      }
-    },
-    "Save Routine Changes" : {
-      "comment" : "Active workout finish: title of the sheet for choosing which routine changes to save.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "루틴 변경사항 저장"
-          }
-        }
-      }
-    },
-    "Save Selected Changes" : {
-      "comment" : "Save Routine Changes sheet: save the checked routine changes, then finish the workout.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "선택한 변경사항 저장"
-          }
-        }
-      }
-    },
-    "Selected" : {
-      "comment" : "Accessibility value of a checked row in a multi-selection list.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "선택됨"
-          }
-        }
-      }
-    },
     "—" : {
 
     },
@@ -142,6 +47,16 @@
         }
       }
     },
+    "“%@” will be removed from this superset. Its prescription, warmup, and technique plans will be deleted." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”이(가) 이 슈퍼세트에서 제거됩니다. 해당 운동의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
+          }
+        }
+      }
+    },
     "#%lld" : {
 
     },
@@ -175,6 +90,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "%@ → %@" : {
+      "comment" : "Save Routine Changes row: the routine's exercise (first) is replaced by the exercise used in this workout (second).",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ → %@"
           }
         }
       }
@@ -230,6 +156,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@: 이 세트에 이미 있습니다."
+          }
+        }
+      }
+    },
+    "%@ plan changes" : {
+      "comment" : "Save Routine Changes row: the plan edits made to this exercise during the workout. The placeholder is the exercise name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 플랜 변경사항"
           }
         }
       }
@@ -332,36 +270,6 @@
         }
       }
     },
-    "%lld exercises" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "운동 %lld개"
-          }
-        }
-      }
-    },
-    "%lld routine" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "루틴 %lld개"
-          }
-        }
-      }
-    },
-    "%lld routines" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "루틴 %lld개"
-          }
-        }
-      }
-    },
     "%lld exercise reference" : {
       "localizations" : {
         "ko" : {
@@ -378,6 +286,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 참조 %lld개"
+          }
+        }
+      }
+    },
+    "%lld exercises" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 %lld개"
+          }
+        }
+      }
+    },
+    "%lld exercises have no name and will be skipped." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이름이 없는 운동 %lld개는 건너뜁니다."
+          }
+        }
+      }
+    },
+    "%lld exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 %lld개가 이 슈퍼세트에서 제거됩니다. 해당 운동들의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
+          }
+        }
+      }
+    },
+    "%lld exercises." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 %lld개."
           }
         }
       }
@@ -430,6 +378,26 @@
         }
       }
     },
+    "%lld routine" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "루틴 %lld개"
+          }
+        }
+      }
+    },
+    "%lld routines" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "루틴 %lld개"
+          }
+        }
+      }
+    },
     "%lld segment" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -468,16 +436,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "세트 %lld개"
-          }
-        }
-      }
-    },
-    "%lld times" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld회"
           }
         }
       }
@@ -531,6 +489,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 기법 %1$lld개"
+          }
+        }
+      }
+    },
+    "%lld times" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld회"
           }
         }
       }
@@ -666,6 +634,36 @@
     },
     "0.0" : {
 
+    },
+    "1 exercise has no name and will be skipped." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이름이 없는 운동 1개는 건너뜁니다."
+          }
+        }
+      }
+    },
+    "1 exercise will be removed from this superset. Its prescription, warmup, and technique plans will be deleted." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 1개가 이 슈퍼세트에서 제거됩니다. 해당 운동의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
+          }
+        }
+      }
+    },
+    "1 exercise." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 1개."
+          }
+        }
+      }
     },
     "1 rep" : {
       "localizations" : {
@@ -1062,6 +1060,18 @@
         }
       }
     },
+    "An exercise cannot be its own alternative." : {
+      "comment" : "Alternative Exercises: routine-editor list footer explaining why the slot's own exercise is missing from the Add Alternative picker.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동은 자기 자신을 대체 운동으로 추가할 수 없습니다."
+          }
+        }
+      }
+    },
     "Applies To" : {
       "localizations" : {
         "ko" : {
@@ -1270,32 +1280,6 @@
         }
       }
     },
-    "Exercise %lld of %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Exercise %1$lld of %2$lld"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "운동 %lld/%lld"
-          }
-        }
-      }
-    },
-    "Superset %lld of %lld" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "슈퍼세트 %lld/%lld"
-          }
-        }
-      }
-    },
     "Body Part" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1491,6 +1475,18 @@
         }
       }
     },
+    "Choose which changes to save to “%@”. Your workout will be recorded either way." : {
+      "comment" : "Save Routine Changes sheet: explains the checklist. The placeholder is the routine's name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”에 저장할 변경사항을 선택하세요. 어떤 항목을 선택해도 운동 기록은 저장됩니다."
+          }
+        }
+      }
+    },
     "Clear" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1638,6 +1634,26 @@
         }
       }
     },
+    "Created %lld new exercises." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새 운동 %lld개를 만들었습니다."
+          }
+        }
+      }
+    },
+    "Created 1 new exercise." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새 운동 1개를 만들었습니다."
+          }
+        }
+      }
+    },
     "Custom" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1772,22 +1788,6 @@
         }
       }
     },
-    "Delete “%@”? This will remove it from %@, delete %@, and unlink %@. This cannot be undone." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Delete “%1$@”? This will remove it from %2$@, delete %3$@, and unlink %4$@. This cannot be undone."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“%1$@”을(를) 삭제하면 %2$@에서 제거되고, %3$@가 삭제되며, %4$@의 연결이 해제됩니다. 되돌릴 수 없습니다."
-          }
-        }
-      }
-    },
     "Delete “%@”? This will remove %@ (%@) and all of their exercise references. This cannot be undone." : {
       "localizations" : {
         "en" : {
@@ -1820,32 +1820,18 @@
         }
       }
     },
-    "“%@” will be removed from this superset. Its prescription, warmup, and technique plans will be deleted." : {
+    "Delete “%@”? This will remove it from %@, delete %@, and unlink %@. This cannot be undone." : {
       "localizations" : {
-        "ko" : {
+        "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "“%@”이(가) 이 슈퍼세트에서 제거됩니다. 해당 운동의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
+            "state" : "new",
+            "value" : "Delete “%1$@”? This will remove it from %2$@, delete %3$@, and unlink %4$@. This cannot be undone."
           }
-        }
-      }
-    },
-    "1 exercise will be removed from this superset. Its prescription, warmup, and technique plans will be deleted." : {
-      "localizations" : {
+        },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "운동 1개가 이 슈퍼세트에서 제거됩니다. 해당 운동의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
-          }
-        }
-      }
-    },
-    "%lld exercises will be removed from this superset. Their prescriptions, warmups, and technique plans will be deleted." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "운동 %lld개가 이 슈퍼세트에서 제거됩니다. 해당 운동들의 목표, 워밍업, 운동 기법 설정이 삭제됩니다."
+            "value" : "“%1$@”을(를) 삭제하면 %2$@에서 제거되고, %3$@가 삭제되며, %4$@의 연결이 해제됩니다. 되돌릴 수 없습니다."
           }
         }
       }
@@ -1917,6 +1903,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "운동 삭제"
+          }
+        }
+      }
+    },
+    "Dismisses the keyboard" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "키보드를 닫습니다"
           }
         }
       }
@@ -2433,6 +2429,22 @@
         }
       }
     },
+    "Exercise %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exercise %1$lld of %2$lld"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "운동 %lld/%lld"
+          }
+        }
+      }
+    },
     "Exercise already exists" : {
       "localizations" : {
         "ko" : {
@@ -2615,6 +2627,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "실제 진행 상황을 분석하려면 작업 세트를 기록한 운동을 완료하거나, 샘플 데이터로 전환해 쇼케이스를 확인하세요."
+          }
+        }
+      }
+    },
+    "Finish This Workout Only" : {
+      "comment" : "Save Routine Changes sheet: finish and record the workout without saving any routine change.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 운동만 완료"
           }
         }
       }
@@ -2817,116 +2841,6 @@
         }
       }
     },
-    "Imported “%@”." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“%@”을(를) 가져왔습니다."
-          }
-        }
-      }
-    },
-    "1 exercise." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "운동 1개."
-          }
-        }
-      }
-    },
-    "%lld exercises." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "운동 %lld개."
-          }
-        }
-      }
-    },
-    "Created 1 new exercise." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "새 운동 1개를 만들었습니다."
-          }
-        }
-      }
-    },
-    "Created %lld new exercises." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "새 운동 %lld개를 만들었습니다."
-          }
-        }
-      }
-    },
-    "Linked 1 existing exercise." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "기존 운동 1개를 연결했습니다."
-          }
-        }
-      }
-    },
-    "Linked %lld existing exercises." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "기존 운동 %lld개를 연결했습니다."
-          }
-        }
-      }
-    },
-    "Skipped 1 exercise with no name." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이름이 없는 운동 1개를 건너뛰었습니다."
-          }
-        }
-      }
-    },
-    "Skipped %lld exercises with no name." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이름이 없는 운동 %lld개를 건너뛰었습니다."
-          }
-        }
-      }
-    },
-    "1 exercise has no name and will be skipped." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이름이 없는 운동 1개는 건너뜁니다."
-          }
-        }
-      }
-    },
-    "%lld exercises have no name and will be skipped." : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이름이 없는 운동 %lld개는 건너뜁니다."
-          }
-        }
-      }
-    },
     "Import Routine from JSON" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2934,6 +2848,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "JSON에서 루틴 가져오기"
+          }
+        }
+      }
+    },
+    "Imported “%@”." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”을(를) 가져왔습니다."
           }
         }
       }
@@ -3152,6 +3076,26 @@
         }
       }
     },
+    "Linked %lld existing exercises." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기존 운동 %lld개를 연결했습니다."
+          }
+        }
+      }
+    },
+    "Linked 1 existing exercise." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기존 운동 1개를 연결했습니다."
+          }
+        }
+      }
+    },
     "Linked existing exercises (%lld)" : {
       "localizations" : {
         "ko" : {
@@ -3320,22 +3264,22 @@
         }
       }
     },
-    "New exercises to create (%lld)" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "새로 만들 운동 (%lld)"
-          }
-        }
-      }
-    },
     "New Exercise Defaults" : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "새 운동 기본값"
+          }
+        }
+      }
+    },
+    "New exercises to create (%lld)" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새로 만들 운동 (%lld)"
           }
         }
       }
@@ -3686,6 +3630,18 @@
         }
       }
     },
+    "Not selected" : {
+      "comment" : "Accessibility value of an unchecked row in a multi-selection list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택 안 됨"
+          }
+        }
+      }
+    },
     "Not set" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4001,6 +3957,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "플랜"
+          }
+        }
+      }
+    },
+    "Plan notes" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "플랜 메모"
           }
         }
       }
@@ -4472,17 +4438,6 @@
         }
       }
     },
-    "Rest before next exercise" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "다음 운동 전 휴식"
-          }
-        }
-      }
-    },
     "Rest after round: %llds" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4501,6 +4456,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "라운드 후 휴식: 없음"
+          }
+        }
+      }
+    },
+    "Rest before next exercise" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다음 운동 전 휴식"
           }
         }
       }
@@ -4829,6 +4795,30 @@
         }
       }
     },
+    "Save Routine Changes" : {
+      "comment" : "Active workout finish: title of the sheet for choosing which routine changes to save.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "루틴 변경사항 저장"
+          }
+        }
+      }
+    },
+    "Save Selected Changes" : {
+      "comment" : "Save Routine Changes sheet: save the checked routine changes, then finish the workout.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택한 변경사항 저장"
+          }
+        }
+      }
+    },
     "Saved Routines" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4892,6 +4882,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "프로그레션을 보려면 운동을 선택하세요."
+          }
+        }
+      }
+    },
+    "Selected" : {
+      "comment" : "Accessibility value of a checked row in a multi-selection list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택됨"
           }
         }
       }
@@ -5164,6 +5166,26 @@
         }
       }
     },
+    "Skipped %lld exercises with no name." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이름이 없는 운동 %lld개를 건너뛰었습니다."
+          }
+        }
+      }
+    },
+    "Skipped 1 exercise with no name." : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이름이 없는 운동 1개를 건너뛰었습니다."
+          }
+        }
+      }
+    },
     "Skipped in file" : {
       "localizations" : {
         "ko" : {
@@ -5191,16 +5213,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "슬레드"
-          }
-        }
-      }
-    },
-    "Plan notes" : {
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "플랜 메모"
           }
         }
       }
@@ -5407,6 +5419,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "슈퍼세트"
+          }
+        }
+      }
+    },
+    "Superset %lld of %lld" : {
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "슈퍼세트 %lld/%lld"
           }
         }
       }
@@ -5712,18 +5734,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "이전 운동을 복원할 수 없습니다. 삭제되었을 수 있습니다."
-          }
-        }
-      }
-    },
-    "An exercise cannot be its own alternative." : {
-      "comment" : "Alternative Exercises: routine-editor list footer explaining why the slot's own exercise is missing from the Add Alternative picker.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "운동은 자기 자신을 대체 운동으로 추가할 수 없습니다."
           }
         }
       }

@@ -31,10 +31,12 @@ struct AllWorkoutsView: View {
     @State private var showActiveDeleteWarning = false
 
     var body: some View {
-        // Same once-per-render precompute discipline as `HistoryView`: build the
-        // resolver and the summary map once here, never inside a row's `body`.
+        // The resolver is built once per render. Summaries are not: each one
+        // reads a workout's items and sets, so they are computed only for the
+        // rows `List` actually builds. This screen stays alive and keeps
+        // re-evaluating when the user switches tabs while it is pushed, so a
+        // pass over every workout here would run on each save during a workout.
         let resolver = RoutineLabelResolver(routines: routines)
-        let summaries = WorkoutSummary.map(for: workouts)
 
         List {
             ForEach(workouts) { w in
@@ -42,8 +44,7 @@ struct AllWorkoutsView: View {
                     workout: w,
                     isActive: activeGuard.activeWorkoutID == w.id,
                     routineLabel: resolver.label(for: w),
-                    summarySubtitle: (summaries[w.id]
-                        ?? WorkoutSummary(workout: w)).subtitle,
+                    summarySubtitle: WorkoutSummary(workout: w).subtitle,
                     onRequestDelete: {
                         toDelete = w
                         showConfirmDelete = true
