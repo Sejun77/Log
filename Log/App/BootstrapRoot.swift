@@ -16,8 +16,10 @@ struct BootstrapRoot: View {
 
     // MARK: - Static (test-only)
 
+    #if DEBUG && targetEnvironment(simulator)
     /// Ensures UI test data reset runs only once per test session.
     private static var didResetUITestData = false
+    #endif
 
     // MARK: - State
 
@@ -90,11 +92,13 @@ struct BootstrapRoot: View {
             .task {
                 launchStart = Date()
 
+                #if DEBUG && targetEnvironment(simulator)
                 // For UI tests, reset the data store once per session.
                 if isUITesting && !Self.didResetUITestData {
                     await resetDataForUITests()
                     Self.didResetUITestData = true
                 }
+                #endif
 
                 // Backfill stable slot IDs and default variants for existing data.
                 backfillPhase1()
@@ -274,6 +278,7 @@ struct BootstrapRoot: View {
 
     // MARK: - Test Data Reset
 
+    #if DEBUG && targetEnvironment(simulator)
     /// Clears all persistent data for UI tests so each run starts clean.
     @MainActor
     private func resetDataForUITests() async {
@@ -317,6 +322,7 @@ struct BootstrapRoot: View {
             all.forEach { ctx.delete($0) }
         }
     }
+    #endif
 
     // MARK: - Phase 1 Backfill
 
