@@ -29,6 +29,9 @@ struct LogApp: App {
     init() {
         // Configure notification handling once at app startup.
         AppNotificationService.shared.configure()
+        #if DEBUG
+        MainThreadStallMonitor.installIfRequested()
+        #endif
     }
 
     // MARK: - Body
