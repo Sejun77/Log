@@ -515,7 +515,10 @@ struct HistoryView: View {
         // row reads its subtitle from the map instead of re-scanning
         // `workout.items` / `item.setLogs` in its own `body` — same once-per-render
         // discipline as the `resolver` above and the Routines list `RoutineSummary`.
-        let summaries = WorkoutSummary.map(for: workouts)
+        // Only for the rows on screen: each summary reads every set in a workout,
+        // which faults them from the store, and this runs on every evaluation.
+        let recentWorkouts = HistoryDisplay.recent(workouts)
+        let summaries = WorkoutSummary.map(for: recentWorkouts)
         return Section {
             if workouts.isEmpty {
                 // This is now the first section on the page, so on a fresh
@@ -540,7 +543,7 @@ struct HistoryView: View {
                 // further below the fold with every session logged; the rest of
                 // the history lives on `AllWorkoutsView`. See
                 // `HistoryDisplay.recentWorkoutLimit` for the size rationale.
-                ForEach(HistoryDisplay.recent(workouts)) { w in
+                ForEach(recentWorkouts) { w in
                     WorkoutRow(
                         workout: w,
                         isActive: activeGuard.activeWorkoutID == w.id,

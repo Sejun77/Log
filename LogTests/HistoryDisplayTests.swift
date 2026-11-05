@@ -1,3 +1,4 @@
+import SwiftData
 import XCTest
 
 @testable import Log
@@ -133,5 +134,60 @@ final class HistoryDisplayTests: SwiftDataTestHarness {
 
         w.completedAt = w.date.addingTimeInterval(-600)
         XCTAssertEqual(WorkoutRowFormat.duration(for: w), "1m")
+    }
+
+    // MARK: - Summaries for the visible rows
+
+    private func addItem(to workout: Workout, setKinds: [SetKind]) {
+        let ex = Exercise(name: "Bench Press", isCustom: true)
+        context.insert(ex)
+        let logs = setKinds.enumerated().map { i, kind in
+            SetLog(indexInExercise: i, kind: kind, reps: 8, weight: 100)
+        }
+        logs.forEach { context.insert($0) }
+        let item = WorkoutItem(exercise: ex, setLogs: logs)
+        context.insert(item)
+        workout.items.append(item)
+    }
+
+    /// The root page builds summaries from this slice only.
+    func test_summaries_coverExactlyTheRecentRows_inOrder() {
+        let workouts = makeWorkouts(HistoryDisplay.recentWorkoutLimit + 3)
+        workouts.forEach { context.insert($0) }
+
+        let recent = HistoryDisplay.recent(workouts)
+        let summaries = WorkoutSummary.map(for: recent)
+
+        XCTAssertEqual(Set(summaries.keys), Set(recent.map(\.id)))
+        XCTAssertEqual(recent.map(\.id), workouts.prefix(HistoryDisplay.recentWorkoutLimit).map(\.id))
+    }
+
+    /// The slice's summaries match a pass over the full history.
+    func test_recentSummaries_matchFullMapValues() {
+        let workouts = makeWorkouts(6)
+        workouts.forEach { context.insert($0) }
+        for (i, w) in workouts.enumerated() {
+            addItem(to: w, setKinds: Array(repeating: .working, count: i + 1) + [.warmup])
+        }
+
+        let recent = WorkoutSummary.map(for: HistoryDisplay.recent(workouts))
+        let all = WorkoutSummary.map(for: workouts)
+
+        for (id, summary) in recent { XCTAssertEqual(summary, all[id]) }
+        XCTAssertEqual(all.count, 6)
+    }
+
+    /// A set logged to a visible workout shows up on the next evaluation.
+    func test_recentSummary_reflectsANewSet() {
+        let workouts = makeWorkouts(5)
+        workouts.forEach { context.insert($0) }
+        let top = workouts[0]
+        addItem(to: top, setKinds: [.working])
+        XCTAssertEqual(WorkoutSummary.map(for: HistoryDisplay.recent(workouts))[top.id]?.setCount, 1)
+
+        addItem(to: top, setKinds: [.working, .dropset])
+        let updated = WorkoutSummary.map(for: HistoryDisplay.recent(workouts))[top.id]
+        XCTAssertEqual(updated?.setCount, 3)
+        XCTAssertEqual(updated?.exerciseCount, 2)
     }
 }
