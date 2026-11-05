@@ -48,12 +48,16 @@ func workoutDayComponents(
 /// in a custom `Binding` changes no state, so SwiftUI never re-applies the
 /// selection and the day stays visually deselected anyway.
 ///
-/// So this drops to the component `MultiDatePicker` is itself built on and uses
-/// the API UIKit provides for exactly this case: a `UICalendarSelectionMultiDate`
-/// whose delegate refuses every `canSelectDate` / `canDeselectDate`. Selection
-/// is therefore settable only in code, the highlight is the system's own (same
-/// accent-tinted circles, same light/dark behavior), and month navigation keeps
-/// working.
+/// So this drops to the component `MultiDatePicker` is itself built on: a
+/// `UICalendarSelectionMultiDate` whose delegate refuses every deselection and
+/// undoes every selection as soon as it happens. The highlight is the system's
+/// own (same accent-tinted circles, same light/dark behavior), and month
+/// navigation keeps working.
+///
+/// `canSelectDate` must keep answering `true`. Answering `false` looks like the
+/// obvious way to refuse a tap, but `UICalendarView` then draws every day as
+/// disabled and draws no circles at all, even for selected days, so the calendar
+/// appears to show no workouts.
 struct WorkoutDaysCalendar: UIViewRepresentable {
     /// Days to highlight. A plain `let`, not a `Binding` — nothing downstream
     /// of here can write back to History's derived state.
@@ -68,6 +72,7 @@ struct WorkoutDaysCalendar: UIViewRepresentable {
         // AccentColor already reaches UIKit through the window tint.
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        context.coordinator.days = days
         let selection = UICalendarSelectionMultiDate(delegate: context.coordinator)
         selection.setSelectedDates(Array(days), animated: false)
         view.selectionBehavior = selection
@@ -81,8 +86,9 @@ struct WorkoutDaysCalendar: UIViewRepresentable {
                 as? UICalendarSelectionMultiDate
         else { return }
 
-        // Re-assert from the derived set on every update. Because the user can
-        // never change it, this only ever runs for a real data change.
+        // Re-assert from the derived set on every update. Because a tap can never
+        // leave it changed, this only ever runs for a real data change.
+        context.coordinator.days = days
         guard Set(selection.selectedDates) != days else { return }
         selection.setSelectedDates(Array(days), animated: false)
     }
@@ -106,14 +112,17 @@ struct WorkoutDaysCalendar: UIViewRepresentable {
         return CGSize(width: width, height: fitted.height)
     }
 
-    /// Refuses every user-initiated selection change. The `didSelect`/
-    /// `didDeselect` callbacks are required by the protocol but unreachable —
-    /// the `can…` pair is consulted first and always says no.
+    /// Keeps the selection equal to `days` whatever the user taps: a selection
+    /// is undone at once, and a deselection is refused. See the type's comment
+    /// for why `canSelectDate` has to allow the tap.
     final class Coordinator: NSObject, UICalendarSelectionMultiDateDelegate {
+        /// The days that stay selected. Kept current by `WorkoutDaysCalendar`.
+        var days: Set<DateComponents> = []
+
         func multiDateSelection(
             _ selection: UICalendarSelectionMultiDate,
             canSelectDate dateComponents: DateComponents
-        ) -> Bool { false }
+        ) -> Bool { true }
 
         func multiDateSelection(
             _ selection: UICalendarSelectionMultiDate,
@@ -123,7 +132,9 @@ struct WorkoutDaysCalendar: UIViewRepresentable {
         func multiDateSelection(
             _ selection: UICalendarSelectionMultiDate,
             didSelectDate dateComponents: DateComponents
-        ) {}
+        ) {
+            selection.setSelectedDates(Array(days), animated: false)
+        }
 
         func multiDateSelection(
             _ selection: UICalendarSelectionMultiDate,

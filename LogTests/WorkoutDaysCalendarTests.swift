@@ -6,10 +6,9 @@ import XCTest
 ///
 /// The History calendar is a visual record of `Workout.date`, not a selection
 /// control: the bug was that `MultiDatePicker(selection:)` let a tap write into
-/// the state driving the highlight. The non-interactive half of that fix lives
-/// in `UICalendarSelectionMultiDateDelegate` and is not meaningfully unit
-/// testable without a brittle UI test, so what is pinned here is the other
-/// half — the derivation the calendar now reads from, which is pure.
+/// the state driving the highlight. Both halves of the fix are pinned here: the
+/// pure derivation the calendar reads from, and the delegate that keeps a tap from
+/// changing the selection without stopping `UICalendarView` drawing it.
 ///
 /// Every assertion uses a fixed UTC Gregorian calendar so the expected day
 /// buckets don't move with the machine's region.
@@ -46,6 +45,45 @@ final class WorkoutDaysCalendarTests: XCTestCase {
             cal.date(from: DateComponents(year: year, month: month, day: day, hour: 12))
         )
         return cal.dateComponents([.year, .month, .day], from: date)
+    }
+
+    // MARK: - Read-only selection
+
+    /// Answering `false` is what made every workout day lose its circle:
+    /// `UICalendarView` draws days it may not select as disabled, selected or not.
+    @MainActor
+    func testDaysStaySelectableSoTheirHighlightIsDrawn() throws {
+        let coordinator = WorkoutDaysCalendar.Coordinator()
+        let selection = UICalendarSelectionMultiDate(delegate: coordinator)
+
+        XCTAssertTrue(
+            coordinator.multiDateSelection(selection, canSelectDate: try day(2026, 11, 10))
+        )
+    }
+
+    @MainActor
+    func testTappingAnUnmarkedDayDoesNotKeepItSelected() throws {
+        let marked: Set<DateComponents> = [try day(2026, 11, 4), try day(2026, 11, 5)]
+        let tapped = try day(2026, 11, 10)
+        let coordinator = WorkoutDaysCalendar.Coordinator()
+        coordinator.days = marked
+        let selection = UICalendarSelectionMultiDate(delegate: coordinator)
+        // UIKit has already added the day by the time it reports the selection.
+        selection.setSelectedDates(Array(marked) + [tapped], animated: false)
+
+        coordinator.multiDateSelection(selection, didSelectDate: tapped)
+
+        XCTAssertEqual(Set(selection.selectedDates), marked)
+    }
+
+    @MainActor
+    func testMarkedDayCannotBeDeselected() throws {
+        let marked = try day(2026, 11, 4)
+        let coordinator = WorkoutDaysCalendar.Coordinator()
+        coordinator.days = [marked]
+        let selection = UICalendarSelectionMultiDate(delegate: coordinator)
+
+        XCTAssertFalse(coordinator.multiDateSelection(selection, canDeselectDate: marked))
     }
 
     // MARK: - Derivation
